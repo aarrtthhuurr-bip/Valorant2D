@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Protocol Shift</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="game-wrap">
+      <canvas id="game" width="1280" height="720" aria-label="Protocol Shift game canvas"></canvas>
+
+      <div class="top-hud glass">
+        <div class="hud-pill">
+          <span class="label">Fase</span>
+          <strong id="phaseText">Compra</strong>
+        </div>
+        <div class="hud-pill timer-pill">
+          <span class="label">Tempo</span>
+          <strong id="timerText">15</strong>
+        </div>
+        <div class="hud-pill">
+          <span class="label">Placar</span>
+          <strong id="scoreText">0 - 0</strong>
+        </div>
+        <div class="hud-pill">
+          <span class="label">Creditos</span>
+          <strong id="moneyText">$800</strong>
+        </div>
+        <button class="hud-button" id="shopButton" type="button">Loja</button>
+        <button class="pause-button" id="pauseButton" type="button">Pause</button>
+      </div>
+
+      <div class="status-card glass">
+        <div class="status-main">
+          <strong id="agentText">Vanguard</strong>
+          <span id="weaponText">Pistol</span>
+        </div>
+        <div class="bars">
+          <div class="bar hp"><i id="hpBar"></i></div>
+          <div class="bar ammo"><i id="ammoBar"></i></div>
+          <div class="bar plant"><i id="plantBar"></i></div>
+        </div>
+        <div class="status-row">
+          <span>HP <b id="hpText">100</b></span>
+          <span id="ammoText">12 / 12</span>
+          <span id="spikeText">Spike</span>
+        </div>
+      </div>
+
+      <aside class="shop" id="shop">
+        <header>
+          <h1>Protocol Shift</h1>
+          <p>Rodada de compra. Escolha agente e arma.</p>
+        </header>
+
+        <div class="panel">
+          <h2>Agentes</h2>
+          <div class="grid" id="agentButtons"></div>
+        </div>
+
+        <div class="panel">
+          <h2>Armas</h2>
+          <div class="grid" id="weaponButtons"></div>
+        </div>
+
+        <div class="panel">
+          <h2>Equipamentos</h2>
+          <div class="grid" id="equipmentButtons"></div>
+        </div>
+      </aside>
+
+      <div class="message glass" id="message">
+        <strong>Plante a spike em A ou B.</strong>
+        <span>WASD move, mouse mira, clique atira, F planta/desarma, R recarrega.</span>
+      </div>
+
+      <div class="match-overlay hidden" id="matchOverlay">
+        <div class="match-card glass">
+          <span class="label" id="overlayKicker">Partida encerrada</span>
+          <h2 id="overlayTitle">Vitória</h2>
+          <p id="overlayText">15 - 0</p>
+          <button id="newGameButton" type="button">Novo jogo</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="game.js"></script>
+</body>
+</html>
