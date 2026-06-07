@@ -3,8 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-store">
   <title>Protocol Shift</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20260607-menu">
 </head>
 <body>
   <main class="shell">
@@ -69,6 +70,11 @@
           <h2>Equipamentos</h2>
           <div class="grid" id="equipmentButtons"></div>
         </div>
+
+        <div class="panel">
+          <h2>Aliados</h2>
+          <div class="grid" id="allyButtons"></div>
+        </div>
       </aside>
 
       <div class="message glass" id="message">
@@ -84,9 +90,26 @@
           <button id="newGameButton" type="button">Novo jogo</button>
         </div>
       </div>
+
+      <div class="menu-overlay" id="menuOverlay">
+        <div class="menu-card glass">
+          <span class="label" id="menuKicker">Protocol Shift</span>
+          <h2 id="menuTitle">Menu</h2>
+          <p id="menuText">Escolha como quer jogar.</p>
+          <div class="menu-grid" id="menuButtons"></div>
+        </div>
+      </div>
+
+      <div class="intro-overlay hidden" id="introOverlay">
+        <div class="intro-card glass">
+          <span class="label" id="introMode">Modo</span>
+          <h2 id="introMap">Mapa</h2>
+          <p id="introTeam">Equipe</p>
+        </div>
+      </div>
     </section>
   </main>
 
-  <script src="game.js"></script>
+  <script src="game.js?v=20260607-menu"></script>
 </body>
 </html>

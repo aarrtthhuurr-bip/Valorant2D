@@ -16,6 +16,7 @@ const ui = {
   agentButtons: document.getElementById("agentButtons"),
   weaponButtons: document.getElementById("weaponButtons"),
   equipmentButtons: document.getElementById("equipmentButtons"),
+  allyButtons: document.getElementById("allyButtons"),
   hpBar: document.getElementById("hpBar"),
   ammoBar: document.getElementById("ammoBar"),
   plantBar: document.getElementById("plantBar"),
@@ -26,6 +27,15 @@ const ui = {
   overlayTitle: document.getElementById("overlayTitle"),
   overlayText: document.getElementById("overlayText"),
   newGameButton: document.getElementById("newGameButton"),
+  menuOverlay: document.getElementById("menuOverlay"),
+  menuKicker: document.getElementById("menuKicker"),
+  menuTitle: document.getElementById("menuTitle"),
+  menuText: document.getElementById("menuText"),
+  menuButtons: document.getElementById("menuButtons"),
+  introOverlay: document.getElementById("introOverlay"),
+  introMode: document.getElementById("introMode"),
+  introMap: document.getElementById("introMap"),
+  introTeam: document.getElementById("introTeam"),
 };
 
 const keys = new Set();
@@ -36,8 +46,6 @@ const PLAYER_DEFUSE_TIME = 3.2;
 const BOT_DEFUSE_TIME = 5.2;
 const PLANT_TIME = 2.0;
 const MATCH_POINT = 15;
-const MAP_POOL = ["Splitline", "Docks", "Foundry"];
-
 const agents = [
   {
     id: "vanguard",
@@ -109,7 +117,24 @@ const equipment = [
   { id: "reloadKit", name: "Kit de recarga", price: 1700, desc: "Recarga 20% mais rapida", apply: () => { game.upgrades.reload = true; } },
 ];
 
-const map = {
+const allyItems = [
+  { id: "allyArmor", name: "Coletes aliados", price: 1200, desc: "Equipe aliados com 35 de armadura", apply: () => { game.allyLoadout.armor = 35; } },
+  { id: "allySmg", name: "SMG aliado", price: 1500, desc: "Aliados usam SMG", weaponId: "smg", apply: () => { game.allyLoadout.weaponId = "smg"; } },
+  { id: "allyRifle", name: "Rifle aliado", price: 3200, desc: "Aliados usam Rifle", weaponId: "rifle", apply: () => { game.allyLoadout.weaponId = "rifle"; } },
+  { id: "allySniper", name: "Sniper aliado", price: 5200, desc: "Um tiro forte, cadencia baixa", weaponId: "sniper", apply: () => { game.allyLoadout.weaponId = "sniper"; } },
+];
+
+const DEFAULT_MAP = {
+  name: "Padrão",
+  vibe: "arena",
+  theme: {
+    floor: "#142028",
+    grid: "rgba(70, 168, 255, 0.07)",
+    wall: "#293944",
+    wallStroke: "#41515d",
+    siteFill: "rgba(255, 209, 102, 0.12)",
+    siteStroke: "#ffd166",
+  },
   width: 1280,
   height: 720,
   attackersSpawn: { x: 640, y: 650 },
@@ -177,6 +202,78 @@ const map = {
   ],
 };
 
+function cloneRects(rects) {
+  return rects.map((rect) => ({ ...rect }));
+}
+
+function makeMap(name, vibe, theme, wallChanges = [], siteChanges = null) {
+  return {
+    ...DEFAULT_MAP,
+    name,
+    vibe,
+    theme: { ...DEFAULT_MAP.theme, ...theme },
+    sites: siteChanges ? cloneRects(siteChanges) : cloneRects(DEFAULT_MAP.sites),
+    walls: [...cloneRects(DEFAULT_MAP.walls), ...cloneRects(wallChanges)],
+    botRoutes: DEFAULT_MAP.botRoutes.map((route) => route.map((point) => ({ ...point }))),
+    attackerBotSpawns: DEFAULT_MAP.attackerBotSpawns.map((point) => ({ ...point })),
+    defendersSpawn: DEFAULT_MAP.defendersSpawn.map((point) => ({ ...point })),
+    attackersSpawn: { ...DEFAULT_MAP.attackersSpawn },
+    playerDefenderSpawn: { ...DEFAULT_MAP.playerDefenderSpawn },
+  };
+}
+
+const MAPS = [
+  makeMap("Splitline", "Padrão", {}, []),
+  makeMap("Miragem", "Deserto", {
+    floor: "#1f1a12",
+    grid: "rgba(255, 209, 102, 0.065)",
+    wall: "#4a3a25",
+    wallStroke: "#7c6036",
+    siteFill: "rgba(255, 190, 80, 0.13)",
+    siteStroke: "#ffc56e",
+  }, [
+    { x: 548, y: 360, w: 64, h: 76 },
+    { x: 688, y: 360, w: 64, h: 76 },
+  ]),
+  makeMap("Neon Core", "Futurístico", {
+    floor: "#101827",
+    grid: "rgba(70, 168, 255, 0.12)",
+    wall: "#203447",
+    wallStroke: "#46a8ff",
+    siteFill: "rgba(98, 230, 160, 0.1)",
+    siteStroke: "#62e6a0",
+  }, [
+    { x: 350, y: 214, w: 110, h: 28 },
+    { x: 820, y: 214, w: 110, h: 28 },
+  ]),
+  makeMap("Docas Ferro", "Galpão", {
+    floor: "#151b1d",
+    grid: "rgba(180, 194, 204, 0.06)",
+    wall: "#343b3f",
+    wallStroke: "#68727a",
+    siteFill: "rgba(255, 77, 93, 0.09)",
+    siteStroke: "#ff8a5b",
+  }, [
+    { x: 92, y: 420, w: 120, h: 32 },
+    { x: 1068, y: 420, w: 120, h: 32 },
+    { x: 570, y: 206, w: 140, h: 30 },
+  ]),
+  makeMap("Templo de Aster", "Templo antigo", {
+    floor: "#161812",
+    grid: "rgba(213, 249, 112, 0.055)",
+    wall: "#35402b",
+    wallStroke: "#7c8d50",
+    siteFill: "rgba(213, 249, 112, 0.1)",
+    siteStroke: "#d5f970",
+  }, [
+    { x: 268, y: 400, w: 80, h: 30 },
+    { x: 932, y: 400, w: 80, h: 30 },
+    { x: 610, y: 235, w: 60, h: 92 },
+  ]),
+];
+
+let map = MAPS[0];
+
 const game = {
   map,
   phase: "buy",
@@ -191,17 +288,26 @@ const game = {
   playerSide: "attackers",
   startingSide: "attackers",
   mapName: "Splitline",
+  mode: "Normal",
+  difficulty: "normal",
+  sandbox: false,
+  allyCount: 0,
+  enemyFireMultiplier: 1.25,
+  introTimer: 0,
+  crosshairStyle: "default",
+  arrowKeys: false,
   selectedAgent: agents[0],
   selectedWeapon: weapons[0],
   ownedWeapons: new Set(["pistol"]),
   upgrades: { armorCapacity: 0, speed: false, magazine: false, reload: false },
   armor: 0,
+  allyLoadout: { weaponId: "pistol", armor: 0 },
   player: null,
   bots: [],
+  allies: [],
   bullets: [],
   particles: [],
   explosions: [],
-  footsteps: [],
   hitMarkers: [],
   smokes: [],
   revealTimer: 0,
@@ -210,7 +316,6 @@ const game = {
   lastMessage: "",
   abilityCooldown: 0,
   lastShot: 0,
-  footstepTimer: 0,
   reloadTimer: 0,
   roundOverTimer: 0,
   shake: 0,
@@ -278,6 +383,36 @@ function makeBot(spawn, index) {
   };
 }
 
+function makeAlly(spawn, index) {
+  const weapon = weapons.find((item) => item.id === game.allyLoadout.weaponId) || weapons[0];
+  const armor = game.allyLoadout.armor || 0;
+  return {
+    id: `ally-${index}`,
+    x: spawn.x,
+    y: spawn.y,
+    r: 17,
+    hp: 100,
+    maxHp: 100,
+    armor,
+    maxArmor: armor,
+    speed: 126 + index * 8,
+    angle: game.playerSide === "attackers" ? -Math.PI / 2 : Math.PI / 2,
+    alive: true,
+    side: game.playerSide,
+    weapon,
+    fireTimer: 0.25 + index * 0.18,
+    patrol: index + 3,
+    routeIndex: 1,
+    wait: 0,
+    lastX: spawn.x,
+    lastY: spawn.y,
+    stuck: 0,
+    strafe: index % 2 === 0 ? 1 : -1,
+    lastKnownPlayer: null,
+    memoryTimer: 0,
+  };
+}
+
 function resetRound() {
   game.roundNumber += game.phase === "ended" ? 1 : 0;
   const sideFlipped = Math.floor((game.roundNumber - 1) / 3) % 2 === 1;
@@ -285,20 +420,23 @@ function resetRound() {
   const changedSide = game.playerSide !== nextSide;
   game.playerSide = nextSide;
   game.phase = "buy";
-  game.phaseTime = 8;
+  game.phaseTime = game.sandbox ? 9999 : 8;
   game.player = makePlayer();
   const botSpawns = game.playerSide === "attackers" ? map.defendersSpawn : map.attackerBotSpawns;
   game.bots = botSpawns.map(makeBot);
+  const allySpawns = game.playerSide === "attackers"
+    ? [{ x: map.attackersSpawn.x - 68, y: map.attackersSpawn.y }, { x: map.attackersSpawn.x + 68, y: map.attackersSpawn.y }]
+    : [{ x: map.playerDefenderSpawn.x - 74, y: map.playerDefenderSpawn.y + 18 }, { x: map.playerDefenderSpawn.x + 74, y: map.playerDefenderSpawn.y + 18 }];
+  if (game.allyCount >= 3) allySpawns.push(game.playerSide === "attackers" ? { x: map.attackersSpawn.x, y: map.attackersSpawn.y + 42 } : { x: map.playerDefenderSpawn.x, y: map.playerDefenderSpawn.y + 58 });
+  game.allies = allySpawns.slice(0, game.allyCount).map(makeAlly);
   game.bullets = [];
   game.particles = [];
   game.explosions = [];
-  game.footsteps = [];
   game.hitMarkers = [];
   game.smokes = [];
   game.revealTimer = 0;
   game.abilityCooldown = 0;
   game.lastShot = 0;
-  game.footstepTimer = 0;
   game.reloadTimer = 0;
   game.roundOverTimer = 0;
   const carrier = game.bots.find((bot) => bot.hasSpike);
@@ -334,21 +472,25 @@ function startNewMatch() {
   game.scoreD = 0;
   game.playerScore = 0;
   game.enemyScore = 0;
-  game.money = 800;
+  game.money = game.sandbox ? 99999 : 800;
   game.ownedWeapons = new Set(["pistol"]);
   game.upgrades = { armorCapacity: 0, speed: false, magazine: false, reload: false };
   game.armor = 0;
+  game.allyLoadout = { weaponId: "pistol", armor: 0 };
   game.roundNumber = 1;
   game.startingSide = Math.random() < 0.5 ? "attackers" : "defenders";
   game.playerSide = game.startingSide;
-  game.mapName = MAP_POOL[Math.floor(Math.random() * MAP_POOL.length)];
+  map = MAPS[Math.floor(Math.random() * MAPS.length)];
+  game.map = map;
+  game.mapName = map.name;
   resetRound();
   game.paused = false;
+  showIntro();
   ui.matchOverlay.classList.add("hidden");
   ui.shop.classList.add("hidden");
   setMessage(game.playerSide === "attackers"
-    ? `Mapa ${game.mapName}. Seu time: Ataque. Plante a spike.`
-    : `Mapa ${game.mapName}. Seu time: Defesa. Impeca o plant ou desarme.`);
+    ? `Mapa ${game.mapName} (${map.vibe}). Seu time: Ataque. Plante a spike.`
+    : `Mapa ${game.mapName} (${map.vibe}). Seu time: Defesa. Impeca o plant ou desarme.`);
 }
 
 function showMatchResult() {
@@ -658,18 +800,15 @@ function updatePlayer(dt) {
   const p = game.player;
   if (!p.alive) return;
 
-  const dx = (keys.has("d") ? 1 : 0) - (keys.has("a") ? 1 : 0);
-  const dy = (keys.has("s") ? 1 : 0) - (keys.has("w") ? 1 : 0);
+  const right = keys.has("d") || (game.arrowKeys && keys.has("arrowright"));
+  const left = keys.has("a") || (game.arrowKeys && keys.has("arrowleft"));
+  const down = keys.has("s") || (game.arrowKeys && keys.has("arrowdown"));
+  const up = keys.has("w") || (game.arrowKeys && keys.has("arrowup"));
+  const dx = (right ? 1 : 0) - (left ? 1 : 0);
+  const dy = (down ? 1 : 0) - (up ? 1 : 0);
   const len = Math.hypot(dx, dy) || 1;
   p.moving = dx !== 0 || dy !== 0;
   moveEntity(p, (dx / len) * p.speed * dt, (dy / len) * p.speed * dt, map.walls);
-  if (p.moving && game.phase === "action") {
-    game.footstepTimer -= dt;
-    if (game.footstepTimer <= 0) {
-      game.footsteps.push({ x: p.x, y: p.y, r: 8, life: 0.42, maxLife: 0.42, team: "player" });
-      game.footstepTimer = 0.28;
-    }
-  }
   p.angle = Math.atan2(mouse.y - p.y, mouse.x - p.x);
   if (game.spike.state === "carried" && game.spike.owner === "player") {
     game.spike.x = p.x;
@@ -900,13 +1039,6 @@ function moveBotToward(bot, target, dt, speedScale = 1) {
   bot.angle = angle;
   const movedNow = moveEntity(bot, Math.cos(angle) * bot.speed * speedScale * dt, Math.sin(angle) * bot.speed * speedScale * dt, map.walls);
   bot.moving = movedNow > 0.5;
-  if (bot.moving && game.phase === "action") {
-    bot.stepTimer = (bot.stepTimer || 0) - dt;
-    if (bot.stepTimer <= 0) {
-      game.footsteps.push({ x: bot.x, y: bot.y, r: 8, life: 0.38, maxLife: 0.38, team: bot.side });
-      bot.stepTimer = 0.34 + Math.random() * 0.1;
-    }
-  }
   if (movedNow < 0.5) {
     bot.stuck += dt;
     if (bot.stuck > 0.42 && rescueBotFromStuck(bot, target, dt)) return 1;
@@ -933,6 +1065,35 @@ function botCanSeePlayer(bot) {
   return p.alive && hasLineOfSight(bot, p) && Math.hypot(p.x - bot.x, p.y - bot.y) < 540;
 }
 
+function closestVisibleSquadTarget(bot) {
+  return [game.player, ...game.allies]
+    .filter((target) => canSeeTarget(bot, target, 560))
+    .sort((a, b) => Math.hypot(a.x - bot.x, a.y - bot.y) - Math.hypot(b.x - bot.x, b.y - bot.y))[0] || null;
+}
+
+function canSeeTarget(bot, target, range = 540) {
+  return target?.alive && hasLineOfSight(bot, target) && Math.hypot(target.x - bot.x, target.y - bot.y) < range;
+}
+
+function closestVisibleEnemy(bot) {
+  return game.bots
+    .filter((enemy) => canSeeTarget(bot, enemy, 560))
+    .sort((a, b) => Math.hypot(a.x - bot.x, a.y - bot.y) - Math.hypot(b.x - bot.x, b.y - bot.y))[0] || null;
+}
+
+function botShootAt(bot, target, dt, team) {
+  const weapon = bot.weapon || weapons[0];
+  const angle = Math.atan2(target.y - bot.y, target.x - bot.x);
+  bot.angle = angle;
+  bot.fireTimer -= dt;
+  if (bot.fireTimer <= 0) {
+    shoot(bot, target.x, target.y, weapon, team);
+    const multiplier = team === "bot" ? game.enemyFireMultiplier : 1;
+    bot.fireTimer = (weapon.fireRate + 0.18 + Math.random() * 0.22) * multiplier;
+    bot.strafe *= -1;
+  }
+}
+
 function updateBotAwareness(bot, seesPlayer, dt) {
   if (seesPlayer) {
     bot.lastKnownPlayer = { x: game.player.x, y: game.player.y };
@@ -943,11 +1104,11 @@ function updateBotAwareness(bot, seesPlayer, dt) {
 }
 
 function botFightPlayer(bot, dt, options = {}) {
-  if (!botCanSeePlayer(bot)) return false;
-  const p = game.player;
-  const angle = Math.atan2(p.y - bot.y, p.x - bot.x);
+  const target = closestVisibleSquadTarget(bot);
+  if (!target) return false;
+  const angle = Math.atan2(target.y - bot.y, target.x - bot.x);
   bot.angle = angle;
-  bot.lastKnownPlayer = { x: p.x, y: p.y };
+  bot.lastKnownPlayer = { x: target.x, y: target.y };
   bot.memoryTimer = 3.2;
 
   if (options.strafe !== false) {
@@ -956,12 +1117,7 @@ function botFightPlayer(bot, dt, options = {}) {
     if (movedNow < 0.5) bot.strafe *= -1;
   }
 
-  bot.fireTimer -= dt;
-  if (bot.fireTimer <= 0) {
-    shoot(bot, p.x, p.y, bot.weapon || weapons[0], "bot");
-    bot.fireTimer = (bot.weapon || weapons[0]).fireRate + 0.18 + Math.random() * 0.22;
-    bot.strafe *= -1;
-  }
+  botShootAt(bot, target, dt, "bot");
   return true;
 }
 
@@ -1090,6 +1246,72 @@ function keepBotSpacing(bot, dt) {
   if (length > 0) {
     moveEntity(bot, (pushX / length) * bot.speed * 0.42 * dt, (pushY / length) * bot.speed * 0.42 * dt, map.walls);
   }
+}
+
+function keepSquadSpacing(entity, squad, dt) {
+  let pushX = 0;
+  let pushY = 0;
+  for (const other of squad) {
+    if (other === entity || !other.alive) continue;
+    const dx = entity.x - other.x;
+    const dy = entity.y - other.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance > 0 && distance < 64) {
+      const strength = (64 - distance) / 64;
+      pushX += (dx / distance) * strength;
+      pushY += (dy / distance) * strength;
+    }
+  }
+  const length = Math.hypot(pushX, pushY);
+  if (length > 0) {
+    moveEntity(entity, (pushX / length) * entity.speed * 0.36 * dt, (pushY / length) * entity.speed * 0.36 * dt, map.walls);
+  }
+}
+
+function allyObjectivePoint(ally, index) {
+  if (game.spike.state === "planted") {
+    const angle = (index / Math.max(1, game.allies.length)) * Math.PI * 2;
+    return {
+      x: game.spike.x + Math.cos(angle) * 86,
+      y: game.spike.y + Math.sin(angle) * 64,
+    };
+  }
+  if (game.playerSide === "attackers") {
+    if (game.spike.state === "carried" && game.spike.owner === "player") {
+      const side = index === 0 ? -1 : 1;
+      return { x: game.player.x + side * 76, y: game.player.y + 48 };
+    }
+    const site = map.sites[game.roundNumber % map.sites.length];
+    return siteEntryPoints(site)[index % siteEntryPoints(site).length];
+  }
+  const holds = [
+    { x: 315, y: 238 },
+    { x: 965, y: 238 },
+    { x: 640, y: 382 },
+  ];
+  return holds[index % holds.length];
+}
+
+function updateAllies(dt) {
+  const squad = [game.player, ...game.allies];
+  game.allies.forEach((ally, index) => {
+    if (!ally.alive) return;
+    const enemy = closestVisibleEnemy(ally);
+    if (enemy) {
+      const side = ally.angle + Math.PI / 2;
+      const movedNow = moveEntity(ally, Math.cos(side) * ally.speed * ally.strafe * 0.3 * dt, Math.sin(side) * ally.speed * ally.strafe * 0.3 * dt, map.walls);
+      if (movedNow < 0.5) ally.strafe *= -1;
+      botShootAt(ally, enemy, dt, "ally");
+    } else {
+      const target = allyObjectivePoint(ally, index);
+      if (Math.hypot(ally.x - target.x, ally.y - target.y) > 36) {
+        moveBotToward(ally, target, dt, 1.04);
+      } else {
+        ally.angle = Math.atan2(game.player.y - ally.y, game.player.x - ally.x);
+      }
+    }
+    keepSquadSpacing(ally, squad, dt);
+  });
 }
 
 function updateBots(dt) {
@@ -1232,7 +1454,7 @@ function updateBullets(dt) {
       continue;
     }
 
-    if (bullet.team === "player") {
+    if (bullet.team === "player" || bullet.team === "ally") {
       for (const bot of game.bots) {
         if (bot.alive && segmentCircleHit(oldX, oldY, bullet.x, bullet.y, bot, 6)) {
           applyDamage(bot, bullet.damage);
@@ -1257,18 +1479,25 @@ function updateBullets(dt) {
           break;
         }
       }
-    } else if (game.player.alive && segmentCircleHit(oldX, oldY, bullet.x, bullet.y, game.player, 3)) {
-      applyDamage(game.player, bullet.damage);
-      game.hitMarkers.push({ x: game.player.x, y: game.player.y - 30, life: 0.3, maxLife: 0.3, color: "#ff5b5b" });
-      spawnParticles(bullet.x, bullet.y, "#ff4d5d", 8, 120);
-      game.shake = Math.max(game.shake, 0.1);
-      bullet.life = 0;
-      if (game.player.hp <= 0) {
-        game.player.alive = false;
-        const winner = game.playerSide === "attackers" ? "defenders" : "attackers";
-        endRound(winner, game.playerSide === "attackers"
-          ? "Voce foi eliminado. Defensores venceram."
-          : "Voce foi eliminado. Atacantes venceram.");
+    } else {
+      const targets = [game.player, ...game.allies];
+      for (const target of targets) {
+        if (!target.alive || !segmentCircleHit(oldX, oldY, bullet.x, bullet.y, target, target.id === "player" ? 3 : 6)) continue;
+        applyDamage(target, bullet.damage);
+        game.hitMarkers.push({ x: target.x, y: target.y - 30, life: 0.3, maxLife: 0.3, color: "#ff5b5b" });
+        spawnParticles(bullet.x, bullet.y, "#ff4d5d", 8, 120);
+        if (target.id === "player") game.shake = Math.max(game.shake, 0.1);
+        bullet.life = 0;
+        if (target.hp <= 0) {
+          target.alive = false;
+          if (target.id === "player") {
+            const winner = game.playerSide === "attackers" ? "defenders" : "attackers";
+            endRound(winner, game.playerSide === "attackers"
+              ? "Voce foi eliminado. Defensores venceram."
+              : "Voce foi eliminado. Atacantes venceram.");
+          }
+        }
+        break;
       }
     }
   }
@@ -1307,7 +1536,12 @@ function updateSpike(dt) {
 }
 
 function updateTimers(dt) {
-  game.phaseTime -= dt;
+  if (!game.sandbox) game.phaseTime -= dt;
+  if (game.sandbox) game.money = 99999;
+  if (game.introTimer > 0) {
+    game.introTimer = Math.max(0, game.introTimer - dt);
+    if (game.introTimer === 0) ui.introOverlay.classList.add("hidden");
+  }
   game.abilityCooldown = Math.max(0, game.abilityCooldown - dt);
   game.shake = Math.max(0, game.shake - dt);
   const wasReloading = game.reloadTimer > 0;
@@ -1326,11 +1560,6 @@ function updateTimers(dt) {
     particle.life -= dt;
   }
   game.particles = game.particles.filter((p) => p.life > 0);
-  for (const step of game.footsteps) {
-    step.r += 90 * dt;
-    step.life -= dt;
-  }
-  game.footsteps = game.footsteps.filter((step) => step.life > 0);
   for (const marker of game.hitMarkers) {
     marker.y -= 22 * dt;
     marker.life -= dt;
@@ -1368,6 +1597,7 @@ function update(dt) {
   updateTimers(dt);
   if (game.phase === "action") {
     updatePlayer(dt);
+    updateAllies(dt);
     updateBots(dt);
     updateBullets(dt);
     updateSpike(dt);
@@ -1376,10 +1606,11 @@ function update(dt) {
 }
 
 function drawMap() {
-  ctx.fillStyle = "#142028";
+  const theme = map.theme || DEFAULT_MAP.theme;
+  ctx.fillStyle = theme.floor;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  ctx.fillStyle = "#1b2b35";
+  ctx.fillStyle = theme.grid;
   for (let x = 0; x < canvas.width; x += 40) {
     ctx.fillRect(x, 0, 1, canvas.height);
   }
@@ -1388,18 +1619,18 @@ function drawMap() {
   }
 
   for (const site of map.sites) {
-    ctx.fillStyle = "rgba(255, 209, 102, 0.12)";
-    ctx.strokeStyle = "#ffd166";
+    ctx.fillStyle = theme.siteFill;
+    ctx.strokeStyle = theme.siteStroke;
     ctx.lineWidth = 2;
     ctx.fillRect(site.x, site.y, site.w, site.h);
     ctx.strokeRect(site.x, site.y, site.w, site.h);
-    ctx.fillStyle = "#ffd166";
+    ctx.fillStyle = theme.siteStroke;
     ctx.font = "bold 24px Segoe UI";
     ctx.fillText(site.id, site.x + 14, site.y + 32);
   }
 
-  ctx.fillStyle = "#293944";
-  ctx.strokeStyle = "#41515d";
+  ctx.fillStyle = theme.wall;
+  ctx.strokeStyle = theme.wallStroke;
   for (const wall of map.walls) {
     ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
     ctx.strokeRect(wall.x, wall.y, wall.w, wall.h);
@@ -1587,6 +1818,9 @@ function drawRadar() {
     ctx.fill();
   };
   dot(game.player.x, game.player.y, "#ffffff", 3.5);
+  for (const ally of game.allies) {
+    if (ally.alive) dot(ally.x, ally.y, "#62e6a0", 2.8);
+  }
   for (const bot of game.bots) {
     if (!bot.alive) continue;
     const visible = game.revealTimer > 0 || hasLineOfSight(game.player, bot) || bot.memoryTimer > 0;
@@ -1594,6 +1828,63 @@ function drawRadar() {
   }
   if (game.spike.state !== "carried") dot(game.spike.x, game.spike.y, "#ffd166", 3);
   ctx.restore();
+}
+
+function drawCrosshair() {
+  if (game.selectedWeapon.id === "sniper") {
+    ctx.save();
+    ctx.fillStyle = "rgba(0, 0, 0, 0.18)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = "rgba(255,255,255,0.86)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(mouse.x, mouse.y, 54, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(255,255,255,0.58)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(mouse.x - 78, mouse.y);
+    ctx.lineTo(mouse.x - 14, mouse.y);
+    ctx.moveTo(mouse.x + 14, mouse.y);
+    ctx.lineTo(mouse.x + 78, mouse.y);
+    ctx.moveTo(mouse.x, mouse.y - 78);
+    ctx.lineTo(mouse.x, mouse.y - 14);
+    ctx.moveTo(mouse.x, mouse.y + 14);
+    ctx.lineTo(mouse.x, mouse.y + 78);
+    ctx.stroke();
+    ctx.fillStyle = "#ff4d5d";
+    ctx.beginPath();
+    ctx.arc(mouse.x, mouse.y, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
+
+  if (game.crosshairStyle === "minimal") {
+    ctx.strokeStyle = "rgba(255,255,255,0.8)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(mouse.x - 7, mouse.y);
+    ctx.lineTo(mouse.x - 3, mouse.y);
+    ctx.moveTo(mouse.x + 3, mouse.y);
+    ctx.lineTo(mouse.x + 7, mouse.y);
+    ctx.moveTo(mouse.x, mouse.y - 7);
+    ctx.lineTo(mouse.x, mouse.y - 3);
+    ctx.moveTo(mouse.x, mouse.y + 3);
+    ctx.lineTo(mouse.x, mouse.y + 7);
+    ctx.stroke();
+    return;
+  }
+
+  ctx.strokeStyle = "rgba(255,255,255,0.7)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(mouse.x, mouse.y, 10, 0, Math.PI * 2);
+  ctx.moveTo(mouse.x - 15, mouse.y);
+  ctx.lineTo(mouse.x + 15, mouse.y);
+  ctx.moveTo(mouse.x, mouse.y - 15);
+  ctx.lineTo(mouse.x, mouse.y + 15);
+  ctx.stroke();
 }
 
 function draw() {
@@ -1614,20 +1905,14 @@ function draw() {
 
   drawSpike();
 
-  for (const step of game.footsteps) {
-    const alpha = Math.max(0, step.life / step.maxLife) * 0.35;
-    ctx.strokeStyle = step.team === "player" ? `rgba(255,255,255,${alpha})` : `rgba(255,209,102,${alpha})`;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(step.x, step.y, step.r, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-
   for (const bot of game.bots) {
     const visible = game.revealTimer > 0 || hasLineOfSight(game.player, bot);
     const label = `${bot.side === "attackers" ? "ATK" : "DEF"} ${bot.weapon?.name || "Pistol"}`;
     const color = bot.side === "attackers" ? "#ff8a5b" : "#4fb3ff";
     drawEntity(bot, visible ? color : "#274351", visible ? label : "", "bot");
+  }
+  for (const ally of game.allies) {
+    drawEntity(ally, "#62e6a0", `ALLY ${ally.weapon?.name || "Pistol"}`, "ally");
   }
   drawEntity(game.player, game.selectedAgent.color, game.playerSide === "attackers" ? "YOU ATK" : "YOU DEF", "player");
 
@@ -1651,14 +1936,23 @@ function draw() {
   for (const marker of game.hitMarkers) {
     const alpha = Math.max(0, marker.life / marker.maxLife);
     ctx.globalAlpha = alpha;
-    ctx.strokeStyle = marker.color;
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(255,255,255,0.95)";
+    ctx.lineWidth = 8;
+    ctx.lineCap = "round";
+    ctx.shadowColor = "rgba(0,0,0,0.55)";
+    ctx.shadowBlur = 5;
     ctx.beginPath();
-    ctx.moveTo(marker.x - 7, marker.y - 7);
-    ctx.lineTo(marker.x + 7, marker.y + 7);
-    ctx.moveTo(marker.x + 7, marker.y - 7);
-    ctx.lineTo(marker.x - 7, marker.y + 7);
+    ctx.moveTo(marker.x - 21, marker.y - 21);
+    ctx.lineTo(marker.x - 10, marker.y - 10);
+    ctx.moveTo(marker.x + 21, marker.y - 21);
+    ctx.lineTo(marker.x + 10, marker.y - 10);
+    ctx.moveTo(marker.x - 21, marker.y + 21);
+    ctx.lineTo(marker.x - 10, marker.y + 10);
+    ctx.moveTo(marker.x + 21, marker.y + 21);
+    ctx.lineTo(marker.x + 10, marker.y + 10);
     ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.lineCap = "butt";
   }
   ctx.globalAlpha = 1;
 
@@ -1678,15 +1972,7 @@ function draw() {
   }
   ctx.globalAlpha = 1;
 
-  ctx.strokeStyle = "rgba(255,255,255,0.7)";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.arc(mouse.x, mouse.y, 10, 0, Math.PI * 2);
-  ctx.moveTo(mouse.x - 15, mouse.y);
-  ctx.lineTo(mouse.x + 15, mouse.y);
-  ctx.moveTo(mouse.x, mouse.y - 15);
-  ctx.lineTo(mouse.x, mouse.y + 15);
-  ctx.stroke();
+  drawCrosshair();
   drawRadar();
   ctx.restore();
 }
@@ -1703,7 +1989,7 @@ function updateUi() {
             : "Fim";
   ui.timer.textContent = game.spike.state === "planted"
     ? `Spike ${Math.max(0, Math.ceil(game.spike.timer))}`
-    : Math.max(0, Math.ceil(game.phaseTime)).toString();
+    : game.sandbox ? "∞" : Math.max(0, Math.ceil(game.phaseTime)).toString();
   ui.score.textContent = `${game.playerScore} - ${game.enemyScore}`;
   ui.money.textContent = `$${game.money}`;
   ui.agent.textContent = `${game.selectedAgent.name} ${game.playerSide === "attackers" ? "ATK" : "DEF"} (${game.abilityCooldown > 0 ? Math.ceil(game.abilityCooldown) : "E"})`;
@@ -1744,13 +2030,97 @@ function togglePause() {
 }
 
 function toggleShop() {
-  if (game.phase !== "buy") {
+  if (game.phase !== "buy" && !game.sandbox) {
     setMessage("A loja so abre na fase de compra.");
     updateUi();
     return;
   }
   ui.shop.classList.toggle("hidden");
   updateUi();
+}
+
+function setMenu(title, text, buttons, kicker = "Protocol Shift") {
+  ui.menuKicker.textContent = kicker;
+  ui.menuTitle.textContent = title;
+  ui.menuText.textContent = text;
+  ui.menuButtons.innerHTML = "";
+  for (const item of buttons) {
+    const button = document.createElement("button");
+    button.innerHTML = `<b>${item.label}</b><span>${item.desc || ""}</span>`;
+    button.addEventListener("click", item.action);
+    ui.menuButtons.appendChild(button);
+  }
+  ui.menuOverlay.classList.remove("hidden");
+  game.paused = true;
+}
+
+function showMainMenu() {
+  ui.introOverlay.classList.add("hidden");
+  setMenu("Menu", "Escolha como quer jogar.", [
+    { label: "JOGAR", desc: "Partida normal com dificuldade.", action: showDifficultyMenu },
+    { label: "OPÇÕES", desc: "Preferências de mira e controles.", action: showOptionsMenu },
+    { label: "SANDBOX", desc: "Dinheiro infinito, sem tempo e posicionamento livre.", action: startSandboxMode },
+  ]);
+}
+
+function showDifficultyMenu() {
+  setMenu("Dificuldade", "Escolha o ritmo da partida.", [
+    { label: "Fácil", desc: "3 aliados. Inimigos atiram bem menos.", action: () => startMode("Fácil", "easy") },
+    { label: "Normal", desc: "Sem aliados. Inimigos atiram com menos frequência.", action: () => startMode("Normal", "normal") },
+    { label: "Difícil", desc: "Sem aliados. Inimigos atiram na frequência normal.", action: () => startMode("Difícil", "hard") },
+    { label: "Voltar", desc: "Retornar ao menu principal.", action: showMainMenu },
+  ], "JOGAR");
+}
+
+function showOptionsMenu() {
+  setMenu("Opções", "Ajustes rápidos de controle e mira.", [
+    { label: `Mira: ${game.crosshairStyle === "default" ? "Padrão" : "Minimalista"}`, desc: "Alterna o visual da mira comum.", action: () => { game.crosshairStyle = game.crosshairStyle === "default" ? "minimal" : "default"; showOptionsMenu(); } },
+    { label: `Movimento: ${game.arrowKeys ? "WASD + setinhas" : "WASD"}`, desc: "Permite usar setinhas junto do WASD.", action: () => { game.arrowKeys = !game.arrowKeys; showOptionsMenu(); } },
+    { label: "Voltar", desc: "Retornar ao menu principal.", action: showMainMenu },
+  ], "OPÇÕES");
+}
+
+function applyDifficulty(difficulty) {
+  game.difficulty = difficulty;
+  game.sandbox = false;
+  if (difficulty === "easy") {
+    game.allyCount = 3;
+    game.enemyFireMultiplier = 1.85;
+  } else if (difficulty === "normal") {
+    game.allyCount = 0;
+    game.enemyFireMultiplier = 1.35;
+  } else {
+    game.allyCount = 0;
+    game.enemyFireMultiplier = 1;
+  }
+}
+
+function startMode(label, difficulty) {
+  game.mode = label;
+  applyDifficulty(difficulty);
+  ui.menuOverlay.classList.add("hidden");
+  startNewMatch();
+}
+
+function startSandboxMode() {
+  game.mode = "Sandbox";
+  game.difficulty = "sandbox";
+  game.sandbox = true;
+  game.allyCount = 2;
+  game.enemyFireMultiplier = 1.2;
+  ui.menuOverlay.classList.add("hidden");
+  startNewMatch();
+  startActionRound();
+  game.phaseTime = 9999;
+  setMessage("Sandbox: clique direito para inimigo, clique do meio para aliado. Dinheiro infinito.");
+}
+
+function showIntro() {
+  ui.introMode.textContent = game.mode;
+  ui.introMap.textContent = game.mapName;
+  ui.introTeam.textContent = `${game.playerSide === "attackers" ? "Ataque" : "Defesa"} - ${map.vibe}`;
+  ui.introOverlay.classList.remove("hidden");
+  game.introTimer = 5;
 }
 
 function buildShop() {
@@ -1826,7 +2196,45 @@ function buildShop() {
     });
     ui.equipmentButtons.appendChild(button);
   }
+
+  ui.allyButtons.innerHTML = "";
+  for (const item of allyItems) {
+    const button = document.createElement("button");
+    button.className = "choice";
+    button.innerHTML = `<b>${item.name} <em>$${item.price}</em></b><span>${item.desc}</span>`;
+    button.addEventListener("click", () => {
+      if (game.phase !== "buy") return;
+      if (allyItemOwned(item)) {
+        setMessage("Esse upgrade aliado ja esta ativo.");
+        updateUi();
+        return;
+      }
+      if (game.money < item.price) {
+        setMessage("Creditos insuficientes.");
+        updateUi();
+        return;
+      }
+      game.money -= item.price;
+      item.apply();
+      const allyWeapon = weapons.find((weapon) => weapon.id === game.allyLoadout.weaponId) || weapons[0];
+      for (const ally of game.allies) {
+        ally.weapon = allyWeapon;
+        ally.maxArmor = game.allyLoadout.armor;
+        ally.armor = game.allyLoadout.armor;
+      }
+      setMessage(`${item.name} comprado para aliados.`);
+      updateShopState();
+      updateUi();
+    });
+    ui.allyButtons.appendChild(button);
+  }
   updateShopState();
+}
+
+function allyItemOwned(item) {
+  if (item.id === "allyArmor") return game.allyLoadout.armor >= 35;
+  if (item.weaponId) return game.allyLoadout.weaponId === item.weaponId;
+  return false;
 }
 
 function equipmentOwned(item) {
@@ -1849,6 +2257,14 @@ function updateShopState() {
     if (status) status.textContent = weapon === game.selectedWeapon ? "Equipada" : owned ? "Comprada" : `$${weapon.price}`;
   });
   [...ui.equipmentButtons.children].forEach((button, i) => button.classList.toggle("active", equipmentOwned(equipment[i])));
+  [...ui.allyButtons.children].forEach((button, i) => {
+    const item = allyItems[i];
+    const owned = allyItemOwned(item);
+    button.classList.toggle("active", owned);
+    button.classList.toggle("owned", owned);
+    const status = button.querySelector("em");
+    if (status) status.textContent = owned ? "Ativo" : `$${item.price}`;
+  });
 }
 
 function loop(now) {
@@ -1883,7 +2299,21 @@ canvas.addEventListener("mousemove", (event) => {
   mouse.y = ((event.clientY - rect.top) / rect.height) * canvas.height;
 });
 
-canvas.addEventListener("mousedown", () => {
+canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+
+canvas.addEventListener("mousedown", (event) => {
+  if (game.sandbox && game.phase === "action" && event.button === 2) {
+    event.preventDefault();
+    const bot = makeBot({ x: mouse.x, y: mouse.y }, game.bots.length);
+    bot.hasSpike = false;
+    game.bots.push(bot);
+    return;
+  }
+  if (game.sandbox && game.phase === "action" && event.button === 1) {
+    event.preventDefault();
+    game.allies.push(makeAlly({ x: mouse.x, y: mouse.y }, game.allies.length));
+    return;
+  }
   mouse.down = true;
 });
 
@@ -1893,8 +2323,12 @@ window.addEventListener("mouseup", () => {
 
 ui.pauseButton.addEventListener("click", togglePause);
 ui.shopButton.addEventListener("click", toggleShop);
-ui.newGameButton.addEventListener("click", startNewMatch);
+ui.newGameButton.addEventListener("click", () => {
+  ui.matchOverlay.classList.add("hidden");
+  showMainMenu();
+});
 
 buildShop();
 startNewMatch();
+showMainMenu();
 requestAnimationFrame(loop);
