@@ -1,0 +1,377 @@
+:root {
+  --bg: #05080d;
+  --panel: rgba(7, 12, 18, 0.74);
+  --panel-strong: rgba(7, 12, 18, 0.9);
+  --line: rgba(215, 237, 255, 0.14);
+  --text: #eef7fb;
+  --muted: #9aaeba;
+  --accent: #ff4d5d;
+  --blue: #46a8ff;
+  --green: #62e6a0;
+  --yellow: #ffd166;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 25% 20%, rgba(70, 168, 255, 0.14), transparent 32%),
+    radial-gradient(circle at 80% 85%, rgba(255, 77, 93, 0.13), transparent 30%),
+    var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", Arial, sans-serif;
+}
+
+button {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+button:hover,
+button.active {
+  border-color: rgba(255, 77, 93, 0.75);
+  background: rgba(255, 77, 93, 0.16);
+  transform: translateY(-1px);
+}
+
+.shell {
+  width: 100vw;
+  height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 14px;
+}
+
+.game-wrap {
+  position: relative;
+  width: min(100%, 1280px);
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #0b1318;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 24px 90px rgba(0, 0, 0, 0.48);
+}
+
+canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.glass {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.24);
+}
+
+.top-hud {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  display: flex;
+  gap: 6px;
+  padding: 5px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  animation: slideDown 420ms ease both;
+}
+
+.hud-button,
+.pause-button {
+  min-width: 72px;
+  padding: 7px 10px;
+  pointer-events: auto;
+}
+
+.hud-pill {
+  min-width: 88px;
+  padding: 5px 9px;
+}
+
+.timer-pill {
+  min-width: 72px;
+  text-align: center;
+}
+
+.label {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 14px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.status-card {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  width: 288px;
+  padding: 10px;
+  pointer-events: none;
+  animation: slideUp 420ms ease both;
+}
+
+.status-main {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.status-main span,
+.status-row {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.bars {
+  display: grid;
+  gap: 5px;
+  margin: 8px 0;
+}
+
+.bar {
+  height: 5px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.bar i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: left center;
+  transition: transform 180ms ease;
+}
+
+.bar.hp i {
+  background: linear-gradient(90deg, var(--green), #d5f970);
+}
+
+.bar.ammo i {
+  background: linear-gradient(90deg, var(--blue), #9bd4ff);
+}
+
+.bar.plant i {
+  background: linear-gradient(90deg, var(--yellow), var(--accent));
+}
+
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.shop {
+  position: absolute;
+  top: 76px;
+  right: 14px;
+  width: 292px;
+  max-height: calc(100% - 108px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  background: var(--panel-strong);
+  padding: 13px;
+  animation: panelIn 220ms ease both;
+}
+
+.shop.hidden {
+  display: none;
+}
+
+.shop header {
+  margin-bottom: 12px;
+}
+
+.shop h1,
+.shop h2,
+.shop p {
+  margin: 0;
+}
+
+.shop h1 {
+  font-size: 20px;
+  letter-spacing: 0;
+}
+
+.shop p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.panel {
+  padding-top: 11px;
+  border-top: 1px solid var(--line);
+  margin-top: 11px;
+}
+
+.panel h2 {
+  margin-bottom: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.grid {
+  display: grid;
+  gap: 7px;
+}
+
+.choice {
+  min-height: 40px;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.choice span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.message {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  max-width: 460px;
+  padding: 8px 12px;
+  text-align: center;
+  transform: translateX(-50%);
+  pointer-events: none;
+  animation: fadeIn 360ms ease both;
+}
+
+.message span {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.message.pulse {
+  animation: pulseMessage 360ms ease both;
+}
+
+.match-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  background: rgba(1, 6, 10, 0.78);
+  pointer-events: auto;
+}
+
+.match-overlay.hidden {
+  display: none;
+}
+
+.match-card {
+  width: min(420px, calc(100% - 32px));
+  padding: 26px;
+  text-align: center;
+}
+
+.match-card h2 {
+  margin: 6px 0 8px;
+  font-size: 48px;
+  line-height: 1;
+}
+
+.match-card p {
+  margin: 0 0 18px;
+  color: var(--muted);
+}
+
+.match-card button {
+  min-width: 150px;
+  padding: 10px 14px;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translate(-50%, -14px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes panelIn {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pulseMessage {
+  0% { transform: translateX(-50%) scale(0.98); border-color: var(--line); }
+  45% { transform: translateX(-50%) scale(1.02); border-color: rgba(255, 209, 102, 0.8); }
+  100% { transform: translateX(-50%) scale(1); border-color: var(--line); }
+}
+
+@media (max-width: 900px) {
+  .shell {
+    padding: 0;
+  }
+
+  .game-wrap {
+    width: 100vw;
+    height: 100vh;
+    aspect-ratio: auto;
+  }
+
+  .top-hud {
+    top: 6px;
+  }
+
+  .hud-pill {
+    min-width: 64px;
+    padding: 5px 7px;
+  }
+
+  .status-card {
+    width: 260px;
+    left: 8px;
+    bottom: 8px;
+  }
+
+  .shop {
+    top: 62px;
+    right: 8px;
+    width: min(292px, calc(100% - 16px));
+  }
+
+  .message {
+    left: auto;
+    right: 8px;
+    bottom: 8px;
+    max-width: 320px;
+    transform: none;
+  }
+}
