@@ -1812,7 +1812,10 @@ function updateBullets(dt) {
           bullet.life = 0;
           if (bot.hp <= 0) {
             bot.alive = false;
-            if (bullet.team === "player") game.stats.kills += 1;
+            if (bullet.team === "player") {
+              game.stats.kills += 1;
+              addKillFeedEntry(true, game.selectedWeapon.name, region === "head");
+            }
             if (!game.sandbox) {
               game.money += bullet.team === "player" ? (region === "head" ? 250 : 180) : 90;
               if (!game.training) game.money = Math.min(game.money, 12000);
@@ -1854,6 +1857,7 @@ function updateBullets(dt) {
           target.alive = false;
           if (target.id === "player") {
             game.stats.deaths += 1;
+            addKillFeedEntry(false, "", false);
             if (game.tutorial) {
               showRoundBanner("Tente de novo", "No tutorial voce renasce para praticar sem perder a partida.", "Tutorial", 2.4);
               resetRound();
