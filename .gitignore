@@ -1,0 +1,4 @@
+preview_*.png
+*.log
+launch_protocol_shift_node.vbs
+launch_protocol_shift_server.vbs

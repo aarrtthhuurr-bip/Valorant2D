@@ -19,6 +19,7 @@ html,
 body {
   width: 100%;
   height: 100%;
+  height: 100dvh;
   margin: 0;
   overflow: hidden;
   background:
@@ -48,6 +49,7 @@ button.active {
 .shell {
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   display: grid;
   place-items: center;
   padding: 14px;
@@ -56,6 +58,8 @@ button.active {
 .game-wrap {
   position: relative;
   width: min(100%, 1280px);
+  max-height: calc(100vh - 28px);
+  max-height: calc(100dvh - 28px);
   aspect-ratio: 16 / 9;
   overflow: hidden;
   background: #0b1318;
@@ -124,10 +128,150 @@ strong {
   white-space: nowrap;
 }
 
+/* ── Side pill (ATK / DEF) ── */
+.side-pill {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 6px 10px;
+  border-radius: 4px;
+  min-width: 48px;
+  text-align: center;
+  border-left: none;
+  transition: background 300ms, color 300ms;
+}
+.side-pill.atk { background: rgba(255,138,91,0.22); color: #ff8a5b; border-color: rgba(255,138,91,0.4); }
+.side-pill.def { background: rgba(70,168,255,0.18); color: #46a8ff; border-color: rgba(70,168,255,0.4); }
+
+/* ── Round label ── */
+.round-label {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* ── Money delta ── */
+.money-pill { position: relative; }
+.money-delta {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: deltaFade 1.8s ease forwards;
+}
+.money-delta.pos { color: #62e6a0; }
+.money-delta.neg { color: #ff4d5d; }
+.money-delta.hidden { display: none; }
+@keyframes deltaFade {
+  0%   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  60%  { opacity: 1; transform: translateX(-50%) translateY(-10px); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-18px); }
+}
+
+/* ── Timer urgência ── */
+#timerText.warn   { color: var(--yellow); }
+#timerText.urgent { color: var(--accent); animation: timerPulse 0.5s ease infinite alternate; }
+@keyframes timerPulse {
+  from { opacity: 1; }
+  to   { opacity: 0.5; }
+}
+
+/* ── Barra de compra ── */
+.buy-bar {
+  position: absolute;
+  top: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(360px, 80%);
+  height: 3px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+  overflow: hidden;
+  z-index: 5;
+}
+.buy-bar.hidden { display: none; }
+.buy-bar i {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: var(--yellow);
+  transform-origin: left;
+  transition: transform 0.25s linear;
+}
+
+/* ── Agent dot ── */
+.agent-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-right: 2px;
+}
+
+/* ── Armor bar ── */
+.bar.armor i { background: linear-gradient(90deg, var(--blue), #9bd4ff); }
+.bar.armor.hidden { display: none; }
+#armorText.hidden { display: none; }
+
+/* ── Ammo dots ── */
+.ammo-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 6px;
+  min-height: 8px;
+}
+.ammo-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 1px;
+  background: rgba(70,168,255,0.85);
+  transition: background 120ms;
+}
+.ammo-dot.spent { background: rgba(255,255,255,0.12); }
+.ammo-dot.group-sep { margin-left: 4px; }
+
+/* ── Kill feed ── */
+.kill-feed {
+  position: absolute;
+  top: 58px;
+  left: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  pointer-events: none;
+  z-index: 10;
+}
+.kill-entry {
+  font-size: 12px;
+  padding: 4px 8px;
+  background: rgba(5,10,15,0.72);
+  border: 1px solid rgba(215,237,255,0.12);
+  border-radius: 4px;
+  white-space: nowrap;
+  animation: killIn 200ms ease both;
+}
+.kill-entry .kf-player { color: #62e6a0; font-weight: 600; }
+.kill-entry .kf-enemy  { color: #ff8a5b; font-weight: 600; }
+.kill-entry .kf-weapon { color: var(--muted); font-size: 10px; margin: 0 4px; }
+.kill-entry .kf-hs     { color: #ff4d5d; font-size: 10px; margin-left: 2px; }
+@keyframes killIn {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
 .status-card {
   position: absolute;
-  left: 12px;
+  right: 12px;
   bottom: 12px;
+  left: auto;
   width: 288px;
   padding: 11px;
   border-radius: 6px;
@@ -188,19 +332,33 @@ strong {
 
 .shop {
   position: absolute;
-  top: 76px;
-  right: 14px;
-  width: 330px;
-  max-height: calc(100% - 108px);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(1);
+  width: min(560px, calc(100% - 32px));
+  max-height: calc(100% - 80px);
   overflow: auto;
   border: 1px solid rgba(215, 237, 255, 0.18);
   background: var(--panel-strong);
-  padding: 14px;
-  border-radius: 6px;
-  animation: panelIn 220ms ease both;
+  padding: 18px 20px;
+  border-radius: 8px;
+  z-index: 22;
+  animation: shopIn 200ms ease both;
 }
 
 .shop.hidden {
+  display: none;
+}
+
+.shop-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 21;
+  background: rgba(1, 6, 10, 0.6);
+  animation: fadeIn 200ms ease both;
+}
+
+.shop-backdrop.hidden {
   display: none;
 }
 
@@ -225,10 +383,34 @@ strong {
   font-size: 12px;
 }
 
+.shop-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+  margin: 10px 0 12px;
+}
+
+.shop-tabs button {
+  min-height: 32px;
+  padding: 7px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.shop-tabs button.active {
+  border-color: rgba(98, 230, 160, 0.75);
+  background: rgba(98, 230, 160, 0.15);
+}
+
 .panel {
   padding-top: 11px;
   border-top: 1px solid var(--line);
   margin-top: 11px;
+}
+
+.shop-panel.hidden {
+  display: none;
 }
 
 .panel h2 {
@@ -308,6 +490,84 @@ strong {
 
 .message.pulse {
   animation: pulseMessage 360ms ease both;
+}
+
+.round-banner {
+  position: absolute;
+  top: 88px;
+  left: 50%;
+  z-index: 12;
+  min-width: 300px;
+  padding: 12px 18px;
+  text-align: center;
+  border: 1px solid rgba(255, 209, 102, 0.35);
+  border-radius: 6px;
+  background: rgba(5, 10, 15, 0.78);
+  transform: translateX(-50%);
+  pointer-events: none;
+  animation: bannerIn 220ms ease both;
+}
+
+.round-banner.hidden {
+  display: none;
+}
+
+.round-banner strong {
+  font-size: 24px;
+}
+
+.round-banner p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.scoreboard {
+  position: absolute;
+  top: 92px;
+  left: 50%;
+  z-index: 18;
+  width: min(520px, calc(100% - 32px));
+  padding: 16px;
+  border-radius: 6px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.scoreboard.hidden {
+  display: none;
+}
+
+.scoreboard header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.scoreboard-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.scoreboard-grid div {
+  padding: 9px;
+  border: 1px solid rgba(215, 237, 255, 0.12);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.scoreboard-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.scoreboard-grid b {
+  display: block;
+  margin-top: 3px;
+  font-size: 16px;
 }
 
 .match-overlay {
@@ -410,6 +670,11 @@ strong {
   padding: 10px 14px;
 }
 
+@keyframes shopIn {
+  from { opacity: 0; transform: translate(-50%, -48%) scale(0.97); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
 @keyframes slideDown {
   from { opacity: 0; transform: translate(-50%, -14px); }
   to { opacity: 1; transform: translate(-50%, 0); }
@@ -434,6 +699,11 @@ strong {
   0% { transform: translateX(-50%) scale(0.98); border-color: var(--line); }
   45% { transform: translateX(-50%) scale(1.02); border-color: rgba(255, 209, 102, 0.8); }
   100% { transform: translateX(-50%) scale(1); border-color: var(--line); }
+}
+
+@keyframes bannerIn {
+  from { opacity: 0; transform: translate(-50%, -10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
 }
 
 @media (max-width: 900px) {

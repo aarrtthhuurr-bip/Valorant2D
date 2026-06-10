@@ -12,6 +12,7 @@ const ui = {
   ammo: document.getElementById("ammoText"),
   spike: document.getElementById("spikeText"),
   shop: document.getElementById("shop"),
+  shopTabs: document.getElementById("shopTabs"),
   message: document.getElementById("message"),
   agentButtons: document.getElementById("agentButtons"),
   weaponButtons: document.getElementById("weaponButtons"),
@@ -21,6 +22,7 @@ const ui = {
   ammoBar: document.getElementById("ammoBar"),
   plantBar: document.getElementById("plantBar"),
   shopButton: document.getElementById("shopButton"),
+  shopBackdrop: document.getElementById("shopBackdrop"),
   pauseButton: document.getElementById("pauseButton"),
   matchOverlay: document.getElementById("matchOverlay"),
   overlayKicker: document.getElementById("overlayKicker"),
@@ -36,16 +38,43 @@ const ui = {
   introMode: document.getElementById("introMode"),
   introMap: document.getElementById("introMap"),
   introTeam: document.getElementById("introTeam"),
+  roundBanner: document.getElementById("roundBanner"),
+  roundKicker: document.getElementById("roundKicker"),
+  roundTitle: document.getElementById("roundTitle"),
+  roundText: document.getElementById("roundText"),
+  scoreboard: document.getElementById("scoreboard"),
+  scoreboardTitle: document.getElementById("scoreboardTitle"),
+  kills: document.getElementById("killsText"),
+  deaths: document.getElementById("deathsText"),
+  headshots: document.getElementById("headshotsText"),
+  plants: document.getElementById("plantsText"),
+  defuses: document.getElementById("defusesText"),
+  scoreMoney: document.getElementById("scoreMoneyText"),
+  sidePill: document.getElementById("sidePill"),
+  roundLabel: document.getElementById("roundLabel"),
+  moneyDelta: document.getElementById("moneyDelta"),
+  buyBar: document.getElementById("buyBar"),
+  buyBarFill: document.getElementById("buyBarFill"),
+  agentDot: document.getElementById("agentDot"),
+  armorBarWrap: document.getElementById("armorBarWrap"),
+  armorBar: document.getElementById("armorBar"),
+  armorText: document.getElementById("armorText"),
+  armorValueText: document.getElementById("armorValueText"),
+  ammoDots: document.getElementById("ammoDots"),
+  killFeed: document.getElementById("killFeed"),
 };
 
 const keys = new Set();
 const pressed = new Set();
 const mouse = { x: canvas.width / 2, y: canvas.height / 2, down: false };
 const SPIKE_DETONATE_TIME = 38;
+const BOT_REACTION_TIME = 0.22;
 const PLAYER_DEFUSE_TIME = 3.2;
 const BOT_DEFUSE_TIME = 5.2;
 const PLANT_TIME = 2.0;
+const BUY_TIME = 8;
 const MATCH_POINT = 15;
+const audio = { ctx: null, enabled: true, volume: 0.8, last: 0 };
 const agents = [
   {
     id: "vanguard",
@@ -123,6 +152,46 @@ const allyItems = [
   { id: "allyRifle", name: "Rifle aliado", price: 3200, desc: "Aliados usam Rifle", weaponId: "rifle", apply: () => { game.allyLoadout.weaponId = "rifle"; } },
   { id: "allySniper", name: "Sniper aliado", price: 5200, desc: "Um tiro forte, cadencia baixa", weaponId: "sniper", apply: () => { game.allyLoadout.weaponId = "sniper"; } },
 ];
+
+function initAudio() {
+  if (audio.ctx || !audio.enabled) return;
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContext) return;
+  audio.ctx = new AudioContext();
+}
+
+function playTone(freq, duration = 0.06, type = "square", gain = 0.035) {
+  if (!audio.enabled) return;
+  initAudio();
+  if (!audio.ctx) return;
+  const now = audio.ctx.currentTime;
+  const osc = audio.ctx.createOscillator();
+  const amp = audio.ctx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  amp.gain.setValueAtTime(0.0001, now);
+  amp.gain.exponentialRampToValueAtTime(gain * audio.volume, now + 0.01);
+  amp.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+  osc.connect(amp);
+  amp.connect(audio.ctx.destination);
+  osc.start(now);
+  osc.stop(now + duration + 0.02);
+}
+
+function playSound(name) {
+  const now = performance.now();
+  if (name === "shot" && now - audio.last < 45) return;
+  audio.last = now;
+  if (name === "shot")    playTone(110, 0.05, "square",   0.028);
+  if (name === "hit")     { playTone(900, 0.04, "triangle", 0.04); playTone(600, 0.06, "triangle", 0.02); }
+  if (name === "headshot"){ playTone(1200,0.05, "triangle", 0.05); playTone(800, 0.08, "sine",     0.03); }
+  if (name === "reload")  playTone(280, 0.1,  "sawtooth",  0.022);
+  if (name === "plant")   { playTone(440, 0.08, "sine", 0.04); playTone(660, 0.12, "sine", 0.03); }
+  if (name === "round_win")  { playTone(523, 0.1, "sine", 0.04); playTone(659, 0.1, "sine", 0.04); playTone(784, 0.2, "sine", 0.045); }
+  if (name === "round_lose") { playTone(392, 0.1, "sine", 0.04); playTone(330, 0.1, "sine", 0.04); playTone(262, 0.22,"sine", 0.045); }
+  if (name === "spike")   playTone(80,  0.3,  "sawtooth",  0.055);
+  if (name === "ability") playTone(620, 0.14, "triangle",  0.038);
+}
 
 const DEFAULT_MAP = {
   name: "Padrão",
@@ -272,6 +341,21 @@ const MAPS = [
   ]),
 ];
 
+function buildMapRoutes(currentMap) {
+  const a = currentMap.sites[0];
+  const b = currentMap.sites[1] || currentMap.sites[0];
+  const centerA = { x: a.x + a.w / 2, y: a.y + a.h / 2 };
+  const centerB = { x: b.x + b.w / 2, y: b.y + b.h / 2 };
+  const midTop = { x: currentMap.width * 0.5, y: currentMap.height * 0.24 };
+  const mid = { x: currentMap.width * 0.5, y: currentMap.height * 0.5 };
+  const midBottom = { x: currentMap.width * 0.5, y: currentMap.height * 0.76 };
+  return [
+    [currentMap.defendersSpawn[0], midTop, { x: centerA.x + 30, y: centerA.y - 80 }, centerA, { x: centerA.x, y: midBottom.y }],
+    [currentMap.defendersSpawn[1], midTop, mid, midBottom, currentMap.attackersSpawn],
+    [currentMap.defendersSpawn[2], midTop, { x: centerB.x - 30, y: centerB.y - 80 }, centerB, { x: centerB.x, y: midBottom.y }],
+  ].map((route) => route.map((point) => ({ ...point })));
+}
+
 let map = MAPS[0];
 
 const game = {
@@ -279,6 +363,7 @@ const game = {
   phase: "buy",
   phaseTime: 8,
   paused: false,
+  menuState: "none",
   scoreA: 0,
   scoreD: 0,
   playerScore: 0,
@@ -294,14 +379,32 @@ const game = {
   allyCount: 0,
   enemyFireMultiplier: 1.25,
   introTimer: 0,
+  menuMapIndex: 0,
+  menuMapTimer: 0,
+  menuMapPan: 0,
+  menuMapPanDir: 1,
   crosshairStyle: "default",
   arrowKeys: false,
+  debugRoutes: false,
+  shopTab: "weapons",
+  damageIndicator: null,
+  scoreboardVisible: false,
+  roundBannerTimer: 0,
+  training: false,
+  tutorial: false,
+  tutorialStep: 0,
+  recoilHeat: 0,
+  shotChain: 0,
+  crosshairScale: 1,
+  lossStreak: 0,
+  stats: { kills: 0, deaths: 0, headshots: 0, plants: 0, defuses: 0, damage: 0 },
   selectedAgent: agents[0],
   selectedWeapon: weapons[0],
   ownedWeapons: new Set(["pistol"]),
   upgrades: { armorCapacity: 0, speed: false, magazine: false, reload: false },
   armor: 0,
   allyLoadout: { weaponId: "pistol", armor: 0 },
+  roundMoneyDelta: 0,
   player: null,
   bots: [],
   allies: [],
@@ -315,6 +418,7 @@ const game = {
   message: "Plante a spike em A ou B.",
   lastMessage: "",
   abilityCooldown: 0,
+  abilityCharges: 2,
   lastShot: 0,
   reloadTimer: 0,
   roundOverTimer: 0,
@@ -372,7 +476,7 @@ function makeBot(spawn, index) {
     defuseProgress: 0,
     fireTimer: 0.3 + index * 0.25,
     patrol: index,
-    routeIndex: 1,
+    routeIndex: 0,
     wait: 0,
     lastX: spawn.x,
     lastY: spawn.y,
@@ -380,6 +484,9 @@ function makeBot(spawn, index) {
     strafe: index % 2 === 0 ? 1 : -1,
     lastKnownPlayer: null,
     memoryTimer: 0,
+    idleTimer: 0,
+    aiState: "hold",
+    revealedTimer: 0,
   };
 }
 
@@ -402,7 +509,7 @@ function makeAlly(spawn, index) {
     weapon,
     fireTimer: 0.25 + index * 0.18,
     patrol: index + 3,
-    routeIndex: 1,
+    routeIndex: 0,
     wait: 0,
     lastX: spawn.x,
     lastY: spawn.y,
@@ -410,6 +517,9 @@ function makeAlly(spawn, index) {
     strafe: index % 2 === 0 ? 1 : -1,
     lastKnownPlayer: null,
     memoryTimer: 0,
+    idleTimer: 0,
+    aiState: "follow",
+    revealedTimer: 0,
   };
 }
 
@@ -420,15 +530,17 @@ function resetRound() {
   const changedSide = game.playerSide !== nextSide;
   game.playerSide = nextSide;
   game.phase = "buy";
-  game.phaseTime = game.sandbox ? 9999 : 8;
+  game.phaseTime = game.sandbox || game.training ? 9999 : BUY_TIME;
   game.player = makePlayer();
+  sanitizeEntityPosition(game.player);
   const botSpawns = game.playerSide === "attackers" ? map.defendersSpawn : map.attackerBotSpawns;
   game.bots = botSpawns.map(makeBot);
   const allySpawns = game.playerSide === "attackers"
     ? [{ x: map.attackersSpawn.x - 68, y: map.attackersSpawn.y }, { x: map.attackersSpawn.x + 68, y: map.attackersSpawn.y }]
     : [{ x: map.playerDefenderSpawn.x - 74, y: map.playerDefenderSpawn.y + 18 }, { x: map.playerDefenderSpawn.x + 74, y: map.playerDefenderSpawn.y + 18 }];
-  if (game.allyCount >= 3) allySpawns.push(game.playerSide === "attackers" ? { x: map.attackersSpawn.x, y: map.attackersSpawn.y + 42 } : { x: map.playerDefenderSpawn.x, y: map.playerDefenderSpawn.y + 58 });
   game.allies = allySpawns.slice(0, game.allyCount).map(makeAlly);
+  game.bots.forEach(sanitizeEntityPosition);
+  game.allies.forEach(sanitizeEntityPosition);
   game.bullets = [];
   game.particles = [];
   game.explosions = [];
@@ -436,6 +548,7 @@ function resetRound() {
   game.smokes = [];
   game.revealTimer = 0;
   game.abilityCooldown = 0;
+  game.abilityCharges = game.selectedAgent.id === "mender" ? 1 : 2;
   game.lastShot = 0;
   game.reloadTimer = 0;
   game.roundOverTimer = 0;
@@ -455,16 +568,39 @@ function resetRound() {
   setMessage(changedSide
     ? (game.playerSide === "attackers" ? "Troca de lado: agora voce ataca e planta." : "Troca de lado: agora voce defende e desarma.")
     : (game.playerSide === "attackers" ? "Compra aberta. Voce ataca: plante a spike." : "Compra aberta. Voce defende: impeca o plant ou desarme."));
-  ui.shop.classList.add("hidden");
+  if (!game.sandbox && !game.training) openShop();
 }
 
 function startActionRound() {
   game.phase = "action";
-  game.phaseTime = 90;
-  ui.shop.classList.add("hidden");
+  game.phaseTime = game.training || game.sandbox ? 9999 : 90;
+  closeShop();
+  showRoundBanner(game.playerSide === "attackers" ? "Ataque" : "Defesa", game.playerSide === "attackers" ? "Plante a spike em A ou B." : "Impeca o plant ou desarme.", `Round ${game.roundNumber}`);
   setMessage(game.playerSide === "attackers"
     ? "Ataque: plante a spike em A ou B."
     : "Defesa: impeca o plant. Se plantarem, desarme com F.");
+}
+
+function openShop() {
+  ui.shop.classList.remove("hidden");
+  ui.shopBackdrop.classList.remove("hidden");
+  ui.shopButton.style.display = "none";
+}
+
+function closeShop() {
+  ui.shop.classList.add("hidden");
+  ui.shopBackdrop.classList.add("hidden");
+  ui.shopButton.style.display = "";
+}
+
+function fullReset() {
+  game.selectedWeapon = weapons[0];
+  game.ownedWeapons = new Set(["pistol"]);
+  game.upgrades = { armorCapacity: 0, speed: false, magazine: false, reload: false };
+  game.armor = 0;
+  game.allyLoadout = { weaponId: "pistol", armor: 0 };
+  game.selectedAgent = agents[0];
+  buildShop();
 }
 
 function startNewMatch() {
@@ -472,22 +608,28 @@ function startNewMatch() {
   game.scoreD = 0;
   game.playerScore = 0;
   game.enemyScore = 0;
-  game.money = game.sandbox ? 99999 : 800;
+  game.money = game.sandbox || game.training ? 99999 : 800;
+  game.lossStreak = 0;
+  game.stats = { kills: 0, deaths: 0, headshots: 0, plants: 0, defuses: 0, damage: 0 };
   game.ownedWeapons = new Set(["pistol"]);
   game.upgrades = { armorCapacity: 0, speed: false, magazine: false, reload: false };
   game.armor = 0;
   game.allyLoadout = { weaponId: "pistol", armor: 0 };
+  game.selectedWeapon = weapons[0];
+  game.roundMoneyDelta = 0;
   game.roundNumber = 1;
   game.startingSide = Math.random() < 0.5 ? "attackers" : "defenders";
   game.playerSide = game.startingSide;
   map = MAPS[Math.floor(Math.random() * MAPS.length)];
+  map.botRoutes = buildMapRoutes(map);
   game.map = map;
   game.mapName = map.name;
   resetRound();
   game.paused = false;
+  game.menuState = "none";
   showIntro();
   ui.matchOverlay.classList.add("hidden");
-  ui.shop.classList.add("hidden");
+  closeShop();
   setMessage(game.playerSide === "attackers"
     ? `Mapa ${game.mapName} (${map.vibe}). Seu time: Ataque. Plante a spike.`
     : `Mapa ${game.mapName} (${map.vibe}). Seu time: Defesa. Impeca o plant ou desarme.`);
@@ -498,7 +640,7 @@ function showMatchResult() {
   game.phase = "matchOver";
   game.phaseTime = 0;
   game.paused = false;
-  ui.shop.classList.add("hidden");
+  closeShop();
   ui.matchOverlay.classList.remove("hidden");
   ui.overlayKicker.textContent = "Partida encerrada";
   ui.overlayTitle.textContent = won ? "Vitória" : "Derrota";
@@ -515,14 +657,29 @@ function endRound(winner, reason) {
   } else {
     game.scoreD += 1;
   }
+  let moneyGained = 0;
   if (winner === game.playerSide) {
     game.playerScore += 1;
-    game.money += 2200;
+    game.lossStreak = 0;
+    moneyGained = game.spike.state === "planted" ? 2600 : 2400;
+    if (!game.sandbox) game.money += moneyGained;
   } else {
     game.enemyScore += 1;
-    game.money += 1600;
+    game.lossStreak += 1;
+    moneyGained = 1700 + Math.min(3, game.lossStreak) * 300;
+    if (!game.sandbox) game.money += moneyGained;
   }
-  setMessage(reason);
+  game.roundMoneyDelta = moneyGained;
+  const won = winner === game.playerSide;
+  const fullReason = game.sandbox ? reason : `${reason}  +${moneyGained}`;
+  setMessage(fullReason);
+  showRoundBanner(
+    won ? "Round vencido" : "Round perdido",
+    fullReason,
+    `${game.playerScore} - ${game.enemyScore}`,
+    2.8
+  );
+  playSound(won ? "round_win" : "round_lose");
   if (game.playerScore >= MATCH_POINT || game.enemyScore >= MATCH_POINT) {
     showMatchResult();
   }
@@ -631,6 +788,45 @@ function setMessage(text) {
   ui.message.classList.add("pulse");
 }
 
+function showRoundBanner(title, text, kicker = `Round ${game.roundNumber}`, duration = 2.2) {
+  ui.roundKicker.textContent = kicker;
+  ui.roundTitle.textContent = title;
+  ui.roundText.textContent = text;
+  ui.roundBanner.classList.remove("hidden");
+  game.roundBannerTimer = duration;
+}
+
+function updateScoreboard() {
+  ui.scoreboard.classList.toggle("hidden", !game.scoreboardVisible);
+  ui.scoreboardTitle.textContent = `${game.playerScore} - ${game.enemyScore} | ${game.mapName}`;
+  ui.kills.textContent = game.stats.kills;
+  ui.deaths.textContent = game.stats.deaths;
+  ui.headshots.textContent = game.stats.headshots;
+  ui.plants.textContent = game.stats.plants;
+  ui.defuses.textContent = game.stats.defuses;
+  ui.scoreMoney.textContent = `$${game.money}`;
+}
+
+function tutorialText() {
+  const steps = [
+    "Use WASD para se mover ate um site.",
+    "Mire com o mouse e clique para atirar nos bots.",
+    "Com a spike, entre no site e aperte F para plantar.",
+    "Defenda a spike ate ela explodir. Se estiver defendendo, segure F para desarmar.",
+    "Abra a loja na compra, equipe armas e use E para habilidade.",
+  ];
+  return steps[Math.min(game.tutorialStep, steps.length - 1)];
+}
+
+function updateTutorial() {
+  if (!game.tutorial) return;
+  if (game.tutorialStep === 0 && (keys.has("w") || keys.has("a") || keys.has("s") || keys.has("d"))) game.tutorialStep = 1;
+  if (game.tutorialStep === 1 && game.stats.kills > 0) game.tutorialStep = 2;
+  if (game.tutorialStep === 2 && game.spike.state === "planted") game.tutorialStep = 3;
+  if (game.tutorialStep === 3 && game.phase === "ended") game.tutorialStep = 4;
+  setMessage(`Tutorial: ${tutorialText()}`);
+}
+
 function lineIntersectsRect(x1, y1, x2, y2, rect) {
   const steps = Math.ceil(Math.hypot(x2 - x1, y2 - y1) / 12);
   for (let i = 0; i <= steps; i++) {
@@ -671,6 +867,27 @@ function segmentCircleHit(x1, y1, x2, y2, circle, padding = 0) {
   return pointLineDistance(circle.x, circle.y, x1, y1, x2, y2) <= circle.r + padding;
 }
 
+function headCircle(entity) {
+  return {
+    x: entity.x + Math.cos(entity.angle) * entity.r * 0.28,
+    y: entity.y + Math.sin(entity.angle) * entity.r * 0.28,
+    r: entity.r * 0.42,
+  };
+}
+
+function hitRegion(x1, y1, x2, y2, entity, padding = 0) {
+  if (segmentCircleHit(x1, y1, x2, y2, headCircle(entity), padding * 0.55)) return "head";
+  if (segmentCircleHit(x1, y1, x2, y2, entity, padding)) return "body";
+  return null;
+}
+
+function damageForHit(bullet, target, region) {
+  const traveled = Math.hypot(bullet.x - bullet.startX, bullet.y - bullet.startY);
+  const falloff = traveled > 620 ? 0.78 : traveled > 420 ? 0.9 : 1;
+  const headshot = region === "head" ? (bullet.weaponId === "shotgun" ? 1.25 : 1.75) : 1;
+  return bullet.damage * falloff * headshot;
+}
+
 function currentDefuseProgress() {
   return (game.spike.defuseCheckpoint || 0) / 3;
 }
@@ -707,7 +924,11 @@ function shoot(owner, targetX, targetY, weapon, team) {
     }
     game.lastShot = now;
     owner.ammo -= 1;
+    game.shotChain += 1;
+    const recoilGain = weapon.id === "sniper" ? 0.5 : weapon.id === "lmg" ? 0.26 : weapon.id === "smg" ? 0.22 : 0.18;
+    game.recoilHeat = Math.min(2.6, game.recoilHeat + recoilGain);
     game.shake = Math.max(game.shake, 0.04);
+    playSound("shot");
     spawnParticles(owner.x + Math.cos(owner.angle) * 24, owner.y + Math.sin(owner.angle) * 24, "#ffe6a8", 5, 90);
     if (owner.ammo <= 0) reload();
   }
@@ -715,10 +936,15 @@ function shoot(owner, targetX, targetY, weapon, team) {
   for (let i = 0; i < count; i++) {
     const base = Math.atan2(targetY - owner.y, targetX - owner.x);
     const movingPenalty = owner.moving ? 1.8 : 1;
-    const spread = (Math.random() - 0.5) * weapon.spread * 2 * movingPenalty;
+    const recoilPenalty = team === "player" ? 1 + game.recoilHeat * 0.85 : 1 + (owner.aiState === "plant" || owner.aiState === "defuse" ? 0.55 : 0);
+    const spread = (Math.random() - 0.5) * weapon.spread * 2 * movingPenalty * recoilPenalty;
+    const startX = owner.x + Math.cos(base) * owner.r;
+    const startY = owner.y + Math.sin(base) * owner.r;
     game.bullets.push({
-      x: owner.x + Math.cos(base) * owner.r,
-      y: owner.y + Math.sin(base) * owner.r,
+      x: startX,
+      y: startY,
+      startX,
+      startY,
       vx: Math.cos(base + spread) * weapon.speed,
       vy: Math.sin(base + spread) * weapon.speed,
       life: 0.9,
@@ -733,6 +959,7 @@ function reload() {
   if (game.reloadTimer > 0) return;
   if (game.player.ammo >= currentMagSize()) return;
   game.reloadTimer = currentReloadTime();
+  playSound("reload");
 }
 
 function plantOrDefuse(dt) {
@@ -745,6 +972,8 @@ function plantOrDefuse(dt) {
       setMessage("Desarmando spike. Continue segurando F.");
       if (complete) {
         spawnParticles(game.spike.x, game.spike.y, "#66e48f", 28, 180);
+        game.stats.defuses += 1;
+        if (!game.sandbox) game.money += 300;
         endRound("defenders", "Spike desarmada. Defensores venceram.");
       }
     } else if (game.spike.state === "planted") {
@@ -792,6 +1021,9 @@ function plantOrDefuse(dt) {
     game.spike.defuserId = null;
     spawnParticles(p.x, p.y, "#ffd166", 22, 160);
     game.shake = 0.18;
+    game.stats.plants += 1;
+    if (!game.sandbox) game.money += 300;
+    playSound("plant");
     setMessage(`Spike plantada no site ${game.spike.site}. Defenda.`);
   }
 }
@@ -817,9 +1049,12 @@ function updatePlayer(dt) {
 
   if (mouse.down) shoot(p, mouse.x, mouse.y, game.selectedWeapon, "player");
   if (keys.has("r")) reload();
-  if (keys.has("e") && game.abilityCooldown <= 0 && game.phase === "action") {
+  if (keys.has("e") && game.abilityCooldown <= 0 && game.abilityCharges > 0 && game.phase === "action") {
     game.selectedAgent.use(game);
+    game.abilityCharges -= 1;
     game.abilityCooldown = game.selectedAgent.cooldown;
+    playSound("ability");
+    setMessage(`${game.selectedAgent.ability} usada. Cargas restantes: ${game.abilityCharges}.`);
   }
   plantOrDefuse(dt);
 }
@@ -912,6 +1147,28 @@ function nearestWalkableCell(cell) {
     }
   }
   return null;
+}
+
+function nearestWalkablePoint(point, fallback = point) {
+  const cell = nearestWalkableCell(gridCellFromPoint(point));
+  return cell ? gridPoint(cell) : { x: fallback.x, y: fallback.y };
+}
+
+function isEntityBlocked(entity) {
+  return map.walls.some((wall) => circleRectCollides(entity, wall))
+    || entity.x < entity.r
+    || entity.x > map.width - entity.r
+    || entity.y < entity.r
+    || entity.y > map.height - entity.r;
+}
+
+function sanitizeEntityPosition(entity) {
+  if (!isEntityBlocked(entity)) return;
+  const safe = nearestWalkablePoint(entity);
+  entity.x = safe.x;
+  entity.y = safe.y;
+  entity.lastX = safe.x;
+  entity.lastY = safe.y;
 }
 
 function findGridStep(bot, target) {
@@ -1033,6 +1290,19 @@ function rescueBotFromStuck(bot, target, dt) {
   return false;
 }
 
+function forceBotProgress(bot, target) {
+  const step = findGridStep(bot, target) || nearestWalkablePoint(target, bot);
+  const probe = { x: step.x, y: step.y, r: bot.r };
+  if (map.walls.some((wall) => circleRectCollides(probe, wall))) return false;
+  bot.x = step.x;
+  bot.y = step.y;
+  bot.lastX = step.x;
+  bot.lastY = step.y;
+  bot.stuck = 0;
+  bot.idleTimer = 0;
+  return true;
+}
+
 function moveBotToward(bot, target, dt, speedScale = 1) {
   const safeTarget = resolveBotTarget(bot, target);
   const angle = Math.atan2(safeTarget.y - bot.y, safeTarget.x - bot.x);
@@ -1081,7 +1351,7 @@ function closestVisibleEnemy(bot) {
     .sort((a, b) => Math.hypot(a.x - bot.x, a.y - bot.y) - Math.hypot(b.x - bot.x, b.y - bot.y))[0] || null;
 }
 
-function botShootAt(bot, target, dt, team) {
+function botShootAt(bot, target, dt, team, firePenalty = 1) {
   const weapon = bot.weapon || weapons[0];
   const angle = Math.atan2(target.y - bot.y, target.x - bot.x);
   bot.angle = angle;
@@ -1089,35 +1359,88 @@ function botShootAt(bot, target, dt, team) {
   if (bot.fireTimer <= 0) {
     shoot(bot, target.x, target.y, weapon, team);
     const multiplier = team === "bot" ? game.enemyFireMultiplier : 1;
-    bot.fireTimer = (weapon.fireRate + 0.18 + Math.random() * 0.22) * multiplier;
+    bot.fireTimer = (weapon.fireRate + 0.18 + Math.random() * 0.22) * multiplier * firePenalty;
     bot.strafe *= -1;
   }
 }
 
 function updateBotAwareness(bot, seesPlayer, dt) {
   if (seesPlayer) {
+    bot.reactionTimer = (bot.reactionTimer === undefined || bot.reactionTimer <= 0)
+      ? BOT_REACTION_TIME + Math.random() * 0.18
+      : bot.reactionTimer;
+    bot.reactionTimer = Math.max(0, bot.reactionTimer - dt);
+    bot.canShoot = bot.reactionTimer <= 0;
     bot.lastKnownPlayer = { x: game.player.x, y: game.player.y };
     bot.memoryTimer = 3.2;
+    bot.revealedTimer = 2.6;
+    alertBotSquad(bot, bot.lastKnownPlayer);
   } else {
+    bot.reactionTimer = BOT_REACTION_TIME;
+    bot.canShoot = false;
     bot.memoryTimer = Math.max(0, bot.memoryTimer - dt);
+    bot.revealedTimer = Math.max(0, (bot.revealedTimer || 0) - dt);
   }
+}
+
+function alertBotSquad(source, point) {
+  for (const bot of game.bots) {
+    if (bot === source || !bot.alive) continue;
+    const distance = Math.hypot(bot.x - source.x, bot.y - source.y);
+    if (distance > 520) continue;
+    bot.lastKnownPlayer = {
+      x: point.x + (Math.random() - 0.5) * 36,
+      y: point.y + (Math.random() - 0.5) * 36,
+    };
+    bot.memoryTimer = Math.max(bot.memoryTimer || 0, 1.8);
+    bot.aiState = "alert";
+  }
+}
+
+function findCoverPoint(bot, threat) {
+  const candidates = [
+    ...navigationPoints(),
+    ...map.walls.flatMap((wall) => [
+      { x: wall.x - 28, y: wall.y + wall.h / 2 },
+      { x: wall.x + wall.w + 28, y: wall.y + wall.h / 2 },
+      { x: wall.x + wall.w / 2, y: wall.y - 28 },
+      { x: wall.x + wall.w / 2, y: wall.y + wall.h + 28 },
+    ]),
+  ];
+  return candidates
+    .map((point) => nearestWalkablePoint(point, bot))
+    .filter((point) => Math.hypot(point.x - bot.x, point.y - bot.y) < 220)
+    .filter((point) => lineIntersectsAnyWall(point.x, point.y, threat.x, threat.y))
+    .sort((a, b) => Math.hypot(a.x - bot.x, a.y - bot.y) - Math.hypot(b.x - bot.x, b.y - bot.y))[0] || null;
 }
 
 function botFightPlayer(bot, dt, options = {}) {
   const target = closestVisibleSquadTarget(bot);
-  if (!target) return false;
-  const angle = Math.atan2(target.y - bot.y, target.x - bot.x);
-  bot.angle = angle;
-  bot.lastKnownPlayer = { x: target.x, y: target.y };
-  bot.memoryTimer = 3.2;
+  const memTarget = !target && bot.lastKnownPlayer && bot.memoryTimer > 0 ? bot.lastKnownPlayer : null;
+  const shootTarget = target || memTarget;
+  if (!shootTarget) return false;
 
-  if (options.strafe !== false) {
+  const angle = Math.atan2(shootTarget.y - bot.y, shootTarget.x - bot.x);
+  bot.angle = angle;
+  if (target) {
+    bot.lastKnownPlayer = { x: target.x, y: target.y };
+    bot.memoryTimer = 3.2;
+  }
+
+  const cover = (options.preferCover || bot.hp < 45) ? findCoverPoint(bot, shootTarget) : null;
+  if (cover && Math.hypot(bot.x - cover.x, bot.y - cover.y) > 20) {
+    bot.aiState = "cover";
+    moveBotToward(bot, cover, dt, 0.9);
+  } else if (options.strafe !== false) {
+    bot.aiState = "fight";
     const side = angle + Math.PI / 2;
     const movedNow = moveEntity(bot, Math.cos(side) * bot.speed * bot.strafe * 0.38 * dt, Math.sin(side) * bot.speed * bot.strafe * 0.38 * dt, map.walls);
     if (movedNow < 0.5) bot.strafe *= -1;
+  } else {
+    bot.aiState = options.state || "fight";
   }
 
-  botShootAt(bot, target, dt, "bot");
+  if (bot.canShoot !== false) botShootAt(bot, shootTarget, dt, "bot", options.firePenalty || 1);
   return true;
 }
 
@@ -1151,7 +1474,8 @@ function botPlantSpike(bot, dt) {
   }
   game.spike.state = "bot_planting";
   game.spike.site = site.id;
-  botFightPlayer(bot, dt, { strafe: false });
+  bot.aiState = "plant";
+  botFightPlayer(bot, dt, { strafe: false, state: "plant", firePenalty: 1.75 });
   game.spike.plantProgress += dt / (PLANT_TIME + 0.7);
   if (!botCanSeePlayer(bot)) bot.angle = -Math.PI / 2;
   if (game.spike.plantProgress >= 1) {
@@ -1176,7 +1500,8 @@ function botPlantSpike(bot, dt) {
 function botDefuseSpike(bot, dt) {
   if (game.spike.state !== "planted") return false;
   const dist = Math.hypot(bot.x - game.spike.x, bot.y - game.spike.y);
-  botFightPlayer(bot, dt, { strafe: dist <= 42 });
+  bot.aiState = "defuse";
+  botFightPlayer(bot, dt, { strafe: dist <= 42, state: "defuse", firePenalty: 1.65 });
   if (dist > 42) {
     if (game.spike.defuserId === bot.id) resetPartialDefuse();
     moveBotToward(bot, game.spike, dt, 1.18);
@@ -1217,15 +1542,17 @@ function attackSupportPoint(bot, carrier, plantSite, plantTarget) {
 }
 
 function defenderHoldPoint(bot) {
+  const a = map.sites[0];
+  const b = map.sites[1] || map.sites[0];
   const points = [
-    { x: 315, y: 238 },
-    { x: 640, y: 238 },
-    { x: 965, y: 238 },
-    { x: 300, y: 418 },
-    { x: 980, y: 418 },
-    { x: 640, y: 382 },
+    ...siteEntryPoints(a),
+    ...siteEntryPoints(b),
+    { x: siteCenter(a).x, y: siteCenter(a).y - 70 },
+    { x: siteCenter(b).x, y: siteCenter(b).y - 70 },
+    { x: map.width * 0.5, y: map.height * 0.33 },
+    { x: map.width * 0.5, y: map.height * 0.55 },
   ];
-  return points[bot.patrol % points.length];
+  return nearestWalkablePoint(points[bot.patrol % points.length], bot);
 }
 
 function keepBotSpacing(bot, dt) {
@@ -1332,13 +1659,15 @@ function updateBots(dt) {
     updateBotAwareness(bot, seesPlayer, dt);
 
     if (game.playerSide === "attackers" && bot === botDefuser) {
+      bot.aiState = "defuse";
       if (botDefuseSpike(bot, dt)) {
         continue;
       }
     }
 
     if (game.playerSide === "defenders" && bot === droppedSpikePicker) {
-      botFightPlayer(bot, dt, { strafe: false });
+      bot.aiState = "recover";
+      botFightPlayer(bot, dt, { strafe: false, state: "recover" });
       if (Math.hypot(bot.x - game.spike.x, bot.y - game.spike.y) < 34) {
         bot.hasSpike = true;
         game.spike.state = "carried";
@@ -1351,7 +1680,8 @@ function updateBots(dt) {
     }
 
     if (game.playerSide === "defenders" && bot === carrier && game.spike.state === "carried") {
-      botFightPlayer(bot, dt, { strafe: false });
+      bot.aiState = "plant";
+      botFightPlayer(bot, dt, { strafe: false, state: "plant", firePenalty: 1.25 });
       if (rectContainsPadded(botPlantSite, bot.x, bot.y, bot.r * 0.65) && botPlantSpike(bot, dt)) {
         continue;
       }
@@ -1361,43 +1691,45 @@ function updateBots(dt) {
     }
 
     if (game.playerSide === "defenders" && bot === carrier && game.spike.state === "bot_planting") {
+      bot.aiState = "plant";
       if (botPlantSpike(bot, dt)) {
         continue;
       }
     }
 
     if (game.playerSide === "defenders" && game.spike.state !== "planted") {
-      botFightPlayer(bot, dt, { strafe: false });
+      // bots atacantes: atirar sempre que possivel, mover para o site
+      const fightResult = botFightPlayer(bot, dt, { strafe: true, state: "push", preferCover: bot.hp < 45 });
       const supportTarget = attackSupportPoint(bot, carrier, botPlantSite, botPlantTarget);
       const closeEnough = Math.hypot(bot.x - supportTarget.x, bot.y - supportTarget.y) < 34;
       if (!closeEnough) {
-        moveBotToward(bot, supportTarget, dt, 1.08);
+        moveBotToward(bot, supportTarget, dt, fightResult ? 0.55 : 1.08);
       } else if (!botCanSeePlayer(bot)) {
         bot.angle = Math.atan2(botPlantTarget.y - bot.y, botPlantTarget.x - bot.x);
       }
+      bot.aiState = fightResult ? "fight" : "push";
       continue;
     }
 
     const route = map.botRoutes[bot.patrol % map.botRoutes.length];
     let waypoint = route[bot.routeIndex % route.length];
     if (game.spike.state === "planted") {
+      bot.aiState = game.playerSide === "attackers" ? "retake" : "guard";
       const guardAngle = (bot.patrol / Math.max(1, game.bots.length)) * Math.PI * 2;
       waypoint = {
         x: game.spike.x + Math.cos(guardAngle) * 92,
         y: game.spike.y + Math.sin(guardAngle) * 72,
       };
     } else if (game.playerSide === "attackers") {
+      bot.aiState = "hold";
       waypoint = defenderHoldPoint(bot);
     } else if (game.playerSide === "defenders") {
+      bot.aiState = "guard";
       const guardAngle = (bot.patrol / Math.max(1, game.bots.length)) * Math.PI * 2;
       waypoint = {
         x: botPlantTarget.x + Math.cos(guardAngle) * 105,
         y: botPlantTarget.y + Math.sin(guardAngle) * 82,
       };
-    }
-    if (!seesPlayer && lineIntersectsAnyWall(bot.x, bot.y, waypoint.x, waypoint.y)) {
-      bot.routeIndex = (bot.routeIndex + 1) % route.length;
-      waypoint = route[bot.routeIndex % route.length];
     }
     const investigating = !seesPlayer && bot.memoryTimer > 0 && bot.lastKnownPlayer;
     const memoryTargetClear = investigating && !lineIntersectsAnyWall(bot.x, bot.y, bot.lastKnownPlayer.x, bot.lastKnownPlayer.y);
@@ -1407,6 +1739,7 @@ function updateBots(dt) {
 
     if (!seesPlayer) {
       if (bot.wait > 0) {
+        bot.aiState = bot.aiState === "hold" ? "hold" : "patrol";
         bot.wait -= dt;
       } else {
         const speed = memoryTargetClear ? bot.speed * 1.15 : bot.speed;
@@ -1427,11 +1760,19 @@ function updateBots(dt) {
 
       const moved = Math.hypot(bot.x - bot.lastX, bot.y - bot.lastY);
       bot.stuck = moved < 2 ? bot.stuck + dt : Math.max(0, bot.stuck - dt * 2);
+      bot.idleTimer = moved < 2 && Math.hypot(target.x - bot.x, target.y - bot.y) > 40
+        ? (bot.idleTimer || 0) + dt
+        : 0;
       bot.lastX = bot.x;
       bot.lastY = bot.y;
-      if (bot.stuck > 0.7) {
+      if (bot.idleTimer > 0.65) {
+        rescueBotFromStuck(bot, target, dt);
+      }
+      if (bot.idleTimer > 1.4) {
+        forceBotProgress(bot, target);
+      } else if (bot.stuck > 1.1) {
         bot.routeIndex = (bot.routeIndex + 1) % route.length;
-        bot.stuck = 0;
+        bot.stuck = 0.35;
       }
     } else {
       botFightPlayer(bot, dt);
@@ -1456,13 +1797,22 @@ function updateBullets(dt) {
 
     if (bullet.team === "player" || bullet.team === "ally") {
       for (const bot of game.bots) {
-        if (bot.alive && segmentCircleHit(oldX, oldY, bullet.x, bullet.y, bot, 6)) {
-          applyDamage(bot, bullet.damage);
-          game.hitMarkers.push({ x: bot.x, y: bot.y - 28, life: 0.35, maxLife: 0.35, color: "#ffd166" });
+        const region = bot.alive ? hitRegion(oldX, oldY, bullet.x, bullet.y, bot, 6) : null;
+        if (region) {
+          const damage = damageForHit(bullet, bot, region);
+          applyDamage(bot, damage);
+          if (bullet.team === "player") {
+            game.stats.damage += Math.round(damage);
+            if (region === "head") game.stats.headshots += 1;
+          }
+          game.hitMarkers.push({ x: bot.x, y: bot.y - 28, life: 0.35, maxLife: 0.35, color: region === "head" ? "#ff4d5d" : "#ffd166" });
           spawnParticles(bullet.x, bullet.y, "#4fb3ff", 10, 130);
+          playSound(region === "head" ? "headshot" : "hit");
           bullet.life = 0;
           if (bot.hp <= 0) {
             bot.alive = false;
+            if (bullet.team === "player") game.stats.kills += 1;
+            if (!game.sandbox) game.money += bullet.team === "player" ? (region === "head" ? 350 : 250) : 120;
             if (game.spike.defuserId === bot.id) {
               resetPartialDefuse();
             }
@@ -1482,15 +1832,24 @@ function updateBullets(dt) {
     } else {
       const targets = [game.player, ...game.allies];
       for (const target of targets) {
-        if (!target.alive || !segmentCircleHit(oldX, oldY, bullet.x, bullet.y, target, target.id === "player" ? 3 : 6)) continue;
-        applyDamage(target, bullet.damage);
+        const region = target.alive ? hitRegion(oldX, oldY, bullet.x, bullet.y, target, target.id === "player" ? 3 : 6) : null;
+        if (!region) continue;
+        applyDamage(target, damageForHit(bullet, target, region));
         game.hitMarkers.push({ x: target.x, y: target.y - 30, life: 0.3, maxLife: 0.3, color: "#ff5b5b" });
         spawnParticles(bullet.x, bullet.y, "#ff4d5d", 8, 120);
-        if (target.id === "player") game.shake = Math.max(game.shake, 0.1);
+        if (target.id === "player") {
+          game.shake = Math.max(game.shake, 0.1);
+          game.damageIndicator = {
+            angle: Math.atan2(oldY - target.y, oldX - target.x),
+            life: 0.72,
+            maxLife: 0.72,
+          };
+        }
         bullet.life = 0;
         if (target.hp <= 0) {
           target.alive = false;
           if (target.id === "player") {
+            game.stats.deaths += 1;
             const winner = game.playerSide === "attackers" ? "defenders" : "attackers";
             endRound(winner, game.playerSide === "attackers"
               ? "Voce foi eliminado. Defensores venceram."
@@ -1529,6 +1888,7 @@ function updateSpike(dt) {
   if (game.spike.state === "planted") {
     game.spike.timer -= dt;
     if (game.spike.timer <= 0) {
+      playSound("spike");
       spawnSpikeExplosion(game.spike.x, game.spike.y);
       endRound("attackers", "Spike detonou. Atacantes venceram.");
     }
@@ -1536,8 +1896,14 @@ function updateSpike(dt) {
 }
 
 function updateTimers(dt) {
-  if (!game.sandbox) game.phaseTime -= dt;
-  if (game.sandbox) game.money = 99999;
+  if (!game.sandbox && !game.training) game.phaseTime -= dt;
+  if (game.sandbox || game.training) game.money = 99999;
+  game.recoilHeat = Math.max(0, game.recoilHeat - dt * (game.player?.moving ? 0.9 : 1.8));
+  if (game.recoilHeat === 0) game.shotChain = 0;
+  if (game.roundBannerTimer > 0) {
+    game.roundBannerTimer = Math.max(0, game.roundBannerTimer - dt);
+    if (game.roundBannerTimer === 0) ui.roundBanner.classList.add("hidden");
+  }
   if (game.introTimer > 0) {
     game.introTimer = Math.max(0, game.introTimer - dt);
     if (game.introTimer === 0) ui.introOverlay.classList.add("hidden");
@@ -1550,6 +1916,10 @@ function updateTimers(dt) {
     game.player.ammo = currentMagSize();
   }
   game.revealTimer = Math.max(0, game.revealTimer - dt);
+  if (game.damageIndicator) {
+    game.damageIndicator.life -= dt;
+    if (game.damageIndicator.life <= 0) game.damageIndicator = null;
+  }
   for (const smoke of game.smokes) smoke.life -= dt;
   game.smokes = game.smokes.filter((s) => s.life > 0);
   for (const particle of game.particles) {
@@ -1582,6 +1952,12 @@ function updateTimers(dt) {
 function checkWinConditions() {
   if (game.phase !== "action") return;
   if (game.bots.every((bot) => !bot.alive)) {
+    if (game.training) {
+      game.bots = map.defendersSpawn.map(makeBot);
+      game.bots.forEach(sanitizeEntityPosition);
+      setMessage("Treino: novos bots apareceram.");
+      return;
+    }
     if (game.playerSide === "defenders" && game.spike.state === "planted") {
       setMessage("Atacantes eliminados. Agora desarme a spike.");
       return;
@@ -1592,9 +1968,61 @@ function checkWinConditions() {
   }
 }
 
+function updateMenuSlideshow(dt) {
+  game.menuMapTimer -= dt;
+  if (game.menuMapTimer <= 0) {
+    game.menuMapTimer = 7 + Math.random() * 3;
+    game.menuMapIndex = (game.menuMapIndex + 1) % MAPS.length;
+    game.menuMapPan = 0;
+    game.menuMapPanDir = Math.random() < 0.5 ? 1 : -1;
+  }
+  game.menuMapPan += dt * 14 * game.menuMapPanDir;
+}
+
+function drawMenuSlideshow() {
+  const slideMap = MAPS[game.menuMapIndex];
+  const theme = slideMap.theme;
+  const panX = game.menuMapPan;
+  ctx.save();
+  ctx.translate(panX, 0);
+  ctx.fillStyle = theme.floor;
+  ctx.fillRect(-60, 0, canvas.width + 120, canvas.height);
+  ctx.fillStyle = theme.grid;
+  for (let x = -60; x < canvas.width + 120; x += 40) ctx.fillRect(x, 0, 1, canvas.height);
+  for (let y = 0; y < canvas.height; y += 40) ctx.fillRect(-60, y, canvas.width + 120, 1);
+  for (const site of slideMap.sites) {
+    ctx.fillStyle = theme.siteFill;
+    ctx.strokeStyle = theme.siteStroke;
+    ctx.lineWidth = 2;
+    ctx.fillRect(site.x, site.y, site.w, site.h);
+    ctx.strokeRect(site.x, site.y, site.w, site.h);
+    ctx.fillStyle = theme.siteStroke;
+    ctx.font = "bold 24px Segoe UI";
+    ctx.fillText(site.id, site.x + 14, site.y + 32);
+  }
+  ctx.fillStyle = theme.wall;
+  ctx.strokeStyle = theme.wallStroke;
+  for (const wall of slideMap.walls) {
+    ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
+    ctx.strokeRect(wall.x, wall.y, wall.w, wall.h);
+  }
+  ctx.restore();
+  ctx.fillStyle = "rgba(5, 8, 13, 0.55)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
 function update(dt) {
+  if (game.menuState !== "none" && game.phase !== "action") {
+    updateMenuSlideshow(dt);
+    if (game.roundBannerTimer > 0) {
+      game.roundBannerTimer = Math.max(0, game.roundBannerTimer - dt);
+      if (game.roundBannerTimer === 0) ui.roundBanner.classList.add("hidden");
+    }
+    return;
+  }
   if (game.paused) return;
   updateTimers(dt);
+  updateTutorial();
   if (game.phase === "action") {
     updatePlayer(dt);
     updateAllies(dt);
@@ -1823,55 +2251,67 @@ function drawRadar() {
   }
   for (const bot of game.bots) {
     if (!bot.alive) continue;
-    const visible = game.revealTimer > 0 || hasLineOfSight(game.player, bot) || bot.memoryTimer > 0;
-    if (visible) dot(bot.x, bot.y, bot.side === "attackers" ? "#ff8a5b" : "#4fb3ff", 2.8);
+    const visible = game.revealTimer > 0 || hasLineOfSight(game.player, bot) || bot.memoryTimer > 0 || bot.revealedTimer > 0;
+    if (visible) {
+      dot(bot.x, bot.y, bot.side === "attackers" ? "#ff8a5b" : "#4fb3ff", bot.revealedTimer > 0 ? 3.2 : 2.8);
+    }
   }
   if (game.spike.state !== "carried") dot(game.spike.x, game.spike.y, "#ffd166", 3);
   ctx.restore();
 }
 
 function drawCrosshair() {
+  const spreadScale = game.crosshairScale * (1 + game.recoilHeat * 0.22);
   if (game.selectedWeapon.id === "sniper") {
+    const p = game.player;
     ctx.save();
-    ctx.fillStyle = "rgba(0, 0, 0, 0.18)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.strokeStyle = "rgba(255,255,255,0.86)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(mouse.x, mouse.y, 54, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.strokeStyle = "rgba(255,255,255,0.58)";
+    // linha do cano até a mira
+    ctx.strokeStyle = "rgba(255, 209, 102, 0.55)";
     ctx.lineWidth = 1;
+    ctx.setLineDash([6, 5]);
     ctx.beginPath();
-    ctx.moveTo(mouse.x - 78, mouse.y);
-    ctx.lineTo(mouse.x - 14, mouse.y);
-    ctx.moveTo(mouse.x + 14, mouse.y);
-    ctx.lineTo(mouse.x + 78, mouse.y);
-    ctx.moveTo(mouse.x, mouse.y - 78);
-    ctx.lineTo(mouse.x, mouse.y - 14);
-    ctx.moveTo(mouse.x, mouse.y + 14);
-    ctx.lineTo(mouse.x, mouse.y + 78);
+    ctx.moveTo(p.x + Math.cos(p.angle) * (p.r + 18), p.y + Math.sin(p.angle) * (p.r + 18));
+    ctx.lineTo(mouse.x, mouse.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // mira normal (círculo + cruz)
+    ctx.strokeStyle = "rgba(255,255,255,0.82)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(mouse.x, mouse.y, 10 * game.crosshairScale, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(255,255,255,0.65)";
+    ctx.lineWidth = 1;
+    const g = 3 * game.crosshairScale;
+    const l = 14 * game.crosshairScale;
+    ctx.beginPath();
+    ctx.moveTo(mouse.x - l, mouse.y); ctx.lineTo(mouse.x - g, mouse.y);
+    ctx.moveTo(mouse.x + g, mouse.y); ctx.lineTo(mouse.x + l, mouse.y);
+    ctx.moveTo(mouse.x, mouse.y - l); ctx.lineTo(mouse.x, mouse.y - g);
+    ctx.moveTo(mouse.x, mouse.y + g); ctx.lineTo(mouse.x, mouse.y + l);
     ctx.stroke();
     ctx.fillStyle = "#ff4d5d";
     ctx.beginPath();
-    ctx.arc(mouse.x, mouse.y, 2.5, 0, Math.PI * 2);
+    ctx.arc(mouse.x, mouse.y, 2, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
     return;
   }
 
   if (game.crosshairStyle === "minimal") {
+    const gap = 3 * spreadScale;
+    const length = 7 * spreadScale;
     ctx.strokeStyle = "rgba(255,255,255,0.8)";
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(mouse.x - 7, mouse.y);
-    ctx.lineTo(mouse.x - 3, mouse.y);
-    ctx.moveTo(mouse.x + 3, mouse.y);
-    ctx.lineTo(mouse.x + 7, mouse.y);
-    ctx.moveTo(mouse.x, mouse.y - 7);
-    ctx.lineTo(mouse.x, mouse.y - 3);
-    ctx.moveTo(mouse.x, mouse.y + 3);
-    ctx.lineTo(mouse.x, mouse.y + 7);
+    ctx.moveTo(mouse.x - length, mouse.y);
+    ctx.lineTo(mouse.x - gap, mouse.y);
+    ctx.moveTo(mouse.x + gap, mouse.y);
+    ctx.lineTo(mouse.x + length, mouse.y);
+    ctx.moveTo(mouse.x, mouse.y - length);
+    ctx.lineTo(mouse.x, mouse.y - gap);
+    ctx.moveTo(mouse.x, mouse.y + gap);
+    ctx.lineTo(mouse.x, mouse.y + length);
     ctx.stroke();
     return;
   }
@@ -1879,15 +2319,148 @@ function drawCrosshair() {
   ctx.strokeStyle = "rgba(255,255,255,0.7)";
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.arc(mouse.x, mouse.y, 10, 0, Math.PI * 2);
-  ctx.moveTo(mouse.x - 15, mouse.y);
-  ctx.lineTo(mouse.x + 15, mouse.y);
-  ctx.moveTo(mouse.x, mouse.y - 15);
-  ctx.lineTo(mouse.x, mouse.y + 15);
+  ctx.arc(mouse.x, mouse.y, 10 * spreadScale, 0, Math.PI * 2);
+  ctx.moveTo(mouse.x - 15 * spreadScale, mouse.y);
+  ctx.lineTo(mouse.x + 15 * spreadScale, mouse.y);
+  ctx.moveTo(mouse.x, mouse.y - 15 * spreadScale);
+  ctx.lineTo(mouse.x, mouse.y + 15 * spreadScale);
   ctx.stroke();
 }
 
+function drawBotDebug() {
+  if (!game.debugRoutes) return;
+  ctx.save();
+  ctx.font = "11px Segoe UI";
+  ctx.textAlign = "center";
+  for (const bot of game.bots) {
+    if (!bot.alive) continue;
+    const target = bot.lastKnownPlayer || defenderHoldPoint(bot);
+    ctx.strokeStyle = bot.stuck > 0.5 ? "rgba(255,77,93,0.85)" : "rgba(255,209,102,0.58)";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 5]);
+    ctx.beginPath();
+    ctx.moveTo(bot.x, bot.y);
+    ctx.lineTo(target.x, target.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "rgba(5,10,15,0.78)";
+    ctx.fillRect(bot.x - 36, bot.y - 42, 72, 16);
+    ctx.fillStyle = "#eef7fb";
+    ctx.fillText(`${bot.aiState || "bot"} ${bot.stuck.toFixed(1)}`, bot.x, bot.y - 30);
+  }
+  ctx.textAlign = "left";
+  ctx.restore();
+}
+
+function drawDamageIndicator() {
+  if (!game.damageIndicator) return;
+  const ratio = Math.max(0, game.damageIndicator.life / game.damageIndicator.maxLife);
+  const angle = game.damageIndicator.angle;
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  const x = cx + Math.cos(angle) * 118;
+  const y = cy + Math.sin(angle) * 78;
+  ctx.save();
+  ctx.globalAlpha = ratio;
+  ctx.translate(x, y);
+  ctx.rotate(angle + Math.PI / 2);
+  ctx.fillStyle = "#ff4d5d";
+  ctx.beginPath();
+  ctx.moveTo(0, -18);
+  ctx.lineTo(13, 12);
+  ctx.lineTo(-13, 12);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawObjectiveHints() {
+  if (game.phase !== "action") return;
+  ctx.save();
+  ctx.lineWidth = 3;
+  if (game.playerSide === "attackers" && game.spike.state === "carried" && game.spike.owner === "player") {
+    for (const site of map.sites) {
+      const c = siteCenter(site);
+      const pulse = 1 + Math.sin(performance.now() / 180) * 0.08;
+      ctx.strokeStyle = "rgba(255, 209, 102, 0.86)";
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, 34 * pulse, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = "#ffd166";
+      ctx.font = "bold 13px Segoe UI";
+      ctx.textAlign = "center";
+      ctx.fillText(`PLANT ${site.id}`, c.x, c.y - 42);
+    }
+  }
+  if (game.spike.state === "planted" || game.spike.state === "dropped") {
+    ctx.strokeStyle = game.spike.state === "planted" ? "rgba(255, 77, 93, 0.9)" : "rgba(255, 209, 102, 0.9)";
+    ctx.beginPath();
+    ctx.arc(game.spike.x, game.spike.y, 46, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = "#eef7fb";
+    ctx.font = "bold 12px Segoe UI";
+    ctx.textAlign = "center";
+    ctx.fillText(game.spike.state === "planted" ? "SPIKE" : "PEGUE A SPIKE", game.spike.x, game.spike.y - 52);
+  }
+  ctx.textAlign = "left";
+  ctx.restore();
+}
+
+function drawAbilityBar() {
+  if (game.phase !== "action") return;
+  const bx = canvas.width / 2 - 60;
+  const by = canvas.height - 38;
+  const bw = 120;
+  const bh = 8;
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
+  const cooldownRatio = game.abilityCooldown > 0
+    ? 1 - game.abilityCooldown / game.selectedAgent.cooldown
+    : 1;
+  const color = game.abilityCharges > 0 && game.abilityCooldown <= 0 ? "#62e6a0" : "#46a8ff";
+  ctx.fillStyle = color;
+  ctx.fillRect(bx, by, bw * Math.min(1, cooldownRatio), bh);
+  ctx.strokeStyle = "rgba(255,255,255,0.22)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(bx, by, bw, bh);
+  ctx.fillStyle = "rgba(255,255,255,0.7)";
+  ctx.font = "11px Segoe UI";
+  ctx.textAlign = "center";
+  const label = game.abilityCharges <= 0 ? "sem carga" : game.abilityCooldown > 0 ? `${Math.ceil(game.abilityCooldown)}s` : "E pronto";
+  ctx.fillText(`${game.selectedAgent.ability} (${game.abilityCharges}x) — ${label}`, canvas.width / 2, by - 4);
+  ctx.textAlign = "left";
+}
+
+function drawSpikeHint() {
+  if (game.spike.state !== "planted" || game.phase !== "action") return;
+  const cx = canvas.width / 2;
+  const cy = 68;
+  const timeRatio = Math.max(0, game.spike.timer / SPIKE_DETONATE_TIME);
+  const urgent = game.spike.timer < 10;
+  const pulse = urgent ? 1 + Math.sin(performance.now() / 120) * 0.08 : 1;
+  ctx.save();
+  ctx.globalAlpha = 0.92;
+  ctx.fillStyle = urgent ? "rgba(255,77,93,0.18)" : "rgba(5,10,15,0.55)";
+  ctx.strokeStyle = urgent ? "#ff4d5d" : "#ffd166";
+  ctx.lineWidth = 1.5;
+  const w = 140 * pulse;
+  const h = 32 * pulse;
+  ctx.fillRect(cx - w / 2, cy - h / 2, w, h);
+  ctx.strokeRect(cx - w / 2, cy - h / 2, w, h);
+  ctx.fillStyle = urgent ? "#ff4d5d" : "#ffd166";
+  ctx.font = `bold ${urgent ? 15 : 13}px Segoe UI`;
+  ctx.textAlign = "center";
+  ctx.fillText(`SPIKE — ${Math.ceil(game.spike.timer)}s`, cx, cy + 5);
+  ctx.textAlign = "left";
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
 function draw() {
+  if (game.menuState !== "none" && game.phase !== "action") {
+    drawMenuSlideshow();
+    return;
+  }
   ctx.save();
   if (game.shake > 0) {
     const amount = game.shake * 18;
@@ -1904,6 +2477,7 @@ function draw() {
   }
 
   drawSpike();
+  drawObjectiveHints();
 
   for (const bot of game.bots) {
     const visible = game.revealTimer > 0 || hasLineOfSight(game.player, bot);
@@ -1936,7 +2510,7 @@ function draw() {
   for (const marker of game.hitMarkers) {
     const alpha = Math.max(0, marker.life / marker.maxLife);
     ctx.globalAlpha = alpha;
-    ctx.strokeStyle = "rgba(255,255,255,0.95)";
+    ctx.strokeStyle = marker.color || "rgba(255,255,255,0.95)";
     ctx.lineWidth = 8;
     ctx.lineCap = "round";
     ctx.shadowColor = "rgba(0,0,0,0.55)";
@@ -1972,12 +2546,51 @@ function draw() {
   }
   ctx.globalAlpha = 1;
 
+  drawBotDebug();
+  drawDamageIndicator();
+  drawAbilityBar();
+  drawSpikeHint();
   drawCrosshair();
   drawRadar();
   ctx.restore();
 }
 
 function updateUi() {
+  // Side pill
+  const atk = game.playerSide === "attackers";
+  ui.sidePill.textContent = atk ? "ATK" : "DEF";
+  ui.sidePill.className = "hud-pill side-pill " + (atk ? "atk" : "def");
+
+  // Round label
+  ui.roundLabel.textContent = `Round ${game.roundNumber}`;
+
+  // Timer com urgência
+  const t = Math.max(0, Math.ceil(game.phaseTime));
+  ui.timerText.className = t <= 5 && game.phase !== "action" ? "urgent" : t <= 10 && game.phase !== "action" ? "warn" : "";
+
+  // Buy bar
+  updateBuyBar();
+
+  // Agent dot cor
+  ui.agentDot.style.background = game.selectedAgent.color;
+
+  // Armor bar separada
+  const hasArmor = (game.player?.maxArmor || 0) > 0;
+  ui.armorBarWrap.classList.toggle("hidden", !hasArmor);
+  ui.armorText.classList.toggle("hidden", !hasArmor);
+  if (hasArmor) {
+    const armorRatio = Math.max(0, game.player.armor) / game.player.maxArmor;
+    ui.armorBar.style.transform = `scaleX(${armorRatio})`;
+    ui.armorValueText.textContent = Math.ceil(game.player.armor);
+  }
+
+  // Ammo dots
+  if (game.reloadTimer <= 0) {
+    updateAmmoDots(game.player.ammo, currentMagSize());
+  } else {
+    updateAmmoDots(0, currentMagSize());
+  }
+
   ui.phase.textContent = game.paused
     ? "Pause"
     : game.phase === "buy"
@@ -1989,12 +2602,17 @@ function updateUi() {
             : "Fim";
   ui.timer.textContent = game.spike.state === "planted"
     ? `Spike ${Math.max(0, Math.ceil(game.spike.timer))}`
-    : game.sandbox ? "∞" : Math.max(0, Math.ceil(game.phaseTime)).toString();
+    : game.sandbox || game.training ? "∞" : t.toString();
   ui.score.textContent = `${game.playerScore} - ${game.enemyScore}`;
-  ui.money.textContent = `$${game.money}`;
-  ui.agent.textContent = `${game.selectedAgent.name} ${game.playerSide === "attackers" ? "ATK" : "DEF"} (${game.abilityCooldown > 0 ? Math.ceil(game.abilityCooldown) : "E"})`;
+
+  // Money com delta
+  const newMoney = game.money;
+  if (newMoney !== lastMoney) flashMoneyDelta(newMoney);
+  ui.money.textContent = `${newMoney}`;
+
+  ui.agent.textContent = `${game.selectedAgent.name} ${atk ? "ATK" : "DEF"} (${game.abilityCharges}x ${game.abilityCooldown > 0 ? Math.ceil(game.abilityCooldown) : "E"})`;
   ui.weapon.textContent = game.selectedWeapon.name;
-  ui.hp.textContent = `${Math.max(0, Math.ceil(game.player.hp))}${game.player.armor > 0 ? ` +${Math.ceil(game.player.armor)}` : ""}`;
+  ui.hp.textContent = `${Math.max(0, Math.ceil(game.player.hp))}`;
   ui.ammo.textContent = game.reloadTimer > 0 ? "Recarregando" : `${game.player.ammo} / ${currentMagSize()}`;
   ui.spike.textContent = game.spike.state === "carried"
     ? game.spike.owner === "player" ? "Com voce" : "Com bots"
@@ -2014,19 +2632,23 @@ function updateUi() {
   })`;
   ui.message.querySelector("strong").textContent = game.message;
   ui.message.querySelector("span").textContent = game.paused
-    ? "Jogo pausado. Aperte P ou clique em Continuar."
+    ? (game.menuState === "pause" ? "Jogo pausado. Aperte P ou clique em Continuar." : "Escolha uma opcao no menu.")
     : game.playerSide === "attackers"
       ? "WASD move, mouse mira, clique atira, E habilidade, F planta, P pause."
       : "WASD move, mouse mira, clique atira, E habilidade, F desarma, P pause.";
-  ui.pauseButton.textContent = game.paused ? "Continuar" : "Pause";
+  ui.pauseButton.textContent = game.menuState === "pause" ? "Continuar" : "Pause";
   ui.shopButton.textContent = ui.shop.classList.contains("hidden") ? "Loja" : "Fechar";
+  updateScoreboard();
 }
 
 function togglePause() {
   if (game.phase === "matchOver") return;
-  game.paused = !game.paused;
-  setMessage(game.paused ? "Jogo pausado." : "Jogo retomado.");
-  updateUi();
+  if (game.menuState === "pause") {
+    resumeFromPause();
+    return;
+  }
+  if (game.menuState !== "none") return;
+  showPauseMenu();
 }
 
 function toggleShop() {
@@ -2035,11 +2657,45 @@ function toggleShop() {
     updateUi();
     return;
   }
-  ui.shop.classList.toggle("hidden");
+  if (ui.shop.classList.contains("hidden")) {
+    openShop();
+  } else {
+    closeShop();
+  }
   updateUi();
 }
 
-function setMenu(title, text, buttons, kicker = "Protocol Shift") {
+function setShopTab(tab) {
+  game.shopTab = tab;
+  document.querySelectorAll("[data-shop-panel]").forEach((panel) => {
+    panel.classList.toggle("hidden", panel.dataset.shopPanel !== tab);
+  });
+  if (ui.shopTabs) {
+    ui.shopTabs.querySelectorAll("[data-shop-tab]").forEach((button) => {
+      button.classList.toggle("active", button.dataset.shopTab === tab);
+    });
+  }
+}
+
+function handleEscape() {
+  if (game.menuState === "pause") {
+    resumeFromPause();
+    return;
+  }
+  if (game.menuState === "difficulty" || game.menuState === "options") {
+    showMainMenu();
+    return;
+  }
+  if (game.menuState !== "none") return;
+  if (!ui.shop.classList.contains("hidden")) {
+    closeShop();
+    updateUi();
+    return;
+  }
+  toggleShop();
+}
+
+function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
   ui.menuKicker.textContent = kicker;
   ui.menuTitle.textContent = title;
   ui.menuText.textContent = text;
@@ -2052,39 +2708,75 @@ function setMenu(title, text, buttons, kicker = "Protocol Shift") {
   }
   ui.menuOverlay.classList.remove("hidden");
   game.paused = true;
+  game.menuState = state;
+}
+
+function hideMenuOverlay() {
+  ui.menuOverlay.classList.add("hidden");
+  game.menuState = "none";
+}
+
+function resumeFromPause() {
+  hideMenuOverlay();
+  game.paused = false;
+  setMessage("Jogo retomado.");
+  updateUi();
+}
+
+function showPauseMenu() {
+  closeShop();
+  setMessage("Jogo pausado.");
+  setMenu("Pause", "A partida esta congelada. Continue ou volte para o menu.", [
+    { label: "Continuar", desc: "Retomar a partida atual.", action: resumeFromPause },
+    { label: "Voltar ao menu", desc: "Sair da partida atual e abrir o menu principal.", action: showMainMenu },
+  ], "JOGO PAUSADO", "pause");
+  updateUi();
 }
 
 function showMainMenu() {
   ui.introOverlay.classList.add("hidden");
+  ui.matchOverlay.classList.add("hidden");
+  closeShop();
+  game.phase = "idle";
+  game.paused = false;
+  game.menuMapTimer = 0;
+  fullReset();
   setMenu("Menu", "Escolha como quer jogar.", [
     { label: "JOGAR", desc: "Partida normal com dificuldade.", action: showDifficultyMenu },
     { label: "OPÇÕES", desc: "Preferências de mira e controles.", action: showOptionsMenu },
     { label: "SANDBOX", desc: "Dinheiro infinito, sem tempo e posicionamento livre.", action: startSandboxMode },
-  ]);
+    { label: "TREINO", desc: "Teste armas, mira, recoil e dano sem pressa.", action: startTrainingMode },
+    { label: "TUTORIAL", desc: "Aprenda movimento, tiro, plant, defuse e compra.", action: startTutorialMode },
+  ], "Valorant2D", "main");
 }
 
 function showDifficultyMenu() {
   setMenu("Dificuldade", "Escolha o ritmo da partida.", [
-    { label: "Fácil", desc: "3 aliados. Inimigos atiram bem menos.", action: () => startMode("Fácil", "easy") },
+    { label: "Fácil", desc: "2 aliados. Inimigos atiram bem menos.", action: () => startMode("Fácil", "easy") },
     { label: "Normal", desc: "Sem aliados. Inimigos atiram com menos frequência.", action: () => startMode("Normal", "normal") },
     { label: "Difícil", desc: "Sem aliados. Inimigos atiram na frequência normal.", action: () => startMode("Difícil", "hard") },
     { label: "Voltar", desc: "Retornar ao menu principal.", action: showMainMenu },
-  ], "JOGAR");
+  ], "JOGAR", "difficulty");
 }
 
 function showOptionsMenu() {
   setMenu("Opções", "Ajustes rápidos de controle e mira.", [
     { label: `Mira: ${game.crosshairStyle === "default" ? "Padrão" : "Minimalista"}`, desc: "Alterna o visual da mira comum.", action: () => { game.crosshairStyle = game.crosshairStyle === "default" ? "minimal" : "default"; showOptionsMenu(); } },
+    { label: `Tamanho mira: ${Math.round(game.crosshairScale * 100)}%`, desc: "Alterna entre mira pequena, media e grande.", action: () => { game.crosshairScale = game.crosshairScale >= 1.25 ? 0.85 : game.crosshairScale + 0.2; showOptionsMenu(); } },
     { label: `Movimento: ${game.arrowKeys ? "WASD + setinhas" : "WASD"}`, desc: "Permite usar setinhas junto do WASD.", action: () => { game.arrowKeys = !game.arrowKeys; showOptionsMenu(); } },
+    { label: `Rotas: ${game.debugRoutes ? "visiveis" : "ocultas"}`, desc: "Mostra alvos e caminhos dos bots para depurar travamentos.", action: () => { game.debugRoutes = !game.debugRoutes; showOptionsMenu(); } },
+    { label: `Som: ${audio.enabled ? "ligado" : "desligado"}`, desc: "Ativa feedback simples de tiros, hits e spike.", action: () => { audio.enabled = !audio.enabled; showOptionsMenu(); } },
+    { label: `Volume: ${Math.round(audio.volume * 100)}%`, desc: "Alterna volume baixo, medio e alto.", action: () => { audio.volume = audio.volume >= 1 ? 0.35 : audio.volume + 0.325; showOptionsMenu(); } },
+    { label: "Tela cheia", desc: "Alterna o jogo em tela cheia quando o navegador permitir.", action: () => { if (document.fullscreenElement) document.exitFullscreen?.(); else document.querySelector(".game-wrap")?.requestFullscreen?.(); showOptionsMenu(); } },
     { label: "Voltar", desc: "Retornar ao menu principal.", action: showMainMenu },
-  ], "OPÇÕES");
+  ], "OPÇÕES", "options");
 }
 
 function applyDifficulty(difficulty) {
   game.difficulty = difficulty;
   game.sandbox = false;
   if (difficulty === "easy") {
-    game.allyCount = 3;
+    game.allyCount = 2;
     game.enemyFireMultiplier = 1.85;
   } else if (difficulty === "normal") {
     game.allyCount = 0;
@@ -2097,8 +2789,10 @@ function applyDifficulty(difficulty) {
 
 function startMode(label, difficulty) {
   game.mode = label;
+  game.training = false;
+  game.tutorial = false;
   applyDifficulty(difficulty);
-  ui.menuOverlay.classList.add("hidden");
+  hideMenuOverlay();
   startNewMatch();
 }
 
@@ -2106,13 +2800,50 @@ function startSandboxMode() {
   game.mode = "Sandbox";
   game.difficulty = "sandbox";
   game.sandbox = true;
+  game.training = false;
+  game.tutorial = false;
   game.allyCount = 2;
   game.enemyFireMultiplier = 1.2;
-  ui.menuOverlay.classList.add("hidden");
+  hideMenuOverlay();
   startNewMatch();
   startActionRound();
   game.phaseTime = 9999;
   setMessage("Sandbox: clique direito para inimigo, clique do meio para aliado. Dinheiro infinito.");
+}
+
+function startTrainingMode() {
+  game.mode = "Treino";
+  game.difficulty = "training";
+  game.sandbox = false;
+  game.training = true;
+  game.tutorial = false;
+  game.allyCount = 0;
+  game.enemyFireMultiplier = 2.4;
+  hideMenuOverlay();
+  startNewMatch();
+  game.money = 99999;
+  startActionRound();
+  game.phaseTime = 9999;
+  setMessage("Treino: dinheiro infinito, tempo livre e bots lentos para testar armas.");
+}
+
+function startTutorialMode() {
+  game.mode = "Tutorial";
+  game.difficulty = "tutorial";
+  game.sandbox = false;
+  game.training = false;
+  game.tutorial = true;
+  game.tutorialStep = 0;
+  game.allyCount = 1;
+  game.enemyFireMultiplier = 2.2;
+  hideMenuOverlay();
+  startNewMatch();
+  game.startingSide = "attackers";
+  game.playerSide = "attackers";
+  game.roundNumber = 1;
+  resetRound();
+  showIntro();
+  setMessage(`Tutorial: ${tutorialText()}`);
 }
 
 function showIntro() {
@@ -2121,6 +2852,72 @@ function showIntro() {
   ui.introTeam.textContent = `${game.playerSide === "attackers" ? "Ataque" : "Defesa"} - ${map.vibe}`;
   ui.introOverlay.classList.remove("hidden");
   game.introTimer = 5;
+}
+
+const killFeedEntries = [];
+
+function addKillFeedEntry(killerIsPlayer, weaponName, headshot) {
+  const entry = document.createElement("div");
+  entry.className = "kill-entry";
+  const killer = killerIsPlayer
+    ? `<span class="kf-player">Você</span>`
+    : `<span class="kf-enemy">Bot</span>`;
+  const victim = killerIsPlayer
+    ? `<span class="kf-enemy">Bot</span>`
+    : `<span class="kf-player">Você</span>`;
+  const hs = headshot ? `<span class="kf-hs">HS</span>` : "";
+  entry.innerHTML = `${killer}<span class="kf-weapon">${weaponName}</span>${victim}${hs}`;
+  ui.killFeed.prepend(entry);
+  killFeedEntries.push(entry);
+  if (killFeedEntries.length > 4) {
+    const old = killFeedEntries.shift();
+    old.remove();
+  }
+  setTimeout(() => {
+    entry.style.transition = "opacity 0.5s";
+    entry.style.opacity = "0";
+    setTimeout(() => entry.remove(), 500);
+  }, 4000);
+}
+
+let lastMoney = 800;
+function flashMoneyDelta(newVal) {
+  const diff = newVal - lastMoney;
+  lastMoney = newVal;
+  if (diff === 0) return;
+  const el = ui.moneyDelta;
+  el.className = "money-delta " + (diff > 0 ? "pos" : "neg");
+  el.textContent = (diff > 0 ? "+" : "") + "$" + diff;
+  void el.offsetWidth;
+  el.style.animation = "none";
+  void el.offsetWidth;
+  el.style.animation = "";
+}
+
+function updateAmmoDots(ammo, maxAmmo) {
+  const el = ui.ammoDots;
+  if (maxAmmo > 30) { el.innerHTML = ""; return; }
+  if (el.childElementCount !== maxAmmo) {
+    el.innerHTML = "";
+    for (let i = 0; i < maxAmmo; i++) {
+      const dot = document.createElement("span");
+      dot.className = "ammo-dot" + (i > 0 && i % 5 === 0 ? " group-sep" : "");
+      el.appendChild(dot);
+    }
+  }
+  [...el.children].forEach((dot, i) => {
+    dot.classList.toggle("spent", i >= ammo);
+  });
+}
+
+function updateBuyBar() {
+  if (game.phase === "buy" && !game.sandbox && !game.training) {
+    ui.buyBar.classList.remove("hidden");
+    const ratio = Math.max(0, game.phaseTime / BUY_TIME);
+    ui.buyBarFill.style.transform = `scaleX(${ratio})`;
+  } else {
+    ui.buyBar.classList.add("hidden");
+  }
 }
 
 function buildShop() {
@@ -2144,7 +2941,7 @@ function buildShop() {
     const owned = game.ownedWeapons.has(weapon.id);
     button.innerHTML = `<b>${weapon.name} <em>${owned ? "Comprada" : `$${weapon.price}`}</em></b><span>${weapon.damage} dano, pente ${weapon.mag}</span>`;
     button.addEventListener("click", () => {
-      if (game.phase !== "buy") return;
+      if (game.phase !== "buy" && !game.sandbox) return;
       const alreadyOwned = game.ownedWeapons.has(weapon.id);
       if (!alreadyOwned && game.money < weapon.price) {
         setMessage("Creditos insuficientes.");
@@ -2171,7 +2968,7 @@ function buildShop() {
     button.className = "choice";
     button.innerHTML = `<b>${item.name} - $${item.price}</b><span>${item.desc}</span>`;
     button.addEventListener("click", () => {
-      if (game.phase !== "buy") return;
+      if (game.phase !== "buy" && !game.sandbox) return;
       if (equipmentOwned(item)) {
         setMessage("Esse equipamento ja esta ativo.");
         updateUi();
@@ -2203,7 +3000,7 @@ function buildShop() {
     button.className = "choice";
     button.innerHTML = `<b>${item.name} <em>$${item.price}</em></b><span>${item.desc}</span>`;
     button.addEventListener("click", () => {
-      if (game.phase !== "buy") return;
+      if (game.phase !== "buy" && !game.sandbox) return;
       if (allyItemOwned(item)) {
         setMessage("Esse upgrade aliado ja esta ativo.");
         updateUi();
@@ -2247,6 +3044,7 @@ function equipmentOwned(item) {
 }
 
 function updateShopState() {
+  setShopTab(game.shopTab);
   [...ui.agentButtons.children].forEach((button, i) => button.classList.toggle("active", agents[i] === game.selectedAgent));
   [...ui.weaponButtons.children].forEach((button, i) => {
     const weapon = weapons[i];
@@ -2279,17 +3077,30 @@ function loop(now) {
 loop.last = performance.now();
 
 window.addEventListener("keydown", (event) => {
+  initAudio();
+  if (event.key === "Tab") {
+    event.preventDefault();
+    game.scoreboardVisible = true;
+    updateUi();
+    return;
+  }
   if (!event.repeat) pressed.add(event.key.toLowerCase());
   keys.add(event.key.toLowerCase());
   if (!event.repeat && event.key.toLowerCase() === "p") {
     togglePause();
   }
   if (event.key === "Escape") {
-    toggleShop();
+    handleEscape();
   }
 });
 
 window.addEventListener("keyup", (event) => {
+  if (event.key === "Tab") {
+    event.preventDefault();
+    game.scoreboardVisible = false;
+    updateUi();
+    return;
+  }
   keys.delete(event.key.toLowerCase());
 });
 
@@ -2302,16 +3113,20 @@ canvas.addEventListener("mousemove", (event) => {
 canvas.addEventListener("contextmenu", (event) => event.preventDefault());
 
 canvas.addEventListener("mousedown", (event) => {
+  initAudio();
   if (game.sandbox && game.phase === "action" && event.button === 2) {
     event.preventDefault();
     const bot = makeBot({ x: mouse.x, y: mouse.y }, game.bots.length);
     bot.hasSpike = false;
+    sanitizeEntityPosition(bot);
     game.bots.push(bot);
     return;
   }
   if (game.sandbox && game.phase === "action" && event.button === 1) {
     event.preventDefault();
-    game.allies.push(makeAlly({ x: mouse.x, y: mouse.y }, game.allies.length));
+    const ally = makeAlly({ x: mouse.x, y: mouse.y }, game.allies.length);
+    sanitizeEntityPosition(ally);
+    game.allies.push(ally);
     return;
   }
   mouse.down = true;
@@ -2323,12 +3138,20 @@ window.addEventListener("mouseup", () => {
 
 ui.pauseButton.addEventListener("click", togglePause);
 ui.shopButton.addEventListener("click", toggleShop);
+ui.shopBackdrop.addEventListener("click", () => { closeShop(); updateUi(); });
+if (ui.shopTabs) {
+  ui.shopTabs.querySelectorAll("[data-shop-tab]").forEach((button) => {
+    button.addEventListener("click", () => setShopTab(button.dataset.shopTab));
+  });
+}
 ui.newGameButton.addEventListener("click", () => {
   ui.matchOverlay.classList.add("hidden");
   showMainMenu();
 });
 
 buildShop();
+setShopTab(game.shopTab);
+game.menuMapTimer = 0;
 startNewMatch();
 showMainMenu();
 requestAnimationFrame(loop);
