@@ -3,7 +3,10 @@ const fs = require("fs");
 const path = require("path");
 
 const baseDir = __dirname;
-const ports = [8088, 8124];
+const requestedPorts = process.argv.slice(2).map(Number).filter(Boolean);
+const ports = requestedPorts.length
+  ? requestedPorts
+  : (process.env.PROTOCOL_SHIFT_PORTS || "8088,8124").split(",").map(Number).filter(Boolean);
 const mime = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -42,7 +45,11 @@ function serve(req, res) {
 
 for (const port of ports) {
   const server = http.createServer(serve);
-  server.on("error", () => {});
+  server.on("error", (error) => {
+    if (error.code !== "EADDRINUSE") {
+      console.error(`Protocol Shift server error on ${port}:`, error.message);
+    }
+  });
   server.listen(port, "127.0.0.1", () => {
     console.log(`Protocol Shift server running on http://127.0.0.1:${port}/`);
   });

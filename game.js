@@ -661,14 +661,15 @@ function endRound(winner, reason) {
   if (winner === game.playerSide) {
     game.playerScore += 1;
     game.lossStreak = 0;
-    moneyGained = game.spike.state === "planted" ? 2600 : 2400;
+    moneyGained = game.spike.state === "planted" ? 2300 : 2100;
     if (!game.sandbox) game.money += moneyGained;
   } else {
     game.enemyScore += 1;
     game.lossStreak += 1;
-    moneyGained = 1700 + Math.min(3, game.lossStreak) * 300;
+    moneyGained = 1500 + Math.min(3, game.lossStreak) * 250;
     if (!game.sandbox) game.money += moneyGained;
   }
+  if (!game.sandbox && !game.training) game.money = Math.min(game.money, 12000);
   game.roundMoneyDelta = moneyGained;
   const won = winner === game.playerSide;
   const fullReason = game.sandbox ? reason : `${reason}  +${moneyGained}`;
@@ -1812,7 +1813,10 @@ function updateBullets(dt) {
           if (bot.hp <= 0) {
             bot.alive = false;
             if (bullet.team === "player") game.stats.kills += 1;
-            if (!game.sandbox) game.money += bullet.team === "player" ? (region === "head" ? 350 : 250) : 120;
+            if (!game.sandbox) {
+              game.money += bullet.team === "player" ? (region === "head" ? 250 : 180) : 90;
+              if (!game.training) game.money = Math.min(game.money, 12000);
+            }
             if (game.spike.defuserId === bot.id) {
               resetPartialDefuse();
             }
@@ -1850,6 +1854,13 @@ function updateBullets(dt) {
           target.alive = false;
           if (target.id === "player") {
             game.stats.deaths += 1;
+            if (game.tutorial) {
+              showRoundBanner("Tente de novo", "No tutorial voce renasce para praticar sem perder a partida.", "Tutorial", 2.4);
+              resetRound();
+              game.tutorialStep = Math.min(game.tutorialStep, 2);
+              setMessage(`Tutorial: ${tutorialText()}`);
+              break;
+            }
             const winner = game.playerSide === "attackers" ? "defenders" : "attackers";
             endRound(winner, game.playerSide === "attackers"
               ? "Voce foi eliminado. Defensores venceram."
@@ -2063,6 +2074,21 @@ function drawMap() {
     ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
     ctx.strokeRect(wall.x, wall.y, wall.w, wall.h);
   }
+
+  const callouts = [
+    { text: "Spawn ATK", x: map.attackersSpawn.x, y: map.attackersSpawn.y - 28 },
+    { text: "Spawn DEF", x: map.playerDefenderSpawn.x, y: map.playerDefenderSpawn.y + 42 },
+    { text: "Meio", x: map.width / 2, y: map.height / 2 },
+  ];
+  ctx.font = "bold 12px Segoe UI";
+  ctx.textAlign = "center";
+  for (const callout of callouts) {
+    ctx.fillStyle = "rgba(5,10,15,0.45)";
+    ctx.fillRect(callout.x - 42, callout.y - 10, 84, 18);
+    ctx.fillStyle = "rgba(238,247,251,0.62)";
+    ctx.fillText(callout.text, callout.x, callout.y + 4);
+  }
+  ctx.textAlign = "left";
 }
 
 function weaponVisual(weapon) {
@@ -2566,7 +2592,7 @@ function updateUi() {
 
   // Timer com urgência
   const t = Math.max(0, Math.ceil(game.phaseTime));
-  ui.timerText.className = t <= 5 && game.phase !== "action" ? "urgent" : t <= 10 && game.phase !== "action" ? "warn" : "";
+  ui.timer.className = t <= 5 && game.phase !== "action" ? "urgent" : t <= 10 && game.phase !== "action" ? "warn" : "";
 
   // Buy bar
   updateBuyBar();
@@ -2808,7 +2834,7 @@ function startSandboxMode() {
   startNewMatch();
   startActionRound();
   game.phaseTime = 9999;
-  setMessage("Sandbox: clique direito para inimigo, clique do meio para aliado. Dinheiro infinito.");
+  setMessage("Sandbox: direito cria inimigo, meio cria aliado, X limpa bots, C limpa aliados.");
 }
 
 function startTrainingMode() {
@@ -2939,7 +2965,7 @@ function buildShop() {
     const button = document.createElement("button");
     button.className = "choice";
     const owned = game.ownedWeapons.has(weapon.id);
-    button.innerHTML = `<b>${weapon.name} <em>${owned ? "Comprada" : `$${weapon.price}`}</em></b><span>${weapon.damage} dano, pente ${weapon.mag}</span>`;
+    button.innerHTML = `<b>${weapon.name} <em>${owned ? "Comprada" : `$${weapon.price}`}</em></b><span>Permanente na partida. ${weapon.damage} dano, pente ${weapon.mag}</span>`;
     button.addEventListener("click", () => {
       if (game.phase !== "buy" && !game.sandbox) return;
       const alreadyOwned = game.ownedWeapons.has(weapon.id);
@@ -2966,7 +2992,8 @@ function buildShop() {
   for (const item of equipment) {
     const button = document.createElement("button");
     button.className = "choice";
-    button.innerHTML = `<b>${item.name} - $${item.price}</b><span>${item.desc}</span>`;
+    const kind = item.id.includes("Armor") ? "Consumivel por round" : "Upgrade permanente";
+    button.innerHTML = `<b>${item.name} - $${item.price}</b><span>${kind}. ${item.desc}</span>`;
     button.addEventListener("click", () => {
       if (game.phase !== "buy" && !game.sandbox) return;
       if (equipmentOwned(item)) {
@@ -2998,7 +3025,7 @@ function buildShop() {
   for (const item of allyItems) {
     const button = document.createElement("button");
     button.className = "choice";
-    button.innerHTML = `<b>${item.name} <em>$${item.price}</em></b><span>${item.desc}</span>`;
+    button.innerHTML = `<b>${item.name} <em>$${item.price}</em></b><span>Upgrade de equipe. ${item.desc}</span>`;
     button.addEventListener("click", () => {
       if (game.phase !== "buy" && !game.sandbox) return;
       if (allyItemOwned(item)) {
@@ -3029,12 +3056,14 @@ function buildShop() {
 }
 
 function allyItemOwned(item) {
+  if (!item) return false;
   if (item.id === "allyArmor") return game.allyLoadout.armor >= 35;
   if (item.weaponId) return game.allyLoadout.weaponId === item.weaponId;
   return false;
 }
 
 function equipmentOwned(item) {
+  if (!item) return false;
   if (item.id === "lightArmor") return (game.player?.armor || 0) >= 25;
   if (item.id === "heavyArmor") return (game.player?.armor || 0) >= 50;
   if (item.id === "boots") return game.upgrades.speed;
@@ -3048,6 +3077,7 @@ function updateShopState() {
   [...ui.agentButtons.children].forEach((button, i) => button.classList.toggle("active", agents[i] === game.selectedAgent));
   [...ui.weaponButtons.children].forEach((button, i) => {
     const weapon = weapons[i];
+    if (!weapon) return;
     const owned = game.ownedWeapons.has(weapon.id);
     button.classList.toggle("active", weapon === game.selectedWeapon);
     button.classList.toggle("owned", owned);
@@ -3057,6 +3087,7 @@ function updateShopState() {
   [...ui.equipmentButtons.children].forEach((button, i) => button.classList.toggle("active", equipmentOwned(equipment[i])));
   [...ui.allyButtons.children].forEach((button, i) => {
     const item = allyItems[i];
+    if (!item) return;
     const owned = allyItemOwned(item);
     button.classList.toggle("active", owned);
     button.classList.toggle("owned", owned);
@@ -3088,6 +3119,14 @@ window.addEventListener("keydown", (event) => {
   keys.add(event.key.toLowerCase());
   if (!event.repeat && event.key.toLowerCase() === "p") {
     togglePause();
+  }
+  if (game.sandbox && !event.repeat && event.key.toLowerCase() === "x") {
+    game.bots = [];
+    setMessage("Sandbox: inimigos removidos.");
+  }
+  if (game.sandbox && !event.repeat && event.key.toLowerCase() === "c") {
+    game.allies = [];
+    setMessage("Sandbox: aliados removidos.");
   }
   if (event.key === "Escape") {
     handleEscape();

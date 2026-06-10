@@ -22,6 +22,14 @@ O servidor tambem tenta abrir o jogo em:
 http://127.0.0.1:8124/
 ```
 
+No Windows, tambem existe o iniciador:
+
+```bat
+start_protocol_shift_server.cmd
+```
+
+Ele tenta usar o `node.exe` instalado no sistema e, se nao encontrar, usa o Node incluido no Codex local.
+
 ## Controles
 
 - `WASD`: mover
