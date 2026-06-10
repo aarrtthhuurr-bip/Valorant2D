@@ -1365,14 +1365,14 @@ function botShootAt(bot, target, dt, team, firePenalty = 1) {
   }
 }
 
-function updateBotAwareness(bot, seesPlayer, dt) {
-  if (seesPlayer) {
+function updateBotAwareness(bot, visibleTarget, dt) {
+  if (visibleTarget) {
     bot.reactionTimer = (bot.reactionTimer === undefined || bot.reactionTimer <= 0)
       ? BOT_REACTION_TIME + Math.random() * 0.18
       : bot.reactionTimer;
     bot.reactionTimer = Math.max(0, bot.reactionTimer - dt);
     bot.canShoot = bot.reactionTimer <= 0;
-    bot.lastKnownPlayer = { x: game.player.x, y: game.player.y };
+    bot.lastKnownPlayer = { x: visibleTarget.x, y: visibleTarget.y };
     bot.memoryTimer = 3.2;
     bot.revealedTimer = 2.6;
     alertBotSquad(bot, bot.lastKnownPlayer);
@@ -1441,7 +1441,7 @@ function botFightPlayer(bot, dt, options = {}) {
     bot.aiState = options.state || "fight";
   }
 
-  if (bot.canShoot !== false) botShootAt(bot, shootTarget, dt, "bot", options.firePenalty || 1);
+  if (target && bot.canShoot !== false) botShootAt(bot, target, dt, "bot", options.firePenalty || 1);
   return true;
 }
 
@@ -1657,7 +1657,8 @@ function updateBots(dt) {
   for (const bot of game.bots) {
     if (!bot.alive) continue;
     const seesPlayer = botCanSeePlayer(bot);
-    updateBotAwareness(bot, seesPlayer, dt);
+    const visibleTarget = closestVisibleSquadTarget(bot);
+    updateBotAwareness(bot, visibleTarget, dt);
 
     if (game.playerSide === "attackers" && bot === botDefuser) {
       bot.aiState = "defuse";
