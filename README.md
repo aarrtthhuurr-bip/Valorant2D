@@ -4,10 +4,18 @@ Um jogo 2D em HTML, CSS e JavaScript inspirado em partidas taticas com ataque, d
 
 ## Como jogar
 
-Abra o arquivo `index.html` no navegador ou rode o servidor local:
+No Windows, o jeito mais facil e dar duplo clique em:
+
+```text
+Abrir Valorant2D.cmd
+```
+
+Ele inicia o servidor local em segundo plano e abre o jogo no navegador.
+
+Se preferir pelo terminal, rode:
 
 ```bash
-node protocol_shift_server.js
+python protocol_shift_server.py --open
 ```
 
 Depois acesse:
@@ -16,19 +24,15 @@ Depois acesse:
 http://127.0.0.1:8088/
 ```
 
-O servidor tambem tenta abrir o jogo em:
+Se a porta `8088` estiver ocupada, o servidor tenta `8124` automaticamente. Se as duas estiverem ocupadas, ele escolhe uma porta livre e mostra o endereco no terminal.
 
-```text
-http://127.0.0.1:8124/
-```
-
-No Windows, tambem existe o iniciador:
+Tambem existe o iniciador base:
 
 ```bat
 start_protocol_shift_server.cmd
 ```
 
-Ele tenta usar o `node.exe` instalado no sistema e, se nao encontrar, usa o Node incluido no Codex local.
+Ele usa Python 3, sem depender de Node.js.
 
 ## Controles
 

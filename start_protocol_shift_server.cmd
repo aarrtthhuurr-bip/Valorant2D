@@ -2,17 +2,18 @@
 setlocal
 cd /d "%~dp0"
 
-where node.exe >nul 2>nul
+where py.exe >nul 2>nul
 if %errorlevel%==0 (
-  start "" /min node.exe "%~dp0protocol_shift_server.js"
+  start "Valorant2D Server" /min py.exe "%~dp0protocol_shift_server.py" --ports 8088,8124 --open
   exit /b 0
 )
 
-set "CODEX_NODE=C:\Users\HP\AppData\Local\OpenAI\Codex\bin\5b9024f90663758b\node.exe"
-if exist "%CODEX_NODE%" (
-  start "" /min "%CODEX_NODE%" "%~dp0protocol_shift_server.js"
+where python.exe >nul 2>nul
+if %errorlevel%==0 (
+  start "Valorant2D Server" /min python.exe "%~dp0protocol_shift_server.py" --ports 8088,8124 --open
   exit /b 0
 )
 
-echo Node.js was not found. Install Node.js or update this launcher.
+echo Python nao foi encontrado. Instale Python 3 para abrir o servidor local.
+pause
 exit /b 1
