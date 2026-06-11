@@ -849,6 +849,22 @@ function lineIntersectsAnyWall(x1, y1, x2, y2) {
   return false;
 }
 
+function firstWallPointOnLine(x1, y1, x2, y2) {
+  const distance = Math.hypot(x2 - x1, y2 - y1);
+  const steps = Math.max(1, Math.ceil(distance / 4));
+  let lastClear = { x: x1, y: y1 };
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const x = x1 + (x2 - x1) * t;
+    const y = y1 + (y2 - y1) * t;
+    if (map.walls.some((wall) => rectContains(wall, x, y))) {
+      return lastClear;
+    }
+    lastClear = { x, y };
+  }
+  return { x: x2, y: y2 };
+}
+
 function hasLineOfSight(a, b) {
   if (lineIntersectsAnyWall(a.x, a.y, b.x, b.y)) return false;
   for (const smoke of game.smokes) {
@@ -2328,16 +2344,25 @@ function drawCrosshair() {
   const spreadScale = game.crosshairScale * (1 + game.recoilHeat * 0.22);
   if (game.selectedWeapon.id === "sniper") {
     const p = game.player;
+    const startX = p.x + Math.cos(p.angle) * (p.r + 18);
+    const startY = p.y + Math.sin(p.angle) * (p.r + 18);
+    const aimEnd = firstWallPointOnLine(startX, startY, mouse.x, mouse.y);
     ctx.save();
     // linha do cano até a mira
     ctx.strokeStyle = "rgba(255, 209, 102, 0.55)";
     ctx.lineWidth = 1;
     ctx.setLineDash([6, 5]);
     ctx.beginPath();
-    ctx.moveTo(p.x + Math.cos(p.angle) * (p.r + 18), p.y + Math.sin(p.angle) * (p.r + 18));
-    ctx.lineTo(mouse.x, mouse.y);
+    ctx.moveTo(startX, startY);
+    ctx.lineTo(aimEnd.x, aimEnd.y);
     ctx.stroke();
     ctx.setLineDash([]);
+    if (aimEnd.x !== mouse.x || aimEnd.y !== mouse.y) {
+      ctx.fillStyle = "rgba(255, 209, 102, 0.85)";
+      ctx.beginPath();
+      ctx.arc(aimEnd.x, aimEnd.y, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
     // mira normal (círculo + cruz)
     ctx.strokeStyle = "rgba(255,255,255,0.82)";
     ctx.lineWidth = 1.5;
