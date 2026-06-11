@@ -69,6 +69,7 @@ const pressed = new Set();
 const mouse = { x: canvas.width / 2, y: canvas.height / 2, down: false };
 const SPIKE_DETONATE_TIME = 38;
 const BOT_REACTION_TIME = 0.22;
+const BOT_SHOOT_GRACE_TIME = 0.42;
 const PLAYER_DEFUSE_TIME = 3.2;
 const BOT_DEFUSE_TIME = 5.2;
 const PLANT_TIME = 2.0;
@@ -484,6 +485,7 @@ function makeBot(spawn, index) {
     strafe: index % 2 === 0 ? 1 : -1,
     lastKnownPlayer: null,
     memoryTimer: 0,
+    shootGraceTimer: 0,
     idleTimer: 0,
     aiState: "hold",
     revealedTimer: 0,
@@ -517,6 +519,7 @@ function makeAlly(spawn, index) {
     strafe: index % 2 === 0 ? 1 : -1,
     lastKnownPlayer: null,
     memoryTimer: 0,
+    shootGraceTimer: 0,
     idleTimer: 0,
     aiState: "follow",
     revealedTimer: 0,
@@ -853,6 +856,30 @@ function hasLineOfSight(a, b) {
     if (dist < smoke.r) return false;
   }
   return true;
+}
+
+function hasCombatLineOfSight(a, b) {
+  if (hasLineOfSight(a, b)) return true;
+  const angle = Math.atan2(b.y - a.y, b.x - a.x);
+  const side = angle + Math.PI / 2;
+  const offsets = [-10, 10];
+  for (const offset of offsets) {
+    const ax = a.x + Math.cos(side) * offset;
+    const ay = a.y + Math.sin(side) * offset;
+    const bx = b.x + Math.cos(side) * offset;
+    const by = b.y + Math.sin(side) * offset;
+    if (!lineIntersectsAnyWall(ax, ay, bx, by)) {
+      let blockedBySmoke = false;
+      for (const smoke of game.smokes) {
+        if (pointLineDistance(smoke.x, smoke.y, ax, ay, bx, by) < smoke.r) {
+          blockedBySmoke = true;
+          break;
+        }
+      }
+      if (!blockedBySmoke) return true;
+    }
+  }
+  return false;
 }
 
 function pointLineDistance(px, py, x1, y1, x2, y2) {
@@ -1333,7 +1360,7 @@ function closestAliveBotTo(x, y) {
 
 function botCanSeePlayer(bot) {
   const p = game.player;
-  return p.alive && hasLineOfSight(bot, p) && Math.hypot(p.x - bot.x, p.y - bot.y) < 540;
+  return p.alive && hasCombatLineOfSight(bot, p) && Math.hypot(p.x - bot.x, p.y - bot.y) < 540;
 }
 
 function closestVisibleSquadTarget(bot) {
@@ -1343,7 +1370,7 @@ function closestVisibleSquadTarget(bot) {
 }
 
 function canSeeTarget(bot, target, range = 540) {
-  return target?.alive && hasLineOfSight(bot, target) && Math.hypot(target.x - bot.x, target.y - bot.y) < range;
+  return target?.alive && hasCombatLineOfSight(bot, target) && Math.hypot(target.x - bot.x, target.y - bot.y) < range;
 }
 
 function closestVisibleEnemy(bot) {
@@ -1367,18 +1394,24 @@ function botShootAt(bot, target, dt, team, firePenalty = 1) {
 
 function updateBotAwareness(bot, visibleTarget, dt) {
   if (visibleTarget) {
-    bot.reactionTimer = (bot.reactionTimer === undefined || bot.reactionTimer <= 0)
-      ? BOT_REACTION_TIME + Math.random() * 0.18
-      : bot.reactionTimer;
-    bot.reactionTimer = Math.max(0, bot.reactionTimer - dt);
+    bot.shootGraceTimer = BOT_SHOOT_GRACE_TIME;
+    if (bot.reactionTimer === undefined) {
+      bot.reactionTimer = BOT_REACTION_TIME + Math.random() * 0.18;
+    }
+    if (bot.reactionTimer > 0) {
+      bot.reactionTimer = Math.max(0, bot.reactionTimer - dt);
+    }
     bot.canShoot = bot.reactionTimer <= 0;
     bot.lastKnownPlayer = { x: visibleTarget.x, y: visibleTarget.y };
     bot.memoryTimer = 3.2;
     bot.revealedTimer = 2.6;
     alertBotSquad(bot, bot.lastKnownPlayer);
   } else {
-    bot.reactionTimer = BOT_REACTION_TIME;
-    bot.canShoot = false;
+    bot.shootGraceTimer = Math.max(0, (bot.shootGraceTimer || 0) - dt);
+    if (bot.shootGraceTimer <= 0) {
+      bot.reactionTimer = BOT_REACTION_TIME;
+      bot.canShoot = false;
+    }
     bot.memoryTimer = Math.max(0, bot.memoryTimer - dt);
     bot.revealedTimer = Math.max(0, (bot.revealedTimer || 0) - dt);
   }
