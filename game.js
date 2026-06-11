@@ -413,6 +413,7 @@ const game = {
   particles: [],
   explosions: [],
   hitMarkers: [],
+  damageNumbers: [],
   smokes: [],
   revealTimer: 0,
   spike: { state: "carried", owner: "player", x: 0, y: 0, timer: 0, site: null, plantProgress: 0, defuseProgress: 0, defuseCheckpoint: 0, defuserId: null },
@@ -424,6 +425,7 @@ const game = {
   reloadTimer: 0,
   roundOverTimer: 0,
   shake: 0,
+  damageFlash: 0,
 };
 
 function makePlayer() {
@@ -548,6 +550,7 @@ function resetRound() {
   game.particles = [];
   game.explosions = [];
   game.hitMarkers = [];
+  game.damageNumbers = [];
   game.smokes = [];
   game.revealTimer = 0;
   game.abilityCooldown = 0;
@@ -718,6 +721,7 @@ function applyDamage(entity, amount) {
   }
   entity.hp -= remaining;
   if (entity.id === "player") game.armor = Math.max(0, entity.armor || 0);
+  return remaining;
 }
 
 function rectContains(rect, x, y) {
@@ -767,6 +771,47 @@ function spawnParticles(x, y, color, count = 8, power = 120) {
       size: 2 + Math.random() * 3,
     });
   }
+}
+
+function spawnWallImpact(x, y, oldX, oldY) {
+  const angle = Math.atan2(y - oldY, x - oldX) + Math.PI;
+  for (let i = 0; i < 9; i++) {
+    const spread = (Math.random() - 0.5) * 1.4;
+    const speed = 70 + Math.random() * 170;
+    game.particles.push({
+      x,
+      y,
+      vx: Math.cos(angle + spread) * speed,
+      vy: Math.sin(angle + spread) * speed,
+      life: 0.16 + Math.random() * 0.2,
+      maxLife: 0.36,
+      color: Math.random() < 0.55 ? "#ffd166" : "#9aaeba",
+      size: 1.3 + Math.random() * 2.4,
+    });
+  }
+}
+
+function spawnDamageNumber(entity, amount, headshot = false) {
+  game.damageNumbers.push({
+    x: entity.x + (Math.random() - 0.5) * 10,
+    y: entity.y - entity.r - 8,
+    vy: headshot ? -42 : -30,
+    drift: (Math.random() - 0.5) * 18,
+    text: `-${Math.max(1, Math.round(amount))}`,
+    life: headshot ? 0.72 : 0.58,
+    maxLife: headshot ? 0.72 : 0.58,
+    color: headshot ? "#ff4d5d" : "#f8fafc",
+    size: headshot ? 22 : 15,
+    weight: headshot ? "900" : "700",
+  });
+}
+
+function shakeForWeapon(weapon) {
+  if (weapon.id === "sniper") return 0.22;
+  if (weapon.id === "dmr" || weapon.id === "rifle") return 0.11;
+  if (weapon.id === "lmg") return 0.1;
+  if (weapon.id === "shotgun" || weapon.id === "revolver") return 0.09;
+  return 0.045;
 }
 
 function spawnSpikeExplosion(x, y) {
@@ -971,7 +1016,7 @@ function shoot(owner, targetX, targetY, weapon, team) {
     game.shotChain += 1;
     const recoilGain = weapon.id === "sniper" ? 0.5 : weapon.id === "lmg" ? 0.26 : weapon.id === "smg" ? 0.22 : 0.18;
     game.recoilHeat = Math.min(2.6, game.recoilHeat + recoilGain);
-    game.shake = Math.max(game.shake, 0.04);
+    game.shake = Math.max(game.shake, shakeForWeapon(weapon));
     playSound("shot");
     spawnParticles(owner.x + Math.cos(owner.angle) * 24, owner.y + Math.sin(owner.angle) * 24, "#ffe6a8", 5, 90);
     if (owner.ammo <= 0) reload();
@@ -1841,7 +1886,7 @@ function updateBullets(dt) {
     bullet.life -= dt;
 
     if (map.walls.some((wall) => lineIntersectsRect(oldX, oldY, bullet.x, bullet.y, wall))) {
-      spawnParticles(bullet.x, bullet.y, "#9aaeba", 4, 70);
+      spawnWallImpact(bullet.x, bullet.y, oldX, oldY);
       bullet.life = 0;
       continue;
     }
@@ -1851,10 +1896,11 @@ function updateBullets(dt) {
         const region = bot.alive ? hitRegion(oldX, oldY, bullet.x, bullet.y, bot, 6) : null;
         if (region) {
           const damage = damageForHit(bullet, bot, region);
-          applyDamage(bot, damage);
+          const actualDamage = applyDamage(bot, damage);
           if (bullet.team === "player") {
-            game.stats.damage += Math.round(damage);
+            game.stats.damage += Math.round(actualDamage);
             if (region === "head") game.stats.headshots += 1;
+            spawnDamageNumber(bot, actualDamage, region === "head");
           }
           game.hitMarkers.push({ x: bot.x, y: bot.y - 28, life: 0.35, maxLife: 0.35, color: region === "head" ? "#ff4d5d" : "#ffd166" });
           spawnParticles(bullet.x, bullet.y, "#4fb3ff", 10, 130);
@@ -1891,11 +1937,12 @@ function updateBullets(dt) {
       for (const target of targets) {
         const region = target.alive ? hitRegion(oldX, oldY, bullet.x, bullet.y, target, target.id === "player" ? 3 : 6) : null;
         if (!region) continue;
-        applyDamage(target, damageForHit(bullet, target, region));
+        const actualDamage = applyDamage(target, damageForHit(bullet, target, region));
         game.hitMarkers.push({ x: target.x, y: target.y - 30, life: 0.3, maxLife: 0.3, color: "#ff5b5b" });
         spawnParticles(bullet.x, bullet.y, "#ff4d5d", 8, 120);
         if (target.id === "player") {
-          game.shake = Math.max(game.shake, 0.1);
+          game.shake = Math.max(game.shake, region === "head" ? 0.34 : 0.24);
+          game.damageFlash = Math.max(game.damageFlash, region === "head" ? 0.55 : 0.38);
           game.damageIndicator = {
             angle: Math.atan2(oldY - target.y, oldX - target.x),
             life: 0.72,
@@ -1975,6 +2022,7 @@ function updateTimers(dt) {
   }
   game.abilityCooldown = Math.max(0, game.abilityCooldown - dt);
   game.shake = Math.max(0, game.shake - dt);
+  game.damageFlash = Math.max(0, game.damageFlash - dt * 1.9);
   const wasReloading = game.reloadTimer > 0;
   game.reloadTimer = Math.max(0, game.reloadTimer - dt);
   if (wasReloading && game.reloadTimer === 0) {
@@ -2000,6 +2048,13 @@ function updateTimers(dt) {
     marker.life -= dt;
   }
   game.hitMarkers = game.hitMarkers.filter((marker) => marker.life > 0);
+  for (const number of game.damageNumbers) {
+    number.x += number.drift * dt;
+    number.y += number.vy * dt;
+    number.vy *= 0.92;
+    number.life -= dt;
+  }
+  game.damageNumbers = game.damageNumbers.filter((number) => number.life > 0);
   for (const explosion of game.explosions) {
     explosion.life -= dt;
     const progress = 1 - Math.max(0, explosion.life) / explosion.maxLife;
@@ -2495,6 +2550,59 @@ function drawObjectiveHints() {
   ctx.restore();
 }
 
+function drawDamageNumbers() {
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  for (const number of game.damageNumbers) {
+    const ratio = Math.max(0, number.life / number.maxLife);
+    const scale = 0.82 + (1 - ratio) * 0.28;
+    ctx.globalAlpha = ratio;
+    ctx.font = `${number.weight} ${number.size * scale}px Segoe UI`;
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "rgba(0,0,0,0.55)";
+    ctx.fillStyle = number.color;
+    ctx.strokeText(number.text, number.x, number.y);
+    ctx.fillText(number.text, number.x, number.y);
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+function drawDamageFlash() {
+  if (game.damageFlash <= 0) return;
+  const alpha = Math.min(0.42, game.damageFlash);
+  const thickness = 92;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  const top = ctx.createLinearGradient(0, 0, 0, thickness);
+  top.addColorStop(0, "rgba(255, 40, 56, 0.95)");
+  top.addColorStop(1, "rgba(255, 40, 56, 0)");
+  ctx.fillStyle = top;
+  ctx.fillRect(0, 0, canvas.width, thickness);
+
+  const bottom = ctx.createLinearGradient(0, canvas.height, 0, canvas.height - thickness);
+  bottom.addColorStop(0, "rgba(255, 40, 56, 0.95)");
+  bottom.addColorStop(1, "rgba(255, 40, 56, 0)");
+  ctx.fillStyle = bottom;
+  ctx.fillRect(0, canvas.height - thickness, canvas.width, thickness);
+
+  const left = ctx.createLinearGradient(0, 0, thickness, 0);
+  left.addColorStop(0, "rgba(255, 40, 56, 0.85)");
+  left.addColorStop(1, "rgba(255, 40, 56, 0)");
+  ctx.fillStyle = left;
+  ctx.fillRect(0, 0, thickness, canvas.height);
+
+  const right = ctx.createLinearGradient(canvas.width, 0, canvas.width - thickness, 0);
+  right.addColorStop(0, "rgba(255, 40, 56, 0.85)");
+  right.addColorStop(1, "rgba(255, 40, 56, 0)");
+  ctx.fillStyle = right;
+  ctx.fillRect(canvas.width - thickness, 0, thickness, canvas.height);
+
+  ctx.restore();
+}
+
 function drawAbilityBar() {
   if (game.phase !== "action") return;
   const bx = canvas.width / 2 - 60;
@@ -2618,6 +2726,7 @@ function draw() {
     ctx.lineCap = "butt";
   }
   ctx.globalAlpha = 1;
+  drawDamageNumbers();
 
   for (const explosion of game.explosions) {
     const alpha = Math.max(0, explosion.life / explosion.maxLife);
@@ -2641,6 +2750,7 @@ function draw() {
   drawSpikeHint();
   drawCrosshair();
   drawRadar();
+  drawDamageFlash();
   ctx.restore();
 }
 
