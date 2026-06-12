@@ -2,7 +2,9 @@ const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
 const ui = {
+  topHud: document.getElementById("topHud"),
   phase: document.getElementById("phaseText"),
+  timerPill: document.getElementById("timerPill"),
   timer: document.getElementById("timerText"),
   score: document.getElementById("scoreText"),
   money: document.getElementById("moneyText"),
@@ -842,6 +844,7 @@ function showRoundBanner(title, text, kicker = `Round ${game.roundNumber}`, dura
   ui.roundTitle.textContent = title;
   ui.roundText.textContent = text;
   ui.roundBanner.classList.remove("hidden");
+  ui.roundBanner.classList.toggle("spike-alert", title.toLowerCase().includes("spike") || text.toLowerCase().includes("spike plant"));
   game.roundBannerTimer = duration;
 }
 
@@ -2765,7 +2768,10 @@ function updateUi() {
 
   // Timer com urgência
   const t = Math.max(0, Math.ceil(game.phaseTime));
-  ui.timer.className = t <= 5 && game.phase !== "action" ? "urgent" : t <= 10 && game.phase !== "action" ? "warn" : "";
+  const spikePlanted = game.spike.state === "planted";
+  ui.topHud.classList.toggle("spike-planted", spikePlanted);
+  ui.timerPill.classList.toggle("spike-alert", spikePlanted);
+  ui.timer.className = spikePlanted || (t <= 5 && game.phase !== "action") ? "urgent" : t <= 10 && game.phase !== "action" ? "warn" : "";
 
   // Buy bar
   updateBuyBar();
@@ -2820,6 +2826,7 @@ function updateUi() {
     : game.spike.state === "planted"
       ? (game.spike.defuseProgress > 0 ? `Defuse ${Math.round(game.spike.defuseProgress * 100)}%` : `${Math.ceil(game.spike.timer)}s`)
       : "Plantando";
+  ui.spike.classList.toggle("planted", spikePlanted);
   ui.hpBar.style.transform = `scaleX(${Math.max(0, game.player.hp) / game.player.maxHp})`;
   ui.ammoBar.style.transform = `scaleX(${game.reloadTimer > 0 ? 1 - game.reloadTimer / currentReloadTime() : game.player.ammo / currentMagSize()})`;
   ui.plantBar.style.transform = `scaleX(${

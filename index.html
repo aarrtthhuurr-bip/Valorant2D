@@ -5,20 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Cache-Control" content="no-store">
   <title>Valorant2D</title>
-  <link rel="stylesheet" href="styles.css?v=20260607-fullsystems">
+  <link rel="stylesheet" href="styles.css?v=20260611-hud-refresh">
 </head>
 <body>
   <main class="shell">
     <section class="game-wrap">
       <canvas id="game" width="1280" height="720" aria-label="Valorant2D game canvas"></canvas>
 
-      <div class="top-hud glass">
+      <div class="top-hud glass" id="topHud">
         <div class="hud-pill side-pill" id="sidePill">ATK</div>
         <div class="hud-pill">
           <span class="label">Fase</span>
           <strong id="phaseText">Compra</strong>
         </div>
-        <div class="hud-pill timer-pill">
+        <div class="hud-pill timer-pill" id="timerPill">
           <span class="label">Tempo</span>
           <strong id="timerText">8</strong>
         </div>
@@ -37,25 +37,31 @@
       </div>
       <div class="buy-bar hidden" id="buyBar"><i id="buyBarFill"></i></div>
 
-      <div class="status-card glass">
-        <div class="status-main">
-          <div class="agent-dot" id="agentDot"></div>
-          <strong id="agentText">Vanguard</strong>
-          <span id="weaponText">Pistol</span>
+      <div class="status-card">
+        <div class="vitals-panel glass">
+          <div class="status-main">
+            <div class="agent-dot" id="agentDot"></div>
+            <strong id="agentText">Vanguard</strong>
+          </div>
+          <div class="bars">
+            <div class="bar hp"><i id="hpBar"></i></div>
+            <div class="bar armor hidden" id="armorBarWrap"><i id="armorBar"></i></div>
+          </div>
+          <div class="status-row">
+            <span>HP <b id="hpText">100</b></span>
+            <span id="armorText" class="hidden">ARM <b id="armorValueText">0</b></span>
+          </div>
         </div>
-        <div class="bars">
-          <div class="bar hp"><i id="hpBar"></i></div>
-          <div class="bar armor hidden" id="armorBarWrap"><i id="armorBar"></i></div>
+        <div class="weapon-panel glass">
+          <div class="weapon-line">
+            <strong id="weaponText">Pistol</strong>
+            <span id="ammoText">12 / 12</span>
+          </div>
           <div class="bar ammo"><i id="ammoBar"></i></div>
+          <div class="ammo-dots" id="ammoDots"></div>
           <div class="bar plant"><i id="plantBar"></i></div>
+          <span class="spike-status" id="spikeText">Spike</span>
         </div>
-        <div class="status-row">
-          <span>HP <b id="hpText">100</b></span>
-          <span id="armorText" class="hidden">ARM <b id="armorValueText">0</b></span>
-          <span id="ammoText">12 / 12</span>
-          <span id="spikeText">Spike</span>
-        </div>
-        <div class="ammo-dots" id="ammoDots"></div>
       </div>
 
       <div class="shop-backdrop hidden" id="shopBackdrop"></div>
@@ -150,6 +156,6 @@
     </section>
   </main>
 
-  <script src="game.js?v=20260611-game-feel"></script>
+  <script src="game.js?v=20260611-hud-refresh"></script>
 </body>
 </html>
