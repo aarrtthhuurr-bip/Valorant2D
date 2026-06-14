@@ -947,6 +947,10 @@ function spawnDashTrail(entity, fromX, fromY, toX, toY, color) {
   spawnParticles(toX, toY, color, 10, 180);
 }
 
+function clamp(val, min, max) {
+  return Math.max(min, Math.min(max, val));
+}
+
 function jitterPoint(point, amount = 44) {
   const candidate = {
     x: clamp(point.x + (Math.random() - 0.5) * amount * 2, 44, map.width - 44),
