@@ -57,7 +57,8 @@ button.active {
 
 .game-wrap {
   position: relative;
-  width: min(100%, 1280px);
+  width: min(100%, 1280px, calc((100vh - 28px) * 16 / 9));
+  width: min(100%, 1280px, calc((100dvh - 28px) * 16 / 9));
   max-height: calc(100vh - 28px);
   max-height: calc(100dvh - 28px);
   aspect-ratio: 16 / 9;
@@ -613,13 +614,12 @@ strong {
 
 .scoreboard {
   position: absolute;
-  top: 92px;
-  left: 50%;
+  top: 58px;
+  right: 12px;
   z-index: 18;
-  width: min(520px, calc(100% - 32px));
-  padding: 16px;
-  border-radius: 6px;
-  transform: translateX(-50%);
+  width: min(360px, calc(100% - 24px));
+  padding: 12px;
+  border-radius: 8px;
   pointer-events: none;
 }
 
@@ -636,14 +636,15 @@ strong {
 
 .scoreboard-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 5px;
 }
 
 .scoreboard-grid div {
-  padding: 9px;
+  padding: 7px;
   border: 1px solid rgba(215, 237, 255, 0.12);
   background: rgba(255, 255, 255, 0.045);
+  border-radius: 6px;
 }
 
 .scoreboard-grid span {
@@ -656,7 +657,38 @@ strong {
 .scoreboard-grid b {
   display: block;
   margin-top: 3px;
-  font-size: 16px;
+  font-size: 13px;
+}
+
+.sandbox-tools {
+  position: absolute;
+  left: 12px;
+  top: 58px;
+  z-index: 16;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 24px);
+  padding: 7px;
+  border-radius: 8px;
+  pointer-events: auto;
+}
+
+.sandbox-tools.hidden {
+  display: none;
+}
+
+.sandbox-tools strong {
+  margin: 0 4px;
+  color: var(--yellow);
+  font-size: 12px;
+}
+
+.sandbox-tools button {
+  min-width: 54px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
 }
 
 .match-overlay {
@@ -674,27 +706,61 @@ strong {
 }
 
 .menu-overlay,
-.intro-overlay {
+.intro-overlay,
+.agent-overlay {
   position: absolute;
   inset: 0;
   z-index: 30;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: stretch;
   background: rgba(1, 6, 10, 0.72);
   pointer-events: auto;
 }
 
 .intro-overlay {
   z-index: 25;
+  align-items: center;
+  justify-content: center;
   background: rgba(1, 6, 10, 0.46);
 }
 
 .menu-overlay.hidden,
-.intro-overlay.hidden {
+.intro-overlay.hidden,
+.agent-overlay.hidden {
   display: none;
 }
 
-.menu-card,
+.menu-card {
+  width: min(380px, calc(100% - 32px));
+  min-height: 100%;
+  padding: 34px 26px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: left;
+  border-radius: 0;
+}
+
+.menu-art {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.menu-art::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(5, 8, 13, 0.9), rgba(5, 8, 13, 0.18)),
+    radial-gradient(circle at 60% 35%, rgba(255, 77, 93, 0.28), transparent 28%),
+    radial-gradient(circle at 72% 70%, rgba(70, 168, 255, 0.18), transparent 32%);
+}
+
+.menu-copy {
+  margin-bottom: 18px;
+}
+
 .intro-card {
   width: min(460px, calc(100% - 32px));
   padding: 24px;
@@ -716,14 +782,20 @@ strong {
 
 .menu-grid {
   display: grid;
-  gap: 9px;
+  gap: 10px;
 }
 
 .menu-grid button {
-  min-height: 48px;
-  padding: 11px 12px;
-  border-radius: 5px;
+  min-height: 50px;
+  padding: 12px 13px;
+  border-radius: 7px;
   text-align: left;
+}
+
+.menu-grid button.menu-back {
+  margin-top: 8px;
+  border-color: rgba(255, 77, 93, 0.45);
+  background: rgba(255, 77, 93, 0.08);
 }
 
 .menu-grid button b,
@@ -757,6 +829,62 @@ strong {
 .match-card button {
   min-width: 150px;
   padding: 10px 14px;
+}
+
+.agent-overlay {
+  place-content: center;
+  align-items: center;
+  justify-content: center;
+  background: rgba(1, 6, 10, 0.82);
+}
+
+.agent-select {
+  width: min(760px, calc(100% - 32px));
+  padding: 24px;
+  border-radius: 10px;
+}
+
+.agent-select h2 {
+  margin: 4px 0 18px;
+  font-size: 34px;
+}
+
+.agent-select-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.agent-card {
+  min-height: 132px;
+  padding: 14px;
+  border-radius: 9px;
+  text-align: left;
+  overflow: hidden;
+  position: relative;
+}
+
+.agent-card::after {
+  content: "";
+  position: absolute;
+  inset: auto -24px -36px auto;
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  background: var(--agent-color);
+  opacity: 0.22;
+}
+
+.agent-card b {
+  display: block;
+  font-size: 18px;
+}
+
+.agent-card span {
+  display: block;
+  margin-top: 8px;
+  color: rgba(238, 247, 251, 0.75);
+  font-size: 12px;
 }
 
 @keyframes shopIn {
@@ -865,6 +993,20 @@ strong {
     bottom: 82px;
     max-width: min(360px, calc(100% - 18px));
   }
+
+  .menu-card {
+    width: min(340px, calc(100% - 24px));
+    padding: 24px 18px;
+  }
+
+  .agent-select-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .sandbox-tools {
+    top: 48px;
+    flex-wrap: wrap;
+  }
 }
 
 @media (max-width: 620px) {
@@ -897,4 +1039,50 @@ strong {
   .ammo-dots {
     display: none;
   }
+
+  .menu-overlay {
+    background: rgba(1, 6, 10, 0.86);
+  }
+
+  .menu-art {
+    display: none;
+  }
+
+  .menu-card {
+    width: 100%;
+  }
+
+  .agent-select-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .scoreboard {
+    top: 48px;
+    right: 8px;
+  }
+
+  .scoreboard-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+/* Forçar cores corretas na HUD */
+#hud-header, #hud-header * {
+    color: #ece8e1 !important;
+}
+#hud-header .fase-label {
+    color: #ffb700 !important;
+}
+#hud-header .score-win {
+    color: #00bcd4 !important;
+}
+#hud-header .score-lose {
+    color: #ff4655 !important;
+}
+.vanguard-btn {
+    color: #ece8e1 !important;
+    border: 1px solid rgba(232, 232, 225, 0.3) !important;
+}
+.vanguard-btn.alert {
+    color: #ff4655 !important;
+    border-color: #ff4655 !important;
 }

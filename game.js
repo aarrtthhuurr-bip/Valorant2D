@@ -36,6 +36,8 @@ const ui = {
   menuTitle: document.getElementById("menuTitle"),
   menuText: document.getElementById("menuText"),
   menuButtons: document.getElementById("menuButtons"),
+  agentOverlay: document.getElementById("agentOverlay"),
+  agentSelectGrid: document.getElementById("agentSelectGrid"),
   introOverlay: document.getElementById("introOverlay"),
   introMode: document.getElementById("introMode"),
   introMap: document.getElementById("introMap"),
@@ -46,6 +48,12 @@ const ui = {
   roundText: document.getElementById("roundText"),
   scoreboard: document.getElementById("scoreboard"),
   scoreboardTitle: document.getElementById("scoreboardTitle"),
+  sandboxTools: document.getElementById("sandboxTools"),
+  spawnBotButton: document.getElementById("spawnBotButton"),
+  spawnAllyButton: document.getElementById("spawnAllyButton"),
+  resetSpikeButton: document.getElementById("resetSpikeButton"),
+  godModeButton: document.getElementById("godModeButton"),
+  clearSandboxButton: document.getElementById("clearSandboxButton"),
   kills: document.getElementById("killsText"),
   deaths: document.getElementById("deathsText"),
   headshots: document.getElementById("headshotsText"),
@@ -77,6 +85,18 @@ const BOT_DEFUSE_TIME = 5.2;
 const PLANT_TIME = 2.0;
 const BUY_TIME = 8;
 const MATCH_POINT = 15;
+const ECONOMY = {
+  start: 800,
+  kill: 150,
+  headshot: 200,
+  win: 3000,
+  plantWin: 3200,
+  lossBase: 1900,
+  lossStep: 500,
+  lossMax: 2900,
+  objective: 300,
+  cap: 12000,
+};
 const audio = { ctx: null, enabled: true, volume: 0.8, last: 0 };
 const agents = [
   {
@@ -88,9 +108,12 @@ const agents = [
     cooldown: 7,
     use(game) {
       const p = game.player;
+      const fromX = p.x;
+      const fromY = p.y;
       const dx = Math.cos(p.angle) * 120;
       const dy = Math.sin(p.angle) * 120;
       moveEntity(p, dx, dy, game.map.walls);
+      spawnDashTrail(p, fromX, fromY, p.x, p.y, game.selectedAgent.color);
     },
   },
   {
@@ -272,13 +295,17 @@ const DEFAULT_MAP = {
     { x: 335, y: 330, w: 90, h: 38 },
     { x: 855, y: 330, w: 90, h: 38 },
   ],
+  destructibles: [
+    { x: 585, y: 340, w: 46, h: 46, hp: 70 },
+    { x: 650, y: 340, w: 46, h: 46, hp: 70 },
+  ],
 };
 
 function cloneRects(rects) {
   return rects.map((rect) => ({ ...rect }));
 }
 
-function makeMap(name, vibe, theme, wallChanges = [], siteChanges = null) {
+function makeMap(name, vibe, theme, wallChanges = [], siteChanges = null, destructibles = []) {
   return {
     ...DEFAULT_MAP,
     name,
@@ -286,6 +313,7 @@ function makeMap(name, vibe, theme, wallChanges = [], siteChanges = null) {
     theme: { ...DEFAULT_MAP.theme, ...theme },
     sites: siteChanges ? cloneRects(siteChanges) : cloneRects(DEFAULT_MAP.sites),
     walls: [...cloneRects(DEFAULT_MAP.walls), ...cloneRects(wallChanges)],
+    destructibles: destructibles.length ? cloneRects(destructibles) : cloneRects(DEFAULT_MAP.destructibles),
     botRoutes: DEFAULT_MAP.botRoutes.map((route) => route.map((point) => ({ ...point }))),
     attackerBotSpawns: DEFAULT_MAP.attackerBotSpawns.map((point) => ({ ...point })),
     defendersSpawn: DEFAULT_MAP.defendersSpawn.map((point) => ({ ...point })),
@@ -344,6 +372,95 @@ const MAPS = [
   ]),
 ];
 
+MAPS.splice(0, MAPS.length,
+  makeMap("Splitline", "Padrao", {}, [], null, [
+    { x: 585, y: 340, w: 46, h: 46, hp: 70 },
+    { x: 650, y: 340, w: 46, h: 46, hp: 70 },
+  ]),
+  makeMap("Miragem", "Deserto", {
+    floor: "#1f1a12",
+    grid: "rgba(255, 209, 102, 0.065)",
+    wall: "#4a3a25",
+    wallStroke: "#7c6036",
+    siteFill: "rgba(255, 190, 80, 0.13)",
+    siteStroke: "#ffc56e",
+  }, [
+    { x: 450, y: 250, w: 46, h: 170 },
+    { x: 784, y: 250, w: 46, h: 170 },
+    { x: 575, y: 510, w: 130, h: 30 },
+    { x: 575, y: 150, w: 130, h: 30 },
+  ], [
+    { id: "A", x: 145, y: 210, w: 210, h: 150 },
+    { id: "B", x: 925, y: 360, w: 210, h: 150 },
+  ], [
+    { x: 610, y: 315, w: 60, h: 42, hp: 80 },
+    { x: 250, y: 395, w: 44, h: 44, hp: 60 },
+  ]),
+  makeMap("Neon Core", "Futuristico", {
+    floor: "#101827",
+    grid: "rgba(70, 168, 255, 0.12)",
+    wall: "#203447",
+    wallStroke: "#46a8ff",
+    siteFill: "rgba(98, 230, 160, 0.1)",
+    siteStroke: "#62e6a0",
+  }, [
+    { x: 610, y: 160, w: 60, h: 180 },
+    { x: 610, y: 410, w: 60, h: 150 },
+    { x: 285, y: 330, w: 170, h: 28 },
+    { x: 825, y: 330, w: 170, h: 28 },
+    { x: 500, y: 82, w: 280, h: 24 },
+  ], [
+    { id: "A", x: 150, y: 460, w: 190, h: 125 },
+    { id: "B", x: 940, y: 140, w: 190, h: 125 },
+  ], [
+    { x: 514, y: 350, w: 52, h: 52, hp: 75 },
+    { x: 716, y: 350, w: 52, h: 52, hp: 75 },
+  ]),
+  makeMap("Docas Ferro", "Galpao", {
+    floor: "#151b1d",
+    grid: "rgba(180, 194, 204, 0.06)",
+    wall: "#343b3f",
+    wallStroke: "#68727a",
+    siteFill: "rgba(255, 77, 93, 0.09)",
+    siteStroke: "#ff8a5b",
+  }, [
+    { x: 150, y: 210, w: 360, h: 34 },
+    { x: 770, y: 480, w: 360, h: 34 },
+    { x: 560, y: 240, w: 44, h: 240 },
+    { x: 676, y: 240, w: 44, h: 240 },
+    { x: 92, y: 420, w: 120, h: 32 },
+    { x: 1068, y: 270, w: 120, h: 32 },
+  ], [
+    { id: "A", x: 180, y: 450, w: 190, h: 135 },
+    { id: "B", x: 910, y: 135, w: 190, h: 135 },
+  ], [
+    { x: 610, y: 500, w: 58, h: 46, hp: 90 },
+    { x: 610, y: 175, w: 58, h: 46, hp: 90 },
+  ]),
+  makeMap("Templo de Aster", "Templo antigo", {
+    floor: "#161812",
+    grid: "rgba(213, 249, 112, 0.055)",
+    wall: "#35402b",
+    wallStroke: "#7c8d50",
+    siteFill: "rgba(213, 249, 112, 0.1)",
+    siteStroke: "#d5f970",
+  }, [
+    { x: 305, y: 180, w: 70, h: 210 },
+    { x: 905, y: 330, w: 70, h: 210 },
+    { x: 520, y: 312, w: 240, h: 36 },
+    { x: 160, y: 520, w: 260, h: 30 },
+    { x: 860, y: 155, w: 260, h: 30 },
+    { x: 610, y: 235, w: 60, h: 92 },
+  ], [
+    { id: "A", x: 165, y: 165, w: 185, h: 145 },
+    { id: "B", x: 930, y: 415, w: 185, h: 145 },
+  ], [
+    { x: 612, y: 380, w: 52, h: 52, hp: 85 },
+    { x: 480, y: 220, w: 42, h: 42, hp: 65 },
+    { x: 758, y: 460, w: 42, h: 42, hp: 65 },
+  ]),
+);
+
 function buildMapRoutes(currentMap) {
   const a = currentMap.sites[0];
   const b = currentMap.sites[1] || currentMap.sites[0];
@@ -365,6 +482,7 @@ const game = {
   map,
   phase: "buy",
   phaseTime: 8,
+  clockActive: false,
   paused: false,
   menuState: "none",
   scoreA: 0,
@@ -379,6 +497,7 @@ const game = {
   mode: "Normal",
   difficulty: "normal",
   sandbox: false,
+  godMode: false,
   allyCount: 0,
   enemyFireMultiplier: 1.25,
   introTimer: 0,
@@ -389,6 +508,7 @@ const game = {
   crosshairStyle: "default",
   arrowKeys: false,
   debugRoutes: false,
+  agentLocked: false,
   shopTab: "weapons",
   damageIndicator: null,
   scoreboardVisible: false,
@@ -416,6 +536,8 @@ const game = {
   explosions: [],
   hitMarkers: [],
   damageNumbers: [],
+  dashGhosts: [],
+  destructibles: [],
   smokes: [],
   revealTimer: 0,
   spike: { state: "carried", owner: "player", x: 0, y: 0, timer: 0, site: null, plantProgress: 0, defuseProgress: 0, defuseCheckpoint: 0, defuserId: null },
@@ -428,6 +550,7 @@ const game = {
   roundOverTimer: 0,
   shake: 0,
   damageFlash: 0,
+  botPlanSiteIndex: 0,
 };
 
 function makePlayer() {
@@ -532,12 +655,15 @@ function makeAlly(spawn, index) {
 
 function resetRound() {
   game.roundNumber += game.phase === "ended" ? 1 : 0;
+  map.botRoutes = randomizedBotRoutes(map);
+  game.botPlanSiteIndex = Math.floor(Math.random() * map.sites.length);
   const sideFlipped = Math.floor((game.roundNumber - 1) / 3) % 2 === 1;
   const nextSide = sideFlipped ? opposingSide(game.startingSide) : game.startingSide;
   const changedSide = game.playerSide !== nextSide;
   game.playerSide = nextSide;
   game.phase = "buy";
   game.phaseTime = game.sandbox || game.training ? 9999 : BUY_TIME;
+  game.clockActive = game.introTimer <= 0;
   game.player = makePlayer();
   sanitizeEntityPosition(game.player);
   const botSpawns = game.playerSide === "attackers" ? map.defendersSpawn : map.attackerBotSpawns;
@@ -553,6 +679,8 @@ function resetRound() {
   game.explosions = [];
   game.hitMarkers = [];
   game.damageNumbers = [];
+  game.dashGhosts = [];
+  game.destructibles = map.destructibles.map((box, index) => ({ ...box, maxHp: box.hp, id: `box-${index}` }));
   game.smokes = [];
   game.revealTimer = 0;
   game.abilityCooldown = 0;
@@ -576,12 +704,13 @@ function resetRound() {
   setMessage(changedSide
     ? (game.playerSide === "attackers" ? "Troca de lado: agora voce ataca e planta." : "Troca de lado: agora voce defende e desarma.")
     : (game.playerSide === "attackers" ? "Compra aberta. Voce ataca: plante a spike." : "Compra aberta. Voce defende: impeca o plant ou desarme."));
-  if (!game.sandbox && !game.training) openShop();
+  if (!game.sandbox && !game.training && game.introTimer <= 0) openShop();
 }
 
 function startActionRound() {
   game.phase = "action";
   game.phaseTime = game.training || game.sandbox ? 9999 : 90;
+  game.clockActive = game.introTimer <= 0;
   closeShop();
   showRoundBanner(game.playerSide === "attackers" ? "Ataque" : "Defesa", game.playerSide === "attackers" ? "Plante a spike em A ou B." : "Impeca o plant ou desarme.", `Round ${game.roundNumber}`);
   setMessage(game.playerSide === "attackers"
@@ -608,6 +737,8 @@ function fullReset() {
   game.armor = 0;
   game.allyLoadout = { weaponId: "pistol", armor: 0 };
   game.selectedAgent = agents[0];
+  game.agentLocked = false;
+  game.godMode = false;
   buildShop();
 }
 
@@ -616,7 +747,7 @@ function startNewMatch() {
   game.scoreD = 0;
   game.playerScore = 0;
   game.enemyScore = 0;
-  game.money = game.sandbox || game.training ? 99999 : 800;
+  game.money = game.sandbox || game.training ? 99999 : ECONOMY.start;
   game.lossStreak = 0;
   game.stats = { kills: 0, deaths: 0, headshots: 0, plants: 0, defuses: 0, damage: 0 };
   game.ownedWeapons = new Set(["pistol"]);
@@ -629,7 +760,7 @@ function startNewMatch() {
   game.startingSide = Math.random() < 0.5 ? "attackers" : "defenders";
   game.playerSide = game.startingSide;
   map = MAPS[Math.floor(Math.random() * MAPS.length)];
-  map.botRoutes = buildMapRoutes(map);
+  map.botRoutes = randomizedBotRoutes(map);
   game.map = map;
   game.mapName = map.name;
   resetRound();
@@ -669,15 +800,15 @@ function endRound(winner, reason) {
   if (winner === game.playerSide) {
     game.playerScore += 1;
     game.lossStreak = 0;
-    moneyGained = game.spike.state === "planted" ? 2300 : 2100;
+    moneyGained = game.spike.state === "planted" ? ECONOMY.plantWin : ECONOMY.win;
     if (!game.sandbox) game.money += moneyGained;
   } else {
     game.enemyScore += 1;
     game.lossStreak += 1;
-    moneyGained = 1500 + Math.min(3, game.lossStreak) * 250;
+    moneyGained = Math.min(ECONOMY.lossMax, ECONOMY.lossBase + Math.max(0, game.lossStreak - 1) * ECONOMY.lossStep);
     if (!game.sandbox) game.money += moneyGained;
   }
-  if (!game.sandbox && !game.training) game.money = Math.min(game.money, 12000);
+  if (!game.sandbox && !game.training) game.money = Math.min(game.money, ECONOMY.cap);
   game.roundMoneyDelta = moneyGained;
   const won = winner === game.playerSide;
   const fullReason = game.sandbox ? reason : `${reason}  +${moneyGained}`;
@@ -715,6 +846,7 @@ function currentPlayerDefuseTime() {
 }
 
 function applyDamage(entity, amount) {
+  if (entity.id === "player" && game.godMode) return 0;
   let remaining = amount;
   if (entity.armor > 0) {
     const absorbed = Math.min(entity.armor, remaining * 0.7);
@@ -724,6 +856,10 @@ function applyDamage(entity, amount) {
   entity.hp -= remaining;
   if (entity.id === "player") game.armor = Math.max(0, entity.armor || 0);
   return remaining;
+}
+
+function solidWalls() {
+  return [...map.walls, ...game.destructibles];
 }
 
 function rectContains(rect, x, y) {
@@ -743,14 +879,15 @@ function circleRectCollides(entity, rect) {
 }
 
 function moveEntity(entity, dx, dy, walls) {
+  const colliders = walls === map.walls ? solidWalls() : walls;
   const startX = entity.x;
   const startY = entity.y;
   entity.x += dx;
-  for (const wall of walls) {
+  for (const wall of colliders) {
     if (circleRectCollides(entity, wall)) entity.x -= dx;
   }
   entity.y += dy;
-  for (const wall of walls) {
+  for (const wall of colliders) {
     if (circleRectCollides(entity, wall)) entity.y -= dy;
   }
   entity.x = Math.max(entity.r, Math.min(map.width - entity.r, entity.x));
@@ -791,6 +928,39 @@ function spawnWallImpact(x, y, oldX, oldY) {
       size: 1.3 + Math.random() * 2.4,
     });
   }
+}
+
+function spawnDashTrail(entity, fromX, fromY, toX, toY, color) {
+  const steps = 8;
+  for (let i = 0; i < steps; i++) {
+    const t = steps === 1 ? 0 : i / (steps - 1);
+    game.dashGhosts.push({
+      x: fromX + (toX - fromX) * t,
+      y: fromY + (toY - fromY) * t,
+      r: entity.r,
+      color,
+      life: 0.18 + i * 0.025,
+      maxLife: 0.36,
+    });
+  }
+  spawnParticles(fromX, fromY, color, 6, 120);
+  spawnParticles(toX, toY, color, 10, 180);
+}
+
+function jitterPoint(point, amount = 44) {
+  const candidate = {
+    x: clamp(point.x + (Math.random() - 0.5) * amount * 2, 44, map.width - 44),
+    y: clamp(point.y + (Math.random() - 0.5) * amount * 2, 44, map.height - 44),
+  };
+  return nearestWalkablePoint(candidate, { x: candidate.x, y: candidate.y, r: 18 });
+}
+
+function randomizedBotRoutes(currentMap) {
+  const routes = buildMapRoutes(currentMap).map((route) => route.map((point, index) => {
+    if (index === 0 || index === route.length - 1) return { ...point };
+    return jitterPoint(point, 52);
+  }));
+  return routes.sort(() => Math.random() - 0.5);
 }
 
 function spawnDamageNumber(entity, amount, headshot = false) {
@@ -861,11 +1031,11 @@ function updateScoreboard() {
 
 function tutorialText() {
   const steps = [
-    "Use WASD para se mover ate um site.",
-    "Mire com o mouse e clique para atirar nos bots.",
-    "Com a spike, entre no site e aperte F para plantar.",
-    "Defenda a spike ate ela explodir. Se estiver defendendo, segure F para desarmar.",
-    "Abra a loja na compra, equipe armas e use E para habilidade.",
+    "WASD move. Chegue vivo a um site marcado A ou B.",
+    "Mouse mira. Clique atira. Pare para ter menos recoil.",
+    "No ataque, entre no site com a Spike e aperte F para plantar.",
+    "Depois do plant, segure posicao ate explodir. Na defesa, chegue perto e segure F para desarmar.",
+    "Na fase de compra, use a loja para equipar arma, colete e upgrades antes do round.",
   ];
   return steps[Math.min(game.tutorialStep, steps.length - 1)];
 }
@@ -891,7 +1061,7 @@ function lineIntersectsRect(x1, y1, x2, y2, rect) {
 }
 
 function lineIntersectsAnyWall(x1, y1, x2, y2) {
-  for (const wall of map.walls) {
+  for (const wall of solidWalls()) {
     if (lineIntersectsRect(x1, y1, x2, y2, wall)) return true;
   }
   return false;
@@ -905,7 +1075,7 @@ function firstWallPointOnLine(x1, y1, x2, y2) {
     const t = i / steps;
     const x = x1 + (x2 - x1) * t;
     const y = y1 + (y2 - y1) * t;
-    if (map.walls.some((wall) => rectContains(wall, x, y))) {
+    if (solidWalls().some((wall) => rectContains(wall, x, y))) {
       return lastClear;
     }
     lastClear = { x, y };
@@ -1065,7 +1235,7 @@ function plantOrDefuse(dt) {
       if (complete) {
         spawnParticles(game.spike.x, game.spike.y, "#66e48f", 28, 180);
         game.stats.defuses += 1;
-        if (!game.sandbox) game.money += 300;
+        if (!game.sandbox) game.money += ECONOMY.objective;
         endRound("defenders", "Spike desarmada. Defensores venceram.");
       }
     } else if (game.spike.state === "planted") {
@@ -1114,7 +1284,7 @@ function plantOrDefuse(dt) {
     spawnParticles(p.x, p.y, "#ffd166", 22, 160);
     game.shake = 0.18;
     game.stats.plants += 1;
-    if (!game.sandbox) game.money += 300;
+    if (!game.sandbox) game.money += ECONOMY.objective;
     playSound("plant");
     setMessage(`Spike plantada no site ${game.spike.site}. Defenda.`);
   }
@@ -1598,8 +1768,17 @@ function botPlantSpike(bot, dt) {
 function botDefuseSpike(bot, dt) {
   if (game.spike.state !== "planted") return false;
   const dist = Math.hypot(bot.x - game.spike.x, bot.y - game.spike.y);
+  const threat = closestVisibleSquadTarget(bot);
   bot.aiState = "defuse";
-  botFightPlayer(bot, dt, { strafe: dist <= 42, state: "defuse", firePenalty: 1.65 });
+  if (threat && dist <= 62 && game.spike.defuserId !== bot.id) {
+    bot.aiState = "fight";
+    botFightPlayer(bot, dt, { strafe: true, state: "fight" });
+    resetPartialDefuse();
+    return true;
+  }
+  if (threat && game.spike.defuserId === bot.id) {
+    botFightPlayer(bot, dt, { strafe: false, state: "defuse", firePenalty: 1.95 });
+  }
   if (dist > 42) {
     if (game.spike.defuserId === bot.id) resetPartialDefuse();
     moveBotToward(bot, game.spike, dt, 1.18);
@@ -1704,17 +1883,20 @@ function allyObjectivePoint(ally, index) {
   if (game.playerSide === "attackers") {
     if (game.spike.state === "carried" && game.spike.owner === "player") {
       const side = index === 0 ? -1 : 1;
-      return { x: game.player.x + side * 76, y: game.player.y + 48 };
+      return nearestWalkablePoint({ x: game.player.x + side * 86, y: game.player.y + 58 }, ally);
     }
-    const site = map.sites[game.roundNumber % map.sites.length];
+    const site = map.sites[game.botPlanSiteIndex % map.sites.length] || map.sites[0];
     return siteEntryPoints(site)[index % siteEntryPoints(site).length];
   }
+  const site = map.sites[index % map.sites.length] || map.sites[0];
+  const center = siteCenter(site);
   const holds = [
-    { x: 315, y: 238 },
-    { x: 965, y: 238 },
-    { x: 640, y: 382 },
+    { x: center.x - 92, y: center.y - 54 },
+    { x: center.x + 92, y: center.y - 54 },
+    { x: map.width * 0.5, y: map.height * 0.42 },
+    { x: center.x, y: center.y + 86 },
   ];
-  return holds[index % holds.length];
+  return nearestWalkablePoint(holds[index % holds.length], ally);
 }
 
 function updateAllies(dt) {
@@ -1748,7 +1930,7 @@ function updateBots(dt) {
   const droppedSpikePicker = game.playerSide === "defenders" && game.spike.state === "dropped"
     ? closestAliveBotTo(game.spike.x, game.spike.y)
     : null;
-  const botPlantSite = map.sites[game.roundNumber % 2];
+  const botPlantSite = map.sites[game.botPlanSiteIndex % map.sites.length] || map.sites[0];
   const botPlantTarget = siteCenter(botPlantSite);
 
   for (const bot of game.bots) {
@@ -1888,6 +2070,18 @@ function updateBullets(dt) {
     bullet.y += bullet.vy * dt;
     bullet.life -= dt;
 
+    const hitDestructible = game.destructibles.find((box) => lineIntersectsRect(oldX, oldY, bullet.x, bullet.y, box));
+    if (hitDestructible) {
+      hitDestructible.hp -= bullet.damage;
+      spawnWallImpact(bullet.x, bullet.y, oldX, oldY);
+      if (hitDestructible.hp <= 0) {
+        spawnParticles(hitDestructible.x + hitDestructible.w / 2, hitDestructible.y + hitDestructible.h / 2, "#ffd166", 20, 210);
+        game.destructibles = game.destructibles.filter((box) => box !== hitDestructible);
+      }
+      bullet.life = 0;
+      continue;
+    }
+
     if (map.walls.some((wall) => lineIntersectsRect(oldX, oldY, bullet.x, bullet.y, wall))) {
       spawnWallImpact(bullet.x, bullet.y, oldX, oldY);
       bullet.life = 0;
@@ -1916,8 +2110,8 @@ function updateBullets(dt) {
               addKillFeedEntry(true, game.selectedWeapon.name, region === "head");
             }
             if (!game.sandbox) {
-              game.money += bullet.team === "player" ? (region === "head" ? 250 : 180) : 90;
-              if (!game.training) game.money = Math.min(game.money, 12000);
+              game.money += bullet.team === "player" ? (region === "head" ? ECONOMY.headshot : ECONOMY.kill) : Math.floor(ECONOMY.kill * 0.5);
+              if (!game.training) game.money = Math.min(game.money, ECONOMY.cap);
             }
             if (game.spike.defuserId === bot.id) {
               resetPartialDefuse();
@@ -2011,17 +2205,21 @@ function updateSpike(dt) {
 }
 
 function updateTimers(dt) {
-  if (!game.sandbox && !game.training) game.phaseTime -= dt;
+  if (game.introTimer > 0) {
+    game.introTimer = Math.max(0, game.introTimer - dt);
+    if (game.introTimer === 0) {
+      ui.introOverlay.classList.add("hidden");
+      game.clockActive = true;
+      if (game.phase === "buy" && !game.sandbox && !game.training) openShop();
+    }
+  }
+  if (game.clockActive && !game.sandbox && !game.training) game.phaseTime -= dt;
   if (game.sandbox || game.training) game.money = 99999;
   game.recoilHeat = Math.max(0, game.recoilHeat - dt * (game.player?.moving ? 0.9 : 1.8));
   if (game.recoilHeat === 0) game.shotChain = 0;
   if (game.roundBannerTimer > 0) {
     game.roundBannerTimer = Math.max(0, game.roundBannerTimer - dt);
     if (game.roundBannerTimer === 0) ui.roundBanner.classList.add("hidden");
-  }
-  if (game.introTimer > 0) {
-    game.introTimer = Math.max(0, game.introTimer - dt);
-    if (game.introTimer === 0) ui.introOverlay.classList.add("hidden");
   }
   game.abilityCooldown = Math.max(0, game.abilityCooldown - dt);
   game.shake = Math.max(0, game.shake - dt);
@@ -2046,6 +2244,8 @@ function updateTimers(dt) {
     particle.life -= dt;
   }
   game.particles = game.particles.filter((p) => p.life > 0);
+  for (const ghost of game.dashGhosts) ghost.life -= dt;
+  game.dashGhosts = game.dashGhosts.filter((ghost) => ghost.life > 0);
   for (const marker of game.hitMarkers) {
     marker.y -= 22 * dt;
     marker.life -= dt;
@@ -2185,6 +2385,19 @@ function drawMap() {
   for (const wall of map.walls) {
     ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
     ctx.strokeRect(wall.x, wall.y, wall.w, wall.h);
+  }
+
+  for (const box of game.destructibles) {
+    const ratio = Math.max(0, box.hp / (box.maxHp || box.hp || 1));
+    ctx.fillStyle = "#5f4930";
+    ctx.strokeStyle = "#d8a657";
+    ctx.lineWidth = 2;
+    ctx.fillRect(box.x, box.y, box.w, box.h);
+    ctx.strokeRect(box.x, box.y, box.w, box.h);
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(box.x + 5, box.y + box.h - 9, box.w - 10, 4);
+    ctx.fillStyle = ratio > 0.35 ? "#ffd166" : "#ff4d5d";
+    ctx.fillRect(box.x + 5, box.y + box.h - 9, (box.w - 10) * ratio, 4);
   }
 
   const callouts = [
@@ -2404,7 +2617,12 @@ function drawCrosshair() {
     const p = game.player;
     const startX = p.x + Math.cos(p.angle) * (p.r + 18);
     const startY = p.y + Math.sin(p.angle) * (p.r + 18);
-    const aimEnd = firstWallPointOnLine(startX, startY, mouse.x, mouse.y);
+    const dx = mouse.x - startX;
+    const dy = mouse.y - startY;
+    const len = Math.hypot(dx, dy) || 1;
+    const rayX = startX + (dx / len) * 2400;
+    const rayY = startY + (dy / len) * 2400;
+    const aimEnd = firstWallPointOnLine(startX, startY, rayX, rayY);
     ctx.save();
     // linha do cano até a mira
     ctx.strokeStyle = "rgba(255, 209, 102, 0.55)";
@@ -2415,7 +2633,7 @@ function drawCrosshair() {
     ctx.lineTo(aimEnd.x, aimEnd.y);
     ctx.stroke();
     ctx.setLineDash([]);
-    if (aimEnd.x !== mouse.x || aimEnd.y !== mouse.y) {
+    if (aimEnd.x !== rayX || aimEnd.y !== rayY) {
       ctx.fillStyle = "rgba(255, 209, 102, 0.85)";
       ctx.beginPath();
       ctx.arc(aimEnd.x, aimEnd.y, 3.5, 0, Math.PI * 2);
@@ -2679,6 +2897,16 @@ function draw() {
   drawSpike();
   drawObjectiveHints();
 
+  for (const ghost of game.dashGhosts) {
+    const alpha = Math.max(0, ghost.life / ghost.maxLife) * 0.34;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = ghost.color;
+    ctx.beginPath();
+    ctx.arc(ghost.x, ghost.y, ghost.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
   for (const bot of game.bots) {
     const visible = game.revealTimer > 0 || hasLineOfSight(game.player, bot);
     const label = `${bot.side === "attackers" ? "ATK" : "DEF"} ${bot.weapon?.name || "Pistol"}`;
@@ -2844,6 +3072,8 @@ function updateUi() {
       : "WASD move, mouse mira, clique atira, E habilidade, F desarma, P pause.";
   ui.pauseButton.textContent = game.menuState === "pause" ? "Continuar" : "Pause";
   ui.shopButton.textContent = ui.shop.classList.contains("hidden") ? "Loja" : "Fechar";
+  ui.sandboxTools.classList.toggle("hidden", !game.sandbox || game.menuState !== "none");
+  ui.godModeButton.textContent = `God: ${game.godMode ? "ON" : "OFF"}`;
   updateScoreboard();
 }
 
@@ -2909,6 +3139,7 @@ function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
   for (const item of buttons) {
     const button = document.createElement("button");
     button.innerHTML = `<b>${item.label}</b><span>${item.desc || ""}</span>`;
+    if (item.back || item.label.toLowerCase().includes("voltar")) button.classList.add("menu-back");
     button.addEventListener("click", item.action);
     ui.menuButtons.appendChild(button);
   }
@@ -2920,6 +3151,34 @@ function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
 function hideMenuOverlay() {
   ui.menuOverlay.classList.add("hidden");
   game.menuState = "none";
+}
+
+function hideAgentSelect() {
+  ui.agentOverlay.classList.add("hidden");
+  game.menuState = "none";
+}
+
+function showAgentSelect(onPick) {
+  closeShop();
+  ui.agentSelectGrid.innerHTML = "";
+  for (const agent of agents) {
+    const button = document.createElement("button");
+    button.className = "agent-card";
+    button.style.setProperty("--agent-color", agent.color);
+    button.innerHTML = `<b>${agent.name}</b><span>${agent.ability}</span>`;
+    button.addEventListener("click", () => {
+      game.selectedAgent = agent;
+      game.agentLocked = true;
+      hideAgentSelect();
+      game.paused = false;
+      onPick();
+      updateUi();
+    });
+    ui.agentSelectGrid.appendChild(button);
+  }
+  ui.agentOverlay.classList.remove("hidden");
+  game.paused = true;
+  game.menuState = "agent";
 }
 
 function resumeFromPause() {
@@ -2942,8 +3201,10 @@ function showPauseMenu() {
 function showMainMenu() {
   ui.introOverlay.classList.add("hidden");
   ui.matchOverlay.classList.add("hidden");
+  ui.agentOverlay.classList.add("hidden");
   closeShop();
   game.phase = "idle";
+  game.clockActive = false;
   game.paused = false;
   game.menuMapTimer = 0;
   fullReset();
@@ -2981,6 +3242,7 @@ function showOptionsMenu() {
 function applyDifficulty(difficulty) {
   game.difficulty = difficulty;
   game.sandbox = false;
+  game.godMode = false;
   if (difficulty === "easy") {
     game.allyCount = 2;
     game.enemyFireMultiplier = 1.85;
@@ -2999,7 +3261,7 @@ function startMode(label, difficulty) {
   game.tutorial = false;
   applyDifficulty(difficulty);
   hideMenuOverlay();
-  startNewMatch();
+  showAgentSelect(startNewMatch);
 }
 
 function startSandboxMode() {
@@ -3011,10 +3273,12 @@ function startSandboxMode() {
   game.allyCount = 2;
   game.enemyFireMultiplier = 1.2;
   hideMenuOverlay();
-  startNewMatch();
-  startActionRound();
-  game.phaseTime = 9999;
-  setMessage("Sandbox: direito cria inimigo, meio cria aliado, X limpa bots, C limpa aliados.");
+  showAgentSelect(() => {
+    startNewMatch();
+    startActionRound();
+    game.phaseTime = 9999;
+    setMessage("Sandbox: use o painel para spawnar bots, resetar spike, ativar God ou limpar o mapa.");
+  });
 }
 
 function startTrainingMode() {
@@ -3026,11 +3290,13 @@ function startTrainingMode() {
   game.allyCount = 0;
   game.enemyFireMultiplier = 2.4;
   hideMenuOverlay();
-  startNewMatch();
-  game.money = 99999;
-  startActionRound();
-  game.phaseTime = 9999;
-  setMessage("Treino: dinheiro infinito, tempo livre e bots lentos para testar armas.");
+  showAgentSelect(() => {
+    startNewMatch();
+    game.money = 99999;
+    startActionRound();
+    game.phaseTime = 9999;
+    setMessage("Treino: dinheiro infinito, tempo livre e bots lentos para testar armas.");
+  });
 }
 
 function startTutorialMode() {
@@ -3043,13 +3309,15 @@ function startTutorialMode() {
   game.allyCount = 1;
   game.enemyFireMultiplier = 2.2;
   hideMenuOverlay();
-  startNewMatch();
-  game.startingSide = "attackers";
-  game.playerSide = "attackers";
-  game.roundNumber = 1;
-  resetRound();
-  showIntro();
-  setMessage(`Tutorial: ${tutorialText()}`);
+  showAgentSelect(() => {
+    startNewMatch();
+    game.startingSide = "attackers";
+    game.playerSide = "attackers";
+    game.roundNumber = 1;
+    resetRound();
+    showIntro();
+    setMessage(`Tutorial: ${tutorialText()}`);
+  });
 }
 
 function showIntro() {
@@ -3058,6 +3326,7 @@ function showIntro() {
   ui.introTeam.textContent = `${game.playerSide === "attackers" ? "Ataque" : "Defesa"} - ${map.vibe}`;
   ui.introOverlay.classList.remove("hidden");
   game.introTimer = 5;
+  game.clockActive = false;
 }
 
 const killFeedEntries = [];
@@ -3133,6 +3402,11 @@ function buildShop() {
     button.className = "choice";
     button.innerHTML = `<b>${agent.name}</b><span>${agent.role}: ${agent.ability}</span>`;
     button.addEventListener("click", () => {
+      if (game.agentLocked) {
+        setMessage("Agente travado ate a proxima partida.");
+        updateUi();
+        return;
+      }
       game.selectedAgent = agent;
       updateShopState();
       updateUi();
@@ -3363,6 +3637,55 @@ if (ui.shopTabs) {
     button.addEventListener("click", () => setShopTab(button.dataset.shopTab));
   });
 }
+
+ui.spawnBotButton.addEventListener("click", () => {
+  if (!game.sandbox) return;
+  const bot = makeBot({ x: mouse.x || map.width / 2, y: mouse.y || map.height / 2 }, game.bots.length);
+  bot.hasSpike = false;
+  sanitizeEntityPosition(bot);
+  game.bots.push(bot);
+  setMessage("Sandbox: inimigo criado.");
+});
+
+ui.spawnAllyButton.addEventListener("click", () => {
+  if (!game.sandbox) return;
+  const ally = makeAlly({ x: mouse.x || map.width / 2, y: mouse.y || map.height / 2 }, game.allies.length);
+  sanitizeEntityPosition(ally);
+  game.allies.push(ally);
+  setMessage("Sandbox: aliado criado.");
+});
+
+ui.resetSpikeButton.addEventListener("click", () => {
+  if (!game.sandbox) return;
+  game.spike = {
+    state: "dropped",
+    owner: null,
+    x: game.player.x + Math.cos(game.player.angle) * 34,
+    y: game.player.y + Math.sin(game.player.angle) * 34,
+    timer: 0,
+    site: null,
+    plantProgress: 0,
+    defuseProgress: 0,
+    defuseCheckpoint: 0,
+    defuserId: null,
+  };
+  setMessage("Sandbox: spike reposicionada.");
+});
+
+ui.godModeButton.addEventListener("click", () => {
+  if (!game.sandbox) return;
+  game.godMode = !game.godMode;
+  setMessage(`Sandbox: God Mode ${game.godMode ? "ligado" : "desligado"}.`);
+});
+
+ui.clearSandboxButton.addEventListener("click", () => {
+  if (!game.sandbox) return;
+  game.bots = [];
+  game.allies = [];
+  game.destructibles = [];
+  setMessage("Sandbox: mapa limpo.");
+});
+
 ui.newGameButton.addEventListener("click", () => {
   ui.matchOverlay.classList.add("hidden");
   showMainMenu();
