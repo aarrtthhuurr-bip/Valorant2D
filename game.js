@@ -3561,7 +3561,13 @@ function loop(now) {
 }
 loop.last = performance.now();
 
-window.addEventListener("keydown", (event) => {
+const on = (target, event, handler, options) => {
+  if (target && typeof target.addEventListener === "function") {
+    target.addEventListener(event, handler, options);
+  }
+};
+
+on(window, "keydown", (event) => {
   initAudio();
   if (event.key === "Tab") {
     event.preventDefault();
@@ -3587,7 +3593,7 @@ window.addEventListener("keydown", (event) => {
   }
 });
 
-window.addEventListener("keyup", (event) => {
+on(window, "keyup", (event) => {
   if (event.key === "Tab") {
     event.preventDefault();
     game.scoreboardVisible = false;
@@ -3597,15 +3603,15 @@ window.addEventListener("keyup", (event) => {
   keys.delete(event.key.toLowerCase());
 });
 
-canvas.addEventListener("mousemove", (event) => {
+on(canvas, "mousemove", (event) => {
   const rect = canvas.getBoundingClientRect();
   mouse.x = ((event.clientX - rect.left) / rect.width) * canvas.width;
   mouse.y = ((event.clientY - rect.top) / rect.height) * canvas.height;
 });
 
-canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+on(canvas, "contextmenu", (event) => event.preventDefault());
 
-canvas.addEventListener("mousedown", (event) => {
+on(canvas, "mousedown", (event) => {
   initAudio();
   if (game.sandbox && game.phase === "action" && event.button === 2) {
     event.preventDefault();
@@ -3625,20 +3631,21 @@ canvas.addEventListener("mousedown", (event) => {
   mouse.down = true;
 });
 
-window.addEventListener("mouseup", () => {
+on(window, "mouseup", () => {
   mouse.down = false;
 });
 
-ui.pauseButton.addEventListener("click", togglePause);
-ui.shopButton.addEventListener("click", toggleShop);
-ui.shopBackdrop.addEventListener("click", () => { closeShop(); updateUi(); });
-if (ui.shopTabs) {
+on(ui.pauseButton, "click", togglePause);
+on(ui.shopButton, "click", toggleShop);
+on(ui.shopBackdrop, "click", () => { closeShop(); updateUi(); });
+
+if (ui.shopTabs && typeof ui.shopTabs.querySelectorAll === "function") {
   ui.shopTabs.querySelectorAll("[data-shop-tab]").forEach((button) => {
-    button.addEventListener("click", () => setShopTab(button.dataset.shopTab));
+    on(button, "click", () => setShopTab(button.dataset.shopTab));
   });
 }
 
-ui.spawnBotButton.addEventListener("click", () => {
+on(ui.spawnBotButton, "click", () => {
   if (!game.sandbox) return;
   const bot = makeBot({ x: mouse.x || map.width / 2, y: mouse.y || map.height / 2 }, game.bots.length);
   bot.hasSpike = false;
@@ -3647,7 +3654,7 @@ ui.spawnBotButton.addEventListener("click", () => {
   setMessage("Sandbox: inimigo criado.");
 });
 
-ui.spawnAllyButton.addEventListener("click", () => {
+on(ui.spawnAllyButton, "click", () => {
   if (!game.sandbox) return;
   const ally = makeAlly({ x: mouse.x || map.width / 2, y: mouse.y || map.height / 2 }, game.allies.length);
   sanitizeEntityPosition(ally);
@@ -3655,7 +3662,7 @@ ui.spawnAllyButton.addEventListener("click", () => {
   setMessage("Sandbox: aliado criado.");
 });
 
-ui.resetSpikeButton.addEventListener("click", () => {
+on(ui.resetSpikeButton, "click", () => {
   if (!game.sandbox) return;
   game.spike = {
     state: "dropped",
@@ -3672,13 +3679,13 @@ ui.resetSpikeButton.addEventListener("click", () => {
   setMessage("Sandbox: spike reposicionada.");
 });
 
-ui.godModeButton.addEventListener("click", () => {
+on(ui.godModeButton, "click", () => {
   if (!game.sandbox) return;
   game.godMode = !game.godMode;
   setMessage(`Sandbox: God Mode ${game.godMode ? "ligado" : "desligado"}.`);
 });
 
-ui.clearSandboxButton.addEventListener("click", () => {
+on(ui.clearSandboxButton, "click", () => {
   if (!game.sandbox) return;
   game.bots = [];
   game.allies = [];
@@ -3686,8 +3693,8 @@ ui.clearSandboxButton.addEventListener("click", () => {
   setMessage("Sandbox: mapa limpo.");
 });
 
-ui.newGameButton.addEventListener("click", () => {
-  ui.matchOverlay.classList.add("hidden");
+on(ui.newGameButton, "click", () => {
+  ui.matchOverlay?.classList.add("hidden");
   showMainMenu();
 });
 
