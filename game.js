@@ -1019,14 +1019,14 @@ function showRoundBanner(title, text, kicker = `Round ${game.roundNumber}`, dura
 }
 
 function updateScoreboard() {
-  ui.scoreboard.classList.toggle("hidden", !game.scoreboardVisible);
-  ui.scoreboardTitle.textContent = `${game.playerScore} - ${game.enemyScore} | ${game.mapName}`;
-  ui.kills.textContent = game.stats.kills;
-  ui.deaths.textContent = game.stats.deaths;
-  ui.headshots.textContent = game.stats.headshots;
-  ui.plants.textContent = game.stats.plants;
-  ui.defuses.textContent = game.stats.defuses;
-  ui.scoreMoney.textContent = `$${game.money}`;
+  if (ui.scoreboard?.classList) ui.scoreboard.classList.toggle("hidden", !game.scoreboardVisible);
+  if (ui.scoreboardTitle) ui.scoreboardTitle.textContent = `${game.playerScore} - ${game.enemyScore} | ${game.mapName}`;
+  if (ui.kills) ui.kills.textContent = game.stats.kills;
+  if (ui.deaths) ui.deaths.textContent = game.stats.deaths;
+  if (ui.headshots) ui.headshots.textContent = game.stats.headshots;
+  if (ui.plants) ui.plants.textContent = game.stats.plants;
+  if (ui.defuses) ui.defuses.textContent = game.stats.defuses;
+  if (ui.scoreMoney) ui.scoreMoney.textContent = `$${game.money}`;
 }
 
 function tutorialText() {
@@ -2986,35 +2986,49 @@ function draw() {
 }
 
 function updateUi() {
+  const setText = (element, value) => {
+    if (element) element.textContent = value;
+  };
+  const setClassName = (element, value) => {
+    if (element) element.className = value;
+  };
+  const toggleClass = (element, className, force) => {
+    if (element?.classList) element.classList.toggle(className, force);
+  };
+  const setStyle = (element, property, value) => {
+    if (element?.style) element.style[property] = value;
+  };
+  if (!game.player) return;
+
   // Side pill
   const atk = game.playerSide === "attackers";
-  ui.sidePill.textContent = atk ? "ATK" : "DEF";
-  ui.sidePill.className = "hud-pill side-pill " + (atk ? "atk" : "def");
+  setText(ui.sidePill, atk ? "ATK" : "DEF");
+  setClassName(ui.sidePill, "hud-pill side-pill " + (atk ? "atk" : "def"));
 
   // Round label
-  ui.roundLabel.textContent = `Round ${game.roundNumber}`;
+  setText(ui.roundLabel, `Round ${game.roundNumber}`);
 
   // Timer com urgência
   const t = Math.max(0, Math.ceil(game.phaseTime));
   const spikePlanted = game.spike.state === "planted";
-  ui.topHud.classList.toggle("spike-planted", spikePlanted);
-  ui.timerPill.classList.toggle("spike-alert", spikePlanted);
-  ui.timer.className = spikePlanted || (t <= 5 && game.phase !== "action") ? "urgent" : t <= 10 && game.phase !== "action" ? "warn" : "";
+  toggleClass(ui.topHud, "spike-planted", spikePlanted);
+  toggleClass(ui.timerPill, "spike-alert", spikePlanted);
+  setClassName(ui.timer, spikePlanted || (t <= 5 && game.phase !== "action") ? "urgent" : t <= 10 && game.phase !== "action" ? "warn" : "");
 
   // Buy bar
   updateBuyBar();
 
   // Agent dot cor
-  ui.agentDot.style.background = game.selectedAgent.color;
+  setStyle(ui.agentDot, "background", game.selectedAgent.color);
 
   // Armor bar separada
   const hasArmor = (game.player?.maxArmor || 0) > 0;
-  ui.armorBarWrap.classList.toggle("hidden", !hasArmor);
-  ui.armorText.classList.toggle("hidden", !hasArmor);
+  toggleClass(ui.armorBarWrap, "hidden", !hasArmor);
+  toggleClass(ui.armorText, "hidden", !hasArmor);
   if (hasArmor) {
     const armorRatio = Math.max(0, game.player.armor) / game.player.maxArmor;
-    ui.armorBar.style.transform = `scaleX(${armorRatio})`;
-    ui.armorValueText.textContent = Math.ceil(game.player.armor);
+    setStyle(ui.armorBar, "transform", `scaleX(${armorRatio})`);
+    setText(ui.armorValueText, Math.ceil(game.player.armor));
   }
 
   // Ammo dots
@@ -3024,7 +3038,7 @@ function updateUi() {
     updateAmmoDots(0, currentMagSize());
   }
 
-  ui.phase.textContent = game.paused
+  setText(ui.phase, game.paused
     ? "Pause"
     : game.phase === "buy"
         ? "Compra"
@@ -3032,48 +3046,49 @@ function updateUi() {
           ? "Round"
           : game.phase === "matchOver"
             ? "Partida"
-            : "Fim";
-  ui.timer.textContent = game.spike.state === "planted"
+            : "Fim");
+  const timerLabel = game.spike.state === "planted"
     ? `Spike ${Math.max(0, Math.ceil(game.spike.timer))}`
     : game.sandbox || game.training ? "∞" : t.toString();
-  ui.score.textContent = `${game.playerScore} - ${game.enemyScore}`;
+  setText(ui.timer, timerLabel);
+  setText(ui.score, `${game.playerScore} - ${game.enemyScore}`);
 
   // Money com delta
   const newMoney = game.money;
   if (newMoney !== lastMoney) flashMoneyDelta(newMoney);
-  ui.money.textContent = `${newMoney}`;
+  setText(ui.money, `${newMoney}`);
 
-  ui.agent.textContent = `${game.selectedAgent.name} ${atk ? "ATK" : "DEF"} (${game.abilityCharges}x ${game.abilityCooldown > 0 ? Math.ceil(game.abilityCooldown) : "E"})`;
-  ui.weapon.textContent = game.selectedWeapon.name;
-  ui.hp.textContent = `${Math.max(0, Math.ceil(game.player.hp))}`;
-  ui.ammo.textContent = game.reloadTimer > 0 ? "Recarregando" : `${game.player.ammo} / ${currentMagSize()}`;
-  ui.spike.textContent = game.spike.state === "carried"
+  setText(ui.agent, `${game.selectedAgent.name} ${atk ? "ATK" : "DEF"} (${game.abilityCharges}x ${game.abilityCooldown > 0 ? Math.ceil(game.abilityCooldown) : "E"})`);
+  setText(ui.weapon, game.selectedWeapon.name);
+  setText(ui.hp, `${Math.max(0, Math.ceil(game.player.hp))}`);
+  setText(ui.ammo, game.reloadTimer > 0 ? "Recarregando" : `${game.player.ammo} / ${currentMagSize()}`);
+  setText(ui.spike, game.spike.state === "carried"
     ? game.spike.owner === "player" ? "Com voce" : "Com bots"
     : game.spike.state === "dropped"
       ? "Derrubada"
     : game.spike.state === "planted"
       ? (game.spike.defuseProgress > 0 ? `Defuse ${Math.round(game.spike.defuseProgress * 100)}%` : `${Math.ceil(game.spike.timer)}s`)
-      : "Plantando";
-  ui.spike.classList.toggle("planted", spikePlanted);
-  ui.hpBar.style.transform = `scaleX(${Math.max(0, game.player.hp) / game.player.maxHp})`;
-  ui.ammoBar.style.transform = `scaleX(${game.reloadTimer > 0 ? 1 - game.reloadTimer / currentReloadTime() : game.player.ammo / currentMagSize()})`;
-  ui.plantBar.style.transform = `scaleX(${
+      : "Plantando");
+  toggleClass(ui.spike, "planted", spikePlanted);
+  setStyle(ui.hpBar, "transform", `scaleX(${Math.max(0, game.player.hp) / game.player.maxHp})`);
+  setStyle(ui.ammoBar, "transform", `scaleX(${game.reloadTimer > 0 ? 1 - game.reloadTimer / currentReloadTime() : game.player.ammo / currentMagSize()})`);
+  setStyle(ui.plantBar, "transform", `scaleX(${
     game.spike.state === "planting" || game.spike.state === "bot_planting" || game.spike.plantProgress > 0
       ? game.spike.plantProgress
       : game.spike.state === "planted"
         ? (game.spike.defuseProgress > 0 ? game.spike.defuseProgress : game.spike.timer / SPIKE_DETONATE_TIME)
         : 0
-  })`;
-  ui.message.querySelector("strong").textContent = game.message;
-  ui.message.querySelector("span").textContent = game.paused
+  })`);
+  setText(ui.message?.querySelector?.("strong"), game.message);
+  setText(ui.message?.querySelector?.("span"), game.paused
     ? (game.menuState === "pause" ? "Jogo pausado. Aperte P ou clique em Continuar." : "Escolha uma opcao no menu.")
     : game.playerSide === "attackers"
       ? "WASD move, mouse mira, clique atira, E habilidade, F planta, P pause."
-      : "WASD move, mouse mira, clique atira, E habilidade, F desarma, P pause.";
-  ui.pauseButton.textContent = game.menuState === "pause" ? "Continuar" : "Pause";
-  ui.shopButton.textContent = ui.shop.classList.contains("hidden") ? "Loja" : "Fechar";
-  ui.sandboxTools.classList.toggle("hidden", !game.sandbox || game.menuState !== "none");
-  ui.godModeButton.textContent = `God: ${game.godMode ? "ON" : "OFF"}`;
+      : "WASD move, mouse mira, clique atira, E habilidade, F desarma, P pause.");
+  setText(ui.pauseButton, game.menuState === "pause" ? "Continuar" : "Pause");
+  setText(ui.shopButton, ui.shop?.classList?.contains("hidden") ? "Loja" : "Fechar");
+  toggleClass(ui.sandboxTools, "hidden", !game.sandbox || game.menuState !== "none");
+  setText(ui.godModeButton, `God: ${game.godMode ? "ON" : "OFF"}`);
   updateScoreboard();
 }
 
@@ -3361,6 +3376,7 @@ function flashMoneyDelta(newVal) {
   lastMoney = newVal;
   if (diff === 0) return;
   const el = ui.moneyDelta;
+  if (!el) return;
   el.className = "money-delta " + (diff > 0 ? "pos" : "neg");
   el.textContent = (diff > 0 ? "+" : "") + "$" + diff;
   void el.offsetWidth;
@@ -3371,6 +3387,7 @@ function flashMoneyDelta(newVal) {
 
 function updateAmmoDots(ammo, maxAmmo) {
   const el = ui.ammoDots;
+  if (!el) return;
   if (maxAmmo > 30) { el.innerHTML = ""; return; }
   if (el.childElementCount !== maxAmmo) {
     el.innerHTML = "";
@@ -3387,11 +3404,11 @@ function updateAmmoDots(ammo, maxAmmo) {
 
 function updateBuyBar() {
   if (game.phase === "buy" && !game.sandbox && !game.training) {
-    ui.buyBar.classList.remove("hidden");
+    if (ui.buyBar?.classList) ui.buyBar.classList.remove("hidden");
     const ratio = Math.max(0, game.phaseTime / BUY_TIME);
-    ui.buyBarFill.style.transform = `scaleX(${ratio})`;
+    if (ui.buyBarFill?.style) ui.buyBarFill.style.transform = `scaleX(${ratio})`;
   } else {
-    ui.buyBar.classList.add("hidden");
+    if (ui.buyBar?.classList) ui.buyBar.classList.add("hidden");
   }
 }
 
