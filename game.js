@@ -3151,18 +3151,21 @@ function handleEscape() {
 }
 
 function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
-  ui.menuKicker.textContent = kicker;
-  ui.menuTitle.textContent = title;
-  ui.menuText.textContent = text;
+  if (ui.menuKicker) ui.menuKicker.textContent = kicker;
+  if (ui.menuTitle) ui.menuTitle.textContent = title;
+  if (ui.menuText) ui.menuText.textContent = "";
+  if (!ui.menuButtons) return;
   ui.menuButtons.innerHTML = "";
   for (const item of buttons) {
     const button = document.createElement("button");
-    button.innerHTML = `<b>${item.label}</b><span>${item.desc || ""}</span>`;
+    const icon = item.icon || "star";
+    button.className = "menu-button";
+    button.innerHTML = `<span class="menu-icon menu-icon-${icon}" aria-hidden="true"></span><b>${item.label}</b>`;
     if (item.back || item.label.toLowerCase().includes("voltar")) button.classList.add("menu-back");
     button.addEventListener("click", item.action);
     ui.menuButtons.appendChild(button);
   }
-  ui.menuOverlay.classList.remove("hidden");
+  ui.menuOverlay?.classList.remove("hidden");
   game.paused = true;
   game.menuState = state;
 }
@@ -3218,44 +3221,44 @@ function showPauseMenu() {
 }
 
 function showMainMenu() {
-  ui.introOverlay.classList.add("hidden");
-  ui.matchOverlay.classList.add("hidden");
-  ui.agentOverlay.classList.add("hidden");
+  ui.introOverlay?.classList.add("hidden");
+  ui.matchOverlay?.classList.add("hidden");
+  ui.agentOverlay?.classList.add("hidden");
   closeShop();
   game.phase = "idle";
   game.clockActive = false;
   game.paused = false;
   game.menuMapTimer = 0;
   fullReset();
-  setMenu("Menu", "Escolha como quer jogar.", [
-    { label: "JOGAR", desc: "Partida normal com dificuldade.", action: showDifficultyMenu },
-    { label: "OPÇÕES", desc: "Preferências de mira e controles.", action: showOptionsMenu },
-    { label: "SANDBOX", desc: "Dinheiro infinito, sem tempo e posicionamento livre.", action: startSandboxMode },
-    { label: "TREINO", desc: "Teste armas, mira, recoil e dano sem pressa.", action: startTrainingMode },
-    { label: "TUTORIAL", desc: "Aprenda movimento, tiro, plant, defuse e compra.", action: startTutorialMode },
-  ], "Valorant2D", "main");
+  setMenu("Valorant 2D", "", [
+    { label: "JOGAR", icon: "gamepad", action: showDifficultyMenu },
+    { label: "OPCOES", icon: "tools", action: showOptionsMenu },
+    { label: "SANDBOX", icon: "money", action: startSandboxMode },
+    { label: "TREINO", icon: "star", action: startTrainingMode },
+    { label: "TUTORIAL", icon: "link", action: startTutorialMode },
+  ], "MENU", "main");
 }
 
 function showDifficultyMenu() {
-  setMenu("Dificuldade", "Escolha o ritmo da partida.", [
-    { label: "Fácil", desc: "2 aliados. Inimigos atiram bem menos.", action: () => startMode("Fácil", "easy") },
-    { label: "Normal", desc: "Sem aliados. Inimigos atiram com menos frequência.", action: () => startMode("Normal", "normal") },
-    { label: "Difícil", desc: "Sem aliados. Inimigos atiram na frequência normal.", action: () => startMode("Difícil", "hard") },
-    { label: "Voltar", desc: "Retornar ao menu principal.", action: showMainMenu },
+  setMenu("Dificuldade", "", [
+    { label: "FACIL", icon: "star", action: () => startMode("Facil", "easy") },
+    { label: "NORMAL", icon: "gamepad", action: () => startMode("Normal", "normal") },
+    { label: "DIFICIL", icon: "tools", action: () => startMode("Dificil", "hard") },
+    { label: "VOLTAR", icon: "link", action: showMainMenu },
   ], "JOGAR", "difficulty");
 }
 
 function showOptionsMenu() {
-  setMenu("Opções", "Ajustes rápidos de controle e mira.", [
-    { label: `Mira: ${game.crosshairStyle === "default" ? "Padrão" : "Minimalista"}`, desc: "Alterna o visual da mira comum.", action: () => { game.crosshairStyle = game.crosshairStyle === "default" ? "minimal" : "default"; showOptionsMenu(); } },
-    { label: `Tamanho mira: ${Math.round(game.crosshairScale * 100)}%`, desc: "Alterna entre mira pequena, media e grande.", action: () => { game.crosshairScale = game.crosshairScale >= 1.25 ? 0.85 : game.crosshairScale + 0.2; showOptionsMenu(); } },
-    { label: `Movimento: ${game.arrowKeys ? "WASD + setinhas" : "WASD"}`, desc: "Permite usar setinhas junto do WASD.", action: () => { game.arrowKeys = !game.arrowKeys; showOptionsMenu(); } },
-    { label: `Rotas: ${game.debugRoutes ? "visiveis" : "ocultas"}`, desc: "Mostra alvos e caminhos dos bots para depurar travamentos.", action: () => { game.debugRoutes = !game.debugRoutes; showOptionsMenu(); } },
-    { label: `Som: ${audio.enabled ? "ligado" : "desligado"}`, desc: "Ativa feedback simples de tiros, hits e spike.", action: () => { audio.enabled = !audio.enabled; showOptionsMenu(); } },
-    { label: `Volume: ${Math.round(audio.volume * 100)}%`, desc: "Alterna volume baixo, medio e alto.", action: () => { audio.volume = audio.volume >= 1 ? 0.35 : audio.volume + 0.325; showOptionsMenu(); } },
-    { label: "Tela cheia", desc: "Alterna o jogo em tela cheia quando o navegador permitir.", action: () => { if (document.fullscreenElement) document.exitFullscreen?.(); else document.querySelector(".game-wrap")?.requestFullscreen?.(); showOptionsMenu(); } },
-    { label: "Voltar", desc: "Retornar ao menu principal.", action: showMainMenu },
-  ], "OPÇÕES", "options");
+  setMenu("Opcoes", "", [
+    { label: `Mira: ${game.crosshairStyle === "default" ? "Padrao" : "Minimalista"}`, icon: "tools", action: () => { game.crosshairStyle = game.crosshairStyle === "default" ? "minimal" : "default"; showOptionsMenu(); } },
+    { label: `Tamanho mira: ${Math.round(game.crosshairScale * 100)}%`, icon: "star", action: () => { game.crosshairScale = game.crosshairScale >= 1.25 ? 0.85 : game.crosshairScale + 0.2; showOptionsMenu(); } },
+    { label: `Movimento: ${game.arrowKeys ? "WASD + setinhas" : "WASD"}`, icon: "gamepad", action: () => { game.arrowKeys = !game.arrowKeys; showOptionsMenu(); } },
+    { label: `Rotas: ${game.debugRoutes ? "visiveis" : "ocultas"}`, icon: "link", action: () => { game.debugRoutes = !game.debugRoutes; showOptionsMenu(); } },
+    { label: `Som: ${audio.enabled ? "ligado" : "desligado"}`, icon: "tools", action: () => { audio.enabled = !audio.enabled; showOptionsMenu(); } },
+    { label: `Volume: ${Math.round(audio.volume * 100)}%`, icon: "star", action: () => { audio.volume = audio.volume >= 1 ? 0.35 : audio.volume + 0.325; showOptionsMenu(); } },
+    { label: "TELA CHEIA", icon: "gamepad", action: () => { if (document.fullscreenElement) document.exitFullscreen?.(); else document.querySelector(".game-wrap")?.requestFullscreen?.(); showOptionsMenu(); } },
+    { label: "VOLTAR", icon: "link", action: showMainMenu },
+  ], "OPCOES", "options");
 }
 
 function applyDifficulty(difficulty) {

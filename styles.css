@@ -731,14 +731,20 @@ strong {
 }
 
 .menu-card {
-  width: min(380px, calc(100% - 32px));
+  width: min(420px, 34vw);
+  min-width: 340px;
   min-height: 100%;
-  padding: 34px 26px;
+  padding: clamp(28px, 5vh, 56px) 28px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   text-align: left;
   border-radius: 0;
+  border-width: 0 1px 0 0;
+  background:
+    linear-gradient(180deg, rgba(12, 19, 28, 0.96), rgba(5, 9, 14, 0.92)),
+    repeating-linear-gradient(135deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 14px);
+  box-shadow: 24px 0 60px rgba(0, 0, 0, 0.48);
 }
 
 .menu-art {
@@ -752,13 +758,15 @@ strong {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(90deg, rgba(5, 8, 13, 0.9), rgba(5, 8, 13, 0.18)),
-    radial-gradient(circle at 60% 35%, rgba(255, 77, 93, 0.28), transparent 28%),
-    radial-gradient(circle at 72% 70%, rgba(70, 168, 255, 0.18), transparent 32%);
+    linear-gradient(90deg, rgba(5, 8, 13, 0.88), rgba(5, 8, 13, 0.18)),
+    linear-gradient(135deg, rgba(255, 70, 85, 0.16), transparent 34%),
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.032) 0 1px, transparent 1px 38px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.026) 0 1px, transparent 1px 38px);
 }
 
 .menu-copy {
-  margin-bottom: 18px;
+  margin-bottom: 34px;
+  padding-top: 12px;
 }
 
 .intro-card {
@@ -769,12 +777,17 @@ strong {
 
 .menu-card h2,
 .intro-card h2 {
-  margin: 6px 0 8px;
-  font-size: 40px;
-  line-height: 1;
+  margin: 8px 0 0;
+  font-size: 46px;
+  line-height: 0.94;
+  letter-spacing: 0;
+  text-transform: uppercase;
 }
 
-.menu-card p,
+.menu-card p {
+  display: none;
+}
+
 .intro-card p {
   margin: 0 0 16px;
   color: var(--muted);
@@ -782,14 +795,44 @@ strong {
 
 .menu-grid {
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .menu-grid button {
-  min-height: 50px;
-  padding: 12px 13px;
-  border-radius: 7px;
+  min-height: 64px;
+  padding: 10px 14px;
+  border-radius: 8px;
   text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(232, 232, 225, 0.14);
+  background: rgba(255, 255, 255, 0.045);
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.menu-grid button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(255, 70, 85, 0.18), transparent 56%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.menu-grid button:hover,
+.menu-grid button:focus-visible {
+  transform: translateX(8px);
+  border-color: rgba(255, 70, 85, 0.82);
+  box-shadow: 0 0 24px rgba(255, 70, 85, 0.16);
+}
+
+.menu-grid button:hover::before,
+.menu-grid button:focus-visible::before {
+  opacity: 1;
 }
 
 .menu-grid button.menu-back {
@@ -798,15 +841,39 @@ strong {
   background: rgba(255, 77, 93, 0.08);
 }
 
-.menu-grid button b,
-.menu-grid button span {
+.menu-grid button b {
   display: block;
+  position: relative;
+  z-index: 1;
+  font-size: 15px;
+  letter-spacing: 0;
+  text-transform: uppercase;
 }
 
-.menu-grid button span {
-  margin-top: 3px;
-  color: var(--muted);
-  font-size: 12px;
+.menu-icon {
+  position: relative;
+  z-index: 1;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  clip-path: inset(0 round 7px);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+.menu-icon-gamepad { background-image: url("assets/menu/gamepad.png"); }
+.menu-icon-tools { background-image: url("assets/menu/tools.png"); }
+.menu-icon-money { background-image: url("assets/menu/money.png"); }
+.menu-icon-star { background-image: url("assets/menu/star.png"); }
+.menu-icon-link { background-image: url("assets/menu/link.png"); }
+
+.menu-grid button > span:not(.menu-icon) {
+  display: none;
 }
 
 .match-card {
@@ -995,8 +1062,17 @@ strong {
   }
 
   .menu-card {
-    width: min(340px, calc(100% - 24px));
-    padding: 24px 18px;
+    width: min(360px, 48vw);
+    min-width: 300px;
+    padding: 28px 20px;
+  }
+
+  .menu-card h2 {
+    font-size: 38px;
+  }
+
+  .menu-grid button {
+    min-height: 58px;
   }
 
   .agent-select-grid {
@@ -1050,6 +1126,18 @@ strong {
 
   .menu-card {
     width: 100%;
+    min-width: 0;
+    padding: 24px 18px;
+  }
+
+  .menu-card h2 {
+    font-size: 34px;
+  }
+
+  .menu-icon {
+    width: 30px;
+    height: 30px;
+    flex-basis: 30px;
   }
 
   .agent-select-grid {
