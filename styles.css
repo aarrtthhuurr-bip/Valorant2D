@@ -89,18 +89,21 @@ canvas {
 
 .top-hud {
   position: absolute;
-  top: 10px;
+  top: 12px;
   left: 50%;
   display: flex;
   align-items: center;
   gap: 0;
-  padding: 0;
+  padding: 4px;
   transform: translateX(-50%);
   pointer-events: none;
-  border-radius: 8px;
+  border-radius: 10px;
   animation: slideDown 420ms ease both;
   max-width: calc(100% - 24px);
-  overflow: hidden;
+  overflow: visible;
+  background: rgba(5, 10, 16, 0.82);
+  border: 1px solid rgba(232, 232, 225, 0.14);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.42);
 }
 
 .hud-button,
@@ -112,8 +115,9 @@ canvas {
 }
 
 .hud-pill {
-  min-width: 76px;
-  padding: 6px 10px;
+  min-width: 82px;
+  min-height: 44px;
+  padding: 7px 12px;
   border-left: 1px solid rgba(255, 255, 255, 0.09);
   display: flex;
   flex-direction: column;
@@ -123,9 +127,9 @@ canvas {
 }
 
 .timer-pill {
-  min-width: 88px;
+  min-width: 96px;
   text-align: center;
-  background: rgba(255, 255, 255, 0.055);
+  background: rgba(255, 255, 255, 0.075);
   border-left: 1px solid rgba(255, 255, 255, 0.09);
   padding: 4px 10px 6px;
 }
@@ -155,9 +159,10 @@ strong {
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  padding: 6px 10px;
-  border-radius: 4px;
-  min-width: 48px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 7px 0 0 7px;
+  min-width: 52px;
   text-align: center;
   border-left: none;
   transition: background 300ms, color 300ms;
@@ -228,15 +233,16 @@ strong {
 /* ── Barra de compra ── */
 .buy-bar {
   position: absolute;
-  top: 46px;
+  top: 62px;
   left: 50%;
   transform: translateX(-50%);
-  width: min(200px, 60%);
-  height: 3px;
-  background: rgba(255,255,255,0.1);
-  border-radius: 2px;
+  width: min(260px, 42%);
+  height: 4px;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 999px;
   overflow: hidden;
-  z-index: 5;
+  z-index: 19;
 }
 .buy-bar.hidden { display: none; }
 .buy-bar i {
@@ -244,8 +250,9 @@ strong {
   height: 100%;
   width: 100%;
   background: var(--yellow);
-  transform-origin: left;
+  transform-origin: center;
   transition: transform 0.25s linear;
+  box-shadow: 0 0 18px rgba(255, 209, 102, 0.45);
 }
 
 /* ── Agent dot ── */
@@ -493,13 +500,14 @@ strong {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 5px;
-  margin: 0;
+  margin: 0 -20px 10px;
   padding: 10px 20px;
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: 5;
   background: var(--panel-strong);
   border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(12px);
 }
 
 .shop-tabs button {
@@ -513,6 +521,11 @@ strong {
 .shop-tabs button.active {
   border-color: rgba(98, 230, 160, 0.75);
   background: rgba(98, 230, 160, 0.15);
+}
+
+.shop-tabs button.hidden,
+.shop-panel.disabled {
+  display: none;
 }
 
 .panel {

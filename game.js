@@ -16,7 +16,6 @@ const ui = {
   shop: document.getElementById("shop"),
   shopTabs: document.getElementById("shopTabs"),
   message: document.getElementById("message"),
-  agentButtons: document.getElementById("agentButtons"),
   weaponButtons: document.getElementById("weaponButtons"),
   equipmentButtons: document.getElementById("equipmentButtons"),
   allyButtons: document.getElementById("allyButtons"),
@@ -719,6 +718,7 @@ function startActionRound() {
 }
 
 function openShop() {
+  updateShopState();
   ui.shop.classList.remove("hidden");
   ui.shopBackdrop.classList.remove("hidden");
   ui.shopButton.style.display = "none";
@@ -1903,11 +1903,42 @@ function allyObjectivePoint(ally, index) {
   return nearestWalkablePoint(holds[index % holds.length], ally);
 }
 
+function closestAliveAllyTo(x, y) {
+  return game.allies
+    .filter((ally) => ally.alive)
+    .sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y))[0] || null;
+}
+
 function updateAllies(dt) {
   const squad = [game.player, ...game.allies];
+  const playerCanDefuse = game.player?.alive && Math.hypot(game.player.x - game.spike.x, game.player.y - game.spike.y) < 120;
+  const allyDefuser = game.playerSide === "defenders" && game.spike.state === "planted" && !playerCanDefuse
+    ? closestAliveAllyTo(game.spike.x, game.spike.y)
+    : null;
   game.allies.forEach((ally, index) => {
     if (!ally.alive) return;
     const enemy = closestVisibleEnemy(ally);
+    if (ally === allyDefuser) {
+      const dist = Math.hypot(ally.x - game.spike.x, ally.y - game.spike.y);
+      ally.aiState = "defuse";
+      if (enemy && dist > 46) {
+        botShootAt(ally, enemy, dt, "ally");
+      }
+      if (dist > 42) {
+        moveBotToward(ally, game.spike, dt, 1.12);
+      } else {
+        ally.angle = Math.atan2(game.spike.y - ally.y, game.spike.x - ally.x);
+        const complete = advanceDefuse(ally.id, dt, BOT_DEFUSE_TIME + 0.7);
+        setMessage("Aliado desarmando a spike. Cubra a area.");
+        if (complete) {
+          spawnParticles(game.spike.x, game.spike.y, "#66e48f", 28, 180);
+          game.stats.defuses += 1;
+          endRound("defenders", "Aliado desarmou a spike. Defensores venceram.");
+        }
+      }
+      keepSquadSpacing(ally, squad, dt);
+      return;
+    }
     if (enemy) {
       const side = ally.angle + Math.PI / 2;
       const movedNow = moveEntity(ally, Math.cos(side) * ally.speed * ally.strafe * 0.3 * dt, Math.sin(side) * ally.speed * ally.strafe * 0.3 * dt, map.walls);
@@ -2153,6 +2184,9 @@ function updateBullets(dt) {
         bullet.life = 0;
         if (target.hp <= 0) {
           target.alive = false;
+          if (game.spike.defuserId === target.id) {
+            resetPartialDefuse();
+          }
           if (target.id === "player") {
             game.stats.deaths += 1;
             addKillFeedEntry(false, "", false);
@@ -3254,7 +3288,7 @@ function showDifficultyMenu() {
 }
 
 function showOptionsMenu() {
-  setMenu("Opcoes", "", [
+  setMenu("Opções", "", [
     { label: `Mira: ${game.crosshairStyle === "default" ? "Padrao" : "Minimalista"}`, icon: "tools", action: () => { game.crosshairStyle = game.crosshairStyle === "default" ? "minimal" : "default"; showOptionsMenu(); } },
     { label: `Tamanho mira: ${Math.round(game.crosshairScale * 100)}%`, icon: "star", action: () => { game.crosshairScale = game.crosshairScale >= 1.25 ? 0.85 : game.crosshairScale + 0.2; showOptionsMenu(); } },
     { label: `Movimento: ${game.arrowKeys ? "WASD + setinhas" : "WASD"}`, icon: "gamepad", action: () => { game.arrowKeys = !game.arrowKeys; showOptionsMenu(); } },
@@ -3263,7 +3297,7 @@ function showOptionsMenu() {
     { label: `Volume: ${Math.round(audio.volume * 100)}%`, icon: "star", action: () => { audio.volume = audio.volume >= 1 ? 0.35 : audio.volume + 0.325; showOptionsMenu(); } },
     { label: "TELA CHEIA", icon: "gamepad", action: () => { if (document.fullscreenElement) document.exitFullscreen?.(); else document.querySelector(".game-wrap")?.requestFullscreen?.(); showOptionsMenu(); } },
     { label: "VOLTAR", icon: "link", action: showMainMenu },
-  ], "OPCOES", "options");
+  ], "OPÇÕES", "options");
 }
 
 function applyDifficulty(difficulty) {
