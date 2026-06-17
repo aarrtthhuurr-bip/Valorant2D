@@ -110,6 +110,19 @@ canvas {
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.34);
 }
 
+.top-hud.hidden {
+  display: none;
+}
+
+.gameplay-ui-hidden .status-card,
+.gameplay-ui-hidden .kill-feed,
+.gameplay-ui-hidden .message,
+.gameplay-ui-hidden .round-banner,
+.gameplay-ui-hidden .scoreboard,
+.gameplay-ui-hidden .sandbox-tools {
+  display: none;
+}
+
 .hud-button,
 .pause-button {
   min-width: 66px;
@@ -206,11 +219,6 @@ canvas {
 }
 
 /* ── Money delta ── */
-.money-pill { position: relative; }
-.money-pill strong {
-  color: #eef7fb;
-  font-size: 18px;
-}
 .money-delta {
   position: absolute;
   top: -14px;
@@ -306,23 +314,6 @@ canvas {
 #armorText.hidden { display: none; }
 
 /* ── Ammo dots ── */
-.ammo-dots {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-  margin-top: 6px;
-  min-height: 8px;
-}
-.ammo-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 1px;
-  background: rgba(70,168,255,0.85);
-  transition: background 120ms;
-}
-.ammo-dot.spent { background: rgba(255,255,255,0.12); }
-.ammo-dot.group-sep { margin-left: 4px; }
-
 /* ── Kill feed ── */
 .kill-feed {
   position: absolute;
@@ -472,11 +463,12 @@ canvas {
 
 .shop {
   position: absolute;
-  top: 50%;
+  top: 76px;
+  bottom: 18px;
   left: 50%;
-  transform: translate(-50%, -50%) scale(1);
-  width: min(560px, calc(100% - 32px));
-  max-height: calc(100% - 80px);
+  transform: translateX(-50%) scale(1);
+  width: min(620px, calc(100% - 32px));
+  max-height: none;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -511,8 +503,13 @@ canvas {
 }
 
 .shop header {
-  margin-bottom: 12px;
-  padding: 18px 20px 0;
+  margin-bottom: 0;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid var(--line);
 }
 
 .shop h1,
@@ -524,6 +521,29 @@ canvas {
 .shop h1 {
   font-size: 20px;
   letter-spacing: 0;
+}
+
+.shop-balance {
+  position: relative;
+  display: grid;
+  justify-items: end;
+  flex-shrink: 0;
+}
+
+.shop-balance > span:first-child {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.shop-balance strong {
+  color: var(--yellow);
+  font-size: 20px;
+}
+
+.shop-balance .money-delta {
+  top: 100%;
 }
 
 .shop p {
@@ -695,7 +715,7 @@ canvas {
 
 .scoreboard {
   position: absolute;
-  top: 58px;
+  top: 76px;
   right: 12px;
   z-index: 18;
   width: min(360px, calc(100% - 24px));
@@ -951,8 +971,8 @@ canvas {
 
 /* ── Menu icons ── */
 .menu-icon {
-  width: 24px;
-  height: 24px;
+  width: 30px;
+  height: 30px;
   display: inline-block;
   flex-shrink: 0;
   position: relative;
@@ -965,6 +985,8 @@ canvas {
   outline: none;
   box-shadow: none;
   pointer-events: none;
+  mix-blend-mode: color-dodge;
+  filter: grayscale(1) brightness(2.4) contrast(1.8);
 }
 
 .menu-icon-gamepad { background-image: url("assets/gamepad.png"); }
@@ -972,6 +994,66 @@ canvas {
 .menu-icon-money { background-image: url("assets/money.png"); }
 .menu-icon-star { background-image: url("assets/star.png"); }
 .menu-icon-link { background-image: url("assets/link.png"); }
+
+.difficulty-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 96px;
+}
+
+.difficulty-stars .menu-icon {
+  width: 26px;
+  height: 26px;
+}
+
+.menu-button.icon-only {
+  width: 62px;
+  min-height: 52px;
+  padding: 0;
+  justify-content: center;
+}
+
+.menu-button.icon-only .menu-icon {
+  width: 34px;
+  height: 34px;
+}
+
+.menu-state-pause {
+  align-items: center;
+  justify-content: center;
+  background: rgba(1, 6, 10, 0.84);
+}
+
+.menu-state-pause .menu-art {
+  display: none;
+}
+
+.menu-state-pause .menu-card {
+  width: min(430px, calc(100% - 32px));
+  min-width: 0;
+  min-height: 0;
+  padding: 34px;
+  border: 1px solid rgba(215, 237, 255, 0.18);
+  border-radius: 12px;
+  text-align: center;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.58);
+}
+
+.menu-state-pause .menu-copy {
+  margin-bottom: 24px;
+  padding-top: 0;
+}
+
+.menu-state-pause .menu-grid {
+  justify-items: center;
+}
+
+.menu-state-pause .menu-button:not(.icon-only) {
+  width: 100%;
+  justify-content: center;
+  text-align: center;
+}
 
 .match-card {
   width: min(420px, calc(100% - 32px));
@@ -1052,8 +1134,8 @@ canvas {
 }
 
 @keyframes shopIn {
-  from { opacity: 0; transform: translate(-50%, -48%) scale(0.97); }
-  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  from { opacity: 0; transform: translateX(-50%) translateY(-10px) scale(0.97); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
 }
 
 @keyframes slideDown {
@@ -1209,10 +1291,6 @@ canvas {
     width: calc(50% - 4px);
   }
 
-  .ammo-dots {
-    display: none;
-  }
-
   .menu-overlay {
     background: rgba(1, 6, 10, 0.86);
   }
@@ -1254,30 +1332,3 @@ canvas {
 .top-hud > :first-child {
   border-left: none;
 }
-
-/* -- Ícones do Menu Principal -- */
-.menu-grid button {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: flex-start !important;
-  gap: 14px !important;
-  padding: 0 20px !important;
-  text-align: left !important;
-}
-
-.menu-icon {
-  width: 24px;
-  height: 24px;
-  display: inline-block;
-  flex-shrink: 0;
-  background-size: contain;
-  background-position: center;
-  background-repeat: no-repeat;
-}
-
-/* Vincular imagens reais da raiz da pasta assets */
-.menu-icon-gamepad { background-image: url("assets/gamepad.png"); }
-.menu-icon-tools   { background-image: url("assets/tools.png"); }
-.menu-icon-money   { background-image: url("assets/money.png"); }
-.menu-icon-star    { background-image: url("assets/star.png"); }
-.menu-icon-link    { background-image: url("assets/link.png"); }

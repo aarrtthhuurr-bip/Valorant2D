@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Cache-Control" content="no-store">
   <title>Valorant2D</title>
-  <link rel="stylesheet" href="styles.css?v=20260617-hud-capsule">
+  <link rel="stylesheet" href="styles.css?v=20260617-refactor">
 </head>
 <body>
   <main class="shell">
     <section class="game-wrap">
       <canvas id="game" width="1280" height="720" aria-label="Valorant2D game canvas"></canvas>
 
-      <div class="top-hud glass" id="topHud">
+      <div class="top-hud glass hidden" id="topHud">
         <div class="hud-pill side-pill" id="sidePill">ATK</div>
         <div class="hud-pill">
           <span class="label">Fase</span>
@@ -26,11 +26,6 @@
           <span class="label">Placar</span>
           <strong id="scoreText">0 - 0</strong>
           <span class="round-label" id="roundLabel">Round 1</span>
-        </div>
-        <div class="hud-pill money-pill">
-          <span class="label">Créditos</span>
-          <strong id="moneyText">$800</strong>
-          <span class="money-delta hidden" id="moneyDelta"></span>
         </div>
         <button class="hud-button" id="shopButton" type="button" style="display:none">Loja</button>
         <button class="pause-button" id="pauseButton" type="button">Pause</button>
@@ -54,11 +49,9 @@
         <div class="weapon-panel glass">
           <div class="weapon-line">
             <strong id="weaponText">Pistol</strong>
-            <span id="ammoText">12 / 12</span>
+            <span id="ammoText">12</span>
           </div>
           <div class="bar ammo"><i id="ammoBar"></i></div>
-          <div class="ammo-dots" id="ammoDots"></div>
-          <div class="bar plant"><i id="plantBar"></i></div>
           <span class="spike-status" id="spikeText">Spike</span>
         </div>
       </div>
@@ -67,8 +60,15 @@
 
       <aside class="shop hidden" id="shop">
         <header>
-          <h1>Valorant 2D</h1>
-          <p aria-hidden="true"></p>
+          <div>
+            <span class="label">Arsenal</span>
+            <h1>Comprar equipamento</h1>
+          </div>
+          <div class="shop-balance">
+            <span>Créditos</span>
+            <strong id="moneyText">$800</strong>
+            <span class="money-delta hidden" id="moneyDelta"></span>
+          </div>
         </header>
 
         <div class="shop-inner-scroll">
@@ -120,7 +120,7 @@
           <div><span>Headshots</span><b id="headshotsText">0</b></div>
           <div><span>Plants</span><b id="plantsText">0</b></div>
           <div><span>Defuses</span><b id="defusesText">0</b></div>
-          <div><span>Dinheiro</span><b id="scoreMoneyText">$800</b></div>
+          <div><span>Créditos</span><b id="scoreMoneyText">$800</b></div>
         </div>
       </div>
 
@@ -172,6 +172,6 @@
     </section>
   </main>
 
-  <script src="game.js?v=20260617-hud-capsule"></script>
+  <script src="game.js?v=20260617-refactor"></script>
 </body>
 </html>

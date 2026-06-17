@@ -21,7 +21,6 @@ const ui = {
   allyButtons: document.getElementById("allyButtons"),
   hpBar: document.getElementById("hpBar"),
   ammoBar: document.getElementById("ammoBar"),
-  plantBar: document.getElementById("plantBar"),
   shopButton: document.getElementById("shopButton"),
   shopBackdrop: document.getElementById("shopBackdrop"),
   pauseButton: document.getElementById("pauseButton"),
@@ -69,7 +68,6 @@ const ui = {
   armorBar: document.getElementById("armorBar"),
   armorText: document.getElementById("armorText"),
   armorValueText: document.getElementById("armorValueText"),
-  ammoDots: document.getElementById("ammoDots"),
   killFeed: document.getElementById("killFeed"),
 };
 
@@ -543,13 +541,13 @@ const game = {
   message: "Plante a spike em A ou B.",
   lastMessage: "",
   abilityCooldown: 0,
-  abilityCharges: 2,
   lastShot: 0,
   reloadTimer: 0,
   roundOverTimer: 0,
   shake: 0,
   damageFlash: 0,
   botPlanSiteIndex: 0,
+  pauseReturnState: null,
 };
 
 function makePlayer() {
@@ -683,7 +681,6 @@ function resetRound() {
   game.smokes = [];
   game.revealTimer = 0;
   game.abilityCooldown = 0;
-  game.abilityCharges = game.selectedAgent.id === "mender" ? 1 : 2;
   game.lastShot = 0;
   game.reloadTimer = 0;
   game.roundOverTimer = 0;
@@ -1023,7 +1020,12 @@ function showRoundBanner(title, text, kicker = `Round ${game.roundNumber}`, dura
 }
 
 function updateScoreboard() {
-  if (ui.scoreboard?.classList) ui.scoreboard.classList.toggle("hidden", !game.scoreboardVisible);
+  const shopClosed = ui.shop?.classList?.contains("hidden") ?? true;
+  const canShow = game.scoreboardVisible
+    && game.menuState === "none"
+    && shopClosed
+    && ["buy", "action", "ended"].includes(game.phase);
+  if (ui.scoreboard?.classList) ui.scoreboard.classList.toggle("hidden", !canShow);
   if (ui.scoreboardTitle) ui.scoreboardTitle.textContent = `${game.playerScore} - ${game.enemyScore} | ${game.mapName}`;
   if (ui.kills) ui.kills.textContent = game.stats.kills;
   if (ui.deaths) ui.deaths.textContent = game.stats.deaths;
@@ -1174,7 +1176,6 @@ function advanceDefuse(defuserId, dt, totalTime) {
   if (game.spike.defuseProgress >= nextCheckpoint / 3) {
     game.spike.defuseCheckpoint = nextCheckpoint;
     game.spike.defuseProgress = nextCheckpoint / 3;
-    game.spike.defuserId = null;
     spawnParticles(game.spike.x, game.spike.y, "#66e48f", 10, 90);
   }
   return game.spike.defuseCheckpoint >= 3;
@@ -1315,12 +1316,13 @@ function updatePlayer(dt) {
 
   if (mouse.down) shoot(p, mouse.x, mouse.y, game.selectedWeapon, "player");
   if (keys.has("r")) reload();
-  if (keys.has("e") && game.abilityCooldown <= 0 && game.abilityCharges > 0 && game.phase === "action") {
+  if (pressed.has("e") && game.abilityCooldown <= 0 && game.phase === "action") {
     game.selectedAgent.use(game);
-    game.abilityCharges -= 1;
-    game.abilityCooldown = game.selectedAgent.cooldown;
+    game.abilityCooldown = game.sandbox ? 0 : game.selectedAgent.cooldown;
     playSound("ability");
-    setMessage(`${game.selectedAgent.ability} usada. Cargas restantes: ${game.abilityCharges}.`);
+    setMessage(game.sandbox
+      ? `${game.selectedAgent.ability} usada. Sandbox: habilidade sem recarga.`
+      : `${game.selectedAgent.ability} usada. Recarga iniciada.`);
   }
   plantOrDefuse(dt);
 }
@@ -1396,7 +1398,7 @@ function isGridCellWalkable(cell) {
   const point = gridPoint(cell);
   const probe = { x: point.x, y: point.y, r: 14 };
   if (point.x < 24 || point.x > map.width - 24 || point.y < 24 || point.y > map.height - 24) return false;
-  return !map.walls.some((wall) => circleRectCollides(probe, wall));
+  return !solidWalls().some((wall) => circleRectCollides(probe, wall));
 }
 
 function nearestWalkableCell(cell) {
@@ -1421,7 +1423,7 @@ function nearestWalkablePoint(point, fallback = point) {
 }
 
 function isEntityBlocked(entity) {
-  return map.walls.some((wall) => circleRectCollides(entity, wall))
+  return solidWalls().some((wall) => circleRectCollides(entity, wall))
     || entity.x < entity.r
     || entity.x > map.width - entity.r
     || entity.y < entity.r
@@ -1488,7 +1490,7 @@ function botPathBlocked(bot, target) {
       y: bot.y + (target.y - bot.y) * t,
       r: bot.r * 0.75,
     };
-    if (map.walls.some((wall) => circleRectCollides(probe, wall))) return true;
+    if (solidWalls().some((wall) => circleRectCollides(probe, wall))) return true;
   }
   return false;
 }
@@ -1546,7 +1548,7 @@ function rescueBotFromStuck(bot, target, dt) {
   }
   if (bot.stuck > 1.15) {
     const probe = { x: step.x, y: step.y, r: bot.r };
-    if (!map.walls.some((wall) => circleRectCollides(probe, wall))) {
+    if (!solidWalls().some((wall) => circleRectCollides(probe, wall))) {
       bot.x = step.x;
       bot.y = step.y;
       bot.stuck = 0;
@@ -1559,7 +1561,7 @@ function rescueBotFromStuck(bot, target, dt) {
 function forceBotProgress(bot, target) {
   const step = findGridStep(bot, target) || nearestWalkablePoint(target, bot);
   const probe = { x: step.x, y: step.y, r: bot.r };
-  if (map.walls.some((wall) => circleRectCollides(probe, wall))) return false;
+  if (solidWalls().some((wall) => circleRectCollides(probe, wall))) return false;
   bot.x = step.x;
   bot.y = step.y;
   bot.lastX = step.x;
@@ -1569,7 +1571,37 @@ function forceBotProgress(bot, target) {
   return true;
 }
 
+function destructibleBlockingPath(bot, target) {
+  const candidates = game.destructibles
+    .filter((box) => lineIntersectsRect(bot.x, bot.y, target.x, target.y, box))
+    .sort((a, b) => Math.hypot(bot.x - (a.x + a.w / 2), bot.y - (a.y + a.h / 2))
+      - Math.hypot(bot.x - (b.x + b.w / 2), bot.y - (b.y + b.h / 2)));
+  return candidates.find((box) => {
+    const cx = box.x + box.w / 2;
+    const cy = box.y + box.h / 2;
+    return Math.hypot(bot.x - cx, bot.y - cy) < 210
+      && !map.walls.some((wall) => lineIntersectsRect(bot.x, bot.y, cx, cy, wall));
+  }) || null;
+}
+
+function attackBlockingDestructible(bot, target, dt) {
+  const box = destructibleBlockingPath(bot, target);
+  if (!box) return false;
+  const aim = { x: box.x + box.w / 2, y: box.y + box.h / 2 };
+  bot.angle = Math.atan2(aim.y - bot.y, aim.x - bot.x);
+  bot.aiState = "break-box";
+  bot.moving = false;
+  bot.fireTimer = Math.max(0, (bot.fireTimer || 0) - dt);
+  if (bot.fireTimer <= 0) {
+    const team = bot.id?.startsWith("ally-") ? "ally" : "bot";
+    shoot(bot, aim.x, aim.y, bot.weapon || weapons[0], team);
+    bot.fireTimer = (bot.weapon?.fireRate || 0.3) + 0.12;
+  }
+  return true;
+}
+
 function moveBotToward(bot, target, dt, speedScale = 1) {
+  if (attackBlockingDestructible(bot, target, dt)) return 0;
   const safeTarget = resolveBotTarget(bot, target);
   const angle = Math.atan2(safeTarget.y - bot.y, safeTarget.x - bot.x);
   bot.angle = angle;
@@ -1950,7 +1982,7 @@ function updateAllies(dt) {
       if (Math.hypot(ally.x - target.x, ally.y - target.y) > 36) {
         moveBotToward(ally, target, dt, 1.04);
       } else {
-        ally.angle = Math.atan2(game.player.y - ally.y, game.player.x - ally.x);
+        ally.angle += dt * (0.35 + index * 0.08) * ally.strafe;
       }
     }
     keepSquadSpacing(ally, squad, dt);
@@ -2260,7 +2292,7 @@ function updateTimers(dt) {
     game.roundBannerTimer = Math.max(0, game.roundBannerTimer - dt);
     if (game.roundBannerTimer === 0) ui.roundBanner.classList.add("hidden");
   }
-  game.abilityCooldown = Math.max(0, game.abilityCooldown - dt);
+  game.abilityCooldown = game.sandbox ? 0 : Math.max(0, game.abilityCooldown - dt);
   game.shake = Math.max(0, game.shake - dt);
   game.damageFlash = Math.max(0, game.damageFlash - dt * 1.9);
   const wasReloading = game.reloadTimer > 0;
@@ -2874,7 +2906,7 @@ function drawAbilityBar() {
   const cooldownRatio = game.abilityCooldown > 0
     ? 1 - game.abilityCooldown / game.selectedAgent.cooldown
     : 1;
-  const color = game.abilityCharges > 0 && game.abilityCooldown <= 0 ? "#62e6a0" : "#46a8ff";
+  const color = game.abilityCooldown <= 0 ? "#62e6a0" : "#46a8ff";
   ctx.fillStyle = color;
   ctx.fillRect(bx, by, bw * Math.min(1, cooldownRatio), bh);
   ctx.strokeStyle = "rgba(255,255,255,0.22)";
@@ -2883,9 +2915,43 @@ function drawAbilityBar() {
   ctx.fillStyle = "rgba(255,255,255,0.7)";
   ctx.font = "11px Segoe UI";
   ctx.textAlign = "center";
-  const label = game.abilityCharges <= 0 ? "sem carga" : game.abilityCooldown > 0 ? `${Math.ceil(game.abilityCooldown)}s` : "E pronto";
-  ctx.fillText(`${game.selectedAgent.ability} (${game.abilityCharges}x) — ${label}`, canvas.width / 2, by - 4);
+  const label = game.sandbox ? "E livre" : game.abilityCooldown > 0 ? `${Math.ceil(game.abilityCooldown)}s` : "E pronto";
+  ctx.fillText(`${game.selectedAgent.ability} — ${label}`, canvas.width / 2, by - 4);
   ctx.textAlign = "left";
+}
+
+function drawWorldActionBar() {
+  let actor = null;
+  let progress = 0;
+  let color = "#ffd166";
+
+  if (game.spike.state === "planting") {
+    actor = game.player;
+    progress = game.spike.plantProgress;
+  } else if (game.spike.state === "bot_planting") {
+    actor = game.bots.find((bot) => bot.alive && bot.hasSpike);
+    progress = game.spike.plantProgress;
+  } else if (game.spike.state === "planted" && game.spike.defuserId) {
+    actor = game.spike.defuserId === "player"
+      ? game.player
+      : [...game.allies, ...game.bots].find((entity) => entity.id === game.spike.defuserId);
+    progress = game.spike.defuseProgress;
+    color = "#62e6a0";
+  }
+
+  if (!actor || !actor.alive || progress <= 0) return;
+  const width = 62;
+  const height = 6;
+  const x = actor.x - width / 2;
+  const y = actor.y + actor.r + 12;
+  ctx.save();
+  ctx.fillStyle = "rgba(3, 8, 12, 0.82)";
+  ctx.fillRect(x - 2, y - 2, width + 4, height + 4);
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, width * Math.max(0, Math.min(1, progress)), height);
+  ctx.strokeStyle = "rgba(255,255,255,0.34)";
+  ctx.strokeRect(x, y, width, height);
+  ctx.restore();
 }
 
 function drawSpikeHint() {
@@ -2956,6 +3022,7 @@ function draw() {
     drawEntity(ally, "#62e6a0", `ALLY ${ally.weapon?.name || "Pistol"}`, "ally");
   }
   drawEntity(game.player, game.selectedAgent.color, game.playerSide === "attackers" ? "YOU ATK" : "YOU DEF", "player");
+  drawWorldActionBar();
 
   ctx.fillStyle = "#f8fafc";
   for (const bullet of game.bullets) {
@@ -3070,13 +3137,6 @@ function updateUi() {
     setText(ui.armorValueText, Math.ceil(game.player.armor));
   }
 
-  // Ammo dots
-  if (game.reloadTimer <= 0) {
-    updateAmmoDots(game.player.ammo, currentMagSize());
-  } else {
-    updateAmmoDots(0, currentMagSize());
-  }
-
   setText(ui.phase, game.paused
     ? "Pause"
     : game.phase === "buy"
@@ -3097,12 +3157,12 @@ function updateUi() {
   if (newMoney !== lastMoney) flashMoneyDelta(newMoney);
   setText(ui.money, `${newMoney}`);
 
-  setText(ui.agent, `${game.selectedAgent.name} ${atk ? "ATK" : "DEF"} (${game.abilityCharges}x ${game.abilityCooldown > 0 ? Math.ceil(game.abilityCooldown) : "E"})`);
+  setText(ui.agent, `${game.selectedAgent.name} ${atk ? "ATK" : "DEF"} · ${game.sandbox ? "E livre" : game.abilityCooldown > 0 ? `${Math.ceil(game.abilityCooldown)}s` : "E"}`);
   setText(ui.weapon, game.selectedWeapon.name);
   setText(ui.hp, `${Math.max(0, Math.ceil(game.player.hp))}`);
-  setText(ui.ammo, game.reloadTimer > 0 ? "Recarregando" : `${game.player.ammo} / ${currentMagSize()}`);
+  setText(ui.ammo, game.reloadTimer > 0 ? "Recarregando" : `${game.player.ammo}`);
   setText(ui.spike, game.spike.state === "carried"
-    ? game.spike.owner === "player" ? "Com voce" : "Com bots"
+    ? game.spike.owner === "player" ? "Com você" : "Em transporte"
     : game.spike.state === "dropped"
       ? "Derrubada"
     : game.spike.state === "planted"
@@ -3111,13 +3171,6 @@ function updateUi() {
   toggleClass(ui.spike, "planted", spikePlanted);
   setStyle(ui.hpBar, "transform", `scaleX(${Math.max(0, game.player.hp) / game.player.maxHp})`);
   setStyle(ui.ammoBar, "transform", `scaleX(${game.reloadTimer > 0 ? 1 - game.reloadTimer / currentReloadTime() : game.player.ammo / currentMagSize()})`);
-  setStyle(ui.plantBar, "transform", `scaleX(${
-    game.spike.state === "planting" || game.spike.state === "bot_planting" || game.spike.plantProgress > 0
-      ? game.spike.plantProgress
-      : game.spike.state === "planted"
-        ? (game.spike.defuseProgress > 0 ? game.spike.defuseProgress : game.spike.timer / SPIKE_DETONATE_TIME)
-        : 0
-  })`);
   setText(ui.message?.querySelector?.("strong"), game.message);
   setText(ui.message?.querySelector?.("span"), game.paused
     ? (game.menuState === "pause" ? "Jogo pausado. Aperte P ou clique em Continuar." : "Escolha uma opcao no menu.")
@@ -3129,12 +3182,19 @@ function updateUi() {
   toggleClass(ui.sandboxTools, "hidden", !game.sandbox || game.menuState !== "none");
   setText(ui.godModeButton, `God: ${game.godMode ? "ON" : "OFF"}`);
   updateScoreboard();
+  const gameplayHudVisible = game.menuState === "none" && ["buy", "action", "ended"].includes(game.phase);
+  toggleClass(ui.topHud, "hidden", !gameplayHudVisible);
+  document.querySelector(".game-wrap")?.classList.toggle("gameplay-ui-hidden", !gameplayHudVisible);
 }
 
 function togglePause() {
   if (game.phase === "matchOver") return;
   if (game.menuState === "pause") {
     resumeFromPause();
+    return;
+  }
+  if (game.menuState === "agent") {
+    showPauseMenu("agent");
     return;
   }
   if (game.menuState !== "none") return;
@@ -3181,6 +3241,10 @@ function handleEscape() {
     showMainMenu();
     return;
   }
+  if (game.menuState === "agent") {
+    showPauseMenu("agent");
+    return;
+  }
   if (game.menuState !== "none") return;
   if (!ui.shop.classList.contains("hidden")) {
     closeShop();
@@ -3198,13 +3262,25 @@ function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
   ui.menuButtons.innerHTML = "";
   for (const item of buttons) {
     const button = document.createElement("button");
-    const icon = item.icon || "star";
     button.className = "menu-button";
-    button.innerHTML = `<span class="menu-icon menu-icon-${icon}" aria-hidden="true"></span><b>${item.label}</b>`;
-    if (item.back || item.label.toLowerCase().includes("voltar")) button.classList.add("menu-back");
+    const isBack = item.back || item.label.toLowerCase().includes("voltar");
+    if (isBack) {
+      button.classList.add("menu-back", "icon-only");
+      button.setAttribute("aria-label", item.label);
+      button.title = item.label;
+      button.innerHTML = `<span class="menu-icon menu-icon-link" aria-hidden="true"></span>`;
+    } else if (state === "main") {
+      button.innerHTML = `<span class="menu-icon menu-icon-${item.icon || "star"}" aria-hidden="true"></span><b>${item.label}</b>`;
+    } else if (state === "difficulty") {
+      const stars = Math.max(1, item.stars || 1);
+      button.innerHTML = `<span class="difficulty-stars" aria-hidden="true">${'<span class="menu-icon menu-icon-star"></span>'.repeat(stars)}</span><b>${item.label}</b>`;
+    } else {
+      button.innerHTML = `<b>${item.label}</b>`;
+    }
     button.addEventListener("click", item.action);
     ui.menuButtons.appendChild(button);
   }
+  ui.menuOverlay.className = `menu-overlay menu-state-${state}`;
   ui.menuOverlay?.classList.remove("hidden");
   game.paused = true;
   game.menuState = state;
@@ -3245,17 +3321,27 @@ function showAgentSelect(onPick) {
 
 function resumeFromPause() {
   hideMenuOverlay();
+  if (game.pauseReturnState === "agent") {
+    game.pauseReturnState = null;
+    ui.agentOverlay.classList.remove("hidden");
+    game.menuState = "agent";
+    game.paused = true;
+    updateUi();
+    return;
+  }
   game.paused = false;
   setMessage("Jogo retomado.");
   updateUi();
 }
 
-function showPauseMenu() {
+function showPauseMenu(returnState = null) {
   closeShop();
+  game.pauseReturnState = returnState;
+  if (returnState === "agent") ui.agentOverlay?.classList.add("hidden");
   setMessage("Jogo pausado.");
   setMenu("Pause", "A partida esta congelada. Continue ou volte para o menu.", [
     { label: "Continuar", desc: "Retomar a partida atual.", action: resumeFromPause },
-    { label: "Voltar ao menu", desc: "Sair da partida atual e abrir o menu principal.", action: showMainMenu },
+    { label: "Voltar ao menu", back: true, desc: "Sair da partida atual e abrir o menu principal.", action: showMainMenu },
   ], "JOGO PAUSADO", "pause");
   updateUi();
 }
@@ -3269,6 +3355,7 @@ function showMainMenu() {
   game.clockActive = false;
   game.paused = false;
   game.menuMapTimer = 0;
+  game.pauseReturnState = null;
   fullReset();
   setMenu("Valorant 2D", "", [
     { label: "JOGAR", icon: "gamepad", action: showDifficultyMenu },
@@ -3281,10 +3368,10 @@ function showMainMenu() {
 
 function showDifficultyMenu() {
   setMenu("Dificuldade", "", [
-    { label: "FACIL", icon: "star", action: () => startMode("Facil", "easy") },
-    { label: "NORMAL", icon: "gamepad", action: () => startMode("Normal", "normal") },
-    { label: "DIFICIL", icon: "tools", action: () => startMode("Dificil", "hard") },
-    { label: "VOLTAR", icon: "link", action: showMainMenu },
+    { label: "FÁCIL", stars: 1, action: () => startMode("Fácil", "easy") },
+    { label: "NORMAL", stars: 2, action: () => startMode("Normal", "normal") },
+    { label: "DIFÍCIL", stars: 3, action: () => startMode("Difícil", "hard") },
+    { label: "VOLTAR", back: true, action: showMainMenu },
   ], "JOGAR", "difficulty");
 }
 
@@ -3297,7 +3384,7 @@ function showOptionsMenu() {
     { label: `Som: ${audio.enabled ? "ligado" : "desligado"}`, icon: "tools", action: () => { audio.enabled = !audio.enabled; showOptionsMenu(); } },
     { label: `Volume: ${Math.round(audio.volume * 100)}%`, icon: "star", action: () => { audio.volume = audio.volume >= 1 ? 0.35 : audio.volume + 0.325; showOptionsMenu(); } },
     { label: "TELA CHEIA", icon: "gamepad", action: () => { if (document.fullscreenElement) document.exitFullscreen?.(); else document.querySelector(".game-wrap")?.requestFullscreen?.(); showOptionsMenu(); } },
-    { label: "VOLTAR", icon: "link", action: showMainMenu },
+    { label: "VOLTAR", back: true, action: showMainMenu },
   ], "OPÇÕES", "options");
 }
 
@@ -3430,23 +3517,6 @@ function flashMoneyDelta(newVal) {
   el.style.animation = "none";
   void el.offsetWidth;
   el.style.animation = "";
-}
-
-function updateAmmoDots(ammo, maxAmmo) {
-  const el = ui.ammoDots;
-  if (!el) return;
-  if (maxAmmo > 30) { el.innerHTML = ""; return; }
-  if (el.childElementCount !== maxAmmo) {
-    el.innerHTML = "";
-    for (let i = 0; i < maxAmmo; i++) {
-      const dot = document.createElement("span");
-      dot.className = "ammo-dot" + (i > 0 && i % 5 === 0 ? " group-sep" : "");
-      el.appendChild(dot);
-    }
-  }
-  [...el.children].forEach((dot, i) => {
-    dot.classList.toggle("spent", i >= ammo);
-  });
 }
 
 function updateBuyBar() {
@@ -3615,7 +3685,7 @@ loop.last = performance.now();
 // Ouvintes de eventos com checagem de seguranca contra valores nulos.
 if (window) window.addEventListener("keydown", (event) => {
   initAudio();
-  if (event.key === "Tab") {
+  if (event.key === "Tab" && game.menuState === "none" && ["buy", "action", "ended"].includes(game.phase) && ui.shop?.classList?.contains("hidden")) {
     event.preventDefault();
     game.scoreboardVisible = true;
     updateUi();
