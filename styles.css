@@ -93,6 +93,7 @@ canvas {
   left: 50%;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0;
   padding: 4px;
   transform: translateX(-50%);
@@ -155,7 +156,7 @@ strong {
   letter-spacing: 0.03em;
 }
 
-/* â”€â”€ Side pill (ATK / DEF) â”€â”€ */
+/* ── Side pill (ATK / DEF) ── */
 .side-pill {
   font-size: 12px;
   font-weight: 700;
@@ -171,7 +172,7 @@ strong {
 .side-pill.atk { background: rgba(255,138,91,0.22); color: #ff8a5b; border-color: rgba(255,138,91,0.4); }
 .side-pill.def { background: rgba(70,168,255,0.18); color: #46a8ff; border-color: rgba(70,168,255,0.4); }
 
-/* â”€â”€ Round label â”€â”€ */
+/* ── Round label ── */
 .round-label {
   display: block;
   margin-top: 2px;
@@ -180,7 +181,7 @@ strong {
   text-align: center;
 }
 
-/* â”€â”€ Money delta â”€â”€ */
+/* ── Money delta ── */
 .money-pill { position: relative; }
 .money-pill strong {
   color: rgba(238, 247, 251, 0.86);
@@ -206,7 +207,7 @@ strong {
   100% { opacity: 0; transform: translateX(-50%) translateY(-18px); }
 }
 
-/* â”€â”€ Timer urgÃªncia â”€â”€ */
+/* ── Timer urgência ── */
 #timerText.warn { color: var(--yellow); }
 #timerText.urgent { color: var(--accent); animation: timerPulse 0.5s ease infinite alternate; }
 .top-hud.spike-planted {
@@ -231,9 +232,10 @@ strong {
   to { box-shadow: inset 0 0 0 1px rgba(255, 77, 93, 0.5), 0 0 24px rgba(255, 77, 93, 0.24); }
 }
 
-/* â”€â”€ Barra de compra â”€â”€ */
+/* ── Barra de compra ── */
 .buy-bar {
   position: relative;
+  align-self: stretch;
   width: 100%;
   height: 4px;
   margin-top: 5px;
@@ -254,7 +256,7 @@ strong {
   box-shadow: 0 0 18px rgba(255, 209, 102, 0.45);
 }
 
-/* â”€â”€ Agent dot â”€â”€ */
+/* ── Agent dot ── */
 .agent-dot {
   width: 10px;
   height: 10px;
@@ -263,12 +265,12 @@ strong {
   margin-right: 2px;
 }
 
-/* â”€â”€ Armor bar â”€â”€ */
+/* ── Armor bar ── */
 .bar.armor i { background: var(--blue); }
 .bar.armor.hidden { display: none; }
 #armorText.hidden { display: none; }
 
-/* â”€â”€ Ammo dots â”€â”€ */
+/* ── Ammo dots ── */
 .ammo-dots {
   display: flex;
   flex-wrap: wrap;
@@ -286,7 +288,7 @@ strong {
 .ammo-dot.spent { background: rgba(255,255,255,0.12); }
 .ammo-dot.group-sep { margin-left: 4px; }
 
-/* â”€â”€ Kill feed â”€â”€ */
+/* ── Kill feed ── */
 .kill-feed {
   position: absolute;
   top: 58px;
@@ -842,7 +844,7 @@ strong {
   gap: 12px;
 }
 
-/* â”€â”€ Menu buttons â”€â”€ */
+/* ── Menu buttons ── */
 .menu-button {
   min-height: 64px;
   padding: 0 20px;
@@ -912,7 +914,7 @@ strong {
   background: none;
 }
 
-/* â”€â”€ Menu icons â”€â”€ */
+/* ── Menu icons ── */
 .menu-icon {
   width: 24px;
   height: 24px;
@@ -1213,7 +1215,7 @@ strong {
     grid-template-columns: repeat(3, 1fr);
   }
 }
-/* â”€â”€ HUD pill: primeiro item sem border-left â”€â”€ */
+/* ── HUD pill: primeiro item sem border-left ── */
 .top-hud > :first-child {
   border-left: none;
 }
