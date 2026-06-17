@@ -861,6 +861,15 @@ strong {
   position: relative;
 }
 
+.menu-grid button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 14px;
+  padding: 0 20px;
+  text-align: left;
+}
+
 .menu-button::before {
   content: "";
   position: absolute;
@@ -906,34 +915,27 @@ strong {
 
 /* ── Menu icons ── */
 .menu-icon {
-  position: relative;
-  z-index: 1;
   width: 24px;
   height: 24px;
-  min-width: 24px;
-  flex: 0 0 24px;
   display: inline-block;
   flex-shrink: 0;
-  background-color: transparent;
+  position: relative;
+  z-index: 1;
+  background-size: contain;
   background-position: center;
   background-repeat: no-repeat;
-  background-size: contain;
+  background-color: transparent;
   border: none;
   outline: none;
   box-shadow: none;
   pointer-events: none;
 }
 
-.menu-icon-gamepad { background-image: url("assets/menu/gamepad.png"); }
-.menu-icon-tools   { background-image: url("assets/menu/tools.png");   }
-.menu-icon-money   { background-image: url("assets/menu/money.png");   }
-.menu-icon-star    { background-image: url("assets/menu/star.png");    }
-.menu-icon-link    { background-image: url("assets/menu/link.png");    }
-
-/* compatibilidade com seletor antigo, sem comportamento ativo */
-.menu-grid button {
-  display: none;
-}
+.menu-icon-gamepad { background-image: url("assets/gamepad.png"); }
+.menu-icon-tools { background-image: url("assets/tools.png"); }
+.menu-icon-money { background-image: url("assets/money.png"); }
+.menu-icon-star { background-image: url("assets/star.png"); }
+.menu-icon-link { background-image: url("assets/link.png"); }
 
 .match-card {
   width: min(420px, calc(100% - 32px));
