@@ -161,7 +161,7 @@ canvas {
   text-align: center;
 }
 
-.top-hud .hud-pill:not(.side-pill):not(.money-pill) {
+.top-hud .hud-pill:not(.side-pill) {
   width: 112px;
 }
 
@@ -415,10 +415,6 @@ canvas {
 
 .bar.ammo i {
   background: var(--blue);
-}
-
-.bar.plant i {
-  background: var(--yellow);
 }
 
 .status-row {
@@ -1274,12 +1270,8 @@ canvas {
     min-width: 0;
   }
 
-  .hud-pill:not(.side-pill):not(.timer-pill):not(.money-pill) {
+  .hud-pill:not(.side-pill):not(.timer-pill) {
     display: none;
-  }
-
-  .money-pill {
-    min-width: 64px;
   }
 
   .status-card {
