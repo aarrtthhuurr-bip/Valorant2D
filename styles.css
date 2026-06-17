@@ -1218,3 +1218,30 @@ strong {
 .top-hud > :first-child {
   border-left: none;
 }
+
+/* -- Ícones do Menu Principal -- */
+.menu-grid button {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 14px !important;
+  padding: 0 20px !important;
+  text-align: left !important;
+}
+
+.menu-icon {
+  width: 24px;
+  height: 24px;
+  display: inline-block;
+  flex-shrink: 0;
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* Vincular imagens reais da raiz da pasta assets */
+.menu-icon-gamepad { background-image: url("assets/gamepad.png"); }
+.menu-icon-tools   { background-image: url("assets/tools.png"); }
+.menu-icon-money   { background-image: url("assets/money.png"); }
+.menu-icon-star    { background-image: url("assets/star.png"); }
+.menu-icon-link    { background-image: url("assets/link.png"); }
