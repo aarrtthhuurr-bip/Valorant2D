@@ -1911,8 +1911,9 @@ function closestAliveAllyTo(x, y) {
 
 function updateAllies(dt) {
   const squad = [game.player, ...game.allies];
-  const playerCanDefuse = game.player?.alive && Math.hypot(game.player.x - game.spike.x, game.player.y - game.spike.y) < 120;
-  const allyDefuser = game.playerSide === "defenders" && game.spike.state === "planted" && !playerCanDefuse
+  const playerNearSpike = game.player?.alive && Math.hypot(game.player.x - game.spike.x, game.player.y - game.spike.y) < 46;
+  const playerActivelyDefusing = game.spike.defuserId === "player" || (playerNearSpike && keys.has("f"));
+  const allyDefuser = game.playerSide === "defenders" && game.spike.state === "planted" && !playerActivelyDefusing
     ? closestAliveAllyTo(game.spike.x, game.spike.y)
     : null;
   game.allies.forEach((ally, index) => {

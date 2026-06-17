@@ -131,7 +131,8 @@ canvas {
   text-align: center;
   background: rgba(255, 255, 255, 0.075);
   border-left: 1px solid rgba(255, 255, 255, 0.09);
-  padding: 4px 10px 6px;
+  padding: 5px 12px 7px;
+  position: relative;
 }
 
 .label {
@@ -154,7 +155,7 @@ strong {
   letter-spacing: 0.03em;
 }
 
-/* ── Side pill (ATK / DEF) ── */
+/* â”€â”€ Side pill (ATK / DEF) â”€â”€ */
 .side-pill {
   font-size: 12px;
   font-weight: 700;
@@ -170,7 +171,7 @@ strong {
 .side-pill.atk { background: rgba(255,138,91,0.22); color: #ff8a5b; border-color: rgba(255,138,91,0.4); }
 .side-pill.def { background: rgba(70,168,255,0.18); color: #46a8ff; border-color: rgba(70,168,255,0.4); }
 
-/* ── Round label ── */
+/* â”€â”€ Round label â”€â”€ */
 .round-label {
   display: block;
   margin-top: 2px;
@@ -179,7 +180,7 @@ strong {
   text-align: center;
 }
 
-/* ── Money delta ── */
+/* â”€â”€ Money delta â”€â”€ */
 .money-pill { position: relative; }
 .money-pill strong {
   color: rgba(238, 247, 251, 0.86);
@@ -205,7 +206,7 @@ strong {
   100% { opacity: 0; transform: translateX(-50%) translateY(-18px); }
 }
 
-/* ── Timer urgência ── */
+/* â”€â”€ Timer urgÃªncia â”€â”€ */
 #timerText.warn { color: var(--yellow); }
 #timerText.urgent { color: var(--accent); animation: timerPulse 0.5s ease infinite alternate; }
 .top-hud.spike-planted {
@@ -230,19 +231,17 @@ strong {
   to { box-shadow: inset 0 0 0 1px rgba(255, 77, 93, 0.5), 0 0 24px rgba(255, 77, 93, 0.24); }
 }
 
-/* ── Barra de compra ── */
+/* â”€â”€ Barra de compra â”€â”€ */
 .buy-bar {
-  position: absolute;
-  top: 62px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(260px, 42%);
+  position: relative;
+  width: 100%;
   height: 4px;
+  margin-top: 5px;
   background: rgba(255,255,255,0.12);
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 999px;
   overflow: hidden;
-  z-index: 19;
+  z-index: 1;
 }
 .buy-bar.hidden { display: none; }
 .buy-bar i {
@@ -255,7 +254,7 @@ strong {
   box-shadow: 0 0 18px rgba(255, 209, 102, 0.45);
 }
 
-/* ── Agent dot ── */
+/* â”€â”€ Agent dot â”€â”€ */
 .agent-dot {
   width: 10px;
   height: 10px;
@@ -264,12 +263,12 @@ strong {
   margin-right: 2px;
 }
 
-/* ── Armor bar ── */
+/* â”€â”€ Armor bar â”€â”€ */
 .bar.armor i { background: var(--blue); }
 .bar.armor.hidden { display: none; }
 #armorText.hidden { display: none; }
 
-/* ── Ammo dots ── */
+/* â”€â”€ Ammo dots â”€â”€ */
 .ammo-dots {
   display: flex;
   flex-wrap: wrap;
@@ -287,7 +286,7 @@ strong {
 .ammo-dot.spent { background: rgba(255,255,255,0.12); }
 .ammo-dot.group-sep { margin-left: 4px; }
 
-/* ── Kill feed ── */
+/* â”€â”€ Kill feed â”€â”€ */
 .kill-feed {
   position: absolute;
   top: 58px;
@@ -504,7 +503,7 @@ strong {
   padding: 10px 20px;
   position: sticky;
   top: 0;
-  z-index: 5;
+  z-index: 10;
   background: var(--panel-strong);
   border-bottom: 1px solid var(--line);
   backdrop-filter: blur(12px);
@@ -843,7 +842,7 @@ strong {
   gap: 12px;
 }
 
-/* ── Menu buttons ── */
+/* â”€â”€ Menu buttons â”€â”€ */
 .menu-button {
   min-height: 64px;
   padding: 0 20px;
@@ -913,7 +912,7 @@ strong {
   background: none;
 }
 
-/* ── Menu icons ── */
+/* â”€â”€ Menu icons â”€â”€ */
 .menu-icon {
   width: 24px;
   height: 24px;
@@ -1214,12 +1213,12 @@ strong {
     grid-template-columns: repeat(3, 1fr);
   }
 }
-/* ── HUD pill: primeiro item sem border-left ── */
+/* â”€â”€ HUD pill: primeiro item sem border-left â”€â”€ */
 .top-hud > :first-child {
   border-left: none;
 }
 
-/* -- �cones do Menu Principal -- */
+/* -- Ícones do Menu Principal -- */
 .menu-grid button {
   display: flex !important;
   align-items: center !important;
