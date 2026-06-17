@@ -3232,7 +3232,7 @@ function showMainMenu() {
   fullReset();
   setMenu("Valorant 2D", "", [
     { label: "JOGAR", icon: "gamepad", action: showDifficultyMenu },
-    { label: "OPCOES", icon: "tools", action: showOptionsMenu },
+    { label: "OPÇÕES", icon: "tools", action: showOptionsMenu },
     { label: "SANDBOX", icon: "money", action: startSandboxMode },
     { label: "TREINO", icon: "star", action: startTrainingMode },
     { label: "TUTORIAL", icon: "link", action: startTutorialMode },

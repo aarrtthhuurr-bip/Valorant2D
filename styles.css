@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap');
+
 :root {
   --bg: #05080d;
   --panel: rgba(7, 12, 18, 0.74);
@@ -27,14 +29,18 @@ body {
     radial-gradient(circle at 80% 85%, rgba(255, 77, 93, 0.13), transparent 30%),
     var(--bg);
   color: var(--text);
-  font-family: "Segoe UI", Arial, sans-serif;
+  font-family: "Rajdhani", "Segoe UI", Arial, sans-serif;
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
 button {
   border: 1px solid rgba(215, 237, 255, 0.16);
   background: rgba(255, 255, 255, 0.06);
   color: var(--text);
-  font: inherit;
+  font-family: "Rajdhani", "Segoe UI", Arial, sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   cursor: pointer;
   transition: transform 140ms ease, border-color 140ms ease, background 140ms ease, color 140ms ease;
 }
@@ -83,17 +89,18 @@ canvas {
 
 .top-hud {
   position: absolute;
-  top: 12px;
+  top: 10px;
   left: 50%;
   display: flex;
-  align-items: stretch;
-  gap: 4px;
-  padding: 5px;
+  align-items: center;
+  gap: 0;
+  padding: 0;
   transform: translateX(-50%);
   pointer-events: none;
   border-radius: 8px;
   animation: slideDown 420ms ease both;
   max-width: calc(100% - 24px);
+  overflow: hidden;
 }
 
 .hud-button,
@@ -106,31 +113,41 @@ canvas {
 
 .hud-pill {
   min-width: 76px;
-  padding: 6px 9px;
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 6px 10px;
+  border-left: 1px solid rgba(255, 255, 255, 0.09);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
 
 .timer-pill {
-  min-width: 82px;
+  min-width: 88px;
   text-align: center;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.035);
+  background: rgba(255, 255, 255, 0.055);
+  border-left: 1px solid rgba(255, 255, 255, 0.09);
+  padding: 4px 10px 6px;
 }
 
 .label {
   display: block;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 9px;
+  font-weight: 600;
   line-height: 1;
   text-transform: uppercase;
+  letter-spacing: 0.1em;
 }
 
 strong {
   display: block;
-  margin-top: 2px;
-  font-size: 13px;
+  margin-top: 1px;
+  font-size: 14px;
+  font-weight: 700;
   line-height: 1.1;
   white-space: nowrap;
+  letter-spacing: 0.03em;
 }
 
 /* ── Side pill (ATK / DEF) ── */
@@ -211,10 +228,10 @@ strong {
 /* ── Barra de compra ── */
 .buy-bar {
   position: absolute;
-  top: 48px;
+  top: 46px;
   left: 50%;
   transform: translateX(-50%);
-  width: min(360px, 80%);
+  width: min(200px, 60%);
   height: 3px;
   background: rgba(255,255,255,0.1);
   border-radius: 2px;
@@ -417,10 +434,12 @@ strong {
   transform: translate(-50%, -50%) scale(1);
   width: min(560px, calc(100% - 32px));
   max-height: calc(100% - 80px);
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border: 1px solid rgba(215, 237, 255, 0.18);
   background: var(--panel-strong);
-  padding: 18px 20px;
+  padding: 0;
   border-radius: 8px;
   z-index: 22;
   animation: shopIn 200ms ease both;
@@ -442,8 +461,15 @@ strong {
   display: none;
 }
 
+.shop-inner-scroll {
+  overflow-y: auto;
+  flex: 1;
+  padding: 0 20px 18px;
+}
+
 .shop header {
   margin-bottom: 12px;
+  padding: 18px 20px 0;
 }
 
 .shop h1,
@@ -465,9 +491,15 @@ strong {
 
 .shop-tabs {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 5px;
-  margin: 10px 0 12px;
+  margin: 0;
+  padding: 10px 20px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--panel-strong);
+  border-bottom: 1px solid var(--line);
 }
 
 .shop-tabs button {
@@ -485,8 +517,8 @@ strong {
 
 .panel {
   padding-top: 11px;
-  border-top: 1px solid var(--line);
-  margin-top: 11px;
+  border-top: none;
+  margin-top: 0;
 }
 
 .shop-panel.hidden {
@@ -741,9 +773,8 @@ strong {
   text-align: left;
   border-radius: 0;
   border-width: 0 1px 0 0;
-  background:
-    linear-gradient(180deg, rgba(12, 19, 28, 0.96), rgba(5, 9, 14, 0.92)),
-    repeating-linear-gradient(135deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 14px);
+  background-color: rgba(10, 16, 26, 0.97);
+  background-image: none;
   box-shadow: 24px 0 60px rgba(0, 0, 0, 0.48);
 }
 
@@ -779,8 +810,9 @@ strong {
 .intro-card h2 {
   margin: 8px 0 0;
   font-size: 46px;
+  font-weight: 700;
   line-height: 0.94;
-  letter-spacing: 0;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
@@ -798,81 +830,95 @@ strong {
   gap: 12px;
 }
 
-.menu-grid button {
+/* ── Menu buttons ── */
+.menu-button {
   min-height: 64px;
-  padding: 10px 14px;
+  padding: 0 20px;
   border-radius: 8px;
   text-align: left;
   display: flex;
   align-items: center;
   justify-content: flex-start;
   gap: 14px;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid rgba(232, 232, 225, 0.14);
-  background: rgba(255, 255, 255, 0.045);
-  transition: all 0.3s ease;
+  background-color: rgba(255, 255, 255, 0.045);
+  background-image: none !important;
+  transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
   position: relative;
 }
 
-.menu-grid button::before {
+.menu-button::before {
   content: "";
   position: absolute;
   inset: 0;
+  border-radius: 8px;
   background: linear-gradient(90deg, rgba(255, 70, 85, 0.18), transparent 56%);
   opacity: 0;
   transition: opacity 0.3s ease;
+  pointer-events: none;
 }
 
-.menu-grid button:hover,
-.menu-grid button:focus-visible {
+.menu-button:hover,
+.menu-button:focus-visible {
   transform: translateX(8px);
   border-color: rgba(255, 70, 85, 0.82);
   box-shadow: 0 0 24px rgba(255, 70, 85, 0.16);
+  background-color: rgba(255, 255, 255, 0.045);
+  background-image: none !important;
 }
 
-.menu-grid button:hover::before,
-.menu-grid button:focus-visible::before {
+.menu-button:hover::before,
+.menu-button:focus-visible::before {
   opacity: 1;
 }
 
-.menu-grid button.menu-back {
+.menu-button.menu-back {
   margin-top: 8px;
   border-color: rgba(255, 77, 93, 0.45);
-  background: rgba(255, 77, 93, 0.08);
+  background-color: rgba(255, 77, 93, 0.08);
+  background-image: none !important;
 }
 
-.menu-grid button b {
+.menu-button b {
   display: block;
   position: relative;
   z-index: 1;
   font-size: 15px;
-  letter-spacing: 0;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  background: none;
 }
 
+/* ── Menu icons ── */
 .menu-icon {
   position: relative;
   z-index: 1;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  clip-path: inset(0 round 7px);
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  flex: 0 0 24px;
+  display: inline-block;
+  flex-shrink: 0;
+  background-color: transparent;
   background-position: center;
   background-repeat: no-repeat;
   background-size: contain;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  pointer-events: none;
 }
 
 .menu-icon-gamepad { background-image: url("assets/menu/gamepad.png"); }
-.menu-icon-tools { background-image: url("assets/menu/tools.png"); }
-.menu-icon-money { background-image: url("assets/menu/money.png"); }
-.menu-icon-star { background-image: url("assets/menu/star.png"); }
-.menu-icon-link { background-image: url("assets/menu/link.png"); }
+.menu-icon-tools   { background-image: url("assets/menu/tools.png");   }
+.menu-icon-money   { background-image: url("assets/menu/money.png");   }
+.menu-icon-star    { background-image: url("assets/menu/star.png");    }
+.menu-icon-link    { background-image: url("assets/menu/link.png");    }
 
-.menu-grid button > span:not(.menu-icon) {
+/* compatibilidade com seletor antigo, sem comportamento ativo */
+.menu-grid button {
   display: none;
 }
 
@@ -1153,24 +1199,7 @@ strong {
     grid-template-columns: repeat(3, 1fr);
   }
 }
-/* Forçar cores corretas na HUD */
-#hud-header, #hud-header * {
-    color: #ece8e1 !important;
-}
-#hud-header .fase-label {
-    color: #ffb700 !important;
-}
-#hud-header .score-win {
-    color: #00bcd4 !important;
-}
-#hud-header .score-lose {
-    color: #ff4655 !important;
-}
-.vanguard-btn {
-    color: #ece8e1 !important;
-    border: 1px solid rgba(232, 232, 225, 0.3) !important;
-}
-.vanguard-btn.alert {
-    color: #ff4655 !important;
-    border-color: #ff4655 !important;
+/* ── HUD pill: primeiro item sem border-left ── */
+.top-hud > :first-child {
+  border-left: none;
 }

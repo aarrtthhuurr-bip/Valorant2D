@@ -68,35 +68,36 @@
 
       <aside class="shop hidden" id="shop">
         <header>
-          <h1>Valorant2D</h1>
-          <p>Rodada de compra. Escolha agente e arma.</p>
+          <h1>Protocol Shift</h1>
+          <p>Fase de compra.</p>
         </header>
 
         <div class="shop-tabs" id="shopTabs">
           <button type="button" data-shop-tab="weapons">Armas</button>
           <button type="button" data-shop-tab="equipment">Equip.</button>
-          <button type="button" data-shop-tab="allies">Aliados</button>
-          <button type="button" data-shop-tab="agents">Agentes</button>
+          <button type="button" data-shop-tab="allies" id="alliesTab">Aliados</button>
         </div>
 
-        <div class="panel shop-panel" data-shop-panel="agents">
-          <h2>Agentes</h2>
-          <div class="grid" id="agentButtons"></div>
-        </div>
+        <div class="shop-inner-scroll">
+          <div class="panel shop-panel" data-shop-panel="weapons">
+            <h2>Armas</h2>
+            <div class="grid" id="weaponButtons"></div>
+          </div>
 
-        <div class="panel shop-panel" data-shop-panel="weapons">
-          <h2>Armas</h2>
-          <div class="grid" id="weaponButtons"></div>
-        </div>
+          <div class="panel shop-panel" data-shop-panel="equipment">
+            <h2>Equipamentos</h2>
+            <div class="grid" id="equipmentButtons"></div>
+          </div>
 
-        <div class="panel shop-panel" data-shop-panel="equipment">
-          <h2>Equipamentos</h2>
-          <div class="grid" id="equipmentButtons"></div>
-        </div>
+          <div class="panel shop-panel" data-shop-panel="allies">
+            <h2>Melhorias de Aliados</h2>
+            <div class="grid" id="allyButtons"></div>
+          </div>
 
-        <div class="panel shop-panel" data-shop-panel="allies">
-          <h2>Aliados</h2>
-          <div class="grid" id="allyButtons"></div>
+          <div class="panel shop-panel hidden" data-shop-panel="agents">
+            <h2>Agentes</h2>
+            <div class="grid" id="agentButtons"></div>
+          </div>
         </div>
       </aside>
 
