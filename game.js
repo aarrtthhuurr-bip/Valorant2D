@@ -3121,15 +3121,20 @@ function toggleShop() {
 }
 
 function setShopTab(tab) {
+  const hasAllies = game.allyCount > 0 || game.sandbox || game.training;
+  const nextTab = !hasAllies && tab === "allies" ? "weapons" : tab;
+  const alliesTab = document.getElementById("alliesTab");
+  alliesTab?.classList.toggle("hidden", !hasAllies);
   game.shopTab = tab;
   document.querySelectorAll("[data-shop-panel]").forEach((panel) => {
-    panel.classList.toggle("hidden", panel.dataset.shopPanel !== tab);
+    panel.classList.toggle("hidden", panel.dataset.shopPanel !== nextTab);
   });
   if (ui.shopTabs) {
     ui.shopTabs.querySelectorAll("[data-shop-tab]").forEach((button) => {
-      button.classList.toggle("active", button.dataset.shopTab === tab);
+      button.classList.toggle("active", button.dataset.shopTab === nextTab);
     });
   }
+  game.shopTab = nextTab;
 }
 
 function handleEscape() {
@@ -3420,24 +3425,6 @@ function updateBuyBar() {
 }
 
 function buildShop() {
-  ui.agentButtons.innerHTML = "";
-  for (const agent of agents) {
-    const button = document.createElement("button");
-    button.className = "choice";
-    button.innerHTML = `<b>${agent.name}</b><span>${agent.role}: ${agent.ability}</span>`;
-    button.addEventListener("click", () => {
-      if (game.agentLocked) {
-        setMessage("Agente travado ate a proxima partida.");
-        updateUi();
-        return;
-      }
-      game.selectedAgent = agent;
-      updateShopState();
-      updateUi();
-    });
-    ui.agentButtons.appendChild(button);
-  }
-
   ui.weaponButtons.innerHTML = "";
   for (const weapon of weapons) {
     const button = document.createElement("button");
@@ -3551,9 +3538,14 @@ function equipmentOwned(item) {
 }
 
 function updateShopState() {
+  const hasAllies = game.allyCount > 0 || game.sandbox || game.training;
+  const alliesTab = document.getElementById("alliesTab");
+  const alliesPanel = document.querySelector('[data-shop-panel="allies"]');
+  alliesTab?.classList.toggle("hidden", !hasAllies);
+  alliesPanel?.classList.toggle("disabled", !hasAllies);
+  if (!hasAllies && game.shopTab === "allies") game.shopTab = "weapons";
   setShopTab(game.shopTab);
-  [...ui.agentButtons.children].forEach((button, i) => button.classList.toggle("active", agents[i] === game.selectedAgent));
-  [...ui.weaponButtons.children].forEach((button, i) => {
+  [...(ui.weaponButtons?.children || [])].forEach((button, i) => {
     const weapon = weapons[i];
     if (!weapon) return;
     const owned = game.ownedWeapons.has(weapon.id);
@@ -3562,8 +3554,8 @@ function updateShopState() {
     const status = button.querySelector("em");
     if (status) status.textContent = weapon === game.selectedWeapon ? "Equipada" : owned ? "Comprada" : `$${weapon.price}`;
   });
-  [...ui.equipmentButtons.children].forEach((button, i) => button.classList.toggle("active", equipmentOwned(equipment[i])));
-  [...ui.allyButtons.children].forEach((button, i) => {
+  [...(ui.equipmentButtons?.children || [])].forEach((button, i) => button.classList.toggle("active", equipmentOwned(equipment[i])));
+  [...(ui.allyButtons?.children || [])].forEach((button, i) => {
     const item = allyItems[i];
     if (!item) return;
     const owned = allyItemOwned(item);
