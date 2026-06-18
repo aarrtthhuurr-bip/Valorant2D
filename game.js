@@ -3318,14 +3318,15 @@ function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
       button.classList.add("menu-back", "icon-only");
       button.setAttribute("aria-label", item.label);
       button.title = item.label;
-      button.innerHTML = `<span class="menu-icon menu-icon-back" aria-hidden="true"></span>`;
+      button.innerHTML = "";
     } else if (state === "main") {
       button.innerHTML = `<span class="menu-icon menu-icon-${item.icon || "star"}" aria-hidden="true"></span><b>${item.label}</b>`;
     } else if (state === "difficulty") {
       const stars = Math.max(1, item.stars || 1);
+      button.classList.add("difficulty-button", `difficulty-button-${stars}`);
       button.setAttribute("aria-label", item.label);
       button.title = item.label;
-      button.innerHTML = `<span class="difficulty-icon difficulty-icon-${stars}" aria-hidden="true"></span>`;
+      button.innerHTML = "";
     } else {
       button.innerHTML = `<b>${item.label}</b>`;
     }

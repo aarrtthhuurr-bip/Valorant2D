@@ -928,9 +928,32 @@ canvas {
 
 .menu-button.menu-back {
   margin-top: 8px;
-  border-color: rgba(255, 77, 93, 0.45);
-  background-color: rgba(255, 77, 93, 0.08);
-  background-image: none !important;
+  border: 0;
+  background-color: transparent;
+  background-image: url("assets/image_276026.png") !important;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  box-shadow: none;
+  filter: grayscale(1) brightness(1.8) contrast(1.35);
+}
+
+.menu-button.menu-back::before,
+.menu-button.menu-back:hover::before,
+.menu-button.menu-back:focus-visible::before,
+.menu-button.difficulty-button::before,
+.menu-button.difficulty-button:hover::before,
+.menu-button.difficulty-button:focus-visible::before {
+  display: none;
+}
+
+.menu-button.menu-back:hover,
+.menu-button.menu-back:focus-visible {
+  border: 0;
+  background-color: transparent;
+  background-image: url("assets/image_276026.png") !important;
+  box-shadow: none;
+  transform: translateX(-4px);
 }
 
 .menu-button b {
@@ -969,39 +992,46 @@ canvas {
 .menu-icon-money { background-image: url("assets/money.png"); }
 .menu-icon-star { background-image: url("assets/star.png"); }
 .menu-icon-link { background-image: url("assets/link.png"); }
-.menu-icon-back { background-image: url("assets/back-arrow-upload.png"); }
-
-.difficulty-icon {
-  width: 84px;
-  height: 84px;
-  display: block;
-  background-repeat: no-repeat;
+.menu-state-difficulty .difficulty-button {
+  width: 96px;
+  min-height: 96px;
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background-color: transparent;
   background-position: center;
+  background-repeat: no-repeat;
   background-size: contain;
-  mix-blend-mode: screen;
-  filter: grayscale(1) brightness(1.45) contrast(1.25);
+  box-shadow: none;
+  filter: grayscale(1) brightness(1.35) contrast(1.2);
 }
 
-.difficulty-icon-1 { background-image: url("assets/star.png"); }
-.difficulty-icon-2 { background-image: url("assets/difficulty-medium-upload.png"); }
-.difficulty-icon-3 { background-image: url("assets/difficulty-hard-upload.png"); }
+.menu-state-difficulty .difficulty-button-1 {
+  background-image: url("assets/image_27b665.png") !important;
+}
 
-.menu-state-difficulty .menu-button:not(.menu-back) {
-  min-height: 104px;
-  justify-content: center;
-  padding: 8px;
+.menu-state-difficulty .difficulty-button-2 {
+  background-image: url("assets/image_27b5e7.png") !important;
+}
+
+.menu-state-difficulty .difficulty-button-3 {
+  background-image: url("assets/image_276063.png") !important;
+}
+
+.menu-state-difficulty .difficulty-button:hover,
+.menu-state-difficulty .difficulty-button:focus-visible {
+  border: 0;
+  background-color: transparent;
+  box-shadow: none;
+  transform: translateX(6px) scale(1.04);
 }
 
 .menu-button.icon-only {
-  width: 62px;
-  min-height: 52px;
+  width: 72px;
+  min-height: 72px;
   padding: 0;
   justify-content: center;
-}
-
-.menu-button.icon-only .menu-icon {
-  width: 34px;
-  height: 34px;
 }
 
 .menu-state-pause {
