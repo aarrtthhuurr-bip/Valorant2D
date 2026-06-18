@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Cache-Control" content="no-store">
   <title>Valorant2D</title>
-  <link rel="stylesheet" href="styles.css?v=20260618-ai-gameplay-fix">
+  <link rel="stylesheet" href="styles.css?v=20260618-premium-tutorial">
 </head>
 <body>
   <main class="shell">
@@ -164,10 +164,24 @@
           <p id="introTeam">Equipe</p>
         </div>
       </div>
+
+      <div class="tutorial-overlay hidden" id="tutorialOverlay">
+        <div class="tutorial-prompt" id="tutorialPrompt">
+          <span class="tutorial-kicker" id="tutorialKicker">Tutorial</span>
+          <strong id="tutorialInstruction">Use WASD para andar</strong>
+          <span class="tutorial-progress" id="tutorialProgress"></span>
+        </div>
+        <div class="tutorial-agent-panel hidden" id="tutorialAgentPanel">
+          <span class="label">Escolha final</span>
+          <h2>Conheça os agentes</h2>
+          <p>Escolha o seu estilo para concluir o treinamento.</p>
+          <div class="tutorial-agent-grid" id="tutorialAgentGrid"></div>
+        </div>
+      </div>
       </section>
     </div>
   </main>
 
-  <script src="game.js?v=20260618-ai-gameplay-fix"></script>
+  <script src="game.js?v=20260618-premium-tutorial"></script>
 </body>
 </html>

@@ -67,6 +67,13 @@ const ui = {
   armorText: document.getElementById("armorText"),
   armorValueText: document.getElementById("armorValueText"),
   killFeed: document.getElementById("killFeed"),
+  tutorialOverlay: document.getElementById("tutorialOverlay"),
+  tutorialPrompt: document.getElementById("tutorialPrompt"),
+  tutorialKicker: document.getElementById("tutorialKicker"),
+  tutorialInstruction: document.getElementById("tutorialInstruction"),
+  tutorialProgress: document.getElementById("tutorialProgress"),
+  tutorialAgentPanel: document.getElementById("tutorialAgentPanel"),
+  tutorialAgentGrid: document.getElementById("tutorialAgentGrid"),
 };
 
 const keys = new Set();
@@ -533,6 +540,10 @@ const game = {
   training: false,
   tutorial: false,
   tutorialStep: 0,
+  tutorialStage: "idle",
+  tutorialMoveTime: 0,
+  tutorialSlowTimer: 0,
+  tutorialKillsAtStart: 0,
   recoilHeat: 0,
   shotChain: 0,
   crosshairScale: 1,
@@ -1117,24 +1128,162 @@ function updateScoreboard() {
   if (ui.scoreMoney) ui.scoreMoney.textContent = `$${game.money}`;
 }
 
-function tutorialText() {
-  const steps = [
-    "WASD move. Chegue vivo a um site marcado A ou B.",
-    "Mouse mira. Clique atira. Pare para ter menos recoil.",
-    "No ataque, entre no site com a Spike e aperte F para plantar.",
-    "Depois do plant, segure posicao ate explodir. Na defesa, chegue perto e segure F para desarmar.",
-    "Na fase de compra, use a loja para equipar arma, colete e upgrades antes do round.",
-  ];
-  return steps[Math.min(game.tutorialStep, steps.length - 1)];
+function setTutorialPrompt(kicker, instruction, progress = "") {
+  if (ui.tutorialKicker) ui.tutorialKicker.textContent = kicker;
+  if (ui.tutorialInstruction) ui.tutorialInstruction.textContent = instruction;
+  if (ui.tutorialProgress) ui.tutorialProgress.textContent = progress;
+  ui.tutorialPrompt?.classList.remove("hidden", "fade-out");
 }
 
-function updateTutorial() {
-  if (!game.tutorial) return;
-  if (game.tutorialStep === 0 && (keys.has("w") || keys.has("a") || keys.has("s") || keys.has("d"))) game.tutorialStep = 1;
-  if (game.tutorialStep === 1 && game.stats.kills > 0) game.tutorialStep = 2;
-  if (game.tutorialStep === 2 && game.spike.state === "planted") game.tutorialStep = 3;
-  if (game.tutorialStep === 3 && game.phase === "ended") game.tutorialStep = 4;
-  setMessage(`Tutorial: ${tutorialText()}`);
+function tutorialAgentDescription(agent) {
+  const descriptions = {
+    vanguard: ["Entrada agressiva", "Dash direcional e Ultimate de velocidade com tiros neon."],
+    viper: ["Controle de espaço", "Nuvem venenosa e Ultimate química para negar áreas."],
+    mender: ["Suporte da equipe", "Cura direta e Ultimate que restaura vida e escudos aliados."],
+    shade: ["Controle tático", "Smoke para cortar visão e criar rotas seguras."],
+  };
+  return descriptions[agent.id] || [agent.role, agent.ability];
+}
+
+function showTutorialAgentChoice() {
+  game.tutorialStep = 3;
+  game.tutorialStage = "agents";
+  game.paused = true;
+  ui.tutorialPrompt?.classList.add("hidden");
+  ui.tutorialAgentPanel?.classList.remove("hidden");
+  if (!ui.tutorialAgentGrid) return;
+  ui.tutorialAgentGrid.innerHTML = "";
+  for (const agent of agents) {
+    const [role, description] = tutorialAgentDescription(agent);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "tutorial-agent-card";
+    button.style.setProperty("--agent-color", agent.color);
+    button.innerHTML = `<b>${agent.name}</b><span>${role}</span><small>${description}</small>`;
+    attachButtonFeedback(button);
+    button.addEventListener("click", () => {
+      game.selectedAgent = agent;
+      game.agentLocked = true;
+      ui.tutorialAgentPanel?.classList.add("hidden");
+      ui.tutorialPrompt?.classList.remove("hidden");
+      setTutorialPrompt("Treinamento concluído", `${agent.name} selecionado`, "Voltando ao menu principal");
+      setTimeout(() => {
+        game.tutorial = false;
+        game.paused = false;
+        ui.tutorialOverlay?.classList.add("hidden");
+        showMainMenu();
+      }, 1100);
+    });
+    ui.tutorialAgentGrid.appendChild(button);
+  }
+}
+
+function setTutorialPhase(step) {
+  game.tutorialStep = step;
+  game.tutorialMoveTime = 0;
+  game.tutorialSlowTimer = 0;
+  game.bullets = [];
+  game.particles = [];
+  game.smokes = [];
+  game.medkits = [];
+  game.ultOrbs = [];
+  ui.tutorialOverlay?.classList.remove("hidden");
+  ui.tutorialAgentPanel?.classList.add("hidden");
+
+  if (step === 0) {
+    game.tutorialStage = "movement";
+    game.bots = [];
+    game.allies = [];
+    game.player.x = map.width / 2;
+    game.player.y = map.height / 2;
+    sanitizeEntityPosition(game.player);
+    game.spike.state = "carried";
+    game.spike.owner = null;
+    setTutorialPrompt("Fase 1 · Movimento", "Use WASD para andar", "0 / 3 segundos");
+    return;
+  }
+
+  if (step === 1) {
+    game.tutorialStage = "combat";
+    game.player.x = map.width * 0.34;
+    game.player.y = map.height * 0.5;
+    sanitizeEntityPosition(game.player);
+    const targetPoint = nearestWalkablePoint({ x: game.player.x + 260, y: game.player.y }, game.player);
+    const target = makeBot(targetPoint, 0);
+    target.speed = 0;
+    target.tutorialStatic = true;
+    target.hp = Math.min(target.hp, game.selectedWeapon.damage || 35);
+    target.maxHp = target.hp;
+    game.bots = [target];
+    game.allies = [];
+    game.tutorialKillsAtStart = game.stats.kills;
+    setTutorialPrompt("Fase 2 · Combate", "Clique com o Botão Esquerdo para Atirar", "Elimine o alvo");
+    return;
+  }
+
+  if (step === 2) {
+    game.tutorialStage = "collect-spike";
+    game.bots = [];
+    game.allies = [];
+    const site = map.sites[0];
+    const entry = nearestWalkablePoint({ x: site.x + site.w + 90, y: site.y + site.h / 2 }, game.player);
+    game.player.x = entry.x;
+    game.player.y = entry.y;
+    game.spike = {
+      state: "dropped",
+      owner: null,
+      x: entry.x - 78,
+      y: entry.y,
+      timer: 0,
+      site: null,
+      plantProgress: 0,
+      defuseProgress: 0,
+      defuseCheckpoint: 0,
+      defuserId: null,
+    };
+    setTutorialPrompt("Fase 3 · Spike", "Colete a Spike e segure F na área marcada para Plantar", "Siga a marca no chão");
+  }
+}
+
+function updateTutorial(dt) {
+  if (!game.tutorial || game.paused) return;
+  if (game.tutorialStep === 0) {
+    if (game.player.moving) game.tutorialMoveTime += dt;
+    const remaining = Math.max(0, 3 - game.tutorialMoveTime);
+    if (ui.tutorialProgress) ui.tutorialProgress.textContent = `${(3 - remaining).toFixed(1)} / 3 segundos`;
+    if (game.tutorialMoveTime >= 3) setTutorialPhase(1);
+    return;
+  }
+
+  if (game.tutorialStep === 1) {
+    if (game.stats.kills > game.tutorialKillsAtStart) setTutorialPhase(2);
+    return;
+  }
+
+  if (game.tutorialStep !== 2) return;
+  if (game.tutorialStage === "collect-spike" && game.spike.state === "dropped"
+    && Math.hypot(game.player.x - game.spike.x, game.player.y - game.spike.y) < 38) {
+    game.spike.state = "carried";
+    game.spike.owner = "player";
+    game.tutorialStage = "plant";
+    setTutorialPrompt("Fase 3 · Spike", "Segure F dentro da área marcada para Plantar", "Leve a Spike ao Bombsite");
+  }
+  if (game.tutorialStage === "plant" && game.spike.state === "planted") {
+    game.tutorialStage = "defend";
+    game.tutorialSlowTimer = 0.4;
+    const allyPoint = nearestWalkablePoint({ x: game.player.x - 62, y: game.player.y + 44 }, game.player);
+    game.allies = [makeAlly(allyPoint, 0)];
+    const threatPoint = nearestWalkablePoint({ x: game.player.x + 260, y: game.player.y + 30 }, game.player);
+    game.bots = [makeBot(threatPoint, 0)];
+    game.tutorialKillsAtStart = game.stats.kills;
+    setTutorialPrompt("Fase 3 · Defesa", "Proteja a Spike ou elimine as ameaças", "A câmera volta ao normal em instantes");
+  }
+  if (game.tutorialStage === "defend") {
+    game.tutorialSlowTimer = Math.max(0, game.tutorialSlowTimer - dt);
+    if (game.stats.kills > game.tutorialKillsAtStart || game.phase === "ended") {
+      showTutorialAgentChoice();
+    }
+  }
 }
 
 function lineIntersectsRect(x1, y1, x2, y2, rect) {
@@ -1514,11 +1663,14 @@ function updatePlayer(dt) {
   const dx = (right ? 1 : 0) - (left ? 1 : 0);
   const dy = (down ? 1 : 0) - (up ? 1 : 0);
   const len = Math.hypot(dx, dy) || 1;
-  p.moving = dx !== 0 || dy !== 0;
+  const movementLocked = game.tutorial && game.tutorialStep === 1;
+  p.moving = !movementLocked && (dx !== 0 || dy !== 0);
   p.moveX = p.moving ? dx / len : 0;
   p.moveY = p.moving ? dy / len : 0;
   const ultimateSpeed = p.ultimate?.type === "vanguard" ? 2.05 : 1;
-  moveEntity(p, (dx / len) * p.speed * ultimateSpeed * dt, (dy / len) * p.speed * ultimateSpeed * dt, map.walls);
+  if (!movementLocked) {
+    moveEntity(p, (dx / len) * p.speed * ultimateSpeed * dt, (dy / len) * p.speed * ultimateSpeed * dt, map.walls);
+  }
   p.angle = Math.atan2(mouse.y - p.y, mouse.x - p.x);
   if (game.spike.state === "carried" && game.spike.owner === "player") {
     game.spike.x = p.x;
@@ -2286,6 +2438,10 @@ function updateBots(dt) {
 
   for (const bot of game.bots) {
     if (!bot.alive) continue;
+    if (bot.tutorialStatic) {
+      bot.moving = false;
+      continue;
+    }
     const seesPlayer = botCanSeePlayer(bot);
     const visibleTarget = closestVisibleSquadTarget(bot);
     updateBotAwareness(bot, visibleTarget, dt);
@@ -2533,10 +2689,9 @@ function updateBullets(dt) {
             game.stats.deaths += 1;
             addKillFeedEntry(false, "", false);
             if (game.tutorial) {
-              showRoundBanner("Tente de novo", "No tutorial voce renasce para praticar sem perder a partida.", "Tutorial", 2.4);
-              resetRound();
-              game.tutorialStep = Math.min(game.tutorialStep, 2);
-              setMessage(`Tutorial: ${tutorialText()}`);
+              game.player.alive = true;
+              game.player.hp = game.player.maxHp;
+              setTutorialPhase(Math.min(game.tutorialStep, 2));
               break;
             }
             const winner = game.playerSide === "attackers" ? "defenders" : "attackers";
@@ -2712,6 +2867,7 @@ function updateTimers(dt) {
 
 function checkWinConditions() {
   if (game.phase !== "action") return;
+  if (game.tutorial) return;
   if (game.bots.every((bot) => !bot.alive)) {
     if (game.training || game.sandbox) {
       const botSpawns = game.playerSide === "attackers" ? map.defendersSpawn : map.attackerBotSpawns;
@@ -3495,7 +3651,12 @@ function draw() {
   }
 
   drawMap();
-  drawMedkitsAndOrbs();
+  if (game.tutorial) {
+    ctx.fillStyle = game.tutorialStep === 2 ? "rgba(1, 6, 10, 0.48)" : "rgba(1, 6, 10, 0.28)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  } else {
+    drawMedkitsAndOrbs();
+  }
 
   for (const smoke of game.smokes) {
     ctx.fillStyle = smoke.poison ? "rgba(47, 179, 78, 0.62)" : "rgba(82, 71, 115, 0.78)";
@@ -3510,7 +3671,7 @@ function draw() {
   }
 
   drawSpike();
-  drawObjectiveHints();
+  if (!game.tutorial || game.tutorialStep === 2) drawObjectiveHints();
 
   for (const ghost of game.dashGhosts) {
     const alpha = Math.max(0, ghost.life / ghost.maxLife) * 0.34;
@@ -3594,10 +3755,12 @@ function draw() {
 
   drawBotDebug();
   drawDamageIndicator();
-  drawAbilityBar();
-  drawSpikeHint();
-  drawCrosshair();
-  drawRadar();
+  if (!game.tutorial) {
+    drawAbilityBar();
+    drawSpikeHint();
+    drawRadar();
+  }
+  if (!game.tutorial || game.tutorialStep > 0) drawCrosshair();
   drawDamageFlash();
   ctx.restore();
 }
@@ -3691,8 +3854,12 @@ function updateUi() {
   setText(ui.godModeButton, `God: ${game.godMode ? "ON" : "OFF"}`);
   updateScoreboard();
   const gameplayHudVisible = game.menuState === "none" && ["buy", "action", "ended"].includes(game.phase);
-  toggleClass(ui.topHud, "hidden", !gameplayHudVisible);
-  document.querySelector(".game-wrap")?.classList.toggle("gameplay-ui-hidden", !gameplayHudVisible);
+  const tutorialActive = game.tutorial && game.menuState === "none";
+  toggleClass(ui.topHud, "hidden", !gameplayHudVisible || tutorialActive);
+  const gameWrap = document.querySelector(".game-wrap");
+  gameWrap?.classList.toggle("gameplay-ui-hidden", !gameplayHudVisible);
+  gameWrap?.classList.toggle("tutorial-mode", tutorialActive);
+  if (gameWrap) gameWrap.dataset.tutorialStep = tutorialActive ? String(game.tutorialStep) : "";
 }
 
 function togglePause() {
@@ -3768,9 +3935,10 @@ function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
   if (ui.menuText) ui.menuText.textContent = "";
   if (!ui.menuButtons) return;
   ui.menuButtons.innerHTML = "";
-  for (const item of buttons) {
+  buttons.forEach((item, index) => {
     const button = document.createElement("button");
     button.className = "menu-button";
+    button.style.setProperty("--menu-index", index);
     const isBack = item.back || item.label.toLowerCase().includes("voltar");
     if (isBack) {
       button.classList.add("menu-back", "icon-only");
@@ -3788,13 +3956,27 @@ function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
     } else {
       button.innerHTML = `<b>${item.label}</b>`;
     }
+    attachButtonFeedback(button);
     button.addEventListener("click", item.action);
     ui.menuButtons.appendChild(button);
-  }
+  });
   ui.menuOverlay.className = `menu-overlay menu-state-${state}`;
   ui.menuOverlay?.classList.remove("hidden");
   game.paused = true;
   game.menuState = state;
+}
+
+function attachButtonFeedback(button) {
+  if (!button || button.dataset.feedbackReady) return;
+  button.dataset.feedbackReady = "true";
+  button.addEventListener("pointerdown", () => {
+    button.classList.remove("click-feedback");
+    void button.offsetWidth;
+    button.classList.add("click-feedback");
+  });
+  button.addEventListener("animationend", (event) => {
+    if (event.animationName === "buttonShockwave") button.classList.remove("click-feedback");
+  });
 }
 
 function hideMenuOverlay() {
@@ -3815,6 +3997,7 @@ function showAgentSelect(onPick) {
     button.className = "agent-card";
     button.style.setProperty("--agent-color", agent.color);
     button.innerHTML = `<b>${agent.name}</b><span>${agent.ability}</span>`;
+    attachButtonFeedback(button);
     button.addEventListener("click", () => {
       game.selectedAgent = agent;
       game.agentLocked = true;
@@ -3861,7 +4044,10 @@ function showMainMenu() {
   ui.introOverlay?.classList.add("hidden");
   ui.matchOverlay?.classList.add("hidden");
   ui.agentOverlay?.classList.add("hidden");
+  ui.tutorialOverlay?.classList.add("hidden");
   closeShop();
+  game.tutorial = false;
+  game.tutorialStage = "idle";
   game.phase = "idle";
   game.clockActive = false;
   game.paused = false;
@@ -3877,7 +4063,15 @@ function showMainMenu() {
   ], "MENU", "main");
 }
 
-function showDifficultyMenu() {
+function showDifficultyMenu(immediate = false) {
+  if (!immediate && game.menuState === "main") {
+    ui.menuOverlay?.classList.add("menu-carousel-out");
+    setTimeout(() => {
+      ui.menuOverlay?.classList.remove("menu-carousel-out");
+      showDifficultyMenu(true);
+    }, 220);
+    return;
+  }
   setMenu("Dificuldade", "", [
     { label: "FÁCIL", stars: 1, action: () => startMode("Fácil", "easy") },
     { label: "MÉDIO", stars: 2, action: () => startMode("Médio", "normal") },
@@ -3920,8 +4114,12 @@ function startMode(label, difficulty) {
   game.training = false;
   game.tutorial = false;
   applyDifficulty(difficulty);
-  hideMenuOverlay();
-  showAgentSelect(startNewMatch);
+  ui.menuOverlay?.classList.add("menu-carousel-out");
+  setTimeout(() => {
+    ui.menuOverlay?.classList.remove("menu-carousel-out");
+    hideMenuOverlay();
+    showAgentSelect(startNewMatch);
+  }, 220);
 }
 
 function startSandboxMode() {
@@ -3966,18 +4164,23 @@ function startTutorialMode() {
   game.training = false;
   game.tutorial = true;
   game.tutorialStep = 0;
-  game.allyCount = 1;
+  game.allyCount = 0;
   game.enemyFireMultiplier = 2.2;
   hideMenuOverlay();
-  showAgentSelect(() => {
-    startNewMatch();
-    game.startingSide = "attackers";
-    game.playerSide = "attackers";
-    game.roundNumber = 1;
-    resetRound();
-    showIntro();
-    setMessage(`Tutorial: ${tutorialText()}`);
-  });
+  game.selectedAgent = agents[0];
+  startNewMatch();
+  game.startingSide = "attackers";
+  game.playerSide = "attackers";
+  game.roundNumber = 1;
+  resetRound();
+  startActionRound();
+  game.phaseTime = 9999;
+  game.introTimer = 0;
+  game.clockActive = true;
+  game.paused = false;
+  ui.introOverlay?.classList.add("hidden");
+  closeShop();
+  setTutorialPhase(0);
 }
 
 function showIntro() {
@@ -4185,7 +4388,9 @@ function updateShopState() {
 function loop(now) {
   const dt = Math.min(0.033, (now - loop.last) / 1000 || 0);
   loop.last = now;
-  update(dt);
+  const tutorialSlowMotion = game.tutorial
+    && (game.tutorialStep === 1 || (game.tutorialStage === "defend" && game.tutorialSlowTimer > 0));
+  update(dt * (tutorialSlowMotion ? 0.2 : 1));
   draw();
   updateUi();
   pressed.clear();
