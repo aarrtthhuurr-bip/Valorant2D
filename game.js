@@ -78,6 +78,7 @@ const BOT_DEFUSE_TIME = 5.2;
 const PLANT_TIME = 2.0;
 const BUY_TIME = 8;
 const MATCH_POINT = 15;
+const POISON_TICK_INTERVAL = 0.35;
 const ECONOMY = {
   start: 800,
   kill: 150,
@@ -2348,12 +2349,12 @@ function updateTimers(dt) {
       const actualDamage = applyDamage(bot, damage);
       game.stats.damage += actualDamage;
       if (smoke.tick <= 0) {
-        spawnDamageNumber(bot, Math.max(1, Math.round((smoke.damagePerSecond || 18) * 0.35)), false);
+        spawnDamageNumber(bot, Math.max(1, Math.round((smoke.damagePerSecond || 18) * POISON_TICK_INTERVAL)), false);
         spawnParticles(bot.x, bot.y, "#54e36f", 4, 55);
       }
       if (bot.hp <= 0) eliminateBot(bot, { playerCredit: true, weaponName: "Poison Cloud" });
     }
-    if (smoke.tick <= 0) smoke.tick = 0.35;
+    if (smoke.tick <= 0) smoke.tick = POISON_TICK_INTERVAL;
   }
   game.smokes = game.smokes.filter((s) => s.life > 0);
   for (const particle of game.particles) {
