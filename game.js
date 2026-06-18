@@ -2194,6 +2194,7 @@ function seekCriticalMedkit(entity, dt, danger) {
 }
 
 function seekUltimateOrb(entity, dt) {
+  if (game.spike.state === "planted") return false;
   if (entity.ultPoints >= ULT_MAX_POINTS || !game.ultOrbs.length) return false;
   const orb = nearestPickup(entity, game.ultOrbs);
   if (!orb) return false;
@@ -2225,10 +2226,15 @@ function updateAllies(dt) {
   game.allies.forEach((ally, index) => {
     if (!ally.alive) return;
     const enemy = closestVisibleEnemy(ally);
-    maybeUseBotUltimate(ally, enemy);
-    if (ally === allyDefuser && !enemy) {
+    // Hierarquia absoluta: sobreviver > objetivo da Spike > recursos opcionais.
+    if (seekCriticalMedkit(ally, dt, enemy)) {
+      keepSquadSpacing(ally, squad, dt);
+      return;
+    }
+    if (ally === allyDefuser) {
       const dist = Math.hypot(ally.x - game.spike.x, ally.y - game.spike.y);
       ally.aiState = "defuse";
+      if (enemy && dist > 46) botShootAt(ally, enemy, dt, "ally", 1.25);
       if (dist > 42) {
         moveBotToward(ally, game.spike, dt, 1.12);
       } else {
@@ -2244,10 +2250,7 @@ function updateAllies(dt) {
       keepSquadSpacing(ally, squad, dt);
       return;
     }
-    if (game.spike.state !== "planted" && seekCriticalMedkit(ally, dt, enemy)) {
-      keepSquadSpacing(ally, squad, dt);
-      return;
-    }
+    maybeUseBotUltimate(ally, enemy);
     if (game.spike.state !== "planted" && !enemy && seekUltimateOrb(ally, dt)) {
       keepSquadSpacing(ally, squad, dt);
       return;
@@ -2286,17 +2289,17 @@ function updateBots(dt) {
     const seesPlayer = botCanSeePlayer(bot);
     const visibleTarget = closestVisibleSquadTarget(bot);
     updateBotAwareness(bot, visibleTarget, dt);
-    maybeUseBotUltimate(bot, visibleTarget);
 
-    if (game.spike.state !== "planted") {
-      if (seekCriticalMedkit(bot, dt, visibleTarget)) {
-        keepBotSpacing(bot, dt);
-        continue;
-      }
-      if (!visibleTarget && bot.memoryTimer <= 0 && seekUltimateOrb(bot, dt)) {
-        keepBotSpacing(bot, dt);
-        continue;
-      }
+    // Hierarquia absoluta: sobreviver > objetivo da Spike > recursos opcionais.
+    if (seekCriticalMedkit(bot, dt, visibleTarget)) {
+      keepBotSpacing(bot, dt);
+      continue;
+    }
+
+    maybeUseBotUltimate(bot, visibleTarget);
+    if (game.spike.state !== "planted" && !visibleTarget && bot.memoryTimer <= 0 && seekUltimateOrb(bot, dt)) {
+      keepBotSpacing(bot, dt);
+      continue;
     }
 
     if (game.playerSide === "attackers" && bot === botDefuser) {
