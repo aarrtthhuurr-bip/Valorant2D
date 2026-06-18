@@ -83,6 +83,8 @@ const MATCH_POINT = 15;
 const POISON_TICK_INTERVAL = 0.35;
 const ULT_MAX_POINTS = 7;
 const MEDKIT_HEAL = 50;
+const VIPER_CAST_RANGE = 330;
+const VIPER_CLOUD_RADIUS = 92;
 const ECONOMY = {
   start: 800,
   kill: 150,
@@ -106,23 +108,40 @@ const agents = [
     cooldown: 7,
     use(game) {
       const p = game.player;
+      const length = Math.hypot(p.moveX || 0, p.moveY || 0);
+      if (length < 0.1) {
+        setMessage("Mova-se com WASD para definir a direção do Dash.");
+        return false;
+      }
       const fromX = p.x;
       const fromY = p.y;
-      const dx = Math.cos(p.angle) * 120;
-      const dy = Math.sin(p.angle) * 120;
+      const dx = (p.moveX / length) * 120;
+      const dy = (p.moveY / length) * 120;
       moveEntity(p, dx, dy, game.map.walls);
       spawnDashTrail(p, fromX, fromY, p.x, p.y, game.selectedAgent.color);
+      return true;
     },
   },
   {
-    id: "ciphera",
-    name: "Ciphera",
-    role: "Informação",
-    color: "#4f83ff",
-    ability: "Pulso rastreador",
-    cooldown: 10,
+    id: "viper",
+    name: "Viper",
+    role: "Controle",
+    color: "#39d96f",
+    ability: "Nuvem de veneno",
+    cooldown: 9,
     use(game) {
-      game.revealTimer = Math.max(game.revealTimer, 3);
+      const p = game.player;
+      const castPoint = limitedCastPoint(p, mouse, VIPER_CAST_RANGE);
+      game.smokes.push({
+        ...nearestWalkablePoint(castPoint, p),
+        r: 22,
+        targetR: VIPER_CLOUD_RADIUS,
+        life: 7,
+        poison: true,
+        damagePerSecond: 20,
+        ownerTeam: "player",
+      });
+      return true;
     },
   },
   {
@@ -667,16 +686,35 @@ function makeAlly(spawn, index) {
 }
 
 function spawnRoundPickups() {
-  const points = [
+  const medkitPoints = [
     { x: map.width * 0.25, y: map.height * 0.52 },
     { x: map.width * 0.5, y: map.height * 0.34 },
     { x: map.width * 0.75, y: map.height * 0.52 },
-    { x: map.width * 0.34, y: map.height * 0.76 },
-    { x: map.width * 0.66, y: map.height * 0.76 },
-    { x: map.width * 0.5, y: map.height * 0.62 },
   ].map((point) => nearestWalkablePoint(point, point));
-  game.medkits = points.slice(0, 3).map((point, index) => ({ ...point, id: `medkit-${index}`, phase: index * 1.7 }));
-  game.ultOrbs = points.slice(3).map((point, index) => ({ ...point, id: `ult-orb-${index}`, phase: index * 2.1 }));
+  game.medkits = medkitPoints.map((point, index) => ({ ...point, id: `medkit-${index}`, phase: index * 1.7 }));
+  const occupied = [...medkitPoints];
+  game.ultOrbs = Array.from({ length: 3 }, (_, index) => {
+    const point = randomAccessiblePickupPoint(occupied);
+    occupied.push(point);
+    return { ...point, id: `ult-orb-${index}`, phase: index * 2.1 };
+  });
+}
+
+function randomAccessiblePickupPoint(occupied = []) {
+  const starts = [map.attackersSpawn, map.playerDefenderSpawn, ...map.defendersSpawn];
+  for (let attempt = 0; attempt < 120; attempt++) {
+    const candidate = {
+      x: 52 + Math.random() * (map.width - 104),
+      y: 52 + Math.random() * (map.height - 104),
+      r: 22,
+    };
+    if (solidWalls().some((wall) => circleRectCollides(candidate, wall))) continue;
+    if (occupied.some((point) => Math.hypot(point.x - candidate.x, point.y - candidate.y) < 105)) continue;
+    if (starts.some((start) => findGridStep({ ...start, r: 17 }, candidate))) {
+      return { x: candidate.x, y: candidate.y };
+    }
+  }
+  return nearestWalkablePoint({ x: map.width / 2, y: map.height / 2 }, map.attackersSpawn);
 }
 
 function resetRound() {
@@ -1300,23 +1338,43 @@ function addUltimateEffect(type, entity, color, life = 5) {
   game.shake = Math.max(game.shake, 0.38);
 }
 
+function limitedCastPoint(origin, target, maxRange) {
+  const dx = target.x - origin.x;
+  const dy = target.y - origin.y;
+  const distance = Math.hypot(dx, dy) || 1;
+  const scale = Math.min(1, maxRange / distance);
+  return { x: origin.x + dx * scale, y: origin.y + dy * scale };
+}
+
 function activateUltimate(entity) {
-  if (!entity?.alive || entity.ultPoints < ULT_MAX_POINTS || entity.ultimate) return false;
+  const infiniteSandboxUlt = game.sandbox && entity?.id === "player";
+  if (!entity?.alive || (!infiniteSandboxUlt && entity.ultPoints < ULT_MAX_POINTS) || (!infiniteSandboxUlt && entity.ultimate)) return false;
   const agent = agentById(entity.agentId);
   const team = entityTeam(entity);
-  entity.ultPoints = 0;
-  if (entity.id === "player") game.playerUltPoints = 0;
+  if (infiniteSandboxUlt) entity.ultimate = null;
+  else {
+    entity.ultPoints = 0;
+    if (entity.id === "player") game.playerUltPoints = 0;
+  }
 
   if (agent.id === "vanguard") {
     entity.ultimate = { type: "vanguard", life: 7, maxLife: 7 };
     addUltimateEffect("wind", entity, "#7df9ff", 7);
-  } else if (agent.id === "ciphera") {
-    entity.ultimate = { type: "ciphera", life: 5, maxLife: 5 };
-    if (team === "player") game.revealTimer = Math.max(game.revealTimer, 6);
-    for (const target of team === "player" ? game.bots : [game.player, ...game.allies]) {
-      if (target.alive) target.revealedTimer = Math.max(target.revealedTimer || 0, 6);
-    }
-    addUltimateEffect("global-pulse", entity, "#355cff", 5);
+  } else if (agent.id === "viper") {
+    entity.ultimate = { type: "viper", life: 9, maxLife: 9 };
+    const requested = entity.id === "player" ? mouse : entity;
+    const center = limitedCastPoint(entity, requested, VIPER_CAST_RANGE);
+    game.smokes.push({
+      ...nearestWalkablePoint(center, entity),
+      r: 36,
+      targetR: 168,
+      life: 9,
+      poison: true,
+      damagePerSecond: 26,
+      ownerTeam: team,
+      ultimate: true,
+    });
+    addUltimateEffect("chemical-fog", entity, "#35c46a", 9);
   } else if (agent.id === "mender") {
     entity.ultimate = { type: "mender", life: 4, maxLife: 4 };
     const squad = team === "player" ? [game.player, ...game.allies] : game.bots;
@@ -1457,6 +1515,8 @@ function updatePlayer(dt) {
   const dy = (down ? 1 : 0) - (up ? 1 : 0);
   const len = Math.hypot(dx, dy) || 1;
   p.moving = dx !== 0 || dy !== 0;
+  p.moveX = p.moving ? dx / len : 0;
+  p.moveY = p.moving ? dy / len : 0;
   const ultimateSpeed = p.ultimate?.type === "vanguard" ? 2.05 : 1;
   moveEntity(p, (dx / len) * p.speed * ultimateSpeed * dt, (dy / len) * p.speed * ultimateSpeed * dt, map.walls);
   p.angle = Math.atan2(mouse.y - p.y, mouse.x - p.x);
@@ -1468,12 +1528,14 @@ function updatePlayer(dt) {
   if (mouse.down) shoot(p, mouse.x, mouse.y, game.selectedWeapon, "player");
   if (keys.has("r")) reload();
   if (pressed.has("e") && game.abilityCooldown <= 0 && game.phase === "action") {
-    game.selectedAgent.use(game);
-    game.abilityCooldown = game.sandbox ? 0 : game.selectedAgent.cooldown;
-    playSound("ability");
-    setMessage(game.sandbox
-      ? `${game.selectedAgent.ability} usada. Sandbox: habilidade sem recarga.`
-      : `${game.selectedAgent.ability} usada. Recarga iniciada.`);
+    const used = game.selectedAgent.use(game);
+    if (used !== false) {
+      game.abilityCooldown = game.sandbox ? 0 : game.selectedAgent.cooldown;
+      playSound("ability");
+      setMessage(game.sandbox
+        ? `${game.selectedAgent.ability} usada. Sandbox: habilidade sem recarga.`
+        : `${game.selectedAgent.ability} usada. Recarga iniciada.`);
+    }
   }
   if (pressed.has("q") && game.phase === "action") activateUltimate(p);
   plantOrDefuse(dt);
@@ -1752,9 +1814,36 @@ function attackBlockingDestructible(bot, target, dt) {
   return true;
 }
 
+function poisonAvoidanceTarget(entity, target) {
+  const hostileClouds = game.smokes.filter((smoke) =>
+    smoke.poison
+    && smoke.ownerTeam !== entityTeam(entity)
+    && pointLineDistance(smoke.x, smoke.y, entity.x, entity.y, target.x, target.y) < smoke.r + entity.r + 18
+  );
+  if (!hostileClouds.length) return target;
+
+  const cloud = hostileClouds.sort((a, b) =>
+    Math.hypot(entity.x - a.x, entity.y - a.y) - Math.hypot(entity.x - b.x, entity.y - b.y)
+  )[0];
+  const pathAngle = Math.atan2(target.y - entity.y, target.x - entity.x);
+  const clearance = cloud.r + entity.r + 34;
+  const candidates = [-1, 1].map((side) => ({
+    x: cloud.x + Math.cos(pathAngle + side * Math.PI / 2) * clearance,
+    y: cloud.y + Math.sin(pathAngle + side * Math.PI / 2) * clearance,
+  })).map((point) => nearestWalkablePoint(point, entity))
+    .filter((point) => Math.hypot(point.x - cloud.x, point.y - cloud.y) > cloud.r + entity.r + 8);
+
+  if (!candidates.length) return target;
+  return candidates.sort((a, b) =>
+    Math.hypot(entity.x - a.x, entity.y - a.y) + Math.hypot(a.x - target.x, a.y - target.y)
+    - Math.hypot(entity.x - b.x, entity.y - b.y) - Math.hypot(b.x - target.x, b.y - target.y)
+  )[0];
+}
+
 function moveBotToward(bot, target, dt, speedScale = 1) {
-  if (attackBlockingDestructible(bot, target, dt)) return 0;
-  const safeTarget = resolveBotTarget(bot, target);
+  const poisonSafeTarget = poisonAvoidanceTarget(bot, target);
+  if (attackBlockingDestructible(bot, poisonSafeTarget, dt)) return 0;
+  const safeTarget = resolveBotTarget(bot, poisonSafeTarget);
   const angle = Math.atan2(safeTarget.y - bot.y, safeTarget.x - bot.x);
   bot.angle = angle;
   const ultimateSpeed = bot.ultimate?.type === "vanguard" ? 1.8 : 1;
@@ -2123,9 +2212,6 @@ function maybeUseBotUltimate(bot, visibleTarget) {
     }
     return false;
   }
-  if (agentId === "ciphera") {
-    return visibleTarget ? activateUltimate(bot) : false;
-  }
   return visibleTarget ? activateUltimate(bot) : false;
 }
 
@@ -2140,20 +2226,9 @@ function updateAllies(dt) {
     if (!ally.alive) return;
     const enemy = closestVisibleEnemy(ally);
     maybeUseBotUltimate(ally, enemy);
-    if (seekCriticalMedkit(ally, dt, enemy)) {
-      keepSquadSpacing(ally, squad, dt);
-      return;
-    }
-    if (!enemy && seekUltimateOrb(ally, dt)) {
-      keepSquadSpacing(ally, squad, dt);
-      return;
-    }
-    if (ally === allyDefuser) {
+    if (ally === allyDefuser && !enemy) {
       const dist = Math.hypot(ally.x - game.spike.x, ally.y - game.spike.y);
       ally.aiState = "defuse";
-      if (enemy && dist > 46) {
-        botShootAt(ally, enemy, dt, "ally");
-      }
       if (dist > 42) {
         moveBotToward(ally, game.spike, dt, 1.12);
       } else {
@@ -2166,6 +2241,14 @@ function updateAllies(dt) {
           endRound("defenders", "Aliado desarmou a spike. Defensores venceram.", "defuse");
         }
       }
+      keepSquadSpacing(ally, squad, dt);
+      return;
+    }
+    if (game.spike.state !== "planted" && seekCriticalMedkit(ally, dt, enemy)) {
+      keepSquadSpacing(ally, squad, dt);
+      return;
+    }
+    if (game.spike.state !== "planted" && !enemy && seekUltimateOrb(ally, dt)) {
       keepSquadSpacing(ally, squad, dt);
       return;
     }
@@ -2205,13 +2288,15 @@ function updateBots(dt) {
     updateBotAwareness(bot, visibleTarget, dt);
     maybeUseBotUltimate(bot, visibleTarget);
 
-    if (seekCriticalMedkit(bot, dt, visibleTarget)) {
-      keepBotSpacing(bot, dt);
-      continue;
-    }
-    if (!visibleTarget && bot.memoryTimer <= 0 && seekUltimateOrb(bot, dt)) {
-      keepBotSpacing(bot, dt);
-      continue;
+    if (game.spike.state !== "planted") {
+      if (seekCriticalMedkit(bot, dt, visibleTarget)) {
+        keepBotSpacing(bot, dt);
+        continue;
+      }
+      if (!visibleTarget && bot.memoryTimer <= 0 && seekUltimateOrb(bot, dt)) {
+        keepBotSpacing(bot, dt);
+        continue;
+      }
     }
 
     if (game.playerSide === "attackers" && bot === botDefuser) {
@@ -2625,10 +2710,28 @@ function updateTimers(dt) {
 function checkWinConditions() {
   if (game.phase !== "action") return;
   if (game.bots.every((bot) => !bot.alive)) {
-    if (game.training) {
-      game.bots = map.defendersSpawn.map(makeBot);
+    if (game.training || game.sandbox) {
+      const botSpawns = game.playerSide === "attackers" ? map.defendersSpawn : map.attackerBotSpawns;
+      game.bots = botSpawns.map(makeBot);
       game.bots.forEach(sanitizeEntityPosition);
-      setMessage("Treino: novos bots apareceram.");
+      game.bullets = [];
+      if (game.sandbox) {
+        const carrier = game.bots.find((bot) => bot.hasSpike) || game.bots[0] || game.player;
+        game.spike = {
+          state: "carried",
+          owner: game.playerSide === "attackers" ? "player" : "bot",
+          x: game.playerSide === "attackers" ? game.player.x : carrier.x,
+          y: game.playerSide === "attackers" ? game.player.y : carrier.y,
+          timer: 0,
+          site: null,
+          plantProgress: 0,
+          defuseProgress: 0,
+          defuseCheckpoint: 0,
+          defuserId: null,
+        };
+        spawnRoundPickups();
+      }
+      setMessage(game.sandbox ? "Sandbox: nova equipe inimiga gerada." : "Treino: novos bots apareceram.");
       return;
     }
     if (game.playerSide === "defenders" && game.spike.state === "planted") {
@@ -2695,6 +2798,7 @@ function update(dt) {
   }
   if (game.paused) return;
   updateTimers(dt);
+  if (game.introTimer > 0 || !game.clockActive) return;
   updateTutorial();
   if (game.phase === "action") {
     updatePlayer(dt);
@@ -2812,7 +2916,7 @@ function drawEntity(entity, color, label, kind = "bot") {
   if (entity.ultimate) {
     const pulse = 1 + Math.sin(performance.now() / 90) * 0.12;
     const auraColor = entity.ultimate.type === "vanguard" ? "#65f5ff"
-      : entity.ultimate.type === "ciphera" ? "#4266ff"
+      : entity.ultimate.type === "viper" ? "#35c46a"
         : entity.ultimate.type === "mender" ? "#62e6a0"
           : "#35c46a";
     ctx.save();
@@ -3235,12 +3339,6 @@ function drawWorldActionBar() {
   } else if (game.spike.state === "bot_planting") {
     actor = game.bots.find((bot) => bot.alive && bot.hasSpike);
     progress = game.spike.plantProgress;
-  } else if (game.spike.state === "planted" && game.spike.defuserId) {
-    actor = game.spike.defuserId === "player"
-      ? game.player
-      : [...game.allies, ...game.bots].find((entity) => entity.id === game.spike.defuserId);
-    progress = game.spike.defuseProgress;
-    color = "#62e6a0";
   }
 
   if (!actor || !actor.alive || progress <= 0) return;
@@ -3567,7 +3665,7 @@ function updateUi() {
   setText(ui.agent, `${game.selectedAgent.name} ${atk ? "ATK" : "DEF"} · ${game.sandbox ? "E livre" : game.abilityCooldown > 0 ? `${Math.ceil(game.abilityCooldown)}s` : "E"}`);
   setText(ui.weapon, game.selectedWeapon.name);
   setText(ui.hp, `${Math.max(0, Math.ceil(game.player.hp))}`);
-  setText(ui.ultPoints, `${game.player.ultPoints}/${ULT_MAX_POINTS}`);
+  setText(ui.ultPoints, game.sandbox ? "∞" : `${game.player.ultPoints}/${ULT_MAX_POINTS}`);
   toggleClass(ui.ultCounter, "ready", game.player.ultPoints >= ULT_MAX_POINTS);
   setText(ui.ammo, game.reloadTimer > 0 ? "Recarregando" : `${game.player.ammo}`);
   setText(ui.spike, game.spike.state === "carried"
@@ -3683,7 +3781,7 @@ function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
       button.classList.add("difficulty-button", `difficulty-button-${stars}`);
       button.setAttribute("aria-label", item.label);
       button.title = item.label;
-      button.innerHTML = "";
+      button.innerHTML = `<span class="difficulty-glyph" aria-hidden="true"></span><b>${item.label}</b>`;
     } else {
       button.innerHTML = `<b>${item.label}</b>`;
     }
