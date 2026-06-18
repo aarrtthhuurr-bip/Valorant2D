@@ -5,19 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Cache-Control" content="no-store">
   <title>Valorant2D</title>
-  <link rel="stylesheet" href="styles.css?v=20260617-refactor">
+  <link rel="stylesheet" href="styles.css?v=20260617-tactical-economy">
 </head>
 <body>
   <main class="shell">
-    <section class="game-wrap">
-      <canvas id="game" width="1280" height="720" aria-label="Valorant2D game canvas"></canvas>
-
+    <div class="game-stage">
       <div class="top-hud glass hidden" id="topHud">
         <div class="hud-pill side-pill" id="sidePill">ATK</div>
-        <div class="hud-pill">
-          <span class="label">Fase</span>
-          <strong id="phaseText">Compra</strong>
-        </div>
         <div class="hud-pill timer-pill" id="timerPill">
           <span class="label">Tempo</span>
           <strong id="timerText">8</strong>
@@ -25,12 +19,12 @@
         <div class="hud-pill">
           <span class="label">Placar</span>
           <strong id="scoreText">0 - 0</strong>
-          <span class="round-label" id="roundLabel">Round 1</span>
         </div>
-        <button class="hud-button" id="shopButton" type="button" style="display:none">Loja</button>
-        <button class="pause-button" id="pauseButton" type="button">Pause</button>
         <div class="buy-bar hidden" id="buyBar"><i id="buyBarFill"></i></div>
       </div>
+
+      <section class="game-wrap">
+      <canvas id="game" width="1280" height="720" aria-label="Valorant2D game canvas"></canvas>
       <div class="status-card">
         <div class="vitals-panel glass">
           <div class="status-main">
@@ -169,9 +163,10 @@
           <p id="introTeam">Equipe</p>
         </div>
       </div>
-    </section>
+      </section>
+    </div>
   </main>
 
-  <script src="game.js?v=20260617-refactor"></script>
+  <script src="game.js?v=20260617-tactical-economy"></script>
 </body>
 </html>

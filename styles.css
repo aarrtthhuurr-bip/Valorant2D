@@ -61,12 +61,18 @@ button.active {
   padding: 14px;
 }
 
+.game-stage {
+  width: min(100%, 1280px, calc((100dvh - 96px) * 16 / 9));
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
 .game-wrap {
   position: relative;
-  width: min(100%, 1280px, calc((100vh - 28px) * 16 / 9));
-  width: min(100%, 1280px, calc((100dvh - 28px) * 16 / 9));
-  max-height: calc(100vh - 28px);
-  max-height: calc(100dvh - 28px);
+  width: 100%;
+  max-height: calc(100vh - 96px);
+  max-height: calc(100dvh - 96px);
   aspect-ratio: 16 / 9;
   overflow: hidden;
   background: #0b1318;
@@ -88,20 +94,19 @@ canvas {
 }
 
 .top-hud {
-  position: absolute;
-  top: 12px;
-  left: 50%;
+  position: relative;
   z-index: 100;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0;
   padding: 6px 0;
-  transform: translateX(-50%);
+  transform: none;
   pointer-events: none;
   border-radius: 4px;
   animation: slideDown 420ms ease both;
-  max-width: calc(100% - 24px);
+  width: max-content;
+  max-width: 100%;
   overflow: hidden;
   background: rgba(6, 10, 15, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -121,32 +126,6 @@ canvas {
 .gameplay-ui-hidden .scoreboard,
 .gameplay-ui-hidden .sandbox-tools {
   display: none;
-}
-
-.hud-button,
-.pause-button {
-  min-width: 66px;
-  padding: 7px 10px;
-  pointer-events: auto;
-  border-radius: 6px;
-}
-
-.top-hud .hud-button,
-.top-hud .pause-button {
-  align-self: stretch;
-  min-height: 46px;
-  border: 0;
-  border-left: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 0;
-  background: transparent;
-}
-
-.top-hud .hud-button:hover,
-.top-hud .pause-button:hover,
-.top-hud .hud-button:focus-visible,
-.top-hud .pause-button:focus-visible {
-  transform: none;
-  background: rgba(255, 255, 255, 0.07);
 }
 
 .hud-pill {
@@ -459,7 +438,7 @@ canvas {
 
 .shop {
   position: absolute;
-  top: 76px;
+  top: 18px;
   bottom: 18px;
   left: 50%;
   transform: translateX(-50%) scale(1);
@@ -711,7 +690,7 @@ canvas {
 
 .scoreboard {
   position: absolute;
-  top: 76px;
+  top: 12px;
   right: 12px;
   z-index: 18;
   width: min(360px, calc(100% - 24px));
@@ -989,7 +968,7 @@ canvas {
 .menu-icon-tools { background-image: url("assets/tools.png"); }
 .menu-icon-money { background-image: url("assets/money.png"); }
 .menu-icon-star { background-image: url("assets/star.png"); }
-.menu-icon-link { background-image: url("assets/link.png"); }
+.menu-icon-link { background-image: url("assets/back-arrow-upload.png"); }
 
 .difficulty-stars {
   display: inline-flex;
@@ -998,9 +977,25 @@ canvas {
   min-width: 96px;
 }
 
-.difficulty-stars .menu-icon {
-  width: 26px;
-  height: 26px;
+.difficulty-icon {
+  width: 84px;
+  height: 84px;
+  display: block;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  mix-blend-mode: screen;
+  filter: grayscale(1) brightness(1.45) contrast(1.25);
+}
+
+.difficulty-icon-1 { background-image: url("assets/star.png"); }
+.difficulty-icon-2 { background-image: url("assets/difficulty-medium-upload.png"); }
+.difficulty-icon-3 { background-image: url("assets/difficulty-hard-upload.png"); }
+
+.menu-state-difficulty .menu-button:not(.menu-back) {
+  min-height: 104px;
+  justify-content: center;
+  padding: 8px;
 }
 
 .menu-button.icon-only {
@@ -1135,8 +1130,8 @@ canvas {
 }
 
 @keyframes slideDown {
-  from { opacity: 0; transform: translate(-50%, -14px); }
-  to { opacity: 1; transform: translate(-50%, 0); }
+  from { opacity: 0; transform: translateY(-14px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes slideUp {
@@ -1172,17 +1167,20 @@ canvas {
 
 @media (max-width: 900px) {
   .shell {
-    padding: 0;
+    padding: 6px;
+  }
+
+  .game-stage {
+    width: 100%;
+    gap: 6px;
   }
 
   .game-wrap {
-    width: 100vw;
-    height: 100vh;
-    aspect-ratio: auto;
+    width: min(100%, calc((100dvh - 72px) * 16 / 9));
+    max-height: calc(100dvh - 72px);
   }
 
   .top-hud {
-    top: 12px;
     max-width: calc(100% - 12px);
     overflow: hidden;
   }
@@ -1204,12 +1202,6 @@ canvas {
     min-width: 42px;
   }
 
-  .hud-button,
-  .pause-button {
-    min-width: 54px;
-    padding: 6px 7px;
-  }
-
   .status-card {
     inset: auto 8px 8px 8px;
     gap: 8px;
@@ -1226,9 +1218,9 @@ canvas {
   }
 
   .shop {
-    top: 62px;
-    right: 8px;
-    width: min(292px, calc(100% - 16px));
+    top: 8px;
+    bottom: 8px;
+    width: min(560px, calc(100% - 16px));
   }
 
   .message {
@@ -1312,7 +1304,7 @@ canvas {
   }
 
   .scoreboard {
-    top: 48px;
+    top: 8px;
     right: 8px;
   }
 

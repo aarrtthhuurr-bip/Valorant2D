@@ -3,7 +3,6 @@ const ctx = canvas.getContext("2d");
 
 const ui = {
   topHud: document.getElementById("topHud"),
-  phase: document.getElementById("phaseText"),
   timerPill: document.getElementById("timerPill"),
   timer: document.getElementById("timerText"),
   score: document.getElementById("scoreText"),
@@ -21,9 +20,7 @@ const ui = {
   allyButtons: document.getElementById("allyButtons"),
   hpBar: document.getElementById("hpBar"),
   ammoBar: document.getElementById("ammoBar"),
-  shopButton: document.getElementById("shopButton"),
   shopBackdrop: document.getElementById("shopBackdrop"),
-  pauseButton: document.getElementById("pauseButton"),
   matchOverlay: document.getElementById("matchOverlay"),
   overlayKicker: document.getElementById("overlayKicker"),
   overlayTitle: document.getElementById("overlayTitle"),
@@ -59,7 +56,6 @@ const ui = {
   defuses: document.getElementById("defusesText"),
   scoreMoney: document.getElementById("scoreMoneyText"),
   sidePill: document.getElementById("sidePill"),
-  roundLabel: document.getElementById("roundLabel"),
   moneyDelta: document.getElementById("moneyDelta"),
   buyBar: document.getElementById("buyBar"),
   buyBarFill: document.getElementById("buyBarFill"),
@@ -86,11 +82,11 @@ const ECONOMY = {
   start: 800,
   kill: 150,
   headshot: 200,
-  win: 3000,
-  plantWin: 3200,
-  lossBase: 1900,
-  lossStep: 500,
-  lossMax: 2900,
+  defuseWin: 3800,
+  eliminationWin: 3300,
+  standardWin: 3000,
+  lossConsolation: 900,
+  spikeDeathCash: 100,
   objective: 300,
   cap: 12000,
 };
@@ -114,14 +110,21 @@ const agents = [
     },
   },
   {
-    id: "ciphera",
-    name: "Ciphera",
-    role: "Info",
-    color: "#4fb3ff",
-    ability: "Pulso revelador",
+    id: "viper",
+    name: "Viper",
+    role: "Controle",
+    color: "#54e36f",
+    ability: "Poison Cloud",
     cooldown: 10,
     use(game) {
-      game.revealTimer = 3;
+      game.smokes.push({
+        x: mouse.x,
+        y: mouse.y,
+        r: 92,
+        life: game.selectedAgent.cooldown,
+        poison: true,
+        damagePerSecond: 18,
+      });
     },
   },
   {
@@ -718,13 +721,11 @@ function openShop() {
   updateShopState();
   ui.shop.classList.remove("hidden");
   ui.shopBackdrop.classList.remove("hidden");
-  ui.shopButton.style.display = "none";
 }
 
 function closeShop() {
   ui.shop.classList.add("hidden");
   ui.shopBackdrop.classList.add("hidden");
-  ui.shopButton.style.display = "";
 }
 
 function fullReset() {
@@ -784,7 +785,7 @@ function showMatchResult() {
   ui.newGameButton.style.display = "";
 }
 
-function endRound(winner, reason) {
+function endRound(winner, reason, outcome = "standard") {
   if (game.phase === "ended" || game.phase === "matchOver") return;
   game.phase = "ended";
   game.phaseTime = 4;
@@ -797,18 +798,28 @@ function endRound(winner, reason) {
   if (winner === game.playerSide) {
     game.playerScore += 1;
     game.lossStreak = 0;
-    moneyGained = game.spike.state === "planted" ? ECONOMY.plantWin : ECONOMY.win;
+    moneyGained = outcome === "defuse"
+      ? ECONOMY.defuseWin
+      : outcome === "elimination"
+        ? ECONOMY.eliminationWin
+        : ECONOMY.standardWin;
     if (!game.sandbox) game.money += moneyGained;
   } else {
     game.enemyScore += 1;
     game.lossStreak += 1;
-    moneyGained = Math.min(ECONOMY.lossMax, ECONOMY.lossBase + Math.max(0, game.lossStreak - 1) * ECONOMY.lossStep);
-    if (!game.sandbox) game.money += moneyGained;
+    if (outcome === "spike_death") {
+      moneyGained = ECONOMY.spikeDeathCash - game.money;
+      if (!game.sandbox) game.money = ECONOMY.spikeDeathCash;
+    } else {
+      moneyGained = ECONOMY.lossConsolation;
+      if (!game.sandbox) game.money += moneyGained;
+    }
   }
   if (!game.sandbox && !game.training) game.money = Math.min(game.money, ECONOMY.cap);
   game.roundMoneyDelta = moneyGained;
   const won = winner === game.playerSide;
-  const fullReason = game.sandbox ? reason : `${reason}  +${moneyGained}`;
+  const moneyLabel = moneyGained >= 0 ? `+$${moneyGained}` : `-$${Math.abs(moneyGained)}`;
+  const fullReason = game.sandbox ? reason : `${reason}  ${moneyLabel}`;
   setMessage(fullReason);
   showRoundBanner(
     won ? "Round vencido" : "Round perdido",
@@ -1241,7 +1252,7 @@ function plantOrDefuse(dt) {
         spawnParticles(game.spike.x, game.spike.y, "#66e48f", 28, 180);
         game.stats.defuses += 1;
         if (!game.sandbox) game.money += ECONOMY.objective;
-        endRound("defenders", "Spike desarmada. Defensores venceram.");
+        endRound("defenders", "Spike desarmada. Defensores venceram.", "defuse");
       }
     } else if (game.spike.state === "planted") {
       resetPartialDefuse();
@@ -1756,7 +1767,7 @@ function ensureBotSpikeCarrier() {
     if (carrier) carrier.hasSpike = true;
   }
   if (!carrier) {
-    endRound("defenders", "Atacantes eliminados antes do plant. Defensores venceram.");
+    endRound("defenders", "Atacantes eliminados antes do plant. Defensores venceram.", "elimination");
     return null;
   }
   game.spike.x = carrier.x;
@@ -1827,7 +1838,7 @@ function botDefuseSpike(bot, dt) {
   setMessage("Um bot esta desarmando a spike. Derrube ele.");
   if (complete) {
     spawnParticles(game.spike.x, game.spike.y, "#66e48f", 28, 180);
-    endRound("defenders", "Bot desarmou a spike. Defensores venceram.");
+    endRound("defenders", "Bot desarmou a spike. Defensores venceram.", "defuse");
   }
   return true;
 }
@@ -1966,7 +1977,7 @@ function updateAllies(dt) {
         if (complete) {
           spawnParticles(game.spike.x, game.spike.y, "#66e48f", 28, 180);
           game.stats.defuses += 1;
-          endRound("defenders", "Aliado desarmou a spike. Defensores venceram.");
+          endRound("defenders", "Aliado desarmou a spike. Defensores venceram.", "defuse");
         }
       }
       keepSquadSpacing(ally, squad, dt);
@@ -2270,7 +2281,20 @@ function updateSpike(dt) {
     if (game.spike.timer <= 0) {
       playSound("spike");
       spawnSpikeExplosion(game.spike.x, game.spike.y);
-      endRound("attackers", "Spike detonou. Atacantes venceram.");
+      const playerCaught = game.player.alive
+        && Math.hypot(game.player.x - game.spike.x, game.player.y - game.spike.y) <= 320;
+      if (playerCaught) {
+        game.player.hp = 0;
+        game.player.alive = false;
+        game.stats.deaths += 1;
+      }
+      endRound(
+        "attackers",
+        playerCaught
+          ? "Você morreu na explosão da Spike. Punição econômica máxima."
+          : "Spike detonou. Atacantes venceram.",
+        playerCaught ? "spike_death" : "standard"
+      );
     }
   }
 }
@@ -2358,7 +2382,7 @@ function checkWinConditions() {
     }
     endRound(game.playerSide, game.playerSide === "attackers"
       ? "Defensores eliminados. Atacantes venceram."
-      : "Atacantes eliminados. Defensores venceram.");
+      : "Atacantes eliminados. Defensores venceram.", "elimination");
   }
 }
 
