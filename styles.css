@@ -402,6 +402,22 @@ canvas {
   gap: 8px;
 }
 
+.ult-counter {
+  color: #c89cff;
+  font-weight: 700;
+  text-shadow: 0 0 12px rgba(176, 84, 255, 0.72);
+}
+
+.ult-counter.ready {
+  color: #f1d8ff;
+  animation: ultReadyPulse 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes ultReadyPulse {
+  from { text-shadow: 0 0 8px rgba(176, 84, 255, 0.55); }
+  to { text-shadow: 0 0 22px rgba(213, 130, 255, 1); }
+}
+
 .weapon-line {
   display: flex;
   align-items: baseline;

@@ -10,6 +10,8 @@ const ui = {
   agent: document.getElementById("agentText"),
   weapon: document.getElementById("weaponText"),
   hp: document.getElementById("hpText"),
+  ultCounter: document.getElementById("ultCounter"),
+  ultPoints: document.getElementById("ultPointsText"),
   ammo: document.getElementById("ammoText"),
   spike: document.getElementById("spikeText"),
   shop: document.getElementById("shop"),
@@ -79,6 +81,8 @@ const PLANT_TIME = 2.0;
 const BUY_TIME = 8;
 const MATCH_POINT = 15;
 const POISON_TICK_INTERVAL = 0.35;
+const ULT_MAX_POINTS = 7;
+const MEDKIT_HEAL = 50;
 const ECONOMY = {
   start: 800,
   kill: 150,
@@ -111,21 +115,14 @@ const agents = [
     },
   },
   {
-    id: "viper",
-    name: "Viper",
-    role: "Controle",
-    color: "#54e36f",
-    ability: "Poison Cloud",
+    id: "ciphera",
+    name: "Ciphera",
+    role: "Informação",
+    color: "#4f83ff",
+    ability: "Pulso rastreador",
     cooldown: 10,
     use(game) {
-      game.smokes.push({
-        x: mouse.x,
-        y: mouse.y,
-        r: 92,
-        life: game.selectedAgent.cooldown,
-        poison: true,
-        damagePerSecond: 18,
-      });
+      game.revealTimer = Math.max(game.revealTimer, 3);
     },
   },
   {
@@ -538,13 +535,18 @@ const game = {
   hitMarkers: [],
   damageNumbers: [],
   dashGhosts: [],
+  neonTrails: [],
+  ultimateEffects: [],
   destructibles: [],
   smokes: [],
+  medkits: [],
+  ultOrbs: [],
   revealTimer: 0,
   spike: { state: "carried", owner: "player", x: 0, y: 0, timer: 0, site: null, plantProgress: 0, defuseProgress: 0, defuseCheckpoint: 0, defuserId: null },
   message: "Plante a spike em A ou B.",
   lastMessage: "",
   abilityCooldown: 0,
+  playerUltPoints: 0,
   lastShot: 0,
   reloadTimer: 0,
   roundOverTimer: 0,
@@ -570,6 +572,9 @@ function makePlayer() {
     ammo: currentMagSize(),
     weapon: game.selectedWeapon,
     alive: true,
+    agentId: game.selectedAgent.id,
+    ultPoints: game.playerUltPoints,
+    ultimate: null,
   };
 }
 
@@ -618,6 +623,9 @@ function makeBot(spawn, index) {
     idleTimer: 0,
     aiState: "hold",
     revealedTimer: 0,
+    agentId: agents[index % agents.length].id,
+    ultPoints: Math.min(ULT_MAX_POINTS, Math.max(0, game.roundNumber - 1) + (index % 2)),
+    ultimate: null,
   };
 }
 
@@ -652,7 +660,23 @@ function makeAlly(spawn, index) {
     idleTimer: 0,
     aiState: "follow",
     revealedTimer: 0,
+    agentId: agents[(index + 2) % agents.length].id,
+    ultPoints: Math.min(ULT_MAX_POINTS, Math.floor((game.roundNumber - 1) / 2)),
+    ultimate: null,
   };
+}
+
+function spawnRoundPickups() {
+  const points = [
+    { x: map.width * 0.25, y: map.height * 0.52 },
+    { x: map.width * 0.5, y: map.height * 0.34 },
+    { x: map.width * 0.75, y: map.height * 0.52 },
+    { x: map.width * 0.34, y: map.height * 0.76 },
+    { x: map.width * 0.66, y: map.height * 0.76 },
+    { x: map.width * 0.5, y: map.height * 0.62 },
+  ].map((point) => nearestWalkablePoint(point, point));
+  game.medkits = points.slice(0, 3).map((point, index) => ({ ...point, id: `medkit-${index}`, phase: index * 1.7 }));
+  game.ultOrbs = points.slice(3).map((point, index) => ({ ...point, id: `ult-orb-${index}`, phase: index * 2.1 }));
 }
 
 function resetRound() {
@@ -682,10 +706,14 @@ function resetRound() {
   game.hitMarkers = [];
   game.damageNumbers = [];
   game.dashGhosts = [];
+  game.neonTrails = [];
+  game.ultimateEffects = [];
   game.destructibles = map.destructibles.map((box, index) => ({ ...box, maxHp: box.hp, id: `box-${index}` }));
   game.smokes = [];
+  spawnRoundPickups();
   game.revealTimer = 0;
   game.abilityCooldown = 0;
+  game.player.ultPoints = game.playerUltPoints;
   game.lastShot = 0;
   game.reloadTimer = 0;
   game.roundOverTimer = 0;
@@ -1218,7 +1246,8 @@ function shoot(owner, targetX, targetY, weapon, team) {
     const base = Math.atan2(targetY - owner.y, targetX - owner.x);
     const movingPenalty = owner.moving ? 1.8 : 1;
     const recoilPenalty = team === "player" ? 1 + game.recoilHeat * 0.85 : 1 + (owner.aiState === "plant" || owner.aiState === "defuse" ? 0.55 : 0);
-    const spread = (Math.random() - 0.5) * weapon.spread * 2 * movingPenalty * recoilPenalty;
+    const vanguardUltimate = owner.ultimate?.type === "vanguard";
+    const spread = vanguardUltimate ? 0 : (Math.random() - 0.5) * weapon.spread * 2 * movingPenalty * recoilPenalty;
     const startX = owner.x + Math.cos(base) * owner.r;
     const startY = owner.y + Math.sin(base) * owner.r;
     game.bullets.push({
@@ -1226,12 +1255,13 @@ function shoot(owner, targetX, targetY, weapon, team) {
       y: startY,
       startX,
       startY,
-      vx: Math.cos(base + spread) * weapon.speed,
-      vy: Math.sin(base + spread) * weapon.speed,
+      vx: Math.cos(base + spread) * (vanguardUltimate ? 1650 : weapon.speed),
+      vy: Math.sin(base + spread) * (vanguardUltimate ? 1650 : weapon.speed),
       life: 0.9,
-      damage: weapon.damage,
+      damage: vanguardUltimate ? Math.max(220, weapon.damage * 4) : weapon.damage,
       team,
       weaponId: weapon.id,
+      ultimateTrail: vanguardUltimate,
     });
   }
 }
@@ -1241,6 +1271,109 @@ function reload() {
   if (game.player.ammo >= currentMagSize()) return;
   game.reloadTimer = currentReloadTime();
   playSound("reload");
+}
+
+function entityTeam(entity) {
+  if (entity.id === "player" || entity.id?.startsWith("ally-")) return "player";
+  return "bot";
+}
+
+function agentById(id) {
+  return agents.find((agent) => agent.id === id) || agents[0];
+}
+
+function addUltimateEffect(type, entity, color, life = 5) {
+  game.ultimateEffects.push({
+    type,
+    entityId: entity.id,
+    x: entity.x,
+    y: entity.y,
+    color,
+    life,
+    maxLife: life,
+    radius: 8,
+  });
+  spawnParticles(entity.x, entity.y, color, 36, 240);
+  game.shake = Math.max(game.shake, 0.38);
+}
+
+function activateUltimate(entity) {
+  if (!entity?.alive || entity.ultPoints < ULT_MAX_POINTS || entity.ultimate) return false;
+  const agent = agentById(entity.agentId);
+  const team = entityTeam(entity);
+  entity.ultPoints = 0;
+  if (entity.id === "player") game.playerUltPoints = 0;
+
+  if (agent.id === "vanguard") {
+    entity.ultimate = { type: "vanguard", life: 7, maxLife: 7 };
+    addUltimateEffect("wind", entity, "#7df9ff", 7);
+  } else if (agent.id === "ciphera") {
+    entity.ultimate = { type: "ciphera", life: 5, maxLife: 5 };
+    if (team === "player") game.revealTimer = Math.max(game.revealTimer, 6);
+    for (const target of team === "player" ? game.bots : [game.player, ...game.allies]) {
+      if (target.alive) target.revealedTimer = Math.max(target.revealedTimer || 0, 6);
+    }
+    addUltimateEffect("global-pulse", entity, "#355cff", 5);
+  } else if (agent.id === "mender") {
+    entity.ultimate = { type: "mender", life: 4, maxLife: 4 };
+    const squad = team === "player" ? [game.player, ...game.allies] : game.bots;
+    for (const target of squad) {
+      if (!target.alive) continue;
+      target.hp = target.maxHp;
+      target.armor = target.maxArmor || 0;
+      if (target.id === "player") game.armor = target.armor;
+      spawnParticles(target.x, target.y, "#62e6a0", 22, 150);
+    }
+    addUltimateEffect("healing-beam", entity, "#62e6a0", 4);
+  } else {
+    entity.ultimate = { type: "shade", life: 9, maxLife: 9 };
+    game.smokes.push({
+      x: entity.id === "player" ? mouse.x : entity.x,
+      y: entity.id === "player" ? mouse.y : entity.y,
+      r: 42,
+      targetR: 260,
+      life: 9,
+      poison: true,
+      damagePerSecond: 24,
+      ownerTeam: team,
+      ultimate: true,
+    });
+    addUltimateEffect("chemical-fog", entity, "#35c46a", 9);
+  }
+  setMessage(`${agent.name} ativou a Ultimate!`);
+  playSound("ability");
+  return true;
+}
+
+function nearestPickup(entity, pickups) {
+  return pickups
+    .slice()
+    .sort((a, b) => Math.hypot(entity.x - a.x, entity.y - a.y) - Math.hypot(entity.x - b.x, entity.y - b.y))[0] || null;
+}
+
+function collectPickups(entity) {
+  if (!entity?.alive) return;
+  const medkit = game.medkits.find((item) => Math.hypot(entity.x - item.x, entity.y - item.y) < entity.r + 22);
+  if (medkit && entity.hp < entity.maxHp) {
+    entity.hp = Math.min(entity.maxHp, entity.hp + MEDKIT_HEAL);
+    game.medkits = game.medkits.filter((item) => item !== medkit);
+    spawnParticles(medkit.x, medkit.y, "#62e6a0", 30, 190);
+    setMessage(`${entity.id === "player" ? "Med-Kit coletado" : "Bot coletou Med-Kit"}: +${MEDKIT_HEAL} HP.`);
+  }
+  const orb = game.ultOrbs.find((item) => Math.hypot(entity.x - item.x, entity.y - item.y) < entity.r + 21);
+  if (orb && entity.ultPoints < ULT_MAX_POINTS) {
+    entity.ultPoints = Math.min(ULT_MAX_POINTS, entity.ultPoints + 1);
+    if (entity.id === "player") game.playerUltPoints = entity.ultPoints;
+    game.ultOrbs = game.ultOrbs.filter((item) => item !== orb);
+    game.ultimateEffects.push({ type: "orb-beam", x: orb.x, y: orb.y, color: "#bd67ff", life: 1.5, maxLife: 1.5, radius: 12 });
+    spawnParticles(orb.x, orb.y, "#bd67ff", 28, 180);
+  }
+}
+
+function updatePickups() {
+  collectPickups(game.player);
+  game.allies.forEach(collectPickups);
+  game.bots.forEach(collectPickups);
 }
 
 function plantOrDefuse(dt) {
@@ -1321,7 +1454,8 @@ function updatePlayer(dt) {
   const dy = (down ? 1 : 0) - (up ? 1 : 0);
   const len = Math.hypot(dx, dy) || 1;
   p.moving = dx !== 0 || dy !== 0;
-  moveEntity(p, (dx / len) * p.speed * dt, (dy / len) * p.speed * dt, map.walls);
+  const ultimateSpeed = p.ultimate?.type === "vanguard" ? 2.05 : 1;
+  moveEntity(p, (dx / len) * p.speed * ultimateSpeed * dt, (dy / len) * p.speed * ultimateSpeed * dt, map.walls);
   p.angle = Math.atan2(mouse.y - p.y, mouse.x - p.x);
   if (game.spike.state === "carried" && game.spike.owner === "player") {
     game.spike.x = p.x;
@@ -1338,6 +1472,7 @@ function updatePlayer(dt) {
       ? `${game.selectedAgent.ability} usada. Sandbox: habilidade sem recarga.`
       : `${game.selectedAgent.ability} usada. Recarga iniciada.`);
   }
+  if (pressed.has("q") && game.phase === "action") activateUltimate(p);
   plantOrDefuse(dt);
 }
 
@@ -1619,7 +1754,8 @@ function moveBotToward(bot, target, dt, speedScale = 1) {
   const safeTarget = resolveBotTarget(bot, target);
   const angle = Math.atan2(safeTarget.y - bot.y, safeTarget.x - bot.x);
   bot.angle = angle;
-  const movedNow = moveEntity(bot, Math.cos(angle) * bot.speed * speedScale * dt, Math.sin(angle) * bot.speed * speedScale * dt, map.walls);
+  const ultimateSpeed = bot.ultimate?.type === "vanguard" ? 1.8 : 1;
+  const movedNow = moveEntity(bot, Math.cos(angle) * bot.speed * speedScale * ultimateSpeed * dt, Math.sin(angle) * bot.speed * speedScale * ultimateSpeed * dt, map.walls);
   bot.moving = movedNow > 0.5;
   if (movedNow < 0.5) {
     bot.stuck += dt;
@@ -1955,6 +2091,41 @@ function closestAliveAllyTo(x, y) {
     .sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y))[0] || null;
 }
 
+function seekCriticalMedkit(entity, dt, danger) {
+  if (entity.hp > entity.maxHp * 0.32 || !game.medkits.length) return false;
+  const medkit = nearestPickup(entity, game.medkits);
+  if (!medkit) return false;
+  entity.aiState = "seek-medkit";
+  if (danger) botShootAt(entity, danger, dt, entityTeam(entity) === "player" ? "ally" : "bot", 1.35);
+  moveBotToward(entity, medkit, dt, 1.18);
+  return true;
+}
+
+function seekUltimateOrb(entity, dt) {
+  if (entity.ultPoints >= ULT_MAX_POINTS || !game.ultOrbs.length) return false;
+  const orb = nearestPickup(entity, game.ultOrbs);
+  if (!orb) return false;
+  entity.aiState = "seek-ult";
+  moveBotToward(entity, orb, dt, 1.04);
+  return true;
+}
+
+function maybeUseBotUltimate(bot, visibleTarget) {
+  if (bot.ultPoints < ULT_MAX_POINTS || bot.ultimate) return false;
+  const agentId = bot.agentId;
+  const alliedSquad = entityTeam(bot) === "player" ? [game.player, ...game.allies] : game.bots;
+  if (agentId === "mender") {
+    if (alliedSquad.some((entity) => entity.alive && (entity.hp < 58 || entity.armor < (entity.maxArmor || 0) * 0.4))) {
+      return activateUltimate(bot);
+    }
+    return false;
+  }
+  if (agentId === "ciphera") {
+    return visibleTarget ? activateUltimate(bot) : false;
+  }
+  return visibleTarget ? activateUltimate(bot) : false;
+}
+
 function updateAllies(dt) {
   const squad = [game.player, ...game.allies];
   const playerNearSpike = game.player?.alive && Math.hypot(game.player.x - game.spike.x, game.player.y - game.spike.y) < 46;
@@ -1965,6 +2136,15 @@ function updateAllies(dt) {
   game.allies.forEach((ally, index) => {
     if (!ally.alive) return;
     const enemy = closestVisibleEnemy(ally);
+    maybeUseBotUltimate(ally, enemy);
+    if (seekCriticalMedkit(ally, dt, enemy)) {
+      keepSquadSpacing(ally, squad, dt);
+      return;
+    }
+    if (!enemy && seekUltimateOrb(ally, dt)) {
+      keepSquadSpacing(ally, squad, dt);
+      return;
+    }
     if (ally === allyDefuser) {
       const dist = Math.hypot(ally.x - game.spike.x, ally.y - game.spike.y);
       ally.aiState = "defuse";
@@ -2020,6 +2200,16 @@ function updateBots(dt) {
     const seesPlayer = botCanSeePlayer(bot);
     const visibleTarget = closestVisibleSquadTarget(bot);
     updateBotAwareness(bot, visibleTarget, dt);
+    maybeUseBotUltimate(bot, visibleTarget);
+
+    if (seekCriticalMedkit(bot, dt, visibleTarget)) {
+      keepBotSpacing(bot, dt);
+      continue;
+    }
+    if (!visibleTarget && bot.memoryTimer <= 0 && seekUltimateOrb(bot, dt)) {
+      keepBotSpacing(bot, dt);
+      continue;
+    }
 
     if (game.playerSide === "attackers" && bot === botDefuser) {
       bot.aiState = "defuse";
