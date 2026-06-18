@@ -767,6 +767,7 @@ function fullReset() {
   game.selectedAgent = agents[0];
   game.agentLocked = false;
   game.godMode = false;
+  game.playerUltPoints = 0;
   buildShop();
 }
 
@@ -784,6 +785,7 @@ function startNewMatch() {
   game.allyLoadout = { weaponId: "pistol", armor: 0 };
   game.selectedWeapon = weapons[0];
   game.roundMoneyDelta = 0;
+  game.playerUltPoints = 0;
   game.roundNumber = 1;
   game.startingSide = Math.random() < 0.5 ? "attackers" : "defenders";
   game.playerSide = game.startingSide;
@@ -1262,6 +1264,7 @@ function shoot(owner, targetX, targetY, weapon, team) {
       team,
       weaponId: weapon.id,
       ultimateTrail: vanguardUltimate,
+      hitIds: [],
     });
   }
 }
@@ -2364,6 +2367,9 @@ function updateBullets(dt) {
     bullet.x += bullet.vx * dt;
     bullet.y += bullet.vy * dt;
     bullet.life -= dt;
+    if (bullet.ultimateTrail) {
+      game.neonTrails.push({ x1: oldX, y1: oldY, x2: bullet.x, y2: bullet.y, life: 1.15, maxLife: 1.15, color: "#5df6ff" });
+    }
 
     const hitDestructible = game.destructibles.find((box) => lineIntersectsRect(oldX, oldY, bullet.x, bullet.y, box));
     if (hitDestructible) {
@@ -2385,8 +2391,10 @@ function updateBullets(dt) {
 
     if (bullet.team === "player" || bullet.team === "ally") {
       for (const bot of game.bots) {
+        if (bullet.hitIds?.includes(bot.id)) continue;
         const region = bot.alive ? hitRegion(oldX, oldY, bullet.x, bullet.y, bot, 6) : null;
         if (region) {
+          bullet.hitIds?.push(bot.id);
           const damage = damageForHit(bullet, bot, region);
           const actualDamage = applyDamage(bot, damage);
           if (bullet.team === "player") {
@@ -2397,7 +2405,7 @@ function updateBullets(dt) {
           game.hitMarkers.push({ x: bot.x, y: bot.y - 28, life: 0.35, maxLife: 0.35, color: region === "head" ? "#ff4d5d" : "#ffd166" });
           spawnParticles(bullet.x, bullet.y, "#4fb3ff", 10, 130);
           playSound(region === "head" ? "headshot" : "hit");
-          bullet.life = 0;
+          if (!bullet.ultimateTrail) bullet.life = 0;
           if (bot.hp <= 0) {
             eliminateBot(bot, {
               playerCredit: bullet.team === "player",
@@ -2405,14 +2413,16 @@ function updateBullets(dt) {
               headshot: region === "head",
             });
           }
-          break;
+          if (!bullet.ultimateTrail) break;
         }
       }
     } else {
       const targets = [game.player, ...game.allies];
       for (const target of targets) {
+        if (bullet.hitIds?.includes(target.id)) continue;
         const region = target.alive ? hitRegion(oldX, oldY, bullet.x, bullet.y, target, target.id === "player" ? 3 : 6) : null;
         if (!region) continue;
+        bullet.hitIds?.push(target.id);
         const actualDamage = applyDamage(target, damageForHit(bullet, target, region));
         game.hitMarkers.push({ x: target.x, y: target.y - 30, life: 0.3, maxLife: 0.3, color: "#ff5b5b" });
         spawnParticles(bullet.x, bullet.y, "#ff4d5d", 8, 120);
@@ -2425,7 +2435,7 @@ function updateBullets(dt) {
             maxLife: 0.72,
           };
         }
-        bullet.life = 0;
+        if (!bullet.ultimateTrail) bullet.life = 0;
         if (target.hp <= 0) {
           target.alive = false;
           if (game.spike.defuserId === target.id) {
@@ -2447,7 +2457,7 @@ function updateBullets(dt) {
               : "Voce foi eliminado. Atacantes venceram.");
           }
         }
-        break;
+        if (!bullet.ultimateTrail) break;
       }
     }
   }
@@ -2531,22 +2541,51 @@ function updateTimers(dt) {
   }
   for (const smoke of game.smokes) {
     smoke.life -= dt;
+    if (smoke.targetR) smoke.r += (smoke.targetR - smoke.r) * Math.min(1, dt * 1.4);
     if (!smoke.poison) continue;
     smoke.tick = (smoke.tick || 0) - dt;
-    for (const bot of game.bots) {
-      if (!bot.alive || Math.hypot(bot.x - smoke.x, bot.y - smoke.y) > smoke.r) continue;
+    const targets = smoke.ownerTeam === "bot" ? [game.player, ...game.allies] : game.bots;
+    for (const target of targets) {
+      if (!target.alive || Math.hypot(target.x - smoke.x, target.y - smoke.y) > smoke.r) continue;
       const damage = (smoke.damagePerSecond || 18) * dt;
-      const actualDamage = applyDamage(bot, damage);
-      game.stats.damage += actualDamage;
+      const actualDamage = applyDamage(target, damage);
+      if (smoke.ownerTeam !== "bot") game.stats.damage += actualDamage;
       if (smoke.tick <= 0) {
-        spawnDamageNumber(bot, Math.max(1, Math.round((smoke.damagePerSecond || 18) * POISON_TICK_INTERVAL)), false);
-        spawnParticles(bot.x, bot.y, "#54e36f", 4, 55);
+        spawnDamageNumber(target, Math.max(1, Math.round((smoke.damagePerSecond || 18) * POISON_TICK_INTERVAL)), false);
+        spawnParticles(target.x, target.y, "#54e36f", 4, 55);
       }
-      if (bot.hp <= 0) eliminateBot(bot, { playerCredit: true, weaponName: "Poison Cloud" });
+      if (target.hp <= 0) {
+        if (target.id?.startsWith("bot-")) {
+          eliminateBot(target, { playerCredit: smoke.ownerTeam !== "bot", weaponName: "Poison Cloud" });
+        } else {
+          target.alive = false;
+          if (target.id === "player") {
+            game.stats.deaths += 1;
+            endRound(opposingSide(game.playerSide), "A névoa química eliminou você.");
+          }
+        }
+      }
     }
     if (smoke.tick <= 0) smoke.tick = POISON_TICK_INTERVAL;
   }
   game.smokes = game.smokes.filter((s) => s.life > 0);
+  for (const entity of [game.player, ...game.allies, ...game.bots]) {
+    if (!entity?.ultimate) continue;
+    entity.ultimate.life -= dt;
+    if (entity.ultimate.life <= 0) entity.ultimate = null;
+  }
+  for (const effect of game.ultimateEffects) {
+    effect.life -= dt;
+    effect.radius += dt * (effect.type === "global-pulse" ? 360 : 72);
+    const source = [game.player, ...game.allies, ...game.bots].find((entity) => entity?.id === effect.entityId);
+    if (source) {
+      effect.x = source.x;
+      effect.y = source.y;
+    }
+  }
+  game.ultimateEffects = game.ultimateEffects.filter((effect) => effect.life > 0);
+  for (const trail of game.neonTrails) trail.life -= dt;
+  game.neonTrails = game.neonTrails.filter((trail) => trail.life > 0);
   for (const particle of game.particles) {
     particle.x += particle.vx * dt;
     particle.y += particle.vy * dt;
@@ -2663,6 +2702,7 @@ function update(dt) {
     updateBots(dt);
     updateBullets(dt);
     updateSpike(dt);
+    updatePickups();
     checkWinConditions();
   }
 }
@@ -2769,6 +2809,22 @@ function drawEntity(entity, color, label, kind = "bot") {
   if (!entity.alive) return;
   const weapon = kind === "player" ? game.selectedWeapon : entity.weapon;
   const armorRatio = (entity.maxArmor || 0) > 0 ? Math.max(0, entity.armor || 0) / entity.maxArmor : 0;
+  if (entity.ultimate) {
+    const pulse = 1 + Math.sin(performance.now() / 90) * 0.12;
+    const auraColor = entity.ultimate.type === "vanguard" ? "#65f5ff"
+      : entity.ultimate.type === "ciphera" ? "#4266ff"
+        : entity.ultimate.type === "mender" ? "#62e6a0"
+          : "#35c46a";
+    ctx.save();
+    ctx.strokeStyle = auraColor;
+    ctx.shadowColor = auraColor;
+    ctx.shadowBlur = 22;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(entity.x, entity.y, (entity.r + 11) * pulse, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
   ctx.save();
   ctx.translate(entity.x, entity.y);
   ctx.rotate(entity.angle);
@@ -2780,6 +2836,14 @@ function drawEntity(entity, color, label, kind = "bot") {
   ctx.beginPath();
   ctx.arc(0, 0, entity.r, 0, Math.PI * 2);
   ctx.fill();
+  if ((entity.revealedTimer || 0) > 0) {
+    ctx.strokeStyle = "#5577ff";
+    ctx.shadowColor = "#5577ff";
+    ctx.shadowBlur = 20;
+    ctx.lineWidth = 6;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
   ctx.strokeStyle = kind === "player" ? "#ffffff" : "rgba(255,255,255,0.45)";
   ctx.lineWidth = kind === "player" ? 3 : 2;
   ctx.stroke();
@@ -3219,6 +3283,105 @@ function drawSpikeHint() {
   ctx.restore();
 }
 
+function drawMedkitsAndOrbs() {
+  const now = performance.now() / 1000;
+  for (const kit of game.medkits) {
+    const floatY = Math.sin(now * 1.8 + kit.phase) * 4;
+    const pulse = 0.7 + Math.sin(now * 1.4 + kit.phase) * 0.22;
+    ctx.save();
+    ctx.translate(kit.x, kit.y + floatY);
+    ctx.fillStyle = "rgba(0,0,0,0.28)";
+    ctx.beginPath();
+    ctx.ellipse(0, 16, 24, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#303a40";
+    ctx.strokeStyle = "#77838a";
+    ctx.lineWidth = 2;
+    ctx.fillRect(-23, -13, 46, 29);
+    ctx.strokeRect(-23, -13, 46, 29);
+    ctx.fillStyle = "#1b2226";
+    ctx.fillRect(-9, -19, 18, 7);
+    ctx.save();
+    ctx.rotate(Math.PI / 4);
+    ctx.fillStyle = "#62e6a0";
+    ctx.shadowColor = "#62e6a0";
+    ctx.shadowBlur = 18 * pulse;
+    ctx.fillRect(-7, -7, 14, 14);
+    ctx.restore();
+    ctx.fillStyle = `rgba(98,230,160,${pulse})`;
+    ctx.font = "bold 14px Segoe UI";
+    ctx.fillText("+", -31, -14);
+    ctx.fillText("+", 25, 5);
+    ctx.restore();
+  }
+  for (const orb of game.ultOrbs) {
+    const pulse = 1 + Math.sin(now * 1.5 + orb.phase) * 0.12;
+    ctx.save();
+    ctx.translate(orb.x, orb.y);
+    ctx.strokeStyle = "rgba(189,103,255,0.5)";
+    ctx.lineWidth = 3;
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath();
+      ctx.arc(0, 0, 22 + i * 8 + Math.sin(now + i) * 3, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#000";
+    ctx.shadowColor = "#bd67ff";
+    ctx.shadowBlur = 28;
+    ctx.beginPath();
+    ctx.arc(0, 0, 15 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#d7a0ff";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function drawUltimateEffects() {
+  for (const trail of game.neonTrails) {
+    const alpha = Math.max(0, trail.life / trail.maxLife);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = trail.color;
+    ctx.shadowColor = trail.color;
+    ctx.shadowBlur = 18;
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(trail.x1, trail.y1);
+    ctx.lineTo(trail.x2, trail.y2);
+    ctx.stroke();
+    ctx.restore();
+  }
+  for (const effect of game.ultimateEffects) {
+    const alpha = Math.max(0, effect.life / effect.maxLife);
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, alpha * 1.5);
+    ctx.strokeStyle = effect.color;
+    ctx.shadowColor = effect.color;
+    ctx.shadowBlur = 28;
+    if (effect.type === "global-pulse") {
+      ctx.lineWidth = 8;
+      ctx.beginPath();
+      ctx.arc(effect.x, effect.y, effect.radius, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (effect.type === "healing-beam" || effect.type === "orb-beam") {
+      ctx.fillStyle = effect.color;
+      const width = effect.type === "healing-beam" ? 34 : 12;
+      ctx.fillRect(effect.x - width / 2, 0, width, effect.y);
+    } else {
+      ctx.lineWidth = 5;
+      for (let i = 0; i < 3; i++) {
+        const angle = performance.now() / 260 + i * Math.PI * 2 / 3;
+        ctx.beginPath();
+        ctx.arc(effect.x, effect.y, effect.radius + i * 12, angle, angle + Math.PI * 1.25);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+}
+
 function draw() {
   if (game.menuState !== "none" && game.phase !== "action") {
     drawMenuSlideshow();
@@ -3231,6 +3394,7 @@ function draw() {
   }
 
   drawMap();
+  drawMedkitsAndOrbs();
 
   for (const smoke of game.smokes) {
     ctx.fillStyle = smoke.poison ? "rgba(47, 179, 78, 0.62)" : "rgba(82, 71, 115, 0.78)";
@@ -3268,6 +3432,7 @@ function draw() {
   }
   drawEntity(game.player, game.selectedAgent.color, game.playerSide === "attackers" ? "YOU ATK" : "YOU DEF", "player");
   drawWorldActionBar();
+  drawUltimateEffects();
 
   ctx.fillStyle = "#f8fafc";
   for (const bullet of game.bullets) {
@@ -3402,6 +3567,8 @@ function updateUi() {
   setText(ui.agent, `${game.selectedAgent.name} ${atk ? "ATK" : "DEF"} · ${game.sandbox ? "E livre" : game.abilityCooldown > 0 ? `${Math.ceil(game.abilityCooldown)}s` : "E"}`);
   setText(ui.weapon, game.selectedWeapon.name);
   setText(ui.hp, `${Math.max(0, Math.ceil(game.player.hp))}`);
+  setText(ui.ultPoints, `${game.player.ultPoints}/${ULT_MAX_POINTS}`);
+  toggleClass(ui.ultCounter, "ready", game.player.ultPoints >= ULT_MAX_POINTS);
   setText(ui.ammo, game.reloadTimer > 0 ? "Recarregando" : `${game.player.ammo}`);
   setText(ui.spike, game.spike.state === "carried"
     ? game.spike.owner === "player" ? "Com você" : "Em transporte"
@@ -3417,8 +3584,8 @@ function updateUi() {
   setText(ui.message?.querySelector?.("span"), game.paused
     ? (game.menuState === "pause" ? "Jogo pausado. Aperte Esc ou P para continuar." : "Escolha uma opção no menu.")
     : game.playerSide === "attackers"
-      ? "WASD move, mouse mira, clique atira, E habilidade, F planta, B loja, Esc pause."
-      : "WASD move, mouse mira, clique atira, E habilidade, F desarma, B loja, Esc pause.");
+      ? "WASD move, E habilidade, Q Ultimate, F planta, B loja, Esc pause."
+      : "WASD move, E habilidade, Q Ultimate, F desarma, B loja, Esc pause.");
   toggleClass(ui.sandboxTools, "hidden", !game.sandbox || game.menuState !== "none");
   setText(ui.godModeButton, `God: ${game.godMode ? "ON" : "OFF"}`);
   updateScoreboard();
