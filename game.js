@@ -587,6 +587,7 @@ function makeBot(spawn, index) {
   const weapon = botWeaponForRound(index);
   const botArmor = game.roundNumber >= 8 ? 35 : game.roundNumber >= 4 ? 20 : 0;
   return {
+    id: `bot-${index}`,
     x: spawn.x,
     y: spawn.y,
     r: 17,
@@ -798,6 +799,14 @@ function endRound(winner, reason, outcome = "standard") {
   if (winner === game.playerSide) {
     game.playerScore += 1;
     game.lossStreak = 0;
+  } else {
+    game.enemyScore += 1;
+    game.lossStreak += 1;
+  }
+  if (outcome === "spike_death") {
+    moneyGained = ECONOMY.spikeDeathCash - game.money;
+    if (!game.sandbox) game.money = ECONOMY.spikeDeathCash;
+  } else if (winner === game.playerSide) {
     moneyGained = outcome === "defuse"
       ? ECONOMY.defuseWin
       : outcome === "elimination"
@@ -805,15 +814,8 @@ function endRound(winner, reason, outcome = "standard") {
         : ECONOMY.standardWin;
     if (!game.sandbox) game.money += moneyGained;
   } else {
-    game.enemyScore += 1;
-    game.lossStreak += 1;
-    if (outcome === "spike_death") {
-      moneyGained = ECONOMY.spikeDeathCash - game.money;
-      if (!game.sandbox) game.money = ECONOMY.spikeDeathCash;
-    } else {
-      moneyGained = ECONOMY.lossConsolation;
-      if (!game.sandbox) game.money += moneyGained;
-    }
+    moneyGained = ECONOMY.lossConsolation;
+    if (!game.sandbox) game.money += moneyGained;
   }
   if (!game.sandbox && !game.training) game.money = Math.min(game.money, ECONOMY.cap);
   game.roundMoneyDelta = moneyGained;
@@ -2141,6 +2143,29 @@ function updateBots(dt) {
   }
 }
 
+function eliminateBot(bot, { playerCredit = false, weaponName = "Poison Cloud", headshot = false } = {}) {
+  if (!bot.alive) return;
+  bot.alive = false;
+  if (playerCredit) {
+    game.stats.kills += 1;
+    addKillFeedEntry(true, weaponName, headshot);
+  }
+  if (!game.sandbox) {
+    game.money += playerCredit ? (headshot ? ECONOMY.headshot : ECONOMY.kill) : Math.floor(ECONOMY.kill * 0.5);
+    if (!game.training) game.money = Math.min(game.money, ECONOMY.cap);
+  }
+  if (game.spike.defuserId === bot.id) resetPartialDefuse();
+  if (bot.hasSpike) {
+    bot.hasSpike = false;
+    game.spike.state = "dropped";
+    game.spike.owner = null;
+    game.spike.x = bot.x;
+    game.spike.y = bot.y;
+    game.spike.plantProgress = 0;
+    setMessage("Spike derrubada. Bots tentarão recuperar.");
+  }
+}
+
 function updateBullets(dt) {
   for (const bullet of game.bullets) {
     const oldX = bullet.x;
@@ -2183,27 +2208,11 @@ function updateBullets(dt) {
           playSound(region === "head" ? "headshot" : "hit");
           bullet.life = 0;
           if (bot.hp <= 0) {
-            bot.alive = false;
-            if (bullet.team === "player") {
-              game.stats.kills += 1;
-              addKillFeedEntry(true, game.selectedWeapon.name, region === "head");
-            }
-            if (!game.sandbox) {
-              game.money += bullet.team === "player" ? (region === "head" ? ECONOMY.headshot : ECONOMY.kill) : Math.floor(ECONOMY.kill * 0.5);
-              if (!game.training) game.money = Math.min(game.money, ECONOMY.cap);
-            }
-            if (game.spike.defuserId === bot.id) {
-              resetPartialDefuse();
-            }
-            if (bot.hasSpike) {
-              bot.hasSpike = false;
-              game.spike.state = "dropped";
-              game.spike.owner = null;
-              game.spike.x = bot.x;
-              game.spike.y = bot.y;
-              game.spike.plantProgress = 0;
-              setMessage("Spike derrubada. Bots tentarao recuperar.");
-            }
+            eliminateBot(bot, {
+              playerCredit: bullet.team === "player",
+              weaponName: game.selectedWeapon.name,
+              headshot: region === "head",
+            });
           }
           break;
         }
@@ -2329,7 +2338,23 @@ function updateTimers(dt) {
     game.damageIndicator.life -= dt;
     if (game.damageIndicator.life <= 0) game.damageIndicator = null;
   }
-  for (const smoke of game.smokes) smoke.life -= dt;
+  for (const smoke of game.smokes) {
+    smoke.life -= dt;
+    if (!smoke.poison) continue;
+    smoke.tick = (smoke.tick || 0) - dt;
+    for (const bot of game.bots) {
+      if (!bot.alive || Math.hypot(bot.x - smoke.x, bot.y - smoke.y) > smoke.r) continue;
+      const damage = (smoke.damagePerSecond || 18) * dt;
+      const actualDamage = applyDamage(bot, damage);
+      game.stats.damage += actualDamage;
+      if (smoke.tick <= 0) {
+        spawnDamageNumber(bot, Math.max(1, Math.round((smoke.damagePerSecond || 18) * 0.35)), false);
+        spawnParticles(bot.x, bot.y, "#54e36f", 4, 55);
+      }
+      if (bot.hp <= 0) eliminateBot(bot, { playerCredit: true, weaponName: "Poison Cloud" });
+    }
+    if (smoke.tick <= 0) smoke.tick = 0.35;
+  }
   game.smokes = game.smokes.filter((s) => s.life > 0);
   for (const particle of game.particles) {
     particle.x += particle.vx * dt;
@@ -3017,10 +3042,15 @@ function draw() {
   drawMap();
 
   for (const smoke of game.smokes) {
-    ctx.fillStyle = "rgba(82, 71, 115, 0.78)";
+    ctx.fillStyle = smoke.poison ? "rgba(47, 179, 78, 0.62)" : "rgba(82, 71, 115, 0.78)";
     ctx.beginPath();
     ctx.arc(smoke.x, smoke.y, smoke.r, 0, Math.PI * 2);
     ctx.fill();
+    if (smoke.poison) {
+      ctx.strokeStyle = "rgba(121, 255, 139, 0.82)";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
   }
 
   drawSpike();
@@ -3135,9 +3165,6 @@ function updateUi() {
   setText(ui.sidePill, atk ? "ATK" : "DEF");
   setClassName(ui.sidePill, "hud-pill side-pill " + (atk ? "atk" : "def"));
 
-  // Round label
-  setText(ui.roundLabel, `Round ${game.roundNumber}`);
-
   // Timer com urgência
   const t = Math.max(0, Math.ceil(game.phaseTime));
   const spikePlanted = game.spike.state === "planted";
@@ -3197,12 +3224,10 @@ function updateUi() {
   setStyle(ui.ammoBar, "transform", `scaleX(${game.reloadTimer > 0 ? 1 - game.reloadTimer / currentReloadTime() : game.player.ammo / currentMagSize()})`);
   setText(ui.message?.querySelector?.("strong"), game.message);
   setText(ui.message?.querySelector?.("span"), game.paused
-    ? (game.menuState === "pause" ? "Jogo pausado. Aperte P ou clique em Continuar." : "Escolha uma opcao no menu.")
+    ? (game.menuState === "pause" ? "Jogo pausado. Aperte Esc ou P para continuar." : "Escolha uma opção no menu.")
     : game.playerSide === "attackers"
-      ? "WASD move, mouse mira, clique atira, E habilidade, F planta, P pause."
-      : "WASD move, mouse mira, clique atira, E habilidade, F desarma, P pause.");
-  setText(ui.pauseButton, game.menuState === "pause" ? "Continuar" : "Pause");
-  setText(ui.shopButton, ui.shop?.classList?.contains("hidden") ? "Loja" : "Fechar");
+      ? "WASD move, mouse mira, clique atira, E habilidade, F planta, B loja, Esc pause."
+      : "WASD move, mouse mira, clique atira, E habilidade, F desarma, B loja, Esc pause.");
   toggleClass(ui.sandboxTools, "hidden", !game.sandbox || game.menuState !== "none");
   setText(ui.godModeButton, `God: ${game.godMode ? "ON" : "OFF"}`);
   updateScoreboard();
@@ -3275,7 +3300,7 @@ function handleEscape() {
     updateUi();
     return;
   }
-  toggleShop();
+  showPauseMenu();
 }
 
 function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
@@ -3292,12 +3317,14 @@ function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
       button.classList.add("menu-back", "icon-only");
       button.setAttribute("aria-label", item.label);
       button.title = item.label;
-      button.innerHTML = `<span class="menu-icon menu-icon-link" aria-hidden="true"></span>`;
+      button.innerHTML = `<span class="menu-icon menu-icon-back" aria-hidden="true"></span>`;
     } else if (state === "main") {
       button.innerHTML = `<span class="menu-icon menu-icon-${item.icon || "star"}" aria-hidden="true"></span><b>${item.label}</b>`;
     } else if (state === "difficulty") {
       const stars = Math.max(1, item.stars || 1);
-      button.innerHTML = `<span class="difficulty-stars" aria-hidden="true">${'<span class="menu-icon menu-icon-star"></span>'.repeat(stars)}</span><b>${item.label}</b>`;
+      button.setAttribute("aria-label", item.label);
+      button.title = item.label;
+      button.innerHTML = `<span class="difficulty-icon difficulty-icon-${stars}" aria-hidden="true"></span>`;
     } else {
       button.innerHTML = `<b>${item.label}</b>`;
     }
@@ -3393,7 +3420,7 @@ function showMainMenu() {
 function showDifficultyMenu() {
   setMenu("Dificuldade", "", [
     { label: "FÁCIL", stars: 1, action: () => startMode("Fácil", "easy") },
-    { label: "NORMAL", stars: 2, action: () => startMode("Normal", "normal") },
+    { label: "MÉDIO", stars: 2, action: () => startMode("Médio", "normal") },
     { label: "DIFÍCIL", stars: 3, action: () => startMode("Difícil", "hard") },
     { label: "VOLTAR", back: true, action: showMainMenu },
   ], "JOGAR", "difficulty");
@@ -3720,6 +3747,9 @@ if (window) window.addEventListener("keydown", (event) => {
   if (!event.repeat && event.key.toLowerCase() === "p") {
     togglePause();
   }
+  if (!event.repeat && event.key.toLowerCase() === "b" && game.menuState === "none") {
+    toggleShop();
+  }
   if (game.sandbox && !event.repeat && event.key.toLowerCase() === "x") {
     game.bots = [];
     setMessage("Sandbox: inimigos removidos.");
@@ -3775,8 +3805,6 @@ if (window) window.addEventListener("mouseup", () => {
   mouse.down = false;
 });
 
-if (ui.pauseButton) ui.pauseButton.addEventListener("click", togglePause);
-if (ui.shopButton) ui.shopButton.addEventListener("click", toggleShop);
 if (ui.shopBackdrop) ui.shopBackdrop.addEventListener("click", () => { closeShop(); updateUi(); });
 
 if (ui.shopTabs && typeof ui.shopTabs.querySelectorAll === "function") {

@@ -968,14 +968,8 @@ canvas {
 .menu-icon-tools { background-image: url("assets/tools.png"); }
 .menu-icon-money { background-image: url("assets/money.png"); }
 .menu-icon-star { background-image: url("assets/star.png"); }
-.menu-icon-link { background-image: url("assets/back-arrow-upload.png"); }
-
-.difficulty-stars {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 96px;
-}
+.menu-icon-link { background-image: url("assets/link.png"); }
+.menu-icon-back { background-image: url("assets/back-arrow-upload.png"); }
 
 .difficulty-icon {
   width: 84px;
