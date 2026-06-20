@@ -1006,20 +1006,22 @@ button.click-feedback::after {
 
 .menu-button.menu-back {
   margin-top: 8px;
-  width: var(--menu-icon-size);
-  min-width: var(--menu-icon-size);
-  height: var(--menu-icon-size);
-  min-height: var(--menu-icon-size);
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  min-height: 42px;
   padding: 0;
-  border: 0;
+  border: none;
+  border-radius: 0;
   background-color: transparent;
   background-image: url("assets/image_276026.png") !important;
   background-position: center;
   background-repeat: no-repeat;
-  background-size: var(--menu-icon-size) var(--menu-icon-size);
+  background-size: 66px 66px;
   box-shadow: none;
   mix-blend-mode: screen;
-  filter: grayscale(1) contrast(12) brightness(1.7);
+  filter: grayscale(1) contrast(16) brightness(1.85);
+  overflow: hidden;
 }
 
 .menu-button.menu-back::before,
@@ -1086,59 +1088,71 @@ button.click-feedback::after {
 }
 
 .menu-state-difficulty .menu-card {
-  width: min(760px, calc(100% - 32px));
+  width: min(500px, calc(100% - 28px));
+  max-width: 500px;
   min-width: 0;
   min-height: 0;
-  padding: clamp(24px, 5vh, 44px);
+  padding: 22px 24px 18px;
   border: 1px solid rgba(215, 237, 255, 0.16);
-  border-radius: 14px;
+  border-radius: 12px;
   text-align: center;
   box-shadow: 0 28px 90px rgba(0, 0, 0, 0.58);
 }
 
 .menu-state-difficulty .menu-copy {
-  margin-bottom: clamp(20px, 4vh, 34px);
+  margin-bottom: 16px;
   padding-top: 0;
+}
+
+.menu-state-difficulty .menu-card h2 {
+  font-size: clamp(30px, 4vw, 38px);
 }
 
 .menu-state-difficulty .difficulty-button {
   width: 100%;
   min-width: 0;
   height: auto;
-  min-height: 108px;
+  min-height: 82px;
   justify-content: center;
   flex-direction: column;
   justify-self: stretch;
-  gap: 10px;
-  padding: 14px 12px;
-  border: 0;
-  border-radius: 10px;
+  gap: 7px;
+  padding: 8px 6px;
+  border: none;
+  border-radius: 8px;
   background-color: transparent;
   box-shadow: none;
+  overflow: hidden;
 }
 
 .menu-state-difficulty .menu-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   justify-content: center;
   align-items: center;
-  gap: clamp(16px, 3vw, 34px);
+  gap: 12px;
 }
 
 .menu-state-difficulty .menu-back {
   grid-column: 1 / -1;
   justify-self: center;
+  margin-top: 0;
 }
 
 .difficulty-glyph {
-  width: var(--menu-icon-size);
-  height: var(--menu-icon-size);
+  width: 42px;
+  height: 42px;
   display: block;
-  flex: 0 0 var(--menu-icon-size);
+  flex: 0 0 42px;
   background-position: center;
   background-repeat: no-repeat;
-  background-size: contain;
+  background-size: 66px 66px;
+  background-color: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
   mix-blend-mode: screen;
-  filter: grayscale(1) contrast(12) brightness(1.7);
+  filter: grayscale(1) contrast(16) brightness(1.85);
+  overflow: hidden;
 }
 
 .menu-state-difficulty .difficulty-button-1 .difficulty-glyph {
@@ -1155,8 +1169,8 @@ button.click-feedback::after {
 
 .menu-state-difficulty .difficulty-button:hover,
 .menu-state-difficulty .difficulty-button:focus-visible {
-  border: 0;
-  background-color: rgba(255, 255, 255, 0.045);
+  border: none;
+  background-color: transparent;
   box-shadow: none;
   transform: translateY(-3px);
 }

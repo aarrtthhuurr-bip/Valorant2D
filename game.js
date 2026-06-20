@@ -542,6 +542,7 @@ const game = {
   tutorialStep: 0,
   tutorialStage: "idle",
   tutorialMoveTime: 0,
+  tutorialMoveRemaining: 3,
   tutorialSlowTimer: 0,
   tutorialKillsAtStart: 0,
   recoilHeat: 0,
@@ -1181,6 +1182,7 @@ function showTutorialAgentChoice() {
 function setTutorialPhase(step) {
   game.tutorialStep = step;
   game.tutorialMoveTime = 0;
+  game.tutorialMoveRemaining = 3;
   game.tutorialSlowTimer = 0;
   game.bullets = [];
   game.particles = [];
@@ -1199,7 +1201,7 @@ function setTutorialPhase(step) {
     sanitizeEntityPosition(game.player);
     game.spike.state = "carried";
     game.spike.owner = null;
-    setTutorialPrompt("Fase 1 · Movimento", "Use WASD para andar", "0 / 3 segundos");
+    setTutorialPrompt("Fase 1 · Movimento", "Use WASD para andar", "3.00 segundos");
     return;
   }
 
@@ -1248,10 +1250,20 @@ function setTutorialPhase(step) {
 function updateTutorial(dt) {
   if (!game.tutorial || game.paused) return;
   if (game.tutorialStep === 0) {
-    if (game.player.moving) game.tutorialMoveTime += dt;
-    const remaining = Math.max(0, 3 - game.tutorialMoveTime);
-    if (ui.tutorialProgress) ui.tutorialProgress.textContent = `${(3 - remaining).toFixed(1)} / 3 segundos`;
-    if (game.tutorialMoveTime >= 3) setTutorialPhase(1);
+    const safeDt = Number.isFinite(dt) && dt > 0 ? dt : 0;
+    if (!Number.isFinite(game.tutorialMoveRemaining)) game.tutorialMoveRemaining = 3;
+    if (!Number.isFinite(game.tutorialMoveTime)) game.tutorialMoveTime = 0;
+    if (game.player?.moving) {
+      game.tutorialMoveTime += safeDt;
+      game.tutorialMoveRemaining = Math.max(0, game.tutorialMoveRemaining - safeDt);
+    }
+    if (ui.tutorialProgress) {
+      ui.tutorialProgress.textContent = `${game.tutorialMoveRemaining.toFixed(2)} segundos`;
+    }
+    if (game.tutorialMoveRemaining <= 0) {
+      ui.tutorialPrompt?.classList.add("fade-out");
+      setTutorialPhase(1);
+    }
     return;
   }
 
