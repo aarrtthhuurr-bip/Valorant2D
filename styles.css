@@ -827,11 +827,15 @@ canvas {
 .menu-card {
   width: min(420px, 34vw);
   min-width: 340px;
-  min-height: 100%;
+  min-height: 0;
+  max-height: 85vh;
+  max-height: 85dvh;
   padding: clamp(28px, 5vh, 56px) 28px;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   text-align: left;
   border-radius: 0;
   border-width: 0 1px 0 0;
@@ -888,9 +892,16 @@ canvas {
 }
 
 .menu-grid {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   align-items: center;
+  width: 100%;
   gap: var(--menu-element-gap);
+}
+
+.menu-grid > button {
+  width: 100%;
+  flex: 0 0 auto;
 }
 
 /* ── Menu buttons ── */
@@ -1006,21 +1017,21 @@ button.click-feedback::after {
 
 .menu-button.menu-back {
   margin-top: 8px;
-  width: 42px;
-  min-width: 42px;
-  height: 42px;
-  min-height: 42px;
+  width: 42px !important;
+  min-width: 42px !important;
+  height: 42px !important;
+  min-height: 42px !important;
   padding: 0;
-  border: none;
+  border: none !important;
   border-radius: 0;
-  background-color: transparent;
+  background-color: transparent !important;
   background-image: url("assets/image_276026.png") !important;
   background-position: center;
   background-repeat: no-repeat;
   background-size: 66px 66px;
   box-shadow: none;
   mix-blend-mode: screen;
-  filter: grayscale(1) contrast(16) brightness(1.85);
+  filter: brightness(0) invert(1);
   overflow: hidden;
 }
 
@@ -1035,8 +1046,8 @@ button.click-feedback::after {
 
 .menu-button.menu-back:hover,
 .menu-button.menu-back:focus-visible {
-  border: 0;
-  background-color: transparent;
+  border: none !important;
+  background-color: transparent !important;
   background-image: url("assets/image_276026.png") !important;
   box-shadow: none;
   transform: translateX(-4px);
@@ -1087,6 +1098,33 @@ button.click-feedback::after {
   display: none;
 }
 
+.menu-state-options {
+  align-items: center;
+}
+
+.menu-state-options .menu-card {
+  min-height: 0;
+  padding: 20px 22px;
+}
+
+.menu-state-options .menu-copy {
+  margin-bottom: 14px;
+  padding-top: 0;
+}
+
+.menu-state-options .menu-card h2 {
+  font-size: 36px;
+}
+
+.menu-state-options .menu-grid {
+  gap: 8px;
+}
+
+.menu-state-options .menu-button {
+  min-height: 48px;
+  padding: 0 16px;
+}
+
 .menu-state-difficulty .menu-card {
   width: min(500px, calc(100% - 28px));
   max-width: 500px;
@@ -1118,14 +1156,15 @@ button.click-feedback::after {
   justify-self: stretch;
   gap: 7px;
   padding: 8px 6px;
-  border: none;
+  border: none !important;
   border-radius: 8px;
-  background-color: transparent;
+  background-color: transparent !important;
   box-shadow: none;
   overflow: hidden;
 }
 
 .menu-state-difficulty .menu-grid {
+  display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   justify-content: center;
   align-items: center;
@@ -1146,12 +1185,12 @@ button.click-feedback::after {
   background-position: center;
   background-repeat: no-repeat;
   background-size: 66px 66px;
-  background-color: transparent;
-  border: none;
+  background-color: transparent !important;
+  border: none !important;
   border-radius: 0;
   box-shadow: none;
   mix-blend-mode: screen;
-  filter: grayscale(1) contrast(16) brightness(1.85);
+  filter: brightness(0) invert(1);
   overflow: hidden;
 }
 
@@ -1169,8 +1208,8 @@ button.click-feedback::after {
 
 .menu-state-difficulty .difficulty-button:hover,
 .menu-state-difficulty .difficulty-button:focus-visible {
-  border: none;
-  background-color: transparent;
+  border: none !important;
+  background-color: transparent !important;
   box-shadow: none;
   transform: translateY(-3px);
 }
@@ -1252,8 +1291,12 @@ button.click-feedback::after {
 
 .agent-select {
   width: min(760px, calc(100% - 32px));
+  max-height: 85vh;
+  max-height: 85dvh;
   padding: 24px;
   border-radius: 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .agent-select h2 {

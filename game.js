@@ -90,6 +90,7 @@ const MATCH_POINT = 15;
 const POISON_TICK_INTERVAL = 0.35;
 const ULT_MAX_POINTS = 7;
 const MEDKIT_HEAL = 50;
+const ORB_CHANNEL_TIME = 3;
 const VIPER_CAST_RANGE = 330;
 const VIPER_CLOUD_RADIUS = 92;
 const ECONOMY = {
@@ -570,6 +571,7 @@ const game = {
   ultimateEffects: [],
   destructibles: [],
   smokes: [],
+  shadowZones: [],
   medkits: [],
   ultOrbs: [],
   revealTimer: 0,
@@ -606,6 +608,7 @@ function makePlayer() {
     agentId: game.selectedAgent.id,
     ultPoints: game.playerUltPoints,
     ultimate: null,
+    orbChannel: null,
   };
 }
 
@@ -655,8 +658,9 @@ function makeBot(spawn, index) {
     aiState: "hold",
     revealedTimer: 0,
     agentId: agents[index % agents.length].id,
-    ultPoints: Math.min(ULT_MAX_POINTS, Math.max(0, game.roundNumber - 1) + (index % 2)),
+    ultimatePoints: Math.min(ULT_MAX_POINTS, Math.max(0, game.roundNumber - 1) + (index % 2)),
     ultimate: null,
+    orbChannel: null,
   };
 }
 
@@ -692,8 +696,9 @@ function makeAlly(spawn, index) {
     aiState: "follow",
     revealedTimer: 0,
     agentId: agents[(index + 2) % agents.length].id,
-    ultPoints: Math.min(ULT_MAX_POINTS, Math.floor((game.roundNumber - 1) / 2)),
+    ultimatePoints: Math.min(ULT_MAX_POINTS, Math.floor((game.roundNumber - 1) / 2)),
     ultimate: null,
+    orbChannel: null,
   };
 }
 
@@ -760,6 +765,7 @@ function resetRound() {
   game.ultimateEffects = [];
   game.destructibles = map.destructibles.map((box, index) => ({ ...box, maxHp: box.hp, id: `box-${index}` }));
   game.smokes = [];
+  game.shadowZones = [];
   spawnRoundPickups();
   game.revealTimer = 0;
   game.abilityCooldown = 0;
@@ -938,6 +944,7 @@ function currentPlayerDefuseTime() {
 
 function applyDamage(entity, amount) {
   if (entity.id === "player" && game.godMode) return 0;
+  if (amount > 0 && entity.orbChannel) entity.orbChannel = null;
   let remaining = amount;
   if (entity.armor > 0) {
     const absorbed = Math.min(entity.armor, remaining * 0.7);
@@ -1251,9 +1258,10 @@ function updateTutorial(dt) {
   if (!game.tutorial || game.paused) return;
   if (game.tutorialStep === 0) {
     const safeDt = Number.isFinite(dt) && dt > 0 ? dt : 0;
+    const movementKeyPressed = ["w", "a", "s", "d"].some((key) => keys.has(key));
     if (!Number.isFinite(game.tutorialMoveRemaining)) game.tutorialMoveRemaining = 3;
     if (!Number.isFinite(game.tutorialMoveTime)) game.tutorialMoveTime = 0;
-    if (game.player?.moving) {
+    if (movementKeyPressed) {
       game.tutorialMoveTime += safeDt;
       game.tutorialMoveRemaining = Math.max(0, game.tutorialMoveRemaining - safeDt);
     }
@@ -1333,6 +1341,7 @@ function firstWallPointOnLine(x1, y1, x2, y2) {
 }
 
 function hasLineOfSight(a, b) {
+  if (isBlindedByShadow(a)) return false;
   if (lineIntersectsAnyWall(a.x, a.y, b.x, b.y)) return false;
   for (const smoke of game.smokes) {
     const dist = pointLineDistance(smoke.x, smoke.y, a.x, a.y, b.x, b.y);
@@ -1342,6 +1351,7 @@ function hasLineOfSight(a, b) {
 }
 
 function hasCombatLineOfSight(a, b) {
+  if (isBlindedByShadow(a)) return false;
   if (hasLineOfSight(a, b)) return true;
   const angle = Math.atan2(b.y - a.y, b.x - a.x);
   const side = angle + Math.PI / 2;
@@ -1456,10 +1466,10 @@ function shoot(owner, targetX, targetY, weapon, team) {
       y: startY,
       startX,
       startY,
-      vx: Math.cos(base + spread) * (vanguardUltimate ? 1650 : weapon.speed),
-      vy: Math.sin(base + spread) * (vanguardUltimate ? 1650 : weapon.speed),
+      vx: Math.cos(base + spread) * (vanguardUltimate ? weapon.speed * 1.25 : weapon.speed),
+      vy: Math.sin(base + spread) * (vanguardUltimate ? weapon.speed * 1.25 : weapon.speed),
       life: 0.9,
-      damage: vanguardUltimate ? Math.max(220, weapon.damage * 4) : weapon.damage,
+      damage: vanguardUltimate ? Math.min(55, weapon.damage * 1.25) : weapon.damage,
       team,
       weaponId: weapon.id,
       ultimateTrail: vanguardUltimate,
@@ -1478,6 +1488,36 @@ function reload() {
 function entityTeam(entity) {
   if (entity.id === "player" || entity.id?.startsWith("ally-")) return "player";
   return "bot";
+}
+
+function hostileShadowAt(entity) {
+  const team = entityTeam(entity);
+  return game.shadowZones.find((zone) =>
+    zone.ownerTeam !== team && Math.hypot(entity.x - zone.x, entity.y - zone.y) <= zone.r + entity.r
+  ) || null;
+}
+
+function shadowSlowMultiplier(entity) {
+  return hostileShadowAt(entity)?.slowMultiplier || 1;
+}
+
+function isBlindedByShadow(entity) {
+  return Boolean(hostileShadowAt(entity));
+}
+
+function getUltimatePoints(entity) {
+  if (entity.id === "player") return Number.isFinite(entity.ultPoints) ? entity.ultPoints : 0;
+  return Number.isFinite(entity.ultimatePoints) ? entity.ultimatePoints : 0;
+}
+
+function setUltimatePoints(entity, value) {
+  const points = Math.max(0, Math.min(ULT_MAX_POINTS, Number(value) || 0));
+  if (entity.id === "player") {
+    entity.ultPoints = points;
+    game.playerUltPoints = points;
+  } else {
+    entity.ultimatePoints = points;
+  }
 }
 
 function agentById(id) {
@@ -1509,13 +1549,12 @@ function limitedCastPoint(origin, target, maxRange) {
 
 function activateUltimate(entity) {
   const infiniteSandboxUlt = game.sandbox && entity?.id === "player";
-  if (!entity?.alive || (!infiniteSandboxUlt && entity.ultPoints < ULT_MAX_POINTS) || (!infiniteSandboxUlt && entity.ultimate)) return false;
+  if (!entity?.alive || (!infiniteSandboxUlt && getUltimatePoints(entity) < ULT_MAX_POINTS) || (!infiniteSandboxUlt && entity.ultimate)) return false;
   const agent = agentById(entity.agentId);
   const team = entityTeam(entity);
   if (infiniteSandboxUlt) entity.ultimate = null;
   else {
-    entity.ultPoints = 0;
-    if (entity.id === "player") game.playerUltPoints = 0;
+    setUltimatePoints(entity, 0);
   }
 
   if (agent.id === "vanguard") {
@@ -1549,18 +1588,22 @@ function activateUltimate(entity) {
     addUltimateEffect("healing-beam", entity, "#62e6a0", 4);
   } else {
     entity.ultimate = { type: "shade", life: 9, maxLife: 9 };
-    game.smokes.push({
-      x: entity.id === "player" ? mouse.x : entity.x,
-      y: entity.id === "player" ? mouse.y : entity.y,
-      r: 42,
-      targetR: 260,
-      life: 9,
-      poison: true,
-      damagePerSecond: 24,
-      ownerTeam: team,
-      ultimate: true,
-    });
-    addUltimateEffect("chemical-fog", entity, "#35c46a", 9);
+    const requested = entity.id === "player" ? mouse : entity;
+    const center = limitedCastPoint(entity, requested, 300);
+    const offsets = [{ x: 0, y: 0 }, { x: 88, y: 42 }, { x: -82, y: -48 }];
+    for (const offset of offsets) {
+      const point = nearestWalkablePoint({ x: center.x + offset.x, y: center.y + offset.y }, entity);
+      game.shadowZones.push({
+        x: point.x,
+        y: point.y,
+        r: 92,
+        life: 9,
+        maxLife: 9,
+        ownerTeam: team,
+        slowMultiplier: 0.48,
+      });
+    }
+    addUltimateEffect("shadow-field", entity, "#7650b8", 9);
   }
   setMessage(`${agent.name} ativou a Ultimate!`);
   playSound("ability");
@@ -1573,7 +1616,40 @@ function nearestPickup(entity, pickups) {
     .sort((a, b) => Math.hypot(entity.x - a.x, entity.y - a.y) - Math.hypot(entity.x - b.x, entity.y - b.y))[0] || null;
 }
 
-function collectPickups(entity) {
+function completeOrbCollection(entity, orb) {
+  setUltimatePoints(entity, getUltimatePoints(entity) + 1);
+  entity.orbChannel = null;
+  game.ultOrbs = game.ultOrbs.filter((item) => item !== orb);
+  game.ultimateEffects.push({ type: "orb-beam", x: orb.x, y: orb.y, color: "#bd67ff", life: 1.5, maxLife: 1.5, radius: 12 });
+  spawnParticles(orb.x, orb.y, "#bd67ff", 28, 180);
+}
+
+function updateOrbChannel(entity, orb, dt) {
+  if (!orb || getUltimatePoints(entity) >= ULT_MAX_POINTS) {
+    entity.orbChannel = null;
+    return;
+  }
+  const playerHolding = entity.id === "player" && keys.has("f");
+  const botHolding = entity.id !== "player" && entity.aiState === "seek-ult";
+  const holding = playerHolding || botHolding;
+  const previous = entity.orbChannel;
+  const moved = entity.moving || (previous && Math.hypot(entity.x - previous.x, entity.y - previous.y) > 2.5);
+  if (!holding || moved || Math.hypot(entity.x - orb.x, entity.y - orb.y) >= entity.r + 21) {
+    entity.orbChannel = null;
+    return;
+  }
+  if (!previous || previous.orbId !== orb.id) {
+    entity.orbChannel = { orbId: orb.id, progress: 0, x: entity.x, y: entity.y };
+    return;
+  }
+  previous.progress = Math.min(1, previous.progress + dt / ORB_CHANNEL_TIME);
+  previous.x = entity.x;
+  previous.y = entity.y;
+  entity.moving = false;
+  if (previous.progress >= 1) completeOrbCollection(entity, orb);
+}
+
+function collectPickups(entity, dt) {
   if (!entity?.alive) return;
   const medkit = game.medkits.find((item) => Math.hypot(entity.x - item.x, entity.y - item.y) < entity.r + 22);
   if (medkit && entity.hp < entity.maxHp) {
@@ -1583,24 +1659,19 @@ function collectPickups(entity) {
     setMessage(`${entity.id === "player" ? "Med-Kit coletado" : "Bot coletou Med-Kit"}: +${MEDKIT_HEAL} HP.`);
   }
   const orb = game.ultOrbs.find((item) => Math.hypot(entity.x - item.x, entity.y - item.y) < entity.r + 21);
-  if (orb && entity.ultPoints < ULT_MAX_POINTS) {
-    entity.ultPoints = Math.min(ULT_MAX_POINTS, entity.ultPoints + 1);
-    if (entity.id === "player") game.playerUltPoints = entity.ultPoints;
-    game.ultOrbs = game.ultOrbs.filter((item) => item !== orb);
-    game.ultimateEffects.push({ type: "orb-beam", x: orb.x, y: orb.y, color: "#bd67ff", life: 1.5, maxLife: 1.5, radius: 12 });
-    spawnParticles(orb.x, orb.y, "#bd67ff", 28, 180);
-  }
+  updateOrbChannel(entity, orb, dt);
 }
 
-function updatePickups() {
-  collectPickups(game.player);
-  game.allies.forEach(collectPickups);
-  game.bots.forEach(collectPickups);
+function updatePickups(dt) {
+  collectPickups(game.player, dt);
+  game.allies.forEach((ally) => collectPickups(ally, dt));
+  game.bots.forEach((bot) => collectPickups(bot, dt));
 }
 
 function plantOrDefuse(dt) {
   const p = game.player;
   if (game.phase !== "action") return;
+  if (game.ultOrbs.some((orb) => Math.hypot(p.x - orb.x, p.y - orb.y) < p.r + 21)) return;
 
   if (game.playerSide === "defenders") {
     if (game.spike.state === "planted" && keys.has("f") && Math.hypot(p.x - game.spike.x, p.y - game.spike.y) < 46) {
@@ -1679,9 +1750,10 @@ function updatePlayer(dt) {
   p.moving = !movementLocked && (dx !== 0 || dy !== 0);
   p.moveX = p.moving ? dx / len : 0;
   p.moveY = p.moving ? dy / len : 0;
-  const ultimateSpeed = p.ultimate?.type === "vanguard" ? 2.05 : 1;
+  const ultimateSpeed = p.ultimate?.type === "vanguard" ? 1.28 : 1;
+  const shadowSlow = shadowSlowMultiplier(p);
   if (!movementLocked) {
-    moveEntity(p, (dx / len) * p.speed * ultimateSpeed * dt, (dy / len) * p.speed * ultimateSpeed * dt, map.walls);
+    moveEntity(p, (dx / len) * p.speed * ultimateSpeed * shadowSlow * dt, (dy / len) * p.speed * ultimateSpeed * shadowSlow * dt, map.walls);
   }
   p.angle = Math.atan2(mouse.y - p.y, mouse.x - p.x);
   if (game.spike.state === "carried" && game.spike.owner === "player") {
@@ -2010,8 +2082,9 @@ function moveBotToward(bot, target, dt, speedScale = 1) {
   const safeTarget = resolveBotTarget(bot, poisonSafeTarget);
   const angle = Math.atan2(safeTarget.y - bot.y, safeTarget.x - bot.x);
   bot.angle = angle;
-  const ultimateSpeed = bot.ultimate?.type === "vanguard" ? 1.8 : 1;
-  const movedNow = moveEntity(bot, Math.cos(angle) * bot.speed * speedScale * ultimateSpeed * dt, Math.sin(angle) * bot.speed * speedScale * ultimateSpeed * dt, map.walls);
+  const ultimateSpeed = bot.ultimate?.type === "vanguard" ? 1.22 : 1;
+  const shadowSlow = shadowSlowMultiplier(bot);
+  const movedNow = moveEntity(bot, Math.cos(angle) * bot.speed * speedScale * ultimateSpeed * shadowSlow * dt, Math.sin(angle) * bot.speed * speedScale * ultimateSpeed * shadowSlow * dt, map.walls);
   bot.moving = movedNow > 0.5;
   if (movedNow < 0.5) {
     bot.stuck += dt;
@@ -2359,16 +2432,21 @@ function seekCriticalMedkit(entity, dt, danger) {
 
 function seekUltimateOrb(entity, dt) {
   if (game.spike.state === "planted") return false;
-  if (entity.ultPoints >= ULT_MAX_POINTS || !game.ultOrbs.length) return false;
+  if (getUltimatePoints(entity) >= ULT_MAX_POINTS || !game.ultOrbs.length) return false;
   const orb = nearestPickup(entity, game.ultOrbs);
   if (!orb) return false;
   entity.aiState = "seek-ult";
-  moveBotToward(entity, orb, dt, 1.04);
+  if (Math.hypot(entity.x - orb.x, entity.y - orb.y) > entity.r + 18) {
+    moveBotToward(entity, orb, dt, 1.04);
+  } else {
+    entity.moving = false;
+    entity.angle = Math.atan2(orb.y - entity.y, orb.x - entity.x);
+  }
   return true;
 }
 
 function maybeUseBotUltimate(bot, visibleTarget) {
-  if (bot.ultPoints < ULT_MAX_POINTS || bot.ultimate) return false;
+  if (getUltimatePoints(bot) < ULT_MAX_POINTS || bot.ultimate) return false;
   const agentId = bot.agentId;
   const alliedSquad = entityTeam(bot) === "player" ? [game.player, ...game.allies] : game.bots;
   if (agentId === "mender") {
@@ -2824,6 +2902,8 @@ function updateTimers(dt) {
     if (smoke.tick <= 0) smoke.tick = POISON_TICK_INTERVAL;
   }
   game.smokes = game.smokes.filter((s) => s.life > 0);
+  for (const zone of game.shadowZones) zone.life -= dt;
+  game.shadowZones = game.shadowZones.filter((zone) => zone.life > 0);
   for (const entity of [game.player, ...game.allies, ...game.bots]) {
     if (!entity?.ultimate) continue;
     entity.ultimate.life -= dt;
@@ -2887,6 +2967,10 @@ function checkWinConditions() {
       game.bots.forEach(sanitizeEntityPosition);
       game.bullets = [];
       if (game.sandbox) {
+        game.phase = "action";
+        game.phaseTime = 9999;
+        game.clockActive = true;
+        game.roundOverTimer = 0;
         const carrier = game.bots.find((bot) => bot.hasSpike) || game.bots[0] || game.player;
         game.spike = {
           state: "carried",
@@ -2977,7 +3061,7 @@ function update(dt) {
     updateBots(dt);
     updateBullets(dt);
     updateSpike(dt);
-    updatePickups();
+    updatePickups(dt);
     checkWinConditions();
   }
 }
@@ -3089,7 +3173,7 @@ function drawEntity(entity, color, label, kind = "bot") {
     const auraColor = entity.ultimate.type === "vanguard" ? "#65f5ff"
       : entity.ultimate.type === "viper" ? "#35c46a"
         : entity.ultimate.type === "mender" ? "#62e6a0"
-          : "#35c46a";
+          : "#9a70dc";
     ctx.save();
     ctx.strokeStyle = auraColor;
     ctx.shadowColor = auraColor;
@@ -3607,6 +3691,39 @@ function drawMedkitsAndOrbs() {
   }
 }
 
+function drawOrbChannelBars() {
+  for (const entity of [game.player, ...game.allies, ...game.bots]) {
+    const channel = entity?.orbChannel;
+    if (!entity?.alive || !channel || channel.progress <= 0) continue;
+    const width = 58;
+    const height = 5;
+    const x = entity.x - width / 2;
+    const y = entity.y + entity.r + 12;
+    ctx.save();
+    ctx.fillStyle = "rgba(3, 5, 10, 0.88)";
+    ctx.fillRect(x - 2, y - 2, width + 4, height + 4);
+    ctx.fillStyle = "#bd67ff";
+    ctx.shadowColor = "#bd67ff";
+    ctx.shadowBlur = 10;
+    ctx.fillRect(x, y, width * Math.max(0, Math.min(1, channel.progress)), height);
+    ctx.strokeStyle = "rgba(238,247,251,0.42)";
+    ctx.strokeRect(x, y, width, height);
+    ctx.restore();
+  }
+}
+
+function drawShadowBlindness() {
+  if (!isBlindedByShadow(game.player)) return;
+  const gradient = ctx.createRadialGradient(game.player.x, game.player.y, 38, game.player.x, game.player.y, 190);
+  gradient.addColorStop(0, "rgba(12, 8, 20, 0.18)");
+  gradient.addColorStop(0.45, "rgba(8, 5, 14, 0.72)");
+  gradient.addColorStop(1, "rgba(2, 1, 5, 0.96)");
+  ctx.save();
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.restore();
+}
+
 function drawUltimateEffects() {
   for (const trail of game.neonTrails) {
     const alpha = Math.max(0, trail.life / trail.maxLife);
@@ -3670,6 +3787,23 @@ function draw() {
     drawMedkitsAndOrbs();
   }
 
+  for (const zone of game.shadowZones) {
+    const alpha = Math.max(0, zone.life / zone.maxLife);
+    const pulse = 0.92 + Math.sin(performance.now() / 180 + zone.x) * 0.06;
+    ctx.save();
+    ctx.globalAlpha = Math.min(0.82, alpha);
+    ctx.fillStyle = "#130d22";
+    ctx.shadowColor = "#7650b8";
+    ctx.shadowBlur = 24;
+    ctx.beginPath();
+    ctx.ellipse(zone.x, zone.y, zone.r * pulse, zone.r * 0.68 * pulse, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(154, 112, 220, 0.58)";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.restore();
+  }
+
   for (const smoke of game.smokes) {
     ctx.fillStyle = smoke.poison ? "rgba(47, 179, 78, 0.62)" : "rgba(82, 71, 115, 0.78)";
     ctx.beginPath();
@@ -3706,6 +3840,7 @@ function draw() {
   }
   drawEntity(game.player, game.selectedAgent.color, game.playerSide === "attackers" ? "YOU ATK" : "YOU DEF", "player");
   drawWorldActionBar();
+  drawOrbChannelBars();
   drawUltimateEffects();
 
   ctx.fillStyle = "#f8fafc";
@@ -3774,6 +3909,7 @@ function draw() {
   }
   if (!game.tutorial || game.tutorialStep > 0) drawCrosshair();
   drawDamageFlash();
+  drawShadowBlindness();
   ctx.restore();
 }
 
