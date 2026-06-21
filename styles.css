@@ -1002,44 +1002,49 @@ button.click-feedback::after {
 }
 
 .menu-state-main {
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
+  justify-content: flex-start;
 }
 
 .menu-state-main .menu-art {
-  display: none;
+  display: block;
+  order: 2;
 }
 
 .menu-state-main .menu-card {
-  width: min(980px, calc(100% - 40px));
-  max-width: 980px;
-  min-width: 0;
-  min-height: 0;
+  order: 1;
+  width: min(350px, 32vw);
+  max-width: 350px;
+  min-width: 300px;
+  min-height: 100%;
   max-height: none;
-  padding: 28px 30px;
-  overflow: visible;
-  border: 1px solid rgba(215, 237, 255, 0.14);
-  border-radius: 14px;
-  text-align: center;
-  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.52);
+  padding: clamp(26px, 5vh, 48px) 24px;
+  overflow: hidden;
+  border-width: 0 1px 0 0;
+  border-radius: 0;
+  text-align: left;
+  box-shadow: 24px 0 60px rgba(0, 0, 0, 0.48);
 }
 
 .menu-state-main .menu-copy {
-  margin-bottom: 22px;
-  padding-top: 0;
+  margin-bottom: 24px;
+  padding-top: 8px;
 }
 
 .menu-state-main .menu-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
 }
 
 .menu-state-main .menu-button {
+  width: 100%;
   min-width: 0;
-  min-height: 76px;
-  padding: 0 14px;
-  justify-content: center;
+  min-height: 62px;
+  padding: 0 16px;
+  justify-content: flex-start;
+  text-align: left;
 }
 
 .menu-carousel-out .menu-card {
@@ -1066,19 +1071,15 @@ button.click-feedback::after {
   border: none !important;
   border-radius: 0;
   background-color: transparent !important;
-  background-image: none !important;
+  background-image: url("assets/image_276026.png") !important;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
   box-shadow: none;
   filter: none;
-  -webkit-mask-image: url("assets/image_276026.png");
-  mask-image: url("assets/image_276026.png");
-  -webkit-mask-position: center;
-  mask-position: center;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-size: contain;
-  mask-size: contain;
-  mask-mode: luminance;
-  background: #ffffff !important;
+  mix-blend-mode: screen;
+  -webkit-mask: none;
+  mask: none;
   overflow: hidden;
 }
 
@@ -1094,8 +1095,8 @@ button.click-feedback::after {
 .menu-button.menu-back:hover,
 .menu-button.menu-back:focus-visible {
   border: none !important;
-  background: #ffffff !important;
-  background-image: none !important;
+  background-color: transparent !important;
+  background-image: url("assets/image_276026.png") !important;
   box-shadow: none;
   transform: translateX(-4px);
 }
@@ -1229,37 +1230,30 @@ button.click-feedback::after {
   height: 42px;
   display: block;
   flex: 0 0 42px;
-  background: #ffffff !important;
+  background-color: transparent !important;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
   border: none !important;
   border-radius: 0;
   box-shadow: none;
   filter: none;
-  -webkit-mask-position: center;
-  mask-position: center;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-size: contain;
-  mask-size: contain;
-  mask-mode: luminance;
+  mix-blend-mode: screen;
+  -webkit-mask: none;
+  mask: none;
   overflow: hidden;
 }
 
 .menu-state-difficulty .difficulty-button-1 .difficulty-glyph {
-  background-image: none;
-  -webkit-mask-image: url("assets/image_27b665.png");
-  mask-image: url("assets/image_27b665.png");
+  background-image: url("assets/image_27b665.png");
 }
 
 .menu-state-difficulty .difficulty-button-2 .difficulty-glyph {
-  background-image: none;
-  -webkit-mask-image: url("assets/image_27b5e7.png");
-  mask-image: url("assets/image_27b5e7.png");
+  background-image: url("assets/image_27b5e7.png");
 }
 
 .menu-state-difficulty .difficulty-button-3 .difficulty-glyph {
-  background-image: none;
-  -webkit-mask-image: url("assets/image_276063.png");
-  mask-image: url("assets/image_276063.png");
+  background-image: url("assets/image_276063.png");
 }
 
 .menu-state-difficulty .difficulty-button:hover,

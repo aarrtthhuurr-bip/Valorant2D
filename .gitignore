@@ -1,4 +1,22 @@
+# Ignorar tudo por padrão.
+*
+
+# Manter apenas a configuração e os quatro componentes essenciais.
+!/.gitignore
+!/assets/
+!/assets/**
+!/index.html
+!/game.js
+!/styles.css
+
+# Bloqueios explícitos para previews e scripts auxiliares/antigos.
 preview_*.png
-*.log
-launch_protocol_shift_node.vbs
-launch_protocol_shift_server.vbs
+**/preview_*.png
+launch_*
+**/launch_*
+*server*
+**/*server*
+iniciar_*
+**/iniciar_*
+rodar_*
+**/rodar_*
