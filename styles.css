@@ -1071,15 +1071,12 @@ button.click-feedback::after {
   border: none !important;
   border-radius: 0;
   background-color: transparent !important;
-  background-image: url("assets/image_276026.png") !important;
+  background-image: url("assets/back-arrow-upload.png") !important;
   background-position: center;
   background-repeat: no-repeat;
   background-size: contain;
   box-shadow: none;
-  filter: none;
   mix-blend-mode: screen;
-  -webkit-mask: none;
-  mask: none;
   overflow: hidden;
 }
 
@@ -1096,7 +1093,7 @@ button.click-feedback::after {
 .menu-button.menu-back:focus-visible {
   border: none !important;
   background-color: transparent !important;
-  background-image: url("assets/image_276026.png") !important;
+  background-image: url("assets/back-arrow-upload.png") !important;
   box-shadow: none;
   transform: translateX(-4px);
 }
@@ -1129,7 +1126,6 @@ button.click-feedback::after {
   box-shadow: none;
   pointer-events: none;
   mix-blend-mode: screen;
-  filter: grayscale(1) contrast(12) brightness(1.7);
 }
 
 .menu-icon-gamepad { background-image: url("assets/gamepad.png"); }
@@ -1237,23 +1233,20 @@ button.click-feedback::after {
   border: none !important;
   border-radius: 0;
   box-shadow: none;
-  filter: none;
   mix-blend-mode: screen;
-  -webkit-mask: none;
-  mask: none;
   overflow: hidden;
 }
 
 .menu-state-difficulty .difficulty-button-1 .difficulty-glyph {
-  background-image: url("assets/image_27b665.png");
+  background-image: url("assets/difficulty-easy.png");
 }
 
 .menu-state-difficulty .difficulty-button-2 .difficulty-glyph {
-  background-image: url("assets/image_27b5e7.png");
+  background-image: url("assets/difficulty-medium-upload.png");
 }
 
 .menu-state-difficulty .difficulty-button-3 .difficulty-glyph {
-  background-image: url("assets/image_276063.png");
+  background-image: url("assets/difficulty-hard-upload.png");
 }
 
 .menu-state-difficulty .difficulty-button:hover,
