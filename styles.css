@@ -1131,7 +1131,7 @@ button.click-feedback::after {
 .menu-icon-gamepad { background-image: url("assets/controle-menu-jogar.png"); }
 .menu-icon-tools { background-image: url("assets/ferramentas-menu-opcoes.png"); }
 .menu-icon-money { background-image: url("assets/dinheiro-menu-sandbox.png"); }
-.menu-icon-star { background-image: url("assets/estrela-menu-treino.png"); }
+.menu-icon-star { background-image: url("assets/uma-estrela-modo-facil.png"); }
 .menu-icon-link { background-image: url("assets/elo-menu-tutorial.png"); }
 .menu-state-difficulty {
   align-items: center;
