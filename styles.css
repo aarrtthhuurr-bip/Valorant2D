@@ -1071,7 +1071,7 @@ button.click-feedback::after {
   border: none !important;
   border-radius: 0;
   background-color: transparent !important;
-  background-image: url("assets/back-arrow-upload.png") !important;
+  background-image: url("assets/seta-voltar.png") !important;
   background-position: center;
   background-repeat: no-repeat;
   background-size: contain;
@@ -1093,7 +1093,7 @@ button.click-feedback::after {
 .menu-button.menu-back:focus-visible {
   border: none !important;
   background-color: transparent !important;
-  background-image: url("assets/back-arrow-upload.png") !important;
+  background-image: url("assets/seta-voltar.png") !important;
   box-shadow: none;
   transform: translateX(-4px);
 }
@@ -1128,11 +1128,11 @@ button.click-feedback::after {
   mix-blend-mode: screen;
 }
 
-.menu-icon-gamepad { background-image: url("assets/gamepad.png"); }
-.menu-icon-tools { background-image: url("assets/tools.png"); }
-.menu-icon-money { background-image: url("assets/money.png"); }
-.menu-icon-star { background-image: url("assets/star.png"); }
-.menu-icon-link { background-image: url("assets/link.png"); }
+.menu-icon-gamepad { background-image: url("assets/controle-menu-jogar.png"); }
+.menu-icon-tools { background-image: url("assets/ferramentas-menu-opcoes.png"); }
+.menu-icon-money { background-image: url("assets/dinheiro-menu-sandbox.png"); }
+.menu-icon-star { background-image: url("assets/estrela-menu-treino.png"); }
+.menu-icon-link { background-image: url("assets/elo-menu-tutorial.png"); }
 .menu-state-difficulty {
   align-items: center;
   justify-content: center;
@@ -1238,15 +1238,15 @@ button.click-feedback::after {
 }
 
 .menu-state-difficulty .difficulty-button-1 .difficulty-glyph {
-  background-image: url("assets/difficulty-easy.png");
+  background-image: url("assets/uma-estrela-modo-facil.png");
 }
 
 .menu-state-difficulty .difficulty-button-2 .difficulty-glyph {
-  background-image: url("assets/difficulty-medium-upload.png");
+  background-image: url("assets/duas-estrelas-modo-medio.png");
 }
 
 .menu-state-difficulty .difficulty-button-3 .difficulty-glyph {
-  background-image: url("assets/difficulty-hard-upload.png");
+  background-image: url("assets/tres-estrelas-modo-dificil.png");
 }
 
 .menu-state-difficulty .difficulty-button:hover,
