@@ -111,7 +111,7 @@ const agents = [
     id: "neon",
     name: "Neon",
     role: "Entrada",
-    color: "#ff5b5b",
+    color: "#00d9ff",
     ability: "Dash curto",
     cooldown: 7,
     use(game) {
@@ -134,7 +134,7 @@ const agents = [
     id: "viper",
     name: "Viper",
     role: "Controle",
-    color: "#39d96f",
+    color: "#0f7f3b",
     ability: "Nuvem de veneno",
     cooldown: 9,
     use(game) {
@@ -156,7 +156,7 @@ const agents = [
     id: "sage",
     name: "Sage",
     role: "Suporte",
-    color: "#66e48f",
+    color: "#00cfa6",
     ability: "Cura",
     cooldown: 9,
     use(game) {
@@ -167,7 +167,7 @@ const agents = [
     id: "omen",
     name: "Omen",
     role: "Controle",
-    color: "#b084ff",
+    color: "#5a2b9e",
     ability: "Smoke",
     cooldown: 8,
     use(game) {
@@ -787,15 +787,25 @@ function resetRound() {
   game.allies = allySpawns.slice(0, game.allyCount).map(makeAlly);
   game.bots.forEach(sanitizeEntityPosition);
   game.allies.forEach(sanitizeEntityPosition);
-  game.bullets = [];
-  game.particles = [];
-  game.explosions = [];
-  game.hitMarkers = [];
-  game.damageNumbers = [];
-  game.dashGhosts = [];
-  game.neonTrails = [];
-  game.ultimateEffects = [];
-  game.destructibles = game.training
+game.bullets = [];
+   game.particles = [];
+   game.explosions = [];
+   game.hitMarkers = [];
+   game.damageNumbers = [];
+   game.dashGhosts = [];
+   game.neonTrails = [];
+   game.ultimateEffects = [];
+   game.player.orbChannel = null;
+   game.player.orbAssignment = null;
+   game.allies.forEach((ally) => {
+     ally.orbChannel = null;
+     ally.orbAssignment = null;
+   });
+   game.bots.forEach((bot) => {
+     bot.orbChannel = null;
+     bot.orbAssignment = null;
+   });
+   game.destructibles = game.training
     ? []
     : map.destructibles.map((box, index) => ({ ...box, maxHp: box.hp, id: `box-${index}` }));
   game.smokes = [];
@@ -1656,56 +1666,84 @@ function nearestPickup(entity, pickups) {
 }
 
 function completeOrbCollection(entity, orb) {
-  setUltimatePoints(entity, getUltimatePoints(entity) + 1);
-  entity.orbChannel = null;
-  game.ultOrbs = game.ultOrbs.filter((item) => item !== orb);
-  game.ultimateEffects.push({ type: "orb-beam", x: orb.x, y: orb.y, color: "#bd67ff", life: 1.5, maxLife: 1.5, radius: 12 });
-  spawnParticles(orb.x, orb.y, "#bd67ff", 28, 180);
-}
+   setUltimatePoints(entity, getUltimatePoints(entity) + 1);
+   entity.orbChannel = null;
+   entity.orbAssignment = null;
+   game.ultOrbs = game.ultOrbs.filter((item) => item !== orb);
+   game.ultimateEffects.push({ type: "orb-beam", x: orb.x, y: orb.y, color: "#bd67ff", life: 1.5, maxLife: 1.5, radius: 12 });
+   spawnParticles(orb.x, orb.y, "#bd67ff", 28, 180);
+ }
 
 function updateOrbChannel(entity, orb, dt) {
-  if (!orb || getUltimatePoints(entity) >= ULT_MAX_POINTS) {
-    entity.orbChannel = null;
-    return;
-  }
-  const playerHolding = entity.id === "player" && keys.has("f");
-  const botHolding = entity.id !== "player" && entity.aiState === "seek-ult";
-  const holding = playerHolding || botHolding;
-  const previous = entity.orbChannel;
-  const moved = entity.moving || (previous && Math.hypot(entity.x - previous.x, entity.y - previous.y) > 2.5);
-  if (!holding || moved || Math.hypot(entity.x - orb.x, entity.y - orb.y) >= entity.r + 21) {
-    entity.orbChannel = null;
-    return;
-  }
-  if (!previous || previous.orbId !== orb.id) {
-    entity.orbChannel = { orbId: orb.id, progress: 0, x: entity.x, y: entity.y };
-    return;
-  }
-  previous.progress = Math.min(1, previous.progress + dt / ORB_CHANNEL_TIME);
-  previous.x = entity.x;
-  previous.y = entity.y;
-  entity.moving = false;
-  if (previous.progress >= 1) completeOrbCollection(entity, orb);
-}
+   if (!orb || getUltimatePoints(entity) >= ULT_MAX_POINTS) {
+     entity.orbChannel = null;
+     return;
+   }
+   const playerHolding = entity.id === "player" && keys.has("f");
+   const botHolding = entity.id !== "player" && entity.aiState === "seek-ult";
+   const holding = playerHolding || botHolding;
+   const previous = entity.orbChannel;
+   const moved = entity.moving || (previous && Math.hypot(entity.x - previous.x, entity.y - previous.y) > 2.5);
+   if (!holding || moved || Math.hypot(entity.x - orb.x, entity.y - orb.y) >= entity.r + 21) {
+     entity.orbChannel = null;
+     return;
+   }
+   if (!previous || previous.orbId !== orb.id) {
+     entity.orbChannel = { orbId: orb.id, progress: 0, x: entity.x, y: entity.y };
+     return;
+   }
+   previous.progress = Math.min(1, previous.progress + dt / ORB_CHANNEL_TIME);
+   previous.x = entity.x;
+   previous.y = entity.y;
+   entity.moving = false;
+   if (previous.progress >= 1) completeOrbCollection(entity, orb);
+ }
+
+ function assignOrbToClosest(orb, entities) {
+   const closest = entities
+     .filter((e) => e.alive && Math.hypot(e.x - orb.x, e.y - orb.y) < e.r + 45)
+     .sort((a, b) => Math.hypot(a.x - orb.x, a.y - orb.y) - Math.hypot(b.x - orb.x, b.y - orb.y))[0];
+   if (closest) {
+     closest.orbAssignment = orb.id;
+     closest.aiState = "seek-ult";
+   }
+   return closest;
+ }
 
 function collectPickups(entity, dt) {
-  if (!entity?.alive) return;
-  const medkit = game.medkits.find((item) => Math.hypot(entity.x - item.x, entity.y - item.y) < entity.r + 22);
-  if (medkit && entity.hp < entity.maxHp) {
-    entity.hp = Math.min(entity.maxHp, entity.hp + MEDKIT_HEAL);
-    game.medkits = game.medkits.filter((item) => item !== medkit);
-    spawnParticles(medkit.x, medkit.y, "#62e6a0", 30, 190);
-    setMessage(`${entity.id === "player" ? "Med-Kit coletado" : "Bot coletou Med-Kit"}: +${MEDKIT_HEAL} HP.`);
-  }
-  const orb = game.ultOrbs.find((item) => Math.hypot(entity.x - item.x, entity.y - item.y) < entity.r + 21);
-  updateOrbChannel(entity, orb, dt);
-}
+   if (!entity?.alive) return;
+   const medkit = game.medkits.find((item) => Math.hypot(entity.x - item.x, entity.y - item.y) < entity.r + 22);
+   if (medkit && entity.hp < entity.maxHp) {
+     entity.hp = Math.min(entity.maxHp, entity.hp + MEDKIT_HEAL);
+     game.medkits = game.medkits.filter((item) => item !== medkit);
+     spawnParticles(medkit.x, medkit.y, "#62e6a0", 30, 190);
+     setMessage(`${entity.id === "player" ? "Med-Kit coletado" : "Bot coletou Med-Kit"}: +${MEDKIT_HEAL} HP.`);
+   }
+   const orb = game.ultOrbs.find((item) => Math.hypot(entity.x - item.x, entity.y - item.y) < entity.r + 21);
+   if (orb && entity.id !== "player" && entity.orbAssignment !== orb.id) {
+     entity.orbChannel = null;
+     return;
+   }
+   updateOrbChannel(entity, orb, dt);
+ }
 
 function updatePickups(dt) {
-  collectPickups(game.player, dt);
-  game.allies.forEach((ally) => collectPickups(ally, dt));
-  game.bots.forEach((bot) => collectPickups(bot, dt));
-}
+   const allEntities = [...game.allies, ...game.bots].filter((e) => e?.alive);
+   for (const orb of game.ultOrbs) {
+     if (!orb._assigned) {
+       const closest = allEntities
+         .filter((e) => !e.orbAssignment)
+         .sort((a, b) => Math.hypot(a.x - orb.x, a.y - orb.y) - Math.hypot(b.x - orb.x, b.y - orb.y))[0];
+       if (closest) {
+         closest.orbAssignment = orb.id;
+       }
+       orb._assigned = true;
+     }
+   }
+   collectPickups(game.player, dt);
+   game.allies.forEach((ally) => collectPickups(ally, dt));
+   game.bots.forEach((bot) => collectPickups(bot, dt));
+ }
 
 function plantOrDefuse(dt) {
   if (game.training) return;
@@ -1779,15 +1817,15 @@ function updatePlayer(dt) {
   const p = game.player;
   if (!p.alive) return;
 
-  const right = keys.has("d") || (game.arrowKeys && keys.has("arrowright"));
-  const left = keys.has("a") || (game.arrowKeys && keys.has("arrowleft"));
-  const down = keys.has("s") || (game.arrowKeys && keys.has("arrowdown"));
-  const up = keys.has("w") || (game.arrowKeys && keys.has("arrowup"));
-  const dx = (right ? 1 : 0) - (left ? 1 : 0);
-  const dy = (down ? 1 : 0) - (up ? 1 : 0);
-  const len = Math.hypot(dx, dy) || 1;
-  const movementLocked = game.tutorial && game.tutorialStep === 1;
-  p.moving = !movementLocked && (dx !== 0 || dy !== 0);
+const right = keys.has("d") || (game.arrowKeys && keys.has("arrowright"));
+   const left = keys.has("a") || (game.arrowKeys && keys.has("arrowleft"));
+   const down = keys.has("s") || (game.arrowKeys && keys.has("arrowdown"));
+   const up = keys.has("w") || (game.arrowKeys && keys.has("arrowup"));
+   const dx = (right ? 1 : 0) - (left ? 1 : 0);
+   const dy = (down ? 1 : 0) - (up ? 1 : 0);
+   const len = Math.hypot(dx, dy) || 1;
+   const movementLocked = game.tutorial && game.tutorialStep === 0;
+   p.moving = !movementLocked && (dx !== 0 || dy !== 0);
   p.moveX = p.moving ? dx / len : 0;
   p.moveY = p.moving ? dy / len : 0;
   const ultimateSpeed = p.ultimate?.type === "neon" ? 1.28 : 1;
@@ -2471,19 +2509,22 @@ function seekCriticalMedkit(entity, dt, danger) {
 }
 
 function seekUltimateOrb(entity, dt) {
-  if (game.spike.state === "planted") return false;
-  if (getUltimatePoints(entity) >= ULT_MAX_POINTS || !game.ultOrbs.length) return false;
-  const orb = nearestPickup(entity, game.ultOrbs);
-  if (!orb) return false;
-  entity.aiState = "seek-ult";
-  if (Math.hypot(entity.x - orb.x, entity.y - orb.y) > entity.r + 18) {
-    moveBotToward(entity, orb, dt, 1.04);
-  } else {
-    entity.moving = false;
-    entity.angle = Math.atan2(orb.y - entity.y, orb.x - entity.x);
-  }
-  return true;
-}
+   if (game.spike.state === "planted") return false;
+   if (getUltimatePoints(entity) >= ULT_MAX_POINTS || !game.ultOrbs.length) return false;
+   const targetOrb = game.ultOrbs.find((orb) => orb?.id === entity.orbAssignment) || nearestPickup(entity, game.ultOrbs);
+   if (!targetOrb) return false;
+   entity.aiState = "seek-ult";
+   if (Math.hypot(entity.x - targetOrb.x, entity.y - targetOrb.y) > entity.r + 22) {
+     const angle = Math.atan2(targetOrb.y - entity.y, targetOrb.x - entity.x);
+     entity.angle = angle;
+     moveEntity(entity, Math.cos(angle) * entity.speed * 1.04 * dt, Math.sin(angle) * entity.speed * 1.04 * dt, map.walls);
+     entity.moving = true;
+   } else {
+     entity.moving = false;
+     entity.angle = Math.atan2(targetOrb.y - entity.y, targetOrb.x - entity.x);
+   }
+   return true;
+ }
 
 function maybeUseBotUltimate(bot, visibleTarget) {
   if (getUltimatePoints(bot) < ULT_MAX_POINTS || bot.ultimate) return false;
@@ -2712,28 +2753,31 @@ function updateBots(dt) {
 }
 
 function eliminateBot(bot, { playerCredit = false, weaponName = "Poison Cloud", headshot = false } = {}) {
-  if (!bot.alive) return;
-  bot.alive = false;
-  if (game.training) bot.respawnTimer = 1.25 + Math.random() * 0.75;
-  if (playerCredit) {
-    game.stats.kills += 1;
-    addKillFeedEntry(true, weaponName, headshot);
-  }
-  if (!game.sandbox) {
-    game.money += playerCredit ? (headshot ? ECONOMY.headshot : ECONOMY.kill) : Math.floor(ECONOMY.kill * 0.5);
-    if (!game.training) game.money = Math.min(game.money, ECONOMY.cap);
-  }
-  if (game.spike.defuserId === bot.id) resetPartialDefuse();
-  if (bot.hasSpike) {
-    bot.hasSpike = false;
-    game.spike.state = "dropped";
-    game.spike.owner = null;
-    game.spike.x = bot.x;
-    game.spike.y = bot.y;
-    game.spike.plantProgress = 0;
-    setMessage("Spike derrubada. Bots tentarão recuperar.");
-  }
-}
+   if (!bot.alive) return;
+   bot.alive = false;
+   if (game.training) bot.respawnTimer = 1.25 + Math.random() * 0.75;
+   if (playerCredit) {
+     game.stats.kills += 1;
+     addKillFeedEntry(true, weaponName, headshot);
+   }
+   if (!game.sandbox) {
+     game.money += playerCredit ? (headshot ? ECONOMY.headshot : ECONOMY.kill) : Math.floor(ECONOMY.kill * 0.5);
+     if (!game.training) game.money = Math.min(game.money, ECONOMY.cap);
+   }
+   if (game.spike.defuserId === bot.id) resetPartialDefuse();
+   if (bot.hasSpike) {
+     bot.hasSpike = false;
+     game.spike.state = "dropped";
+     game.spike.owner = null;
+     game.spike.x = bot.x;
+     game.spike.y = bot.y;
+     game.spike.plantProgress = 0;
+     setMessage("Spike derrubada. Bots tentarão recuperar.");
+   }
+   if (bot.orbAssignment) {
+     bot.orbAssignment = null;
+   }
+ }
 
 function randomTrainingSpawn() {
   const margin = 70;
