@@ -108,8 +108,8 @@ const ECONOMY = {
 const audio = { ctx: null, enabled: true, volume: 0.8, last: 0 };
 const agents = [
   {
-    id: "vanguard",
-    name: "Vanguard",
+    id: "neon",
+    name: "Neon",
     role: "Entrada",
     color: "#ff5b5b",
     ability: "Dash curto",
@@ -153,8 +153,8 @@ const agents = [
     },
   },
   {
-    id: "mender",
-    name: "Mender",
+    id: "sage",
+    name: "Sage",
     role: "Suporte",
     color: "#66e48f",
     ability: "Cura",
@@ -164,8 +164,8 @@ const agents = [
     },
   },
   {
-    id: "shade",
-    name: "Shade",
+    id: "omen",
+    name: "Omen",
     role: "Controle",
     color: "#b084ff",
     ability: "Smoke",
@@ -1184,10 +1184,10 @@ function setTutorialPrompt(kicker, instruction, progress = "") {
 
 function tutorialAgentDescription(agent) {
   const descriptions = {
-    vanguard: ["Entrada agressiva", "Dash direcional e Ultimate de velocidade com tiros neon."],
+    neon: ["Entrada agressiva", "Dash direcional e Ultimate de velocidade com tiros neon."],
     viper: ["Controle de espaço", "Nuvem venenosa e Ultimate química para negar áreas."],
-    mender: ["Suporte da equipe", "Cura direta e Ultimate que restaura vida e escudos aliados."],
-    shade: ["Controle tático", "Smoke para cortar visão e criar rotas seguras."],
+    sage: ["Suporte da equipe", "Cura direta e Ultimate que restaura vida e escudos aliados."],
+    omen: ["Controle tático", "Smoke para cortar visão e criar rotas seguras."],
   };
   return descriptions[agent.id] || [agent.role, agent.ability];
 }
@@ -1496,8 +1496,8 @@ function shoot(owner, targetX, targetY, weapon, team) {
     const base = Math.atan2(targetY - owner.y, targetX - owner.x);
     const movingPenalty = owner.moving ? 1.8 : 1;
     const recoilPenalty = team === "player" ? 1 + game.recoilHeat * 0.85 : 1 + (owner.aiState === "plant" || owner.aiState === "defuse" ? 0.55 : 0);
-    const vanguardUltimate = owner.ultimate?.type === "vanguard";
-    const spread = vanguardUltimate ? 0 : (Math.random() - 0.5) * weapon.spread * 2 * movingPenalty * recoilPenalty;
+    const neonUltimate = owner.ultimate?.type === "neon";
+    const spread = neonUltimate ? 0 : (Math.random() - 0.5) * weapon.spread * 2 * movingPenalty * recoilPenalty;
     const startX = owner.x + Math.cos(base) * owner.r;
     const startY = owner.y + Math.sin(base) * owner.r;
     game.bullets.push({
@@ -1505,13 +1505,13 @@ function shoot(owner, targetX, targetY, weapon, team) {
       y: startY,
       startX,
       startY,
-      vx: Math.cos(base + spread) * (vanguardUltimate ? weapon.speed * 1.25 : weapon.speed),
-      vy: Math.sin(base + spread) * (vanguardUltimate ? weapon.speed * 1.25 : weapon.speed),
+      vx: Math.cos(base + spread) * (neonUltimate ? weapon.speed * 1.25 : weapon.speed),
+      vy: Math.sin(base + spread) * (neonUltimate ? weapon.speed * 1.25 : weapon.speed),
       life: 0.9,
-      damage: vanguardUltimate ? Math.min(55, weapon.damage * 1.25) : weapon.damage,
+      damage: neonUltimate ? Math.min(55, weapon.damage * 1.25) : weapon.damage,
       team,
       weaponId: weapon.id,
-      ultimateTrail: vanguardUltimate,
+      ultimateTrail: neonUltimate,
       hitIds: [],
     });
   }
@@ -1596,8 +1596,8 @@ function activateUltimate(entity) {
     setUltimatePoints(entity, 0);
   }
 
-  if (agent.id === "vanguard") {
-    entity.ultimate = { type: "vanguard", life: 7, maxLife: 7 };
+  if (agent.id === "neon") {
+    entity.ultimate = { type: "neon", life: 7, maxLife: 7 };
     addUltimateEffect("wind", entity, "#7df9ff", 7);
   } else if (agent.id === "viper") {
     entity.ultimate = { type: "viper", life: 9, maxLife: 9 };
@@ -1614,8 +1614,8 @@ function activateUltimate(entity) {
       ultimate: true,
     });
     addUltimateEffect("chemical-fog", entity, "#35c46a", 9);
-  } else if (agent.id === "mender") {
-    entity.ultimate = { type: "mender", life: 4, maxLife: 4 };
+  } else if (agent.id === "sage") {
+    entity.ultimate = { type: "sage", life: 4, maxLife: 4 };
     const squad = team === "player" ? [game.player, ...game.allies] : game.bots;
     for (const target of squad) {
       if (!target.alive) continue;
@@ -1626,7 +1626,7 @@ function activateUltimate(entity) {
     }
     addUltimateEffect("healing-beam", entity, "#62e6a0", 4);
   } else {
-    entity.ultimate = { type: "shade", life: 9, maxLife: 9 };
+    entity.ultimate = { type: "omen", life: 9, maxLife: 9 };
     const requested = entity.id === "player" ? mouse : entity;
     const center = limitedCastPoint(entity, requested, 300);
     const offsets = [{ x: 0, y: 0 }, { x: 88, y: 42 }, { x: -82, y: -48 }];
@@ -1790,7 +1790,7 @@ function updatePlayer(dt) {
   p.moving = !movementLocked && (dx !== 0 || dy !== 0);
   p.moveX = p.moving ? dx / len : 0;
   p.moveY = p.moving ? dy / len : 0;
-  const ultimateSpeed = p.ultimate?.type === "vanguard" ? 1.28 : 1;
+  const ultimateSpeed = p.ultimate?.type === "neon" ? 1.28 : 1;
   const shadowSlow = shadowSlowMultiplier(p);
   if (!movementLocked) {
     moveEntity(p, (dx / len) * p.speed * ultimateSpeed * shadowSlow * dt, (dy / len) * p.speed * ultimateSpeed * shadowSlow * dt, map.walls);
@@ -2122,7 +2122,7 @@ function moveBotToward(bot, target, dt, speedScale = 1) {
   const safeTarget = resolveBotTarget(bot, poisonSafeTarget);
   const angle = Math.atan2(safeTarget.y - bot.y, safeTarget.x - bot.x);
   bot.angle = angle;
-  const ultimateSpeed = bot.ultimate?.type === "vanguard" ? 1.22 : 1;
+  const ultimateSpeed = bot.ultimate?.type === "neon" ? 1.22 : 1;
   const shadowSlow = shadowSlowMultiplier(bot);
   const movedNow = moveEntity(bot, Math.cos(angle) * bot.speed * speedScale * ultimateSpeed * shadowSlow * dt, Math.sin(angle) * bot.speed * speedScale * ultimateSpeed * shadowSlow * dt, map.walls);
   bot.moving = movedNow > 0.5;
@@ -2489,7 +2489,7 @@ function maybeUseBotUltimate(bot, visibleTarget) {
   if (getUltimatePoints(bot) < ULT_MAX_POINTS || bot.ultimate) return false;
   const agentId = bot.agentId;
   const alliedSquad = entityTeam(bot) === "player" ? [game.player, ...game.allies] : game.bots;
-  if (agentId === "mender") {
+  if (agentId === "sage") {
     if (alliedSquad.some((entity) => entity.alive && (entity.hp < 58 || entity.armor < (entity.maxArmor || 0) * 0.4))) {
       return activateUltimate(bot);
     }
@@ -3259,9 +3259,9 @@ function drawEntity(entity, color, label, kind = "bot") {
   const armorRatio = (entity.maxArmor || 0) > 0 ? Math.max(0, entity.armor || 0) / entity.maxArmor : 0;
   if (entity.ultimate) {
     const pulse = 1 + Math.sin(performance.now() / 90) * 0.12;
-    const auraColor = entity.ultimate.type === "vanguard" ? "#65f5ff"
+    const auraColor = entity.ultimate.type === "neon" ? "#65f5ff"
       : entity.ultimate.type === "viper" ? "#35c46a"
-        : entity.ultimate.type === "mender" ? "#62e6a0"
+        : entity.ultimate.type === "sage" ? "#62e6a0"
           : "#9a70dc";
     ctx.save();
     ctx.strokeStyle = auraColor;
@@ -4228,32 +4228,32 @@ function hideAgentSelect() {
 
 function agentPresentation(agent) {
   const details = {
-    vanguard: {
+    neon: {
       className: "Duelista",
       tagline: "Velocidade e avanço agressivo",
       ultimate: "Sobrecarga Cinética",
-      initials: "VG",
+      icon: "assets/Gaming, Valorant_ icon Neon.jpeg",
       artwork: "assets/Neon_Artwork_Full.webp",
     },
     viper: {
       className: "Controladora",
       tagline: "Domínio territorial com toxinas",
       ultimate: "Poço Químico",
-      initials: "VP",
+      icon: "assets/Viper.jpeg",
       artwork: "assets/Viper_Artwork_Full.webp",
     },
-    mender: {
+    sage: {
       className: "Sentinela",
       tagline: "Sustentação e recuperação da equipe",
       ultimate: "Restauração Total",
-      initials: "MD",
+      icon: "assets/Sage_icon.webp",
       artwork: "assets/Sage_Artwork_Full.webp",
     },
-    shade: {
+    omen: {
       className: "Controlador",
       tagline: "Cegueira e redução de mobilidade",
       ultimate: "Domínio das Sombras",
-      initials: "SH",
+      icon: "assets/Omen.jpeg",
       artwork: "assets/Omen_Artwork_Full.webp",
     },
   };
@@ -4261,7 +4261,7 @@ function agentPresentation(agent) {
     className: agent.role,
     tagline: agent.ability,
     ultimate: "Ultimate",
-    initials: agent.name.slice(0, 2).toUpperCase(),
+    icon: "",
     artwork: "",
   };
 }
@@ -4276,8 +4276,8 @@ function showAgentSelect(onPick) {
   const preview = document.createElement("section");
   preview.className = "agent-preview";
   preview.setAttribute("aria-live", "polite");
-preview.innerHTML = `
-     <div class="agent-preview-art" aria-hidden="true"><span></span></div>
+  preview.innerHTML = `
+     <div class="agent-preview-art"><img alt=""></div>
      <div class="agent-preview-copy">
        <span class="agent-class"></span>
        <h3></h3>
@@ -4298,14 +4298,13 @@ preview.innerHTML = `
   let selectedAgent = null;
   let agenteTravado = false;
 
-const renderPreview = (agent) => {
+  const renderPreview = (agent) => {
      const presentation = agentPresentation(agent);
      preview.style.setProperty("--agent-color", agent.color);
      preview.dataset.agent = agent.id;
-     preview.querySelector(".agent-preview-art").style.backgroundImage = presentation.artwork
-       ? `linear-gradient(180deg, transparent 52%, rgba(2, 6, 10, 0.92)), url("${presentation.artwork}")`
-       : "";
-     preview.querySelector(".agent-preview-art span").textContent = presentation.initials;
+     const previewImage = preview.querySelector(".agent-preview-art img");
+     previewImage.src = presentation.artwork;
+     previewImage.alt = `Arte da agente ${agent.name}`;
      preview.querySelector(".agent-class").textContent = presentation.className;
      preview.querySelector("h3").textContent = agent.name;
      preview.querySelector("p").textContent = presentation.tagline;
@@ -4313,7 +4312,7 @@ const renderPreview = (agent) => {
      const cooldownEl = preview.querySelector(".agent-ability-cooldown");
      if (cooldownEl) cooldownEl.textContent = `(${agent.cooldown}s recarga)`;
      preview.querySelector(".ability-chip-ultimate b").textContent = presentation.ultimate;
-   };
+  };
 
   const confirmSelection = () => {
     if (!selectedAgent) return;
@@ -4334,9 +4333,8 @@ const renderPreview = (agent) => {
     button.type = "button";
     button.className = "agent-card";
     button.style.setProperty("--agent-color", agent.color);
-    button.style.setProperty("--agent-art", `url("${presentation.artwork}")`);
     button.innerHTML = `
-      <span class="agent-card-portrait" aria-hidden="true">${presentation.initials}</span>
+      <span class="agent-card-portrait"><img src="${presentation.icon}" alt="Retrato de ${agent.name}"></span>
       <span class="agent-card-copy"><b>${agent.name}</b><small>${presentation.className}</small></span>`;
     attachButtonFeedback(button);
     button.addEventListener("mouseenter", () => {
