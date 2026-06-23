@@ -4232,14 +4232,14 @@ function agentPresentation(agent) {
       className: "Duelista",
       tagline: "Velocidade e avanço agressivo",
       ultimate: "Sobrecarga Cinética",
-      icon: "assets/Gaming, Valorant_ icon Neon.jpeg",
+      icon: "assets/Neon_icon.webp",
       artwork: "assets/Neon_Artwork_Full.webp",
     },
     viper: {
       className: "Controladora",
       tagline: "Domínio territorial com toxinas",
       ultimate: "Poço Químico",
-      icon: "assets/Viper.jpeg",
+      icon: "assets/Viper_icon.webp",
       artwork: "assets/Viper_Artwork_Full.webp",
     },
     sage: {
@@ -4253,7 +4253,7 @@ function agentPresentation(agent) {
       className: "Controlador",
       tagline: "Cegueira e redução de mobilidade",
       ultimate: "Domínio das Sombras",
-      icon: "assets/Omen.jpeg",
+      icon: "assets/Omen_icon.webp",
       artwork: "assets/Omen_Artwork_Full.webp",
     },
   };
