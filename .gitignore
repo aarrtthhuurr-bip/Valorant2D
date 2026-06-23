@@ -1,23 +1,25 @@
-# Ignorar tudo por padrão.
-*
+# # Ignorar tudo por padrão.
+# *
 
-# Manter apenas a configuração e os quatro componentes essenciais.
-!/.gitignore
-!/assets/
-!/assets/**
-!/index.html
-!/game.js
-!/styles.css
-!/README.md
+# # Manter apenas a configuração e os quatro componentes essenciais.
+# !/.gitignore
+# !/assets/
+# !/assets/**
+# !/index.html
+# !/game.js
+# !/styles.css
+# !/README.md
 
-# Bloqueios explícitos para previews e scripts auxiliares/antigos.
-preview_*.png
-**/preview_*.png
-launch_*
-**/launch_*
-*server*
-**/*server*
-iniciar_*
-**/iniciar_*
-rodar_*
-**/rodar_*
+# # Bloqueios explícitos para previews e scripts auxiliares/antigos.
+# preview_*.png
+# **/preview_*.png
+# launch_*
+# **/launch_*
+# *server*
+# **/*server*
+# iniciar_*
+# **/iniciar_*
+# rodar_*
+# **/rodar_*
+
+Abrir Valorant2D.cmd
