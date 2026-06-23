@@ -486,6 +486,37 @@ MAPS.splice(0, MAPS.length,
   ]),
 );
 
+const TRAINING_MAP = {
+  ...DEFAULT_MAP,
+  name: "Campo de Tiro",
+  vibe: "Arena aberta",
+  theme: {
+    ...DEFAULT_MAP.theme,
+    floor: "#101820",
+    grid: "rgba(70, 168, 255, 0.09)",
+  },
+  attackersSpawn: { x: 640, y: 610 },
+  playerDefenderSpawn: { x: 640, y: 110 },
+  attackerBotSpawns: [
+    { x: 260, y: 150 },
+    { x: 640, y: 115 },
+    { x: 1020, y: 150 },
+  ],
+  defendersSpawn: [
+    { x: 260, y: 150 },
+    { x: 640, y: 115 },
+    { x: 1020, y: 150 },
+  ],
+  sites: [{ id: "TREINO", x: 590, y: 330, w: 100, h: 60 }],
+  walls: [],
+  destructibles: [],
+  botRoutes: [
+    [{ x: 260, y: 150 }, { x: 420, y: 300 }, { x: 640, y: 520 }],
+    [{ x: 640, y: 115 }, { x: 640, y: 310 }, { x: 640, y: 520 }],
+    [{ x: 1020, y: 150 }, { x: 860, y: 300 }, { x: 640, y: 520 }],
+  ],
+};
+
 function buildMapRoutes(currentMap) {
   const a = currentMap.sites[0];
   const b = currentMap.sites[1] || currentMap.sites[0];
@@ -546,6 +577,7 @@ const game = {
   tutorialMoveRemaining: 3,
   tutorialSlowTimer: 0,
   tutorialKillsAtStart: 0,
+  trainingBotSequence: 0,
   recoilHeat: 0,
   shotChain: 0,
   crosshairScale: 1,
@@ -763,10 +795,17 @@ function resetRound() {
   game.dashGhosts = [];
   game.neonTrails = [];
   game.ultimateEffects = [];
-  game.destructibles = map.destructibles.map((box, index) => ({ ...box, maxHp: box.hp, id: `box-${index}` }));
+  game.destructibles = game.training
+    ? []
+    : map.destructibles.map((box, index) => ({ ...box, maxHp: box.hp, id: `box-${index}` }));
   game.smokes = [];
   game.shadowZones = [];
-  spawnRoundPickups();
+  if (game.training) {
+    game.medkits = [];
+    game.ultOrbs = [];
+  } else {
+    spawnRoundPickups();
+  }
   game.revealTimer = 0;
   game.abilityCooldown = 0;
   game.player.ultPoints = game.playerUltPoints;
@@ -775,8 +814,8 @@ function resetRound() {
   game.roundOverTimer = 0;
   const carrier = game.bots.find((bot) => bot.hasSpike);
   game.spike = {
-    state: "carried",
-    owner: game.playerSide === "attackers" ? "player" : "bot",
+    state: game.training ? "disabled" : "carried",
+    owner: game.training ? null : game.playerSide === "attackers" ? "player" : "bot",
     x: game.playerSide === "attackers" ? game.player.x : carrier.x,
     y: game.playerSide === "attackers" ? game.player.y : carrier.y,
     timer: 0,
@@ -845,7 +884,7 @@ function startNewMatch() {
   game.roundNumber = 1;
   game.startingSide = Math.random() < 0.5 ? "attackers" : "defenders";
   game.playerSide = game.startingSide;
-  map = MAPS[Math.floor(Math.random() * MAPS.length)];
+  map = game.training ? TRAINING_MAP : MAPS[Math.floor(Math.random() * MAPS.length)];
   map.botRoutes = randomizedBotRoutes(map);
   game.map = map;
   game.mapName = map.name;
@@ -1669,6 +1708,7 @@ function updatePickups(dt) {
 }
 
 function plantOrDefuse(dt) {
+  if (game.training) return;
   const p = game.player;
   if (game.phase !== "action") return;
   if (game.ultOrbs.some((orb) => Math.hypot(p.x - orb.x, p.y - orb.y) < p.r + 21)) return;
@@ -2674,6 +2714,7 @@ function updateBots(dt) {
 function eliminateBot(bot, { playerCredit = false, weaponName = "Poison Cloud", headshot = false } = {}) {
   if (!bot.alive) return;
   bot.alive = false;
+  if (game.training) bot.respawnTimer = 1.25 + Math.random() * 0.75;
   if (playerCredit) {
     game.stats.kills += 1;
     addKillFeedEntry(true, weaponName, headshot);
@@ -2691,6 +2732,44 @@ function eliminateBot(bot, { playerCredit = false, weaponName = "Poison Cloud", 
     game.spike.y = bot.y;
     game.spike.plantProgress = 0;
     setMessage("Spike derrubada. Bots tentarão recuperar.");
+  }
+}
+
+function randomTrainingSpawn() {
+  const margin = 70;
+  const player = game.player || TRAINING_MAP.attackersSpawn;
+  for (let attempt = 0; attempt < 24; attempt++) {
+    const edge = Math.floor(Math.random() * 3);
+    const point = edge === 0
+      ? { x: margin + Math.random() * (map.width - margin * 2), y: margin }
+      : edge === 1
+        ? { x: margin, y: margin + Math.random() * (map.height * 0.58) }
+        : { x: map.width - margin, y: margin + Math.random() * (map.height * 0.58) };
+    if (Math.hypot(point.x - player.x, point.y - player.y) >= 360) return point;
+  }
+  return { x: map.width / 2, y: margin };
+}
+
+function createTrainingBot() {
+  const bot = makeBot(randomTrainingSpawn(), game.trainingBotSequence++);
+  bot.id = `training-bot-${game.trainingBotSequence}`;
+  bot.hasSpike = false;
+  bot.speed = 108 + Math.random() * 18;
+  bot.respawnTimer = 0;
+  sanitizeEntityPosition(bot);
+  return bot;
+}
+
+function updateTrainingArena(dt) {
+  if (!game.training || game.phase !== "action") return;
+  for (let index = 0; index < game.bots.length; index++) {
+    const bot = game.bots[index];
+    if (bot.alive) continue;
+    bot.respawnTimer = Math.max(0, (Number(bot.respawnTimer) || 0) - dt);
+    if (bot.respawnTimer === 0) {
+      game.bots[index] = createTrainingBot();
+      setMessage("Treino: novo alvo entrou na arena.");
+    }
   }
 }
 
@@ -2782,6 +2861,14 @@ function updateBullets(dt) {
               game.player.alive = true;
               game.player.hp = game.player.maxHp;
               setTutorialPhase(Math.min(game.tutorialStep, 2));
+              break;
+            }
+            if (game.training) {
+              game.player.alive = true;
+              game.player.hp = game.player.maxHp;
+              game.player.armor = game.player.maxArmor;
+              game.player.x = map.attackersSpawn.x;
+              game.player.y = map.attackersSpawn.y;
               break;
             }
             const winner = game.playerSide === "attackers" ? "defenders" : "attackers";
@@ -2960,6 +3047,7 @@ function updateTimers(dt) {
 function checkWinConditions() {
   if (game.phase !== "action") return;
   if (game.tutorial) return;
+  if (game.training) return;
   if (game.bots.every((bot) => !bot.alive)) {
     if (game.training || game.sandbox) {
       const botSpawns = game.playerSide === "attackers" ? map.defendersSpawn : map.attackerBotSpawns;
@@ -3054,12 +3142,13 @@ function update(dt) {
   if (game.paused) return;
   updateTimers(dt);
   if (game.introTimer > 0 || !game.clockActive) return;
-  updateTutorial();
+  updateTutorial(dt);
   if (game.phase === "action") {
     updatePlayer(dt);
     updateAllies(dt);
     updateBots(dt);
     updateBullets(dt);
+    updateTrainingArena(dt);
     updateSpike(dt);
     updatePickups(dt);
     checkWinConditions();
@@ -3079,7 +3168,7 @@ function drawMap() {
     ctx.fillRect(0, y, canvas.width, 1);
   }
 
-  for (const site of map.sites) {
+  for (const site of game.training ? [] : map.sites) {
     ctx.fillStyle = theme.siteFill;
     ctx.strokeStyle = theme.siteStroke;
     ctx.lineWidth = 2;
@@ -3110,7 +3199,7 @@ function drawMap() {
     ctx.fillRect(box.x + 5, box.y + box.h - 9, (box.w - 10) * ratio, 4);
   }
 
-  const callouts = [
+  const callouts = game.training ? [] : [
     { text: "Spawn ATK", x: map.attackersSpawn.x, y: map.attackersSpawn.y - 28 },
     { text: "Spawn DEF", x: map.playerDefenderSpawn.x, y: map.playerDefenderSpawn.y + 42 },
     { text: "Meio", x: map.width / 2, y: map.height / 2 },
@@ -4137,25 +4226,140 @@ function hideAgentSelect() {
   game.menuState = "none";
 }
 
+function agentPresentation(agent) {
+  const details = {
+    vanguard: {
+      className: "Duelista",
+      tagline: "Velocidade e avanço agressivo",
+      ultimate: "Sobrecarga Cinética",
+      initials: "VG",
+      artwork: "assets/Neon_Artwork_Full.webp",
+    },
+    viper: {
+      className: "Controladora",
+      tagline: "Domínio territorial com toxinas",
+      ultimate: "Poço Químico",
+      initials: "VP",
+      artwork: "assets/Viper_Artwork_Full.webp",
+    },
+    mender: {
+      className: "Sentinela",
+      tagline: "Sustentação e recuperação da equipe",
+      ultimate: "Restauração Total",
+      initials: "MD",
+      artwork: "assets/Sage_Artwork_Full.webp",
+    },
+    shade: {
+      className: "Controlador",
+      tagline: "Cegueira e redução de mobilidade",
+      ultimate: "Domínio das Sombras",
+      initials: "SH",
+      artwork: "assets/Omen_Artwork_Full.webp",
+    },
+  };
+  return details[agent.id] || {
+    className: agent.role,
+    tagline: agent.ability,
+    ultimate: "Ultimate",
+    initials: agent.name.slice(0, 2).toUpperCase(),
+    artwork: "",
+  };
+}
+
 function showAgentSelect(onPick) {
   closeShop();
+  const selector = ui.agentSelectGrid.parentElement;
+  selector.querySelector(".agent-preview")?.remove();
   ui.agentSelectGrid.innerHTML = "";
+  ui.agentSelectGrid.classList.remove("has-selection");
+
+  const preview = document.createElement("section");
+  preview.className = "agent-preview";
+  preview.setAttribute("aria-live", "polite");
+preview.innerHTML = `
+     <div class="agent-preview-art" aria-hidden="true"><span></span></div>
+     <div class="agent-preview-copy">
+       <span class="agent-class"></span>
+       <h3></h3>
+       <p></p>
+       <div class="agent-abilities">
+         <div class="ability-chip ability-chip-basic agent-preview-ability">
+           <i>E</i><span><small>Habilidade</small><b></b><span class="agent-ability-cooldown"></span></span>
+         </div>
+         <div class="ability-chip ability-chip-ultimate agent-preview-ability">
+           <i>Q</i><span><small>Ultimate</small><b></b></span>
+         </div>
+       </div>
+       <button type="button" class="agent-confirm" disabled>Confirmar agente</button>
+     </div>`;
+  selector.appendChild(preview);
+
+  const confirmButton = preview.querySelector(".agent-confirm");
+  let selectedAgent = null;
+  let agenteTravado = false;
+
+const renderPreview = (agent) => {
+     const presentation = agentPresentation(agent);
+     preview.style.setProperty("--agent-color", agent.color);
+     preview.dataset.agent = agent.id;
+     preview.querySelector(".agent-preview-art").style.backgroundImage = presentation.artwork
+       ? `linear-gradient(180deg, transparent 52%, rgba(2, 6, 10, 0.92)), url("${presentation.artwork}")`
+       : "";
+     preview.querySelector(".agent-preview-art span").textContent = presentation.initials;
+     preview.querySelector(".agent-class").textContent = presentation.className;
+     preview.querySelector("h3").textContent = agent.name;
+     preview.querySelector("p").textContent = presentation.tagline;
+     preview.querySelector(".ability-chip-basic b").textContent = agent.ability;
+     const cooldownEl = preview.querySelector(".agent-ability-cooldown");
+     if (cooldownEl) cooldownEl.textContent = `(${agent.cooldown}s recarga)`;
+     preview.querySelector(".ability-chip-ultimate b").textContent = presentation.ultimate;
+   };
+
+  const confirmSelection = () => {
+    if (!selectedAgent) return;
+    game.selectedAgent = selectedAgent;
+    game.agentLocked = true;
+    hideAgentSelect();
+    game.paused = false;
+    onPick();
+    updateUi();
+  };
+
+  attachButtonFeedback(confirmButton);
+  confirmButton.addEventListener("click", confirmSelection);
+
   for (const agent of agents) {
+    const presentation = agentPresentation(agent);
     const button = document.createElement("button");
+    button.type = "button";
     button.className = "agent-card";
     button.style.setProperty("--agent-color", agent.color);
-    button.innerHTML = `<b>${agent.name}</b><span>${agent.ability}</span>`;
+    button.style.setProperty("--agent-art", `url("${presentation.artwork}")`);
+    button.innerHTML = `
+      <span class="agent-card-portrait" aria-hidden="true">${presentation.initials}</span>
+      <span class="agent-card-copy"><b>${agent.name}</b><small>${presentation.className}</small></span>`;
     attachButtonFeedback(button);
-    button.addEventListener("click", () => {
-      game.selectedAgent = agent;
-      game.agentLocked = true;
-      hideAgentSelect();
-      game.paused = false;
-      onPick();
-      updateUi();
+    button.addEventListener("mouseenter", () => {
+      if (!agenteTravado) renderPreview(agent);
     });
+    button.addEventListener("focus", () => {
+      if (!agenteTravado) renderPreview(agent);
+    });
+    button.addEventListener("click", () => {
+      agenteTravado = true;
+      selectedAgent = agent;
+      renderPreview(agent);
+      ui.agentSelectGrid.classList.add("has-selection");
+      for (const card of ui.agentSelectGrid.querySelectorAll(".agent-card")) {
+        card.classList.toggle("selected", card === button);
+      }
+      confirmButton.disabled = false;
+      confirmButton.textContent = `Confirmar ${agent.name}`;
+    });
+    button.addEventListener("dblclick", confirmSelection);
     ui.agentSelectGrid.appendChild(button);
   }
+  renderPreview(game.selectedAgent || agents[0]);
   ui.agentOverlay.classList.remove("hidden");
   game.paused = true;
   game.menuState = "agent";
@@ -4293,6 +4497,8 @@ function startTrainingMode() {
   game.sandbox = false;
   game.training = true;
   game.tutorial = false;
+  game.godMode = true;
+  game.trainingBotSequence = 0;
   game.allyCount = 0;
   game.enemyFireMultiplier = 2.4;
   hideMenuOverlay();
@@ -4301,7 +4507,13 @@ function startTrainingMode() {
     game.money = 99999;
     startActionRound();
     game.phaseTime = 9999;
-    setMessage("Treino: dinheiro infinito, tempo livre e bots lentos para testar armas.");
+    game.destructibles = [];
+    game.medkits = [];
+    game.ultOrbs = [];
+    game.spike.state = "disabled";
+    game.spike.owner = null;
+    game.bots = Array.from({ length: 3 }, () => createTrainingBot());
+    setMessage("Treino livre: arena aberta e alvos com respawn infinito.");
   });
 }
 
