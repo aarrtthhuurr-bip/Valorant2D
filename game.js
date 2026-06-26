@@ -751,7 +751,7 @@ function spawnRoundPickups() {
   game.ultOrbs = Array.from({ length: 3 }, (_, index) => {
     const point = randomAccessiblePickupPoint(occupied);
     occupied.push(point);
-    return { ...point, id: `ult-orb-${index}`, phase: index * 2.1 };
+    return { ...point, id: `ult-orb-${index}`, phase: index * 2.1, reservadaPor: null };
   });
 }
 
@@ -1675,6 +1675,7 @@ function completeOrbCollection(entity, orb) {
    setUltimatePoints(entity, getUltimatePoints(entity) + 1);
    entity.orbChannel = null;
    entity.orbAssignment = null;
+   if (orb) orb.reservadaPor = null;
    game.ultOrbs = game.ultOrbs.filter((item) => item !== orb);
    game.ultimateEffects.push({ type: "orb-beam", x: orb.x, y: orb.y, color: "#bd67ff", life: 1.5, maxLife: 1.5, radius: 12 });
    spawnParticles(orb.x, orb.y, "#bd67ff", 28, 180);
@@ -1705,16 +1706,49 @@ function updateOrbChannel(entity, orb, dt) {
    if (previous.progress >= 1) completeOrbCollection(entity, orb);
  }
 
- function assignOrbToClosest(orb, entities) {
-   const closest = entities
-     .filter((e) => e.alive && Math.hypot(e.x - orb.x, e.y - orb.y) < e.r + 45)
-     .sort((a, b) => Math.hypot(a.x - orb.x, a.y - orb.y) - Math.hypot(b.x - orb.x, b.y - orb.y))[0];
-   if (closest) {
-     closest.orbAssignment = orb.id;
-     closest.aiState = "seek-ult";
-   }
-   return closest;
- }
+function livingBotLikeEntities() {
+  return [...game.allies, ...game.bots].filter((entity) => entity?.alive);
+}
+
+function orbReservationOwner(orb) {
+  if (!orb?.reservadaPor) return null;
+  return livingBotLikeEntities().find((entity) => entity.id === orb.reservadaPor) || null;
+}
+
+function releaseEntityOrbReservation(entity) {
+  if (!entity?.orbAssignment) return;
+  const reservedOrb = game.ultOrbs.find((orb) => orb.id === entity.orbAssignment);
+  if (reservedOrb?.reservadaPor === entity.id) reservedOrb.reservadaPor = null;
+  entity.orbAssignment = null;
+  entity.orbChannel = null;
+}
+
+function updateOrbReservations() {
+  const livingIds = new Set(livingBotLikeEntities().map((entity) => entity.id));
+  for (const orb of game.ultOrbs) {
+    if (orb.reservadaPor && (!livingIds.has(orb.reservadaPor) || game.spike.state === "planted")) {
+      orb.reservadaPor = null;
+    }
+  }
+  for (const entity of livingBotLikeEntities()) {
+    const assignedOrb = game.ultOrbs.find((orb) => orb.id === entity.orbAssignment);
+    if (!assignedOrb || assignedOrb.reservadaPor !== entity.id || entity.aiState !== "seek-ult" || game.spike.state === "planted") {
+      if (assignedOrb?.reservadaPor === entity.id) assignedOrb.reservadaPor = null;
+      entity.orbAssignment = null;
+      entity.orbChannel = null;
+    }
+  }
+}
+
+function reserveOrbForEntity(entity, orb) {
+  if (!entity || !orb) return false;
+  const owner = orbReservationOwner(orb);
+  if (owner && owner.id !== entity.id) return false;
+  if (entity.orbAssignment && entity.orbAssignment !== orb.id) releaseEntityOrbReservation(entity);
+  orb.reservadaPor = entity.id;
+  entity.orbAssignment = orb.id;
+  return true;
+}
 
 function collectPickups(entity, dt) {
    if (!entity?.alive) return;
@@ -1734,18 +1768,7 @@ function collectPickups(entity, dt) {
  }
 
 function updatePickups(dt) {
-   const allEntities = [...game.allies, ...game.bots].filter((e) => e?.alive);
-   for (const orb of game.ultOrbs) {
-     if (!orb._assigned) {
-       const closest = allEntities
-         .filter((e) => !e.orbAssignment)
-         .sort((a, b) => Math.hypot(a.x - orb.x, a.y - orb.y) - Math.hypot(b.x - orb.x, b.y - orb.y))[0];
-       if (closest) {
-         closest.orbAssignment = orb.id;
-       }
-       orb._assigned = true;
-     }
-   }
+   updateOrbReservations();
    collectPickups(game.player, dt);
    game.allies.forEach((ally) => collectPickups(ally, dt));
    game.bots.forEach((bot) => collectPickups(bot, dt));
@@ -2515,16 +2538,19 @@ function seekCriticalMedkit(entity, dt, danger) {
 }
 
 function seekUltimateOrb(entity, dt) {
-   if (game.spike.state === "planted") return false;
-   if (getUltimatePoints(entity) >= ULT_MAX_POINTS || !game.ultOrbs.length) return false;
-   const targetOrb = game.ultOrbs.find((orb) => orb?.id === entity.orbAssignment) || nearestPickup(entity, game.ultOrbs);
-   if (!targetOrb) return false;
+   if (game.spike.state === "planted" || getUltimatePoints(entity) >= ULT_MAX_POINTS || !game.ultOrbs.length) {
+     releaseEntityOrbReservation(entity);
+     return false;
+   }
+   updateOrbReservations();
+   const currentOrb = game.ultOrbs.find((orb) => orb.id === entity.orbAssignment && orb.reservadaPor === entity.id);
+   const targetOrb = currentOrb || game.ultOrbs
+     .filter((orb) => !orb.reservadaPor)
+     .sort((a, b) => Math.hypot(entity.x - a.x, entity.y - a.y) - Math.hypot(entity.x - b.x, entity.y - b.y))[0];
+   if (!targetOrb || !reserveOrbForEntity(entity, targetOrb)) return false;
    entity.aiState = "seek-ult";
    if (Math.hypot(entity.x - targetOrb.x, entity.y - targetOrb.y) > entity.r + 22) {
-     const angle = Math.atan2(targetOrb.y - entity.y, targetOrb.x - entity.x);
-     entity.angle = angle;
-     moveEntity(entity, Math.cos(angle) * entity.speed * 1.04 * dt, Math.sin(angle) * entity.speed * 1.04 * dt, map.walls);
-     entity.moving = true;
+     moveBotToward(entity, targetOrb, dt, 1.04);
    } else {
      entity.moving = false;
      entity.angle = Math.atan2(targetOrb.y - entity.y, targetOrb.x - entity.x);
@@ -2780,9 +2806,7 @@ function eliminateBot(bot, { playerCredit = false, weaponName = "Poison Cloud", 
      game.spike.plantProgress = 0;
      setMessage("Spike derrubada. Bots tentarão recuperar.");
    }
-   if (bot.orbAssignment) {
-     bot.orbAssignment = null;
-   }
+   releaseEntityOrbReservation(bot);
  }
 
 function randomTrainingSpawn() {
