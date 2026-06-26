@@ -33,6 +33,11 @@ const ui = {
   menuTitle: document.getElementById("menuTitle"),
   menuText: document.getElementById("menuText"),
   menuButtons: document.getElementById("menuButtons"),
+  pauseOverlay: document.getElementById("pauseMenuOverlay"),
+  pauseResumeButton: document.getElementById("pauseResumeButton"),
+  pauseOptionsButton: document.getElementById("pauseOptionsButton"),
+  pauseRestartButton: document.getElementById("pauseRestartButton"),
+  pauseQuitButton: document.getElementById("pauseQuitButton"),
   agentOverlay: document.getElementById("agentOverlay"),
   agentSelectGrid: document.getElementById("agentSelectGrid"),
   introOverlay: document.getElementById("introOverlay"),
@@ -4211,6 +4216,7 @@ function handleEscape() {
 }
 
 function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
+  hidePauseOverlay();
   if (ui.menuKicker) ui.menuKicker.textContent = kicker;
   if (ui.menuTitle) ui.menuTitle.textContent = title;
   if (ui.menuText) ui.menuText.textContent = "";
@@ -4263,6 +4269,11 @@ function attachButtonFeedback(button) {
 function hideMenuOverlay() {
   ui.menuOverlay.classList.add("hidden");
   game.menuState = "none";
+}
+
+function hidePauseOverlay() {
+  ui.pauseOverlay?.classList.remove("is-open");
+  ui.pauseOverlay?.setAttribute("aria-hidden", "true");
 }
 
 function hideAgentSelect() {
@@ -4408,6 +4419,7 @@ function showAgentSelect(onPick) {
 }
 
 function resumeFromPause() {
+  hidePauseOverlay();
   hideMenuOverlay();
   if (game.pauseReturnState === "agent") {
     game.pauseReturnState = null;
@@ -4426,15 +4438,43 @@ function showPauseMenu(returnState = null) {
   closeShop();
   game.pauseReturnState = returnState;
   if (returnState === "agent") ui.agentOverlay?.classList.add("hidden");
+  ui.menuOverlay?.classList.add("hidden");
+  ui.pauseOverlay?.classList.add("is-open");
+  ui.pauseOverlay?.setAttribute("aria-hidden", "false");
+  game.menuState = "pause";
+  game.paused = true;
   setMessage("Jogo pausado.");
-  setMenu("Pause", "A partida esta congelada. Continue ou volte para o menu.", [
-    { label: "Continuar", desc: "Retomar a partida atual.", action: resumeFromPause },
-    { label: "Voltar ao menu", back: true, desc: "Sair da partida atual e abrir o menu principal.", action: showMainMenu },
-  ], "JOGO PAUSADO", "pause");
   updateUi();
 }
 
+function restartCurrentMatch() {
+  hidePauseOverlay();
+  ui.matchOverlay?.classList.add("hidden");
+  game.pauseReturnState = null;
+  game.paused = false;
+  game.menuState = "none";
+  if (game.training) {
+    startTrainingMode();
+  } else if (game.sandbox) {
+    startSandboxMode();
+  } else {
+    startNewMatch();
+  }
+  updateUi();
+}
+
+function openPauseOptions() {
+  hidePauseOverlay();
+  showOptionsMenu();
+}
+
+function quitToMainMenu() {
+  hidePauseOverlay();
+  showMainMenu();
+}
+
 function showMainMenu() {
+  hidePauseOverlay();
   ui.introOverlay?.classList.add("hidden");
   ui.matchOverlay?.classList.add("hidden");
   ui.agentOverlay?.classList.add("hidden");
@@ -4932,6 +4972,11 @@ if (ui.newGameButton) ui.newGameButton.addEventListener("click", () => {
   ui.matchOverlay?.classList.add("hidden");
   showMainMenu();
 });
+
+if (ui.pauseResumeButton) ui.pauseResumeButton.addEventListener("click", resumeFromPause);
+if (ui.pauseOptionsButton) ui.pauseOptionsButton.addEventListener("click", openPauseOptions);
+if (ui.pauseRestartButton) ui.pauseRestartButton.addEventListener("click", restartCurrentMatch);
+if (ui.pauseQuitButton) ui.pauseQuitButton.addEventListener("click", quitToMainMenu);
 
 buildShop();
 setShopTab(game.shopTab);
