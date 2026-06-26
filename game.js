@@ -4202,17 +4202,21 @@ function handleEscape() {
     showMainMenu();
     return;
   }
-  if (game.menuState === "agent") {
-    showPauseMenu("agent");
-    return;
-  }
+  if (game.menuState === "agent") return;
   if (game.menuState !== "none") return;
   if (!ui.shop.classList.contains("hidden")) {
     closeShop();
     updateUi();
     return;
   }
+  if (!canOpenPauseMenu()) return;
   showPauseMenu();
+}
+
+function canOpenPauseMenu() {
+  return game.menuState === "none"
+    && ["buy", "action"].includes(game.phase)
+    && !game.introTimer;
 }
 
 function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
@@ -4435,9 +4439,9 @@ function resumeFromPause() {
 }
 
 function showPauseMenu(returnState = null) {
+  if (returnState === "agent" || !canOpenPauseMenu()) return;
   closeShop();
   game.pauseReturnState = returnState;
-  if (returnState === "agent") ui.agentOverlay?.classList.add("hidden");
   ui.menuOverlay?.classList.add("hidden");
   ui.pauseOverlay?.classList.add("is-open");
   ui.pauseOverlay?.setAttribute("aria-hidden", "false");
