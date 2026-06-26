@@ -624,6 +624,7 @@ const game = {
   damageFlash: 0,
   botPlanSiteIndex: 0,
   pauseReturnState: null,
+  agentReturnState: "main",
 };
 
 function makePlayer() {
@@ -4155,7 +4156,7 @@ function togglePause() {
     return;
   }
   if (game.menuState === "agent") {
-    showPauseMenu("agent");
+    returnFromAgentSelect();
     return;
   }
   if (game.menuState !== "none") return;
@@ -4202,7 +4203,10 @@ function handleEscape() {
     showMainMenu();
     return;
   }
-  if (game.menuState === "agent") return;
+  if (game.menuState === "agent") {
+    returnFromAgentSelect();
+    return;
+  }
   if (game.menuState !== "none") return;
   if (!ui.shop.classList.contains("hidden")) {
     closeShop();
@@ -4285,6 +4289,16 @@ function hideAgentSelect() {
   game.menuState = "none";
 }
 
+function returnFromAgentSelect() {
+  ui.agentOverlay?.classList.add("hidden");
+  game.paused = true;
+  if (game.agentReturnState === "difficulty") {
+    showDifficultyMenu(true);
+  } else {
+    showMainMenu();
+  }
+}
+
 function agentPresentation(agent) {
   const details = {
     neon: {
@@ -4325,8 +4339,9 @@ function agentPresentation(agent) {
   };
 }
 
-function showAgentSelect(onPick) {
+function showAgentSelect(onPick, returnState = "main") {
   closeShop();
+  game.agentReturnState = returnState;
   const selector = ui.agentSelectGrid.parentElement;
   selector.querySelector(".agent-preview")?.remove();
   ui.agentSelectGrid.innerHTML = "";
@@ -4556,7 +4571,7 @@ function startMode(label, difficulty) {
   setTimeout(() => {
     ui.menuOverlay?.classList.remove("menu-carousel-out");
     hideMenuOverlay();
-    showAgentSelect(startNewMatch);
+    showAgentSelect(startNewMatch, "difficulty");
   }, 220);
 }
 
@@ -4574,7 +4589,7 @@ function startSandboxMode() {
     startActionRound();
     game.phaseTime = 9999;
     setMessage("Sandbox: use o painel para spawnar bots, resetar spike, ativar God ou limpar o mapa.");
-  });
+  }, "main");
 }
 
 function startTrainingMode() {
@@ -4600,7 +4615,7 @@ function startTrainingMode() {
     game.spike.owner = null;
     game.bots = Array.from({ length: 3 }, () => createTrainingBot());
     setMessage("Treino livre: arena aberta e alvos com respawn infinito.");
-  });
+  }, "main");
 }
 
 function startTutorialMode() {
