@@ -1218,11 +1218,18 @@ function showTutorialAgentChoice() {
   ui.tutorialAgentGrid.innerHTML = "";
   for (const agent of agents) {
     const [role, description] = tutorialAgentDescription(agent);
+    const presentation = agentPresentation(agent);
     const button = document.createElement("button");
     button.type = "button";
     button.className = "tutorial-agent-card";
     button.style.setProperty("--agent-color", agent.color);
-    button.innerHTML = `<b>${agent.name}</b><span>${role}</span><small>${description}</small>`;
+    button.innerHTML = `
+      <span class="tutorial-agent-portrait" aria-hidden="true">
+        <img src="${presentation.icon}" alt="">
+      </span>
+      <b>${agent.name}</b>
+      <span>${role}</span>
+      <small>${description}</small>`;
     attachButtonFeedback(button);
     button.addEventListener("click", () => {
       game.selectedAgent = agent;
@@ -1853,7 +1860,7 @@ const right = keys.has("d") || (game.arrowKeys && keys.has("arrowright"));
    const dx = (right ? 1 : 0) - (left ? 1 : 0);
    const dy = (down ? 1 : 0) - (up ? 1 : 0);
    const len = Math.hypot(dx, dy) || 1;
-   const movementLocked = game.tutorial && game.tutorialStep === 0;
+   const movementLocked = game.tutorial && game.tutorialStep === 1;
    p.moving = !movementLocked && (dx !== 0 || dy !== 0);
   p.moveX = p.moving ? dx / len : 0;
   p.moveY = p.moving ? dy / len : 0;

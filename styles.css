@@ -1901,7 +1901,9 @@ button.click-feedback::after {
   inset: 0;
   z-index: 28;
   display: grid;
-  place-items: center;
+  align-items: end;
+  justify-items: center;
+  padding: 0 24px 28px;
   pointer-events: none;
 }
 
@@ -1913,7 +1915,7 @@ button.click-feedback::after {
 
 .tutorial-prompt {
    max-width: min(580px, calc(100% - 40px));
-   padding: 16px 24px;
+   padding: 14px 24px;
    display: grid;
    justify-items: center;
    gap: 6px;
@@ -1941,6 +1943,8 @@ button.click-feedback::after {
 }
 
 .tutorial-agent-panel {
+  align-self: center;
+  justify-self: center;
   width: min(920px, calc(100% - 40px));
   padding: clamp(24px, 4vw, 42px);
   border-radius: 16px;
@@ -1984,6 +1988,32 @@ button.click-feedback::after {
   will-change: transform, opacity;
 }
 
+.tutorial-agent-portrait {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 1;
+  width: 76px;
+  height: 76px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--agent-color) 44%, rgba(255, 255, 255, 0.16));
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--agent-color) 24%, transparent), transparent 72%),
+    rgba(255, 255, 255, 0.035);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--agent-color) 18%, transparent);
+}
+
+.tutorial-agent-portrait img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  object-position: center;
+}
+
 .tutorial-agent-card::before {
   content: "";
   position: absolute;
@@ -2002,7 +2032,7 @@ button.click-feedback::after {
 }
 
 .tutorial-agent-card b,
-.tutorial-agent-card span,
+.tutorial-agent-card > span:not(.tutorial-agent-portrait),
 .tutorial-agent-card small {
   position: relative;
   z-index: 1;
@@ -2012,7 +2042,7 @@ button.click-feedback::after {
   font-size: 22px;
 }
 
-.tutorial-agent-card span {
+.tutorial-agent-card > span:not(.tutorial-agent-portrait) {
   color: var(--agent-color);
   font-weight: 700;
   text-transform: uppercase;
