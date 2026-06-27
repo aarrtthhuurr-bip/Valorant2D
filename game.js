@@ -91,7 +91,7 @@ const PLAYER_DEFUSE_TIME = 3.2;
 const BOT_DEFUSE_TIME = 5.2;
 const PLANT_TIME = 2.0;
 const BUY_TIME = 8;
-const MATCH_POINT = 15;
+const MATCH_ROUNDS = 9;
 const POISON_TICK_INTERVAL = 0.35;
 const ULT_MAX_POINTS = 7;
 const MEDKIT_HEAL = 50;
@@ -916,7 +916,7 @@ function startNewMatch() {
 }
 
 function showMatchResult() {
-  const won = game.playerScore >= MATCH_POINT;
+  const won = game.playerScore > game.enemyScore;
   game.phase = "matchOver";
   game.phaseTime = 0;
   game.paused = false;
@@ -972,7 +972,7 @@ function endRound(winner, reason, outcome = "standard") {
     2.8
   );
   playSound(won ? "round_win" : "round_lose");
-  if (game.playerScore >= MATCH_POINT || game.enemyScore >= MATCH_POINT) {
+  if (game.playerScore + game.enemyScore >= MATCH_ROUNDS) {
     showMatchResult();
   }
 }

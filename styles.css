@@ -73,7 +73,7 @@ button.active {
   height: auto;
   max-height: 90vh;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   justify-items: center;
   align-content: center;
   gap: 8px;
@@ -84,7 +84,7 @@ button.active {
 
 .game-wrap {
   position: relative;
-  grid-row: 3;
+  grid-row: 2;
   width: 100%;
   max-width: 1024px;
   max-height: min(576px, calc(90vh - 118px));
@@ -657,7 +657,7 @@ canvas {
 
 .message {
   position: relative;
-  grid-row: 2;
+  grid-row: 3;
   align-self: start;
   z-index: 99;
   width: max-content;
