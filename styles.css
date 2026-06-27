@@ -73,7 +73,7 @@ button.active {
   height: auto;
   max-height: 90vh;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   justify-items: center;
   align-content: center;
   gap: 8px;
@@ -86,7 +86,7 @@ button.active {
   position: relative;
   width: 100%;
   max-width: 1024px;
-  max-height: min(576px, calc(90vh - 62px));
+  max-height: min(576px, calc(90vh - 118px));
   aspect-ratio: 16 / 9;
   overflow: hidden;
   background: #0b1318;
@@ -135,7 +135,6 @@ canvas {
 
 .gameplay-ui-hidden .status-card,
 .gameplay-ui-hidden .kill-feed,
-.gameplay-ui-hidden .message,
 .gameplay-ui-hidden .round-banner,
 .gameplay-ui-hidden .scoreboard,
 .gameplay-ui-hidden .sandbox-tools {
@@ -655,16 +654,19 @@ canvas {
 }
 
 .message {
-  position: absolute;
-  left: 50%;
-  bottom: 92px;
+  position: relative;
+  z-index: 99;
+  width: max-content;
   max-width: min(430px, calc(100% - 32px));
   padding: 7px 11px;
   text-align: center;
   border-radius: 6px;
-  transform: translateX(-50%);
   pointer-events: none;
   animation: fadeIn 360ms ease both;
+}
+
+.message.hidden {
+  display: none;
 }
 
 .message span {
@@ -2143,10 +2145,10 @@ button.click-feedback::after {
      gap: 6px;
    }
 
-   .game-wrap {
-     width: 100%;
-     max-height: calc(90vh - 58px);
-   }
+  .game-wrap {
+    width: 100%;
+    max-height: calc(90vh - 108px);
+  }
 
    .top-hud {
      max-width: calc(100% - 12px);
@@ -2191,10 +2193,9 @@ button.click-feedback::after {
      width: min(560px, calc(100% - 16px));
    }
 
-   .message {
-     bottom: 82px;
-     max-width: min(360px, calc(100% - 18px));
-   }
+  .message {
+    max-width: min(360px, calc(100% - 18px));
+  }
 
    .menu-card {
      width: min(360px, 48vw);

@@ -3067,6 +3067,10 @@ function updateTimers(dt) {
   game.shadowZones = game.shadowZones.filter((zone) => zone.life > 0);
   for (const entity of [game.player, ...game.allies, ...game.bots]) {
     if (!entity?.ultimate) continue;
+    if (!entity.alive) {
+      entity.ultimate = null;
+      continue;
+    }
     entity.ultimate.life -= dt;
     if (entity.ultimate.life <= 0) entity.ultimate = null;
   }
@@ -4167,6 +4171,7 @@ function updateUi() {
   const gameplayHudVisible = game.menuState === "none" && ["buy", "action", "ended"].includes(game.phase);
   const tutorialActive = game.tutorial && game.menuState === "none";
   toggleClass(ui.topHud, "hidden", !gameplayHudVisible || tutorialActive);
+  toggleClass(ui.message, "hidden", !gameplayHudVisible || tutorialActive);
   const gameWrap = document.querySelector(".game-wrap");
   gameWrap?.classList.toggle("gameplay-ui-hidden", !gameplayHudVisible);
   gameWrap?.classList.toggle("tutorial-mode", tutorialActive);
