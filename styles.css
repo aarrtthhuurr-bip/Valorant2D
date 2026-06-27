@@ -84,6 +84,7 @@ button.active {
 
 .game-wrap {
   position: relative;
+  grid-row: 3;
   width: 100%;
   max-width: 1024px;
   max-height: min(576px, calc(90vh - 118px));
@@ -109,6 +110,7 @@ canvas {
 
 .top-hud {
   position: relative;
+  grid-row: 1;
   z-index: 100;
   display: flex;
   align-items: center;
@@ -655,9 +657,12 @@ canvas {
 
 .message {
   position: relative;
+  grid-row: 2;
+  align-self: start;
   z-index: 99;
   width: max-content;
-  max-width: min(430px, calc(100% - 32px));
+  max-width: min(560px, calc(100% - 32px));
+  margin: 0 0 2px;
   padding: 7px 11px;
   text-align: center;
   border-radius: 6px;
