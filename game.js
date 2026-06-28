@@ -587,6 +587,7 @@ const game = {
   tutorialAbilityUsed: false,
   tutorialFreeUlts: 0,
   tutorialUltUses: 0,
+  tutorialTransitioning: false,
   trainingBotSequence: 0,
   recoilHeat: 0,
   shotChain: 0,
@@ -1317,6 +1318,10 @@ function tutorialSiteA() {
   return map.sites.find((site) => site.id === "A") || map.sites[0];
 }
 
+function tutorialSiteB() {
+  return map.sites.find((site) => site.id === "B") || map.sites[1] || map.sites[0];
+}
+
 function tutorialSiteCenter(site = tutorialSiteA()) {
   return { x: site.x + site.w / 2, y: site.y + site.h / 2 };
 }
@@ -1371,8 +1376,24 @@ function placeTutorialMedkits() {
   }));
 }
 
+function completeTutorialPhase(nextStep, label = "Fase concluida") {
+  if (game.tutorialTransitioning) return;
+  game.tutorialTransitioning = true;
+  game.paused = true;
+  game.bullets = [];
+  setTutorialPrompt(label, "Preparando a proxima fase", "1.00 segundo");
+  showRoundBanner(label, "Preparando a proxima fase", "Tutorial", 1);
+  setTimeout(() => {
+    if (!game.tutorial) return;
+    game.tutorialTransitioning = false;
+    game.paused = false;
+    setTutorialPhase(nextStep);
+  }, 1000);
+}
+
 function setTutorialPhase(step) {
   game.tutorialStep = step;
+  game.tutorialTransitioning = false;
   game.tutorialMoveTime = 0;
   game.tutorialMoveRemaining = 3;
   game.tutorialSlowTimer = 0;
@@ -1414,14 +1435,14 @@ function setTutorialPhase(step) {
   if (step === 2) {
     game.tutorialStage = "defuse";
     setTutorialSide("defenders");
-    const site = map.sites[0];
+    const site = tutorialSiteB();
     const spikePoint = safeTutorialSpawn(tutorialSiteCenter(site), site, 18);
     const spawnPoint = randomAccessiblePickupPoint([spikePoint]);
     movePlayerToTutorial(spawnPoint, map.playerDefenderSpawn || map.defendersSpawn[0]);
     resetTutorialSpike("planted", spikePoint);
     game.spike.site = site.id;
     game.tutorialDefusesAtStart = game.stats.defuses;
-    setTutorialPrompt("Fase 3 - Desarmar Spike", "Encontre a Spike e segure F para desarmar", "Sem caixas, sem inimigos");
+    setTutorialPrompt("Fase 3 - Desarmar Spike", "Encontre a Spike no site B e segure F para desarmar", "Sem caixas, sem inimigos");
     return;
   }
 
@@ -1479,13 +1500,13 @@ function updateTutorial(dt) {
     }
     if (game.tutorialMoveRemaining <= 0) {
       ui.tutorialPrompt?.classList.add("fade-out");
-      setTutorialPhase(1);
+      completeTutorialPhase(1);
     }
     return;
   }
 
   if (game.tutorialStep === 1) {
-    if (game.stats.kills > game.tutorialKillsAtStart) setTutorialPhase(2);
+    if (game.stats.kills > game.tutorialKillsAtStart) completeTutorialPhase(2);
     return;
   }
 
@@ -1494,7 +1515,7 @@ function updateTutorial(dt) {
       const distance = Math.hypot(game.player.x - game.spike.x, game.player.y - game.spike.y);
       ui.tutorialProgress.textContent = distance < 46 ? `Defuse ${Math.round(game.spike.defuseProgress * 100)}%` : "Ande ate a Spike";
     }
-    if (game.stats.defuses > game.tutorialDefusesAtStart || game.phase === "ended") setTutorialPhase(3);
+    if (game.stats.defuses > game.tutorialDefusesAtStart || game.phase === "ended") completeTutorialPhase(3);
     return;
   }
 
@@ -1515,14 +1536,14 @@ function updateTutorial(dt) {
   if (game.tutorialStep === 3 && game.tutorialStage === "defend") {
     const kills = Math.max(0, game.stats.kills - game.tutorialKillsAtStart);
     if (ui.tutorialProgress) ui.tutorialProgress.textContent = `${Math.min(3, kills)}/3 bots`;
-    if (kills >= 3) setTutorialPhase(4);
+    if (kills >= 3) completeTutorialPhase(4);
     return;
   }
 
   if (game.tutorialStep === 4) {
     if (game.tutorialStage === "agent-test" && game.tutorialAbilityUsed) {
       if (ui.tutorialProgress) ui.tutorialProgress.textContent = "Habilidade testada";
-      if (game.tutorialTimer > 1.2) setTutorialPhase(5);
+      if (game.tutorialTimer > 1.2) completeTutorialPhase(5);
     }
     return;
   }
@@ -1540,7 +1561,7 @@ function updateTutorial(dt) {
       setTutorialPrompt("Fase 6 - Ultimate", "Aperte Q para testar a Ultimate escolhida", "3 ultimates gratis");
       return;
     }
-    if (game.tutorialStage === "ult-test" && (game.tutorialFreeUlts <= 0 || game.tutorialTimer > 10)) setTutorialPhase(6);
+    if (game.tutorialStage === "ult-test" && (game.tutorialFreeUlts <= 0 || game.tutorialTimer > 10)) completeTutorialPhase(6);
     return;
   }
 
@@ -4867,6 +4888,7 @@ function startTutorialMode() {
   game.tutorialAbilityUsed = false;
   game.tutorialFreeUlts = 0;
   game.tutorialUltUses = 0;
+  game.tutorialTransitioning = false;
   game.allyCount = 0;
   game.enemyFireMultiplier = 2.2;
   hideMenuOverlay();
