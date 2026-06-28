@@ -110,7 +110,7 @@ const ECONOMY = {
   objective: 300,
   cap: 12000,
 };
-const audio = { ctx: null, enabled: true, volume: 0.8, last: 0 };
+const audio = { ctx: null, enabled: true, volume: 0.8, last: 0, cache: new Map(), cachePrimed: false };
 const agents = [
   {
     id: "neon",
@@ -296,10 +296,12 @@ const allyItems = [
 ];
 
 function initAudio() {
-  if (audio.ctx || !audio.enabled) return;
-  const AudioContext = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContext) return;
-  audio.ctx = new AudioContext();
+  if (!audio.enabled) return;
+  if (!audio.ctx) {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (AudioContext) audio.ctx = new AudioContext();
+  }
+  primeWeaponAudioCache();
 }
 
 function playTone(freq, duration = 0.06, type = "square", gain = 0.035) {
@@ -325,9 +327,58 @@ function randomAudioPath(paths) {
   return paths[Math.floor(Math.random() * paths.length)];
 }
 
+function weaponAudioPaths() {
+  const paths = new Set();
+  for (const config of Object.values(weaponAudio)) {
+    for (const src of config.sonsTiro || []) paths.add(src);
+    for (const src of config.sonsReload || []) paths.add(src);
+  }
+  return [...paths];
+}
+
+function makeAudioClip(src) {
+  const clip = new Audio(src);
+  clip.preload = "auto";
+  clip.load();
+  return clip;
+}
+
+function audioPoolSize(src) {
+  return src.includes("/Tiro/") ? 5 : 2;
+}
+
+function primeWeaponAudioCache() {
+  if (audio.cachePrimed || !audio.enabled || typeof Audio === "undefined") return;
+  audio.cachePrimed = true;
+  for (const src of weaponAudioPaths()) {
+    if (audio.cache.has(src)) continue;
+    audio.cache.set(src, {
+      index: 0,
+      max: audioPoolSize(src),
+      clips: [makeAudioClip(src)],
+    });
+  }
+}
+
 function playAudioFile(src, volume = audio.volume) {
   if (!audio.enabled || !src || typeof Audio === "undefined") return false;
-  const clip = new Audio(src);
+  primeWeaponAudioCache();
+  const pool = audio.cache.get(src);
+  const clips = pool?.clips || [makeAudioClip(src)];
+  const start = pool?.index || 0;
+  let clip = clips[start];
+  for (let i = 0; i < clips.length; i++) {
+    const candidate = clips[(start + i) % clips.length];
+    if (candidate.paused || candidate.ended || candidate.currentTime === 0) {
+      clip = candidate;
+      break;
+    }
+  }
+  if (pool && !clip.paused && !clip.ended && clip.currentTime > 0 && clips.length < pool.max) {
+    clip = makeAudioClip(src);
+    clips.push(clip);
+  }
+  if (pool) pool.index = (clips.indexOf(clip) + 1) % clips.length;
   clip.volume = Math.max(0, Math.min(1, volume));
   clip.currentTime = 0;
   const playback = clip.play();
