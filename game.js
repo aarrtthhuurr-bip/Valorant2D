@@ -359,6 +359,10 @@ function weaponAudioPaths() {
   return [...paths];
 }
 
+function canFetchAudioBuffers() {
+  return typeof fetch === "function" && window.location?.protocol !== "file:";
+}
+
 function makeAudioClip(src) {
   const clip = new Audio(src);
   clip.preload = "auto";
@@ -384,7 +388,7 @@ function primeWeaponAudioCache() {
 }
 
 function loadAudioBuffer(src) {
-  if (!audio.enabled || !audio.ctx || !src || typeof fetch !== "function") return null;
+  if (!audio.enabled || !audio.ctx || !src || !canFetchAudioBuffers()) return null;
   let entry = audio.buffers.get(src);
   if (!entry) {
     entry = { buffer: null, promise: null, failed: false };
@@ -412,7 +416,7 @@ function loadAudioBuffer(src) {
 }
 
 function primeWeaponAudioBuffers() {
-  if (audio.buffersPrimed || !audio.enabled || !audio.ctx) return;
+  if (audio.buffersPrimed || !audio.enabled || !audio.ctx || !canFetchAudioBuffers()) return;
   audio.buffersPrimed = true;
   for (const src of weaponAudioPaths()) loadAudioBuffer(src);
 }
@@ -4791,6 +4795,7 @@ function hideMenuOverlay() {
 }
 
 function hidePauseOverlay() {
+  if (ui.pauseOverlay?.contains(document.activeElement)) document.activeElement.blur();
   ui.pauseOverlay?.classList.remove("is-open");
   ui.pauseOverlay?.setAttribute("aria-hidden", "true");
 }
