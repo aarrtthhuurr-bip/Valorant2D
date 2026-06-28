@@ -235,7 +235,6 @@ const weaponAudio = {
   revolver: {
     sonsTiro: [
       "assets/Sounds/Tiro/%231%20Revolver%20shot%20sound.mp3",
-      "assets/Sounds/Tiro/%232%20Revolver%20shot%20sound.mp3",
     ],
     sonsReload: ["assets/Sounds/Reload/Revolver%20reload%20sound%20effect.mp3"],
   },
