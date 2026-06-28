@@ -837,6 +837,10 @@ const game = {
   debugRoutes: false,
   hudOpacity: 1,
   showFps: false,
+  showPing: false,
+  playerName: "Player",
+  currentFps: 0,
+  pingMs: 32,
   showAudioDebug: false,
   showHitboxes: false,
   timeScale: 1,
@@ -1761,7 +1765,8 @@ function updateTutorial(dt) {
   const safeDt = Number.isFinite(dt) && dt > 0 ? dt : 0;
   game.tutorialTimer += safeDt;
   if (game.tutorialStep === 0) {
-    const movementKeyPressed = ["w", "a", "s", "d"].some((key) => keys.has(key));
+    const movementKeys = game.arrowKeys ? ["arrowup", "arrowleft", "arrowdown", "arrowright"] : ["w", "a", "s", "d"];
+    const movementKeyPressed = movementKeys.some((key) => keys.has(key));
     if (!Number.isFinite(game.tutorialMoveRemaining)) game.tutorialMoveRemaining = 3;
     if (!Number.isFinite(game.tutorialMoveTime)) game.tutorialMoveTime = 0;
     if (movementKeyPressed) {
@@ -2199,7 +2204,7 @@ function updateOrbChannel(entity, orb, dt) {
      entity.orbChannel = null;
      return;
    }
-   const playerHolding = entity.id === "player" && keys.has("f");
+   const playerHolding = entity.id === "player" && keyHeld("interact");
    const botHolding = entity.id !== "player" && entity.aiState === "seek-ult";
    const holding = playerHolding || botHolding;
    const previous = entity.orbChannel;
@@ -2294,7 +2299,7 @@ function plantOrDefuse(dt) {
   if (game.ultOrbs.some((orb) => Math.hypot(p.x - orb.x, p.y - orb.y) < p.r + 21)) return;
 
   if (game.playerSide === "defenders") {
-    if (game.spike.state === "planted" && keys.has("f") && Math.hypot(p.x - game.spike.x, p.y - game.spike.y) < 46) {
+    if (game.spike.state === "planted" && keyHeld("interact") && Math.hypot(p.x - game.spike.x, p.y - game.spike.y) < 46) {
       const complete = advanceDefuse("player", dt, currentPlayerDefuseTime());
       setMessage("Desarmando spike. Continue segurando F.");
       if (complete) {
@@ -2309,7 +2314,7 @@ function plantOrDefuse(dt) {
     return;
   }
 
-  if (game.spike.state === "carried" && game.spike.owner === "player" && pressed.has("f")) {
+  if (game.spike.state === "carried" && game.spike.owner === "player" && keyPressed("interact")) {
     const site = map.sites.find((s) => rectContains(s, p.x, p.y));
     if (!site) {
       setMessage("Entre em um site A/B para plantar.");
@@ -2359,10 +2364,11 @@ function updatePlayer(dt) {
   const p = game.player;
   if (!p.alive) return;
 
-const right = keys.has("d") || (game.arrowKeys && keys.has("arrowright"));
-   const left = keys.has("a") || (game.arrowKeys && keys.has("arrowleft"));
-   const down = keys.has("s") || (game.arrowKeys && keys.has("arrowdown"));
-   const up = keys.has("w") || (game.arrowKeys && keys.has("arrowup"));
+   const useArrows = game.arrowKeys;
+   const right = useArrows ? keys.has("arrowright") : keys.has("d");
+   const left = useArrows ? keys.has("arrowleft") : keys.has("a");
+   const down = useArrows ? keys.has("arrowdown") : keys.has("s");
+   const up = useArrows ? keys.has("arrowup") : keys.has("w");
    const dx = (right ? 1 : 0) - (left ? 1 : 0);
    const dy = (down ? 1 : 0) - (up ? 1 : 0);
    const len = Math.hypot(dx, dy) || 1;
@@ -2381,9 +2387,9 @@ const right = keys.has("d") || (game.arrowKeys && keys.has("arrowright"));
     game.spike.y = p.y;
   }
 
-  if (mouse.down) shoot(p, mouse.x, mouse.y, game.selectedWeapon, "player");
-  if (keys.has("r")) reload();
-  if (pressed.has("e") && game.abilityCooldown <= 0 && game.phase === "action") {
+  if (mouse.down || keyHeld("fire")) shoot(p, mouse.x, mouse.y, game.selectedWeapon, "player");
+  if (keyHeld("reload")) reload();
+  if (keyPressed("ability1") && game.abilityCooldown <= 0 && game.phase === "action") {
     const used = game.selectedAgent.use(game);
     if (used !== false) {
       game.abilityCooldown = game.sandbox ? 0 : game.tutorial ? 2 : game.selectedAgent.cooldown;
@@ -2397,7 +2403,7 @@ const right = keys.has("d") || (game.arrowKeys && keys.has("arrowright"));
         : `${game.selectedAgent.ability} usada. Recarga iniciada.`);
     }
   }
-  if (pressed.has("q") && game.phase === "action") activateUltimate(p);
+  if (keyPressed("ability2") && game.phase === "action") activateUltimate(p);
   plantOrDefuse(dt);
 }
 
@@ -3091,7 +3097,7 @@ function maybeUseBotUltimate(bot, visibleTarget) {
 function updateAllies(dt) {
   const squad = [game.player, ...game.allies];
   const playerNearSpike = game.player?.alive && Math.hypot(game.player.x - game.spike.x, game.player.y - game.spike.y) < 46;
-  const playerActivelyDefusing = game.spike.defuserId === "player" || (playerNearSpike && keys.has("f"));
+  const playerActivelyDefusing = game.spike.defuserId === "player" || (playerNearSpike && keyHeld("interact"));
   const allyDefuser = game.playerSide === "defenders" && game.spike.state === "planted" && !playerActivelyDefusing
     ? closestAliveAllyTo(game.spike.x, game.spike.y)
     : null;
@@ -4031,6 +4037,11 @@ function drawRadar() {
 
 function drawCrosshair() {
   const spreadScale = game.crosshairScale * (1 + game.recoilHeat * 0.22);
+  const crosshairColor = settings.crosshairColor || "#ffffff";
+  const crosshairAlpha = Math.max(0.1, Math.min(1, settings.crosshairOpacity / 100));
+  const crosshairThickness = Math.max(1, settings.crosshairThickness || 2);
+  const crosshairGap = Math.max(0, settings.crosshairGap || 0) * game.crosshairScale;
+  const crosshairLength = 14 * spreadScale;
   if (game.selectedWeapon.id === "sniper") {
     const p = game.player;
     const startX = p.x + Math.cos(p.angle) * (p.r + 18);
@@ -4058,22 +4069,21 @@ function drawCrosshair() {
       ctx.fill();
     }
     // mira normal (círculo + cruz)
-    ctx.strokeStyle = "rgba(255,255,255,0.82)";
-    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = crosshairAlpha;
+    ctx.strokeStyle = crosshairColor;
+    ctx.lineWidth = crosshairThickness;
     ctx.beginPath();
     ctx.arc(mouse.x, mouse.y, 10 * game.crosshairScale, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.strokeStyle = "rgba(255,255,255,0.65)";
-    ctx.lineWidth = 1;
-    const g = 3 * game.crosshairScale;
-    const l = 14 * game.crosshairScale;
+    const g = Math.max(3 * game.crosshairScale, crosshairGap);
+    const l = crosshairLength;
     ctx.beginPath();
     ctx.moveTo(mouse.x - l, mouse.y); ctx.lineTo(mouse.x - g, mouse.y);
     ctx.moveTo(mouse.x + g, mouse.y); ctx.lineTo(mouse.x + l, mouse.y);
     ctx.moveTo(mouse.x, mouse.y - l); ctx.lineTo(mouse.x, mouse.y - g);
     ctx.moveTo(mouse.x, mouse.y + g); ctx.lineTo(mouse.x, mouse.y + l);
     ctx.stroke();
-    ctx.fillStyle = "#ff4d5d";
+    ctx.fillStyle = crosshairColor;
     ctx.beginPath();
     ctx.arc(mouse.x, mouse.y, 2, 0, Math.PI * 2);
     ctx.fill();
@@ -4082,10 +4092,12 @@ function drawCrosshair() {
   }
 
   if (game.crosshairStyle === "minimal") {
-    const gap = 3 * spreadScale;
-    const length = 7 * spreadScale;
-    ctx.strokeStyle = "rgba(255,255,255,0.8)";
-    ctx.lineWidth = 2;
+    const gap = Math.max(3 * spreadScale, crosshairGap);
+    const length = Math.max(7 * spreadScale, crosshairLength);
+    ctx.save();
+    ctx.globalAlpha = crosshairAlpha;
+    ctx.strokeStyle = crosshairColor;
+    ctx.lineWidth = crosshairThickness;
     ctx.beginPath();
     ctx.moveTo(mouse.x - length, mouse.y);
     ctx.lineTo(mouse.x - gap, mouse.y);
@@ -4096,18 +4108,36 @@ function drawCrosshair() {
     ctx.moveTo(mouse.x, mouse.y + gap);
     ctx.lineTo(mouse.x, mouse.y + length);
     ctx.stroke();
+    if (settings.crosshairType === "dot") {
+      ctx.fillStyle = crosshairColor;
+      ctx.beginPath();
+      ctx.arc(mouse.x, mouse.y, crosshairThickness * 1.3, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (settings.crosshairType === "circle") {
+      ctx.beginPath();
+      ctx.arc(mouse.x, mouse.y, 10 * game.crosshairScale, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
     return;
   }
 
-  ctx.strokeStyle = "rgba(255,255,255,0.7)";
-  ctx.lineWidth = 1;
+  ctx.save();
+  ctx.globalAlpha = crosshairAlpha;
+  ctx.strokeStyle = crosshairColor;
+  ctx.lineWidth = crosshairThickness;
   ctx.beginPath();
   ctx.arc(mouse.x, mouse.y, 10 * spreadScale, 0, Math.PI * 2);
-  ctx.moveTo(mouse.x - 15 * spreadScale, mouse.y);
-  ctx.lineTo(mouse.x + 15 * spreadScale, mouse.y);
-  ctx.moveTo(mouse.x, mouse.y - 15 * spreadScale);
-  ctx.lineTo(mouse.x, mouse.y + 15 * spreadScale);
+  ctx.moveTo(mouse.x - crosshairLength, mouse.y);
+  ctx.lineTo(mouse.x - crosshairGap, mouse.y);
+  ctx.moveTo(mouse.x + crosshairGap, mouse.y);
+  ctx.lineTo(mouse.x + crosshairLength, mouse.y);
+  ctx.moveTo(mouse.x, mouse.y - crosshairLength);
+  ctx.lineTo(mouse.x, mouse.y - crosshairGap);
+  ctx.moveTo(mouse.x, mouse.y + crosshairGap);
+  ctx.lineTo(mouse.x, mouse.y + crosshairLength);
   ctx.stroke();
+  ctx.restore();
 }
 
 function drawBotDebug() {
@@ -4659,7 +4689,7 @@ function updateUi() {
   if (newMoney !== lastMoney) flashMoneyDelta(newMoney);
   setText(ui.money, `${newMoney}`);
 
-  setText(ui.agent, `${game.selectedAgent.name} ${atk ? "ATK" : "DEF"} · ${game.sandbox ? "E livre" : game.abilityCooldown > 0 ? `${Math.ceil(game.abilityCooldown)}s` : "E"}`);
+  setText(ui.agent, `${game.playerName} · ${game.selectedAgent.name} ${atk ? "ATK" : "DEF"} · ${game.sandbox ? "E livre" : game.abilityCooldown > 0 ? `${Math.ceil(game.abilityCooldown)}s` : "E"}`);
   setText(ui.weapon, game.selectedWeapon.name);
   setText(ui.hp, `${Math.max(0, Math.ceil(game.player.hp))}`);
   setText(ui.ultPoints, game.sandbox ? "∞" : `${game.player.ultPoints}/${ULT_MAX_POINTS}`);
@@ -4688,6 +4718,14 @@ function updateUi() {
   const tutorialActive = game.tutorial && game.menuState === "none";
   toggleClass(ui.topHud, "hidden", !gameplayHudVisible || tutorialActive);
   toggleClass(ui.message, "hidden", !gameplayHudVisible || tutorialActive);
+  const metricsVisible = gameplayHudVisible && (game.showFps || game.showPing);
+  toggleClass(ui.fpsCounter, "hidden", !metricsVisible);
+  if (ui.fpsCounter && metricsVisible) {
+    const metrics = [];
+    if (game.showFps) metrics.push(`${game.currentFps || 0} FPS`);
+    if (game.showPing) metrics.push(`${game.pingMs || 0} MS`);
+    ui.fpsCounter.textContent = metrics.join("  |  ");
+  }
   const gameWrap = document.querySelector(".game-wrap");
   gameWrap?.classList.toggle("gameplay-ui-hidden", !gameplayHudVisible);
   gameWrap?.classList.toggle("tutorial-mode", tutorialActive);
@@ -5128,11 +5166,16 @@ const OPTIONS_DEFAULTS = {
   shadows: true,
 };
 
-let optionsSettings = cloneOptions(OPTIONS_DEFAULTS);
+let settings = cloneOptions(OPTIONS_DEFAULTS);
+let optionsSettings = cloneOptions(settings);
 let activeOptionsTab = "general";
 let pendingKeyBind = null;
+let optionsFeedback = "";
+let optionsFeedbackTimer = null;
+let optionsFeedbackId = 0;
 
 function cloneOptions(source) {
+  if (source == null || typeof source !== "object") return source;
   return JSON.parse(JSON.stringify(source));
 }
 
@@ -5162,6 +5205,18 @@ function optionSection(title, children) {
 function setOptionValue(key, value) {
   optionsSettings[key] = value;
   renderOptionsMenu();
+}
+
+function showOptionsFeedback(text) {
+  optionsFeedback = text;
+  const feedbackId = ++optionsFeedbackId;
+  clearTimeout(optionsFeedbackTimer);
+  renderOptionsMenu(true);
+  optionsFeedbackTimer = setTimeout(() => {
+    if (feedbackId !== optionsFeedbackId) return;
+    optionsFeedback = "";
+    if (game.menuState === "options") renderOptionsMenu(true);
+  }, 2000);
 }
 
 function ToggleSwitch(label, key, activeLabel = "LIG", inactiveLabel = "DESL") {
@@ -5236,6 +5291,26 @@ function handleOptionsKeyCapture(event) {
   pendingKeyBind = null;
   renderOptionsMenu();
   return true;
+}
+
+function normalizeKeyLabel(value) {
+  return String(value || "").toLowerCase();
+}
+
+function settingKey(action) {
+  return normalizeKeyLabel(settings.keys?.[action] || OPTIONS_DEFAULTS.keys[action]);
+}
+
+function keyHeld(action) {
+  const key = settingKey(action);
+  if (key === "mouse1") return mouse.down;
+  return keys.has(key);
+}
+
+function keyPressed(action) {
+  const key = settingKey(action);
+  if (key === "mouse1") return false;
+  return pressed.has(key);
 }
 
 function updateCrosshairPreview() {
@@ -5412,23 +5487,44 @@ function renderOptionsContent() {
 }
 
 function applyOptionsSettings() {
-  game.arrowKeys = optionsSettings.movementScheme === "arrows";
-  game.crosshairStyle = optionsSettings.crosshairType === "default" ? "default" : "minimal";
-  game.crosshairScale = optionsSettings.crosshairSize / 100;
-  audio.enabled = !optionsSettings.muted;
-  audio.volume = Math.max(0, Math.min(1, optionsSettings.masterVolume / 100));
-  if (optionsSettings.displayMode === "fullscreen" && !document.fullscreenElement) {
+  settings = cloneOptions(optionsSettings);
+  settings.idioma = settings.language;
+  settings.nomeJogador = settings.playerName;
+  settings.mostrarFPS = settings.showFps;
+  settings.mostrarPing = settings.showPing;
+  settings.minimapaRotacao = settings.minimapRotation === "rotate" ? "rodar" : "fixo";
+  game.arrowKeys = settings.movementScheme === "arrows";
+  game.crosshairStyle = settings.crosshairType === "default" ? "default" : "minimal";
+  game.crosshairScale = settings.crosshairSize / 100;
+  game.playerName = settings.playerName.trim() || OPTIONS_DEFAULTS.playerName;
+  game.showFps = Boolean(settings.showFps);
+  game.showPing = Boolean(settings.showPing);
+  game.hudOpacity = Math.max(0.5, Math.min(1.5, settings.brightness / 100));
+  audio.enabled = !settings.muted;
+  audio.volume = Math.max(0, Math.min(1, settings.masterVolume / 100));
+  if (settings.displayMode === "fullscreen" && !document.fullscreenElement) {
     document.querySelector(".game-wrap")?.requestFullscreen?.();
-  } else if (optionsSettings.displayMode === "window" && document.fullscreenElement) {
+  } else if (settings.displayMode === "window" && document.fullscreenElement) {
     document.exitFullscreen?.();
   }
-  setMessage("Opções aplicadas.");
+  updateUi();
+  setMessage("Configurações aplicadas!");
+  showOptionsFeedback("Configurações aplicadas!");
 }
 
 function resetOptionsSettings() {
-  optionsSettings = cloneOptions(OPTIONS_DEFAULTS);
+  const tabDefaults = {
+    general: ["language", "playerName", "showFps", "showPing", "minimapRotation", "minimapSize", "minimapZoom", "showAreaNames", "showVisionCones"],
+    controls: ["movementScheme", "mouseSensitivity", "adsSensitivity", "invertY", "keys"],
+    crosshair: ["crosshairType", "crosshairColor", "crosshairCustomColor", "crosshairSize", "crosshairThickness", "crosshairOpacity", "crosshairGap"],
+    audio: ["masterVolume", "musicVolume", "sfxVolume", "voiceVolume", "muted", "highlightSteps", "impactEffects"],
+    video: ["displayMode", "resolution", "fpsLimit", "vsync", "quality", "brightness", "particles", "bloodEffects", "shadows"],
+  };
+  for (const key of tabDefaults[activeOptionsTab] || []) {
+    optionsSettings[key] = cloneOptions(OPTIONS_DEFAULTS[key]);
+  }
   pendingKeyBind = null;
-  renderOptionsMenu();
+  showOptionsFeedback("Padrões restaurados!");
 }
 
 function renderOptionsMenu(skipFade = false) {
@@ -5458,7 +5554,6 @@ function renderOptionsMenu(skipFade = false) {
   [
     { label: "REPOR PADRÕES", action: resetOptionsSettings },
     { label: "APLICAR", action: applyOptionsSettings, primary: true },
-    { label: "VOLTAR", action: showMainMenu },
   ].forEach((item) => {
     const button = createOptionElement("button", item.primary ? "is-primary" : "", item.label);
     button.type = "button";
@@ -5466,6 +5561,8 @@ function renderOptionsMenu(skipFade = false) {
     attachButtonFeedback(button);
     footer.appendChild(button);
   });
+  const feedback = createOptionElement("span", "options-feedback", optionsFeedback);
+  footer.appendChild(feedback);
   panel.append(tabs, content, footer);
   ui.menuButtons.appendChild(panel);
   requestAnimationFrame(() => panel.classList.add("is-ready"));
@@ -5785,6 +5882,8 @@ function updateShopState() {
 function loop(now) {
   const dt = Math.min(0.033, (now - loop.last) / 1000 || 0);
   loop.last = now;
+  game.currentFps = Math.round(1 / Math.max(0.001, dt));
+  game.pingMs = 28 + Math.round(Math.sin(now / 900) * 5 + Math.random() * 4);
   const tutorialSlowMotion = game.tutorial
     && game.tutorialStage === "defend"
     && game.tutorialSlowTimer > 0;
