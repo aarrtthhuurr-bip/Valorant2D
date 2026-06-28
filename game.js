@@ -203,6 +203,19 @@ const weapons = [
   { id: "sniper", name: "Sniper", price: 6900, damage: 95, fireRate: 0.9, speed: 1450, spread: 0.01, mag: 5, reload: 2.1 },
 ];
 
+const damageFalloff = {
+  pistol: { start: 260, end: 760, min: 0.62 },
+  "light-pistol": { start: 210, end: 650, min: 0.55 },
+  revolver: { start: 360, end: 900, min: 0.72 },
+  smg: { start: 220, end: 700, min: 0.52 },
+  shotgun: { start: 120, end: 420, min: 0.25 },
+  carbine: { start: 360, end: 980, min: 0.76 },
+  rifle: { start: 420, end: 1100, min: 0.8 },
+  dmr: { start: 520, end: 1250, min: 0.86 },
+  lmg: { start: 300, end: 930, min: 0.68 },
+  sniper: { start: 700, end: 1500, min: 0.93 },
+};
+
 const weaponAudio = {
   pistol: {
     sonsTiro: [
@@ -1903,9 +1916,23 @@ function hitRegion(x1, y1, x2, y2, entity, padding = 0) {
   return null;
 }
 
-function damageForHit(bullet, target, region) {
+function smoothStep(value) {
+  const t = Math.max(0, Math.min(1, value));
+  return t * t * (3 - 2 * t);
+}
+
+function distanceDamageMultiplier(bullet) {
   const traveled = Math.hypot(bullet.x - bullet.startX, bullet.y - bullet.startY);
-  const falloff = traveled > 620 ? 0.78 : traveled > 420 ? 0.9 : 1;
+  const curve = damageFalloff[bullet.weaponId] || { start: 360, end: 960, min: 0.7 };
+  if (traveled <= curve.start) return 1;
+  if (traveled >= curve.end) return curve.min;
+  const progress = smoothStep((traveled - curve.start) / (curve.end - curve.start));
+  const multiplier = 1 - (1 - curve.min) * progress;
+  return bullet.ultimateTrail ? Math.max(multiplier, 0.82) : multiplier;
+}
+
+function damageForHit(bullet, target, region) {
+  const falloff = distanceDamageMultiplier(bullet);
   const headshot = region === "head" ? (bullet.weaponId === "shotgun" ? 1.25 : 1.75) : 1;
   return bullet.damage * falloff * headshot;
 }
