@@ -79,6 +79,8 @@ const ui = {
   tutorialProgress: document.getElementById("tutorialProgress"),
   tutorialAgentPanel: document.getElementById("tutorialAgentPanel"),
   tutorialAgentGrid: document.getElementById("tutorialAgentGrid"),
+  fpsCounter: document.getElementById("fpsCounter"),
+  audioDebugLabel: document.getElementById("audioDebugLabel"),
 };
 
 const keys = new Set();
@@ -120,6 +122,27 @@ const audio = {
   buffers: new Map(),
   buffersPrimed: false,
 };
+const AUDIO_NAMES = {
+  shot: "Tiro",
+  hit: "Acerto",
+  headshot: "Headshot",
+  reload: "Recarga",
+  plant: "Plantando Spike",
+  round_win: "Round Vencido",
+  round_lose: "Round Perdido",
+  spike: "Explos\u00e3o da Spike",
+  ability: "Habilidade",
+};
+let audioDebugTimeoutId = null;
+function announceAudioDebug(label) {
+  if (!game.showAudioDebug || !ui.audioDebugLabel) return;
+  ui.audioDebugLabel.textContent = `\u{1F50A} ${label}`;
+  ui.audioDebugLabel.classList.remove("hidden");
+  clearTimeout(audioDebugTimeoutId);
+  audioDebugTimeoutId = setTimeout(() => {
+    ui.audioDebugLabel?.classList.add("hidden");
+  }, 1100);
+}
 const agents = [
   {
     id: "neon",
@@ -812,6 +835,13 @@ const game = {
   crosshairStyle: "default",
   arrowKeys: false,
   debugRoutes: false,
+  hudOpacity: 1,
+  showFps: false,
+  showAudioDebug: false,
+  showHitboxes: false,
+  timeScale: 1,
+  devModeUnlocked: false,
+  crosshairUnlockClicks: 0,
   agentLocked: false,
   shopTab: "weapons",
   damageIndicator: null,
@@ -4745,6 +4775,7 @@ function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
   if (ui.menuText) ui.menuText.textContent = "";
   if (!ui.menuButtons) return;
   ui.menuButtons.innerHTML = "";
+  ui.menuButtons.className = "menu-grid menu-grid-unified";
   buttons.forEach((item, index) => {
     const button = document.createElement("button");
     button.className = "menu-button";
@@ -5049,17 +5080,400 @@ function showDifficultyMenu(immediate = false) {
   ], "JOGAR", "difficulty");
 }
 
+const OPTIONS_TABS = [
+  { id: "general", label: "GERAL" },
+  { id: "controls", label: "CONTROLES" },
+  { id: "crosshair", label: "MIRA" },
+  { id: "audio", label: "ÁUDIO" },
+  { id: "video", label: "VÍDEO" },
+];
+
+const OPTIONS_DEFAULTS = {
+  language: "pt-BR",
+  playerName: "Player",
+  showFps: false,
+  showPing: false,
+  minimapRotation: "fixed",
+  minimapSize: 1,
+  minimapZoom: 1,
+  showAreaNames: true,
+  showVisionCones: true,
+  movementScheme: "wasd",
+  mouseSensitivity: 50,
+  adsSensitivity: 50,
+  invertY: false,
+  keys: { fire: "Mouse1", reload: "R", ability1: "E", ability2: "Q", interact: "F" },
+  crosshairType: "default",
+  crosshairColor: "#ffffff",
+  crosshairCustomColor: "#ffffff",
+  crosshairSize: 100,
+  crosshairThickness: 2,
+  crosshairOpacity: 100,
+  crosshairGap: 6,
+  masterVolume: 80,
+  musicVolume: 50,
+  sfxVolume: 80,
+  voiceVolume: 70,
+  muted: false,
+  highlightSteps: true,
+  impactEffects: true,
+  displayMode: "window",
+  resolution: "1280x720",
+  fpsLimit: "120",
+  vsync: true,
+  quality: "high",
+  brightness: 100,
+  particles: true,
+  bloodEffects: true,
+  shadows: true,
+};
+
+let optionsSettings = cloneOptions(OPTIONS_DEFAULTS);
+let activeOptionsTab = "general";
+let pendingKeyBind = null;
+
+function cloneOptions(source) {
+  return JSON.parse(JSON.stringify(source));
+}
+
+function createOptionElement(tag, className = "", html = "") {
+  const element = document.createElement(tag);
+  if (className) element.className = className;
+  if (html) element.innerHTML = html;
+  return element;
+}
+
+function optionRow(label, control, hint = "") {
+  const row = createOptionElement("div", "option-row");
+  row.innerHTML = `<div class="option-row-copy"><span>${label}</span>${hint ? `<small>${hint}</small>` : ""}</div>`;
+  row.appendChild(control);
+  return row;
+}
+
+function optionSection(title, children) {
+  const section = createOptionElement("section", "options-section");
+  section.innerHTML = `<h3>${title}</h3>`;
+  const body = createOptionElement("div", "options-section-body");
+  children.forEach((child) => body.appendChild(child));
+  section.appendChild(body);
+  return section;
+}
+
+function setOptionValue(key, value) {
+  optionsSettings[key] = value;
+  renderOptionsMenu();
+}
+
+function ToggleSwitch(label, key, activeLabel = "LIG", inactiveLabel = "DESL") {
+  const active = Boolean(optionsSettings[key]);
+  const button = createOptionElement("button", `option-toggle ${active ? "is-active" : ""}`, active ? activeLabel : inactiveLabel);
+  button.type = "button";
+  button.addEventListener("click", () => setOptionValue(key, !active));
+  attachButtonFeedback(button);
+  return optionRow(label, button);
+}
+
+function ToggleGroup(label, key, options) {
+  const group = createOptionElement("div", "option-toggle-group");
+  options.forEach((option) => {
+    const button = createOptionElement("button", optionsSettings[key] === option.value ? "is-active" : "", option.label);
+    button.type = "button";
+    button.addEventListener("click", () => setOptionValue(key, option.value));
+    attachButtonFeedback(button);
+    group.appendChild(button);
+  });
+  return optionRow(label, group);
+}
+
+function SettingSlider(label, key, min, max, step = 1, unit = "") {
+  const wrap = createOptionElement("div", "option-slider");
+  const input = createOptionElement("input");
+  input.type = "range";
+  input.min = min;
+  input.max = max;
+  input.step = step;
+  input.value = optionsSettings[key];
+  const value = createOptionElement("strong", "", `${optionsSettings[key]}${unit}`);
+  input.addEventListener("input", () => {
+    const parsed = Number(step) % 1 === 0 ? Number.parseInt(input.value, 10) : Number.parseFloat(input.value);
+    optionsSettings[key] = parsed;
+    value.textContent = `${parsed}${unit}`;
+    updateCrosshairPreview();
+  });
+  wrap.append(input, value);
+  return optionRow(label, wrap);
+}
+
+function SettingDropdown(label, key, options) {
+  const select = createOptionElement("select", "option-select");
+  options.forEach((option) => {
+    const item = createOptionElement("option", "", option.label);
+    item.value = option.value;
+    select.appendChild(item);
+  });
+  select.value = optionsSettings[key];
+  select.addEventListener("change", () => setOptionValue(key, select.value));
+  return optionRow(label, select);
+}
+
+function KeyBind(label, key) {
+  const button = createOptionElement("button", `option-keybind ${pendingKeyBind === key ? "is-listening" : ""}`);
+  button.type = "button";
+  button.textContent = pendingKeyBind === key ? "PRESSIONE UMA TECLA..." : optionsSettings.keys[key];
+  button.addEventListener("click", () => {
+    pendingKeyBind = key;
+    renderOptionsMenu();
+  });
+  attachButtonFeedback(button);
+  return optionRow(label, button);
+}
+
+function handleOptionsKeyCapture(event) {
+  if (!pendingKeyBind || game.menuState !== "options") return false;
+  event.preventDefault();
+  event.stopPropagation();
+  optionsSettings.keys[pendingKeyBind] = event.key === " " ? "SPACE" : event.key.toUpperCase();
+  pendingKeyBind = null;
+  renderOptionsMenu();
+  return true;
+}
+
+function updateCrosshairPreview() {
+  const preview = document.getElementById("crosshairPreview");
+  if (!preview) return;
+  preview.innerHTML = "";
+  preview.dataset.type = optionsSettings.crosshairType;
+  preview.style.setProperty("--crosshair-color", optionsSettings.crosshairColor);
+  preview.style.setProperty("--crosshair-size", `${optionsSettings.crosshairSize / 100}`);
+  preview.style.setProperty("--crosshair-thickness", `${optionsSettings.crosshairThickness}px`);
+  preview.style.setProperty("--crosshair-opacity", optionsSettings.crosshairOpacity / 100);
+  preview.style.setProperty("--crosshair-gap", `${optionsSettings.crosshairGap}px`);
+  ["top", "right", "bottom", "left", "dot"].forEach((part) => preview.appendChild(createOptionElement("i", part)));
+}
+
+function CrosshairPreview() {
+  const preview = createOptionElement("div", "crosshair-preview-card");
+  preview.innerHTML = `<span>PRÉVIA</span><div class="crosshair-preview" id="crosshairPreview"></div>`;
+  requestAnimationFrame(updateCrosshairPreview);
+  return preview;
+}
+
+function crosshairColorPicker() {
+  const wrap = createOptionElement("div", "option-color-tools");
+  ["#ffffff", "#ff4655", "#46a8ff", "#62e6a0", "#ffd166", "#bd67ff", "#ff8a5b", "#00f5d4"].forEach((color) => {
+    const swatch = createOptionElement("button", optionsSettings.crosshairColor === color ? "is-active" : "");
+    swatch.type = "button";
+    swatch.style.setProperty("--swatch", color);
+    swatch.addEventListener("click", () => {
+      optionsSettings.crosshairColor = color;
+      renderOptionsMenu();
+    });
+    wrap.appendChild(swatch);
+  });
+  const custom = createOptionElement("input", "option-color-picker");
+  custom.type = "color";
+  custom.value = optionsSettings.crosshairCustomColor;
+  custom.addEventListener("input", () => {
+    optionsSettings.crosshairCustomColor = custom.value;
+    optionsSettings.crosshairColor = custom.value;
+    updateCrosshairPreview();
+  });
+  custom.addEventListener("change", renderOptionsMenu);
+  wrap.appendChild(custom);
+  return optionRow("Cor", wrap);
+}
+
+function renderGeneralOptions() {
+  return [
+    optionSection("GERAL", [
+      SettingDropdown("Idioma", "language", [
+        { value: "pt-BR", label: "Português BR" },
+        { value: "pt-PT", label: "Português PT" },
+        { value: "en", label: "English" },
+      ]),
+      optionRow("Nome do jogador", (() => {
+        const input = createOptionElement("input", "option-text-input");
+        input.type = "text";
+        input.value = optionsSettings.playerName;
+        input.maxLength = 18;
+        input.addEventListener("input", () => { optionsSettings.playerName = input.value; });
+        return input;
+      })()),
+      ToggleSwitch("Mostrar FPS", "showFps"),
+      ToggleSwitch("Mostrar Ping", "showPing"),
+    ]),
+    optionSection("MINIMAPA", [
+      ToggleGroup("Rotação", "minimapRotation", [{ value: "rotate", label: "RODAR" }, { value: "fixed", label: "FIXO" }]),
+      SettingSlider("Tamanho do minimapa", "minimapSize", 0.5, 2, 0.1, "x"),
+      SettingSlider("Zoom do minimapa", "minimapZoom", 0.5, 2, 0.1, "x"),
+      ToggleSwitch("Mostrar nomes de área", "showAreaNames"),
+      ToggleSwitch("Mostrar cones de visão", "showVisionCones"),
+    ]),
+  ];
+}
+
+function renderControlOptions() {
+  return [
+    optionSection("MOVIMENTO", [
+      ToggleGroup("Esquema", "movementScheme", [{ value: "wasd", label: "WASD" }, { value: "arrows", label: "SETAS" }]),
+      SettingSlider("Sensibilidade do mouse", "mouseSensitivity", 1, 100),
+      SettingSlider("Sensibilidade ADS", "adsSensitivity", 1, 100),
+      ToggleSwitch("Inverter eixo Y", "invertY"),
+    ]),
+    optionSection("TECLAS", [
+      KeyBind("Atirar", "fire"),
+      KeyBind("Recarregar", "reload"),
+      KeyBind("Habilidade 1", "ability1"),
+      KeyBind("Habilidade 2", "ability2"),
+      KeyBind("Usar/Interagir", "interact"),
+    ]),
+  ];
+}
+
+function renderCrosshairOptions() {
+  const layout = createOptionElement("div", "crosshair-options-layout");
+  const left = createOptionElement("div", "crosshair-options-controls");
+  left.append(optionSection("MIRA", [
+    ToggleGroup("Tipo", "crosshairType", [
+      { value: "default", label: "PADRÃO" },
+      { value: "cross", label: "CRUZ" },
+      { value: "dot", label: "PONTO" },
+      { value: "circle", label: "CÍRCULO" },
+    ]),
+    crosshairColorPicker(),
+    SettingSlider("Tamanho", "crosshairSize", 50, 200, 1, "%"),
+    SettingSlider("Espessura", "crosshairThickness", 1, 5, 1, "px"),
+    SettingSlider("Opacidade", "crosshairOpacity", 10, 100, 1, "%"),
+    SettingSlider("Gap central", "crosshairGap", 0, 20, 1, "px"),
+  ]));
+  layout.append(left, CrosshairPreview());
+  return [layout];
+}
+
+function renderAudioOptions() {
+  return [
+    optionSection("VOLUME", [
+      SettingSlider("🔊 Volume Geral", "masterVolume", 0, 100, 1, "%"),
+      SettingSlider("Música", "musicVolume", 0, 100, 1, "%"),
+      SettingSlider("Efeitos de Som", "sfxVolume", 0, 100, 1, "%"),
+      SettingSlider("Comunicação/Voz", "voiceVolume", 0, 100, 1, "%"),
+    ]),
+    optionSection("OPÇÕES", [
+      ToggleSwitch("Som Mudo", "muted"),
+      ToggleSwitch("Destacar passos de inimigos", "highlightSteps"),
+      ToggleSwitch("Efeitos de impacto", "impactEffects"),
+    ]),
+  ];
+}
+
+function renderVideoOptions() {
+  return [
+    optionSection("DISPLAY", [
+      ToggleGroup("Modo de tela", "displayMode", [
+        { value: "fullscreen", label: "TELA CHEIA" },
+        { value: "window", label: "JANELA" },
+        { value: "borderless", label: "SEM BORDAS" },
+      ]),
+      SettingDropdown("Resolução", "resolution", [
+        { value: "1920x1080", label: "1920x1080" },
+        { value: "1280x720", label: "1280x720" },
+        { value: "1024x768", label: "1024x768" },
+      ]),
+      SettingDropdown("Limite de FPS", "fpsLimit", [
+        { value: "30", label: "30" },
+        { value: "60", label: "60" },
+        { value: "120", label: "120" },
+        { value: "240", label: "240" },
+        { value: "unlimited", label: "SEM LIMITE" },
+      ]),
+      ToggleSwitch("Sincronização Vertical (VSync)", "vsync"),
+    ]),
+    optionSection("QUALIDADE", [
+      ToggleGroup("Qualidade Gráfica", "quality", [
+        { value: "low", label: "BAIXO" },
+        { value: "medium", label: "MÉDIO" },
+        { value: "high", label: "ALTO" },
+        { value: "ultra", label: "ULTRA" },
+      ]),
+      SettingSlider("Brilho", "brightness", 50, 150, 1, "%"),
+      ToggleSwitch("Partículas", "particles"),
+      ToggleSwitch("Efeitos de sangue", "bloodEffects"),
+      ToggleSwitch("Sombras", "shadows"),
+    ]),
+  ];
+}
+
+function renderOptionsContent() {
+  if (activeOptionsTab === "controls") return renderControlOptions();
+  if (activeOptionsTab === "crosshair") return renderCrosshairOptions();
+  if (activeOptionsTab === "audio") return renderAudioOptions();
+  if (activeOptionsTab === "video") return renderVideoOptions();
+  return renderGeneralOptions();
+}
+
+function applyOptionsSettings() {
+  game.arrowKeys = optionsSettings.movementScheme === "arrows";
+  game.crosshairStyle = optionsSettings.crosshairType === "default" ? "default" : "minimal";
+  game.crosshairScale = optionsSettings.crosshairSize / 100;
+  audio.enabled = !optionsSettings.muted;
+  audio.volume = Math.max(0, Math.min(1, optionsSettings.masterVolume / 100));
+  if (optionsSettings.displayMode === "fullscreen" && !document.fullscreenElement) {
+    document.querySelector(".game-wrap")?.requestFullscreen?.();
+  } else if (optionsSettings.displayMode === "window" && document.fullscreenElement) {
+    document.exitFullscreen?.();
+  }
+  setMessage("Opções aplicadas.");
+}
+
+function resetOptionsSettings() {
+  optionsSettings = cloneOptions(OPTIONS_DEFAULTS);
+  pendingKeyBind = null;
+  renderOptionsMenu();
+}
+
+function renderOptionsMenu(skipFade = false) {
+  if (!ui.menuButtons) return;
+  ui.menuButtons.innerHTML = "";
+  ui.menuButtons.className = "options-shell";
+  const panel = createOptionElement("div", `options-panel ${skipFade ? "" : "is-ready"}`);
+  const tabs = createOptionElement("div", "options-tabs");
+  OPTIONS_TABS.forEach((tab) => {
+    const button = createOptionElement("button", activeOptionsTab === tab.id ? "is-active" : "", tab.label);
+    button.type = "button";
+    button.addEventListener("click", () => {
+      if (activeOptionsTab === tab.id) return;
+      panel.querySelector(".options-content")?.classList.add("is-fading");
+      setTimeout(() => {
+        activeOptionsTab = tab.id;
+        pendingKeyBind = null;
+        renderOptionsMenu(true);
+      }, 150);
+    });
+    attachButtonFeedback(button);
+    tabs.appendChild(button);
+  });
+  const content = createOptionElement("div", "options-content");
+  renderOptionsContent().forEach((section) => content.appendChild(section));
+  const footer = createOptionElement("footer", "options-footer");
+  [
+    { label: "REPOR PADRÕES", action: resetOptionsSettings },
+    { label: "APLICAR", action: applyOptionsSettings, primary: true },
+    { label: "VOLTAR", action: showMainMenu },
+  ].forEach((item) => {
+    const button = createOptionElement("button", item.primary ? "is-primary" : "", item.label);
+    button.type = "button";
+    button.addEventListener("click", item.action);
+    attachButtonFeedback(button);
+    footer.appendChild(button);
+  });
+  panel.append(tabs, content, footer);
+  ui.menuButtons.appendChild(panel);
+  requestAnimationFrame(() => panel.classList.add("is-ready"));
+}
+
 function showOptionsMenu() {
-  setMenu("Opções", "", [
-    { label: `Mira: ${game.crosshairStyle === "default" ? "Padrao" : "Minimalista"}`, icon: "tools", action: () => { game.crosshairStyle = game.crosshairStyle === "default" ? "minimal" : "default"; showOptionsMenu(); } },
-    { label: `Tamanho mira: ${Math.round(game.crosshairScale * 100)}%`, icon: "star", action: () => { game.crosshairScale = game.crosshairScale >= 1.25 ? 0.85 : game.crosshairScale + 0.2; showOptionsMenu(); } },
-    { label: `Movimento: ${game.arrowKeys ? "WASD + setinhas" : "WASD"}`, icon: "gamepad", action: () => { game.arrowKeys = !game.arrowKeys; showOptionsMenu(); } },
-    { label: `Rotas: ${game.debugRoutes ? "visiveis" : "ocultas"}`, icon: "link", action: () => { game.debugRoutes = !game.debugRoutes; showOptionsMenu(); } },
-    { label: `Som: ${audio.enabled ? "ligado" : "desligado"}`, icon: "tools", action: () => { audio.enabled = !audio.enabled; showOptionsMenu(); } },
-    { label: `Volume: ${Math.round(audio.volume * 100)}%`, icon: "star", action: () => { audio.volume = audio.volume >= 1 ? 0.35 : audio.volume + 0.325; showOptionsMenu(); } },
-    { label: "TELA CHEIA", icon: "gamepad", action: () => { if (document.fullscreenElement) document.exitFullscreen?.(); else document.querySelector(".game-wrap")?.requestFullscreen?.(); showOptionsMenu(); } },
-    { label: "VOLTAR", back: true, action: showMainMenu },
-  ], "OPÇÕES", "options");
+  setMenu("OPÇÕES", "", [], "OPÇÕES", "options");
+  renderOptionsMenu(true);
 }
 
 function applyDifficulty(difficulty) {
@@ -5385,6 +5799,7 @@ loop.last = performance.now();
 // Ouvintes de eventos com checagem de seguranca contra valores nulos.
 if (window) window.addEventListener("keydown", (event) => {
   initAudio();
+  if (handleOptionsKeyCapture(event)) return;
   if (event.key === "Tab" && game.menuState === "none" && ["buy", "action", "ended"].includes(game.phase) && ui.shop?.classList?.contains("hidden")) {
     event.preventDefault();
     game.scoreboardVisible = true;
