@@ -110,7 +110,16 @@ const ECONOMY = {
   objective: 300,
   cap: 12000,
 };
-const audio = { ctx: null, enabled: true, volume: 0.8, last: 0, cache: new Map(), cachePrimed: false };
+const audio = {
+  ctx: null,
+  enabled: true,
+  volume: 0.8,
+  last: 0,
+  cache: new Map(),
+  cachePrimed: false,
+  buffers: new Map(),
+  buffersPrimed: false,
+};
 const agents = [
   {
     id: "neon",
@@ -301,6 +310,8 @@ function initAudio() {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (AudioContext) audio.ctx = new AudioContext();
   }
+  if (audio.ctx?.state === "suspended") audio.ctx.resume?.()?.catch?.(() => {});
+  primeWeaponAudioBuffers();
   primeWeaponAudioCache();
 }
 
@@ -360,7 +371,59 @@ function primeWeaponAudioCache() {
   }
 }
 
-function playAudioFile(src, volume = audio.volume) {
+function loadAudioBuffer(src) {
+  if (!audio.enabled || !audio.ctx || !src || typeof fetch !== "function") return null;
+  let entry = audio.buffers.get(src);
+  if (!entry) {
+    entry = { buffer: null, promise: null, failed: false };
+    audio.buffers.set(src, entry);
+  }
+  if (entry.buffer || entry.promise || entry.failed) return entry.promise;
+  entry.promise = fetch(src)
+    .then((response) => {
+      if (!response.ok) throw new Error(`Audio HTTP ${response.status}`);
+      return response.arrayBuffer();
+    })
+    .then((data) => audio.ctx.decodeAudioData(data))
+    .then((buffer) => {
+      entry.buffer = buffer;
+      return buffer;
+    })
+    .catch(() => {
+      entry.failed = true;
+      return null;
+    })
+    .finally(() => {
+      entry.promise = null;
+    });
+  return entry.promise;
+}
+
+function primeWeaponAudioBuffers() {
+  if (audio.buffersPrimed || !audio.enabled || !audio.ctx) return;
+  audio.buffersPrimed = true;
+  for (const src of weaponAudioPaths()) loadAudioBuffer(src);
+}
+
+function playDecodedAudioBuffer(src, volume = audio.volume) {
+  if (!audio.enabled || !audio.ctx || !src) return false;
+  if (audio.ctx.state === "suspended") audio.ctx.resume?.()?.catch?.(() => {});
+  const entry = audio.buffers.get(src);
+  if (!entry?.buffer) {
+    loadAudioBuffer(src);
+    return false;
+  }
+  const source = audio.ctx.createBufferSource();
+  const gain = audio.ctx.createGain();
+  source.buffer = entry.buffer;
+  gain.gain.value = Math.max(0, Math.min(1, volume));
+  source.connect(gain);
+  gain.connect(audio.ctx.destination);
+  source.start(0);
+  return true;
+}
+
+function playAudioElement(src, volume = audio.volume) {
   if (!audio.enabled || !src || typeof Audio === "undefined") return false;
   primeWeaponAudioCache();
   const pool = audio.cache.get(src);
@@ -394,7 +457,8 @@ function playWeaponSound(weapon, action) {
     playSound(action === "reload" ? "reload" : "shot");
     return false;
   }
-  return playAudioFile(src, action === "reload" ? audio.volume * 0.82 : audio.volume * 0.92);
+  const volume = action === "reload" ? audio.volume * 0.82 : audio.volume * 0.92;
+  return playDecodedAudioBuffer(src, volume) || playAudioElement(src, volume);
 }
 
 function playSound(name) {
