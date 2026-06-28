@@ -581,7 +581,12 @@ const game = {
   tutorialMoveTime: 0,
   tutorialMoveRemaining: 3,
   tutorialSlowTimer: 0,
+  tutorialTimer: 0,
   tutorialKillsAtStart: 0,
+  tutorialDefusesAtStart: 0,
+  tutorialAbilityUsed: false,
+  tutorialFreeUlts: 0,
+  tutorialUltUses: 0,
   trainingBotSequence: 0,
   recoilHeat: 0,
   shotChain: 0,
@@ -1209,7 +1214,7 @@ function tutorialAgentDescription(agent) {
 }
 
 function showTutorialAgentChoice() {
-  game.tutorialStep = 3;
+  game.tutorialStep = 4;
   game.tutorialStage = "agents";
   game.paused = true;
   ui.tutorialPrompt?.classList.add("hidden");
@@ -1236,16 +1241,134 @@ function showTutorialAgentChoice() {
       game.agentLocked = true;
       ui.tutorialAgentPanel?.classList.add("hidden");
       ui.tutorialPrompt?.classList.remove("hidden");
-      setTutorialPrompt("Treinamento concluído", `${agent.name} selecionado`, "Voltando ao menu principal");
-      setTimeout(() => {
-        game.tutorial = false;
-        game.paused = false;
-        ui.tutorialOverlay?.classList.add("hidden");
-        showMainMenu();
-      }, 1100);
+      game.paused = false;
+      game.tutorialStage = "agent-test";
+      game.tutorialAbilityUsed = false;
+      game.abilityCooldown = 0;
+      game.player.agentId = agent.id;
+      setTutorialPrompt("Fase 5 - Agentes", `${agent.name}: ${description}`, "Use E para testar a habilidade");
     });
     ui.tutorialAgentGrid.appendChild(button);
   }
+}
+
+function resetTutorialSpike(state = "disabled", point = game.player) {
+  game.spike = {
+    state,
+    owner: state === "carried" ? "player" : null,
+    x: point.x,
+    y: point.y,
+    timer: state === "planted" ? SPIKE_DETONATE_TIME : 0,
+    site: null,
+    plantProgress: 0,
+    defuseProgress: 0,
+    defuseCheckpoint: 0,
+    defuserId: null,
+  };
+}
+
+function clearTutorialEntities() {
+  game.bots = [];
+  game.allies = [];
+  game.bullets = [];
+  game.particles = [];
+  game.smokes = [];
+  game.shadowZones = [];
+  game.medkits = [];
+  game.ultOrbs = [];
+  game.destructibles = [];
+  game.explosions = [];
+  game.hitMarkers = [];
+  game.damageNumbers = [];
+  game.ultimateEffects = [];
+}
+
+function safeTutorialSpawn(preferredPoint, fallback = map.attackersSpawn, radius = 18) {
+  const base = nearestWalkablePoint({ ...preferredPoint, r: radius }, { ...fallback, r: radius });
+  const offsets = [
+    { x: 0, y: 0 },
+    { x: 54, y: 0 },
+    { x: -54, y: 0 },
+    { x: 0, y: 54 },
+    { x: 0, y: -54 },
+    { x: 72, y: 48 },
+    { x: -72, y: 48 },
+    { x: 72, y: -48 },
+    { x: -72, y: -48 },
+  ];
+  for (const offset of offsets) {
+    const point = nearestWalkablePoint({ x: base.x + offset.x, y: base.y + offset.y, r: radius }, { ...fallback, r: radius });
+    const probe = { x: point.x, y: point.y, r: radius };
+    if (!isEntityBlocked(probe)) return point;
+  }
+  return { x: fallback.x, y: fallback.y };
+}
+
+function movePlayerToTutorial(point, fallback = point) {
+  const safe = safeTutorialSpawn(point, fallback, game.player.r || 18);
+  game.player.x = safe.x;
+  game.player.y = safe.y;
+  game.player.lastX = safe.x;
+  game.player.lastY = safe.y;
+  game.player.alive = true;
+}
+
+function tutorialSiteA() {
+  return map.sites.find((site) => site.id === "A") || map.sites[0];
+}
+
+function tutorialSiteCenter(site = tutorialSiteA()) {
+  return { x: site.x + site.w / 2, y: site.y + site.h / 2 };
+}
+
+function spawnTutorialBot(point, index, options = {}) {
+  const safe = safeTutorialSpawn(point, game.player, 17);
+  const bot = makeBot(safe, index);
+  bot.id = `tutorial-bot-${index}`;
+  bot.hasSpike = false;
+  bot.hp = options.hp || 65;
+  bot.maxHp = bot.hp;
+  bot.armor = 0;
+  bot.maxArmor = 0;
+  bot.speed = options.static ? 0 : (options.speed || 78);
+  bot.fireTimer = options.fireTimer ?? 1.5;
+  bot.tutorialStatic = Boolean(options.static);
+  bot.aiState = options.static ? "hold" : "push";
+  sanitizeEntityPosition(bot);
+  return bot;
+}
+
+function setTutorialSide(side) {
+  game.playerSide = side;
+  game.startingSide = side;
+  game.player.agentId = game.selectedAgent.id;
+}
+
+function placeTutorialOrbs() {
+  const points = [
+    { x: map.width * 0.25, y: map.height * 0.42 },
+    { x: map.width * 0.5, y: map.height * 0.28 },
+    { x: map.width * 0.75, y: map.height * 0.42 },
+  ];
+  game.ultOrbs = points.map((point, index) => ({
+    ...safeTutorialSpawn(point, map.attackersSpawn, 18),
+    id: `tutorial-orb-${index}`,
+    phase: index * 2.1,
+    reservadaPor: null,
+  }));
+}
+
+function placeTutorialMedkits() {
+  const points = [
+    { x: map.width * 0.35, y: map.height * 0.42 },
+    { x: map.width * 0.5, y: map.height * 0.34 },
+    { x: map.width * 0.65, y: map.height * 0.42 },
+  ];
+  game.medkits = points.map((point, index) => ({
+    ...safeTutorialSpawn(point, map.attackersSpawn, 18),
+    id: `tutorial-medkit-${index}`,
+    phase: index * 1.7,
+  }));
 }
 
 function setTutorialPhase(step) {
@@ -1253,73 +1376,97 @@ function setTutorialPhase(step) {
   game.tutorialMoveTime = 0;
   game.tutorialMoveRemaining = 3;
   game.tutorialSlowTimer = 0;
-  game.bullets = [];
-  game.particles = [];
-  game.smokes = [];
-  game.medkits = [];
-  game.ultOrbs = [];
+  game.tutorialTimer = 0;
+  game.phase = "action";
+  game.phaseTime = 9999;
+  game.clockActive = true;
+  game.paused = false;
+  game.player.hp = game.player.maxHp;
+  game.player.armor = game.armor;
+  game.player.ammo = currentMagSize();
+  game.reloadTimer = 0;
+  clearTutorialEntities();
+  resetTutorialSpike();
   ui.tutorialOverlay?.classList.remove("hidden");
   ui.tutorialAgentPanel?.classList.add("hidden");
 
   if (step === 0) {
     game.tutorialStage = "movement";
-    game.bots = [];
-    game.allies = [];
-    game.player.x = map.width / 2;
-    game.player.y = map.height / 2;
-    sanitizeEntityPosition(game.player);
-    game.spike.state = "carried";
-    game.spike.owner = null;
-    setTutorialPrompt("Fase 1 · Movimento", "Use WASD para andar", "3.00 segundos");
+    setTutorialSide("attackers");
+    movePlayerToTutorial({ x: map.width / 2, y: map.height / 2 }, map.attackersSpawn);
+    setTutorialPrompt("Fase 1 - Movimento", "Use WASD para andar", "3.00 segundos");
     return;
   }
 
   if (step === 1) {
     game.tutorialStage = "combat";
-    game.player.x = map.width * 0.34;
-    game.player.y = map.height * 0.5;
-    sanitizeEntityPosition(game.player);
-    const targetPoint = nearestWalkablePoint({ x: game.player.x + 260, y: game.player.y }, game.player);
-    const target = makeBot(targetPoint, 0);
-    target.speed = 0;
-    target.tutorialStatic = true;
-    target.hp = Math.min(target.hp, game.selectedWeapon.damage || 35);
-    target.maxHp = target.hp;
-    game.bots = [target];
-    game.allies = [];
+    setTutorialSide("attackers");
+    movePlayerToTutorial({ x: map.width * 0.34, y: map.height * 0.5 }, map.attackersSpawn);
+    game.bots = [spawnTutorialBot({ x: game.player.x + 260, y: game.player.y }, 0, {
+      static: true,
+      hp: Math.min(60, game.selectedWeapon.damage || 35),
+    })];
     game.tutorialKillsAtStart = game.stats.kills;
-    setTutorialPrompt("Fase 2 · Combate", "Clique com o Botão Esquerdo para Atirar", "Elimine o alvo");
+    setTutorialPrompt("Fase 2 - Eliminar inimigos", "Ande, mire e clique com o Botao Esquerdo para atirar", "Elimine o alvo");
     return;
   }
 
   if (step === 2) {
-    game.tutorialStage = "collect-spike";
-    game.bots = [];
-    game.allies = [];
+    game.tutorialStage = "defuse";
+    setTutorialSide("defenders");
     const site = map.sites[0];
-    const entry = nearestWalkablePoint({ x: site.x + site.w + 90, y: site.y + site.h / 2 }, game.player);
-    game.player.x = entry.x;
-    game.player.y = entry.y;
-    game.spike = {
-      state: "dropped",
-      owner: null,
-      x: entry.x - 78,
-      y: entry.y,
-      timer: 0,
-      site: null,
-      plantProgress: 0,
-      defuseProgress: 0,
-      defuseCheckpoint: 0,
-      defuserId: null,
-    };
-    setTutorialPrompt("Fase 3 · Spike", "Colete a Spike e segure F na área marcada para Plantar", "Siga a marca no chão");
+    const spikePoint = safeTutorialSpawn(tutorialSiteCenter(site), site, 18);
+    const spawnPoint = randomAccessiblePickupPoint([spikePoint]);
+    movePlayerToTutorial(spawnPoint, map.playerDefenderSpawn || map.defendersSpawn[0]);
+    resetTutorialSpike("planted", spikePoint);
+    game.spike.site = site.id;
+    game.tutorialDefusesAtStart = game.stats.defuses;
+    setTutorialPrompt("Fase 3 - Desarmar Spike", "Encontre a Spike e segure F para desarmar", "Sem caixas, sem inimigos");
+    return;
+  }
+
+  if (step === 3) {
+    game.tutorialStage = "plant-spike";
+    setTutorialSide("attackers");
+    const site = tutorialSiteA();
+    movePlayerToTutorial(tutorialSiteCenter(site), map.attackersSpawn);
+    resetTutorialSpike("carried", game.player);
+    setTutorialPrompt("Fase 4 - Defender Spike", "Segure F na area A para plantar", "Depois elimine 3 bots em camera lenta");
+    return;
+  }
+
+  if (step === 4) {
+    game.tutorialStage = "agents";
+    showTutorialAgentChoice();
+    return;
+  }
+
+  if (step === 5) {
+    game.tutorialStage = "orbs";
+    setTutorialSide("attackers");
+    movePlayerToTutorial({ x: map.width / 2, y: map.height - 70 }, map.attackersSpawn);
+    setUltimatePoints(game.player, 0);
+    game.tutorialFreeUlts = 0;
+    placeTutorialOrbs();
+    setTutorialPrompt("Fase 6 - Orbs", "Segure F em cada orb para carregar a Ultimate", "Colete 3 orbs");
+    return;
+  }
+
+  if (step === 6) {
+    game.tutorialStage = "medkits";
+    setTutorialSide("attackers");
+    movePlayerToTutorial({ x: map.width / 2, y: map.height - 70 }, map.attackersSpawn);
+    game.player.hp = 5;
+    placeTutorialMedkits();
+    setTutorialPrompt("Fase 7 - Medkits", "Colete medkits ate ficar com vida cheia", `${Math.ceil(game.player.hp)}/${game.player.maxHp} HP`);
   }
 }
 
 function updateTutorial(dt) {
   if (!game.tutorial || game.paused) return;
+  const safeDt = Number.isFinite(dt) && dt > 0 ? dt : 0;
+  game.tutorialTimer += safeDt;
   if (game.tutorialStep === 0) {
-    const safeDt = Number.isFinite(dt) && dt > 0 ? dt : 0;
     const movementKeyPressed = ["w", "a", "s", "d"].some((key) => keys.has(key));
     if (!Number.isFinite(game.tutorialMoveRemaining)) game.tutorialMoveRemaining = 3;
     if (!Number.isFinite(game.tutorialMoveTime)) game.tutorialMoveTime = 0;
@@ -1342,28 +1489,72 @@ function updateTutorial(dt) {
     return;
   }
 
-  if (game.tutorialStep !== 2) return;
-  if (game.tutorialStage === "collect-spike" && game.spike.state === "dropped"
-    && Math.hypot(game.player.x - game.spike.x, game.player.y - game.spike.y) < 38) {
-    game.spike.state = "carried";
-    game.spike.owner = "player";
-    game.tutorialStage = "plant";
-    setTutorialPrompt("Fase 3 · Spike", "Segure F dentro da área marcada para Plantar", "Leve a Spike ao Bombsite");
+  if (game.tutorialStep === 2) {
+    if (ui.tutorialProgress) {
+      const distance = Math.hypot(game.player.x - game.spike.x, game.player.y - game.spike.y);
+      ui.tutorialProgress.textContent = distance < 46 ? `Defuse ${Math.round(game.spike.defuseProgress * 100)}%` : "Ande ate a Spike";
+    }
+    if (game.stats.defuses > game.tutorialDefusesAtStart || game.phase === "ended") setTutorialPhase(3);
+    return;
   }
-  if (game.tutorialStage === "plant" && game.spike.state === "planted") {
+
+  if (game.tutorialStep === 3 && game.tutorialStage === "plant-spike" && game.spike.state === "planted") {
     game.tutorialStage = "defend";
-    game.tutorialSlowTimer = 0.4;
-    const allyPoint = nearestWalkablePoint({ x: game.player.x - 62, y: game.player.y + 44 }, game.player);
-    game.allies = [makeAlly(allyPoint, 0)];
-    const threatPoint = nearestWalkablePoint({ x: game.player.x + 260, y: game.player.y + 30 }, game.player);
-    game.bots = [makeBot(threatPoint, 0)];
+    game.tutorialSlowTimer = 999;
+    const site = tutorialSiteA();
+    const center = tutorialSiteCenter(site);
+    game.bots = [
+      spawnTutorialBot({ x: center.x + 210, y: center.y - 86 }, 0, { hp: 55, speed: 64 }),
+      spawnTutorialBot({ x: center.x + 250, y: center.y + 12 }, 1, { hp: 55, speed: 70 }),
+      spawnTutorialBot({ x: center.x + 210, y: center.y + 96 }, 2, { hp: 55, speed: 76 }),
+    ];
     game.tutorialKillsAtStart = game.stats.kills;
-    setTutorialPrompt("Fase 3 · Defesa", "Proteja a Spike ou elimine as ameaças", "A câmera volta ao normal em instantes");
+    setTutorialPrompt("Fase 4 - Defender Spike", "Elimine os 3 bots inimigos", "Camera lenta ativa");
   }
-  if (game.tutorialStage === "defend") {
-    game.tutorialSlowTimer = Math.max(0, game.tutorialSlowTimer - dt);
-    if (game.stats.kills > game.tutorialKillsAtStart || game.phase === "ended") {
-      showTutorialAgentChoice();
+
+  if (game.tutorialStep === 3 && game.tutorialStage === "defend") {
+    const kills = Math.max(0, game.stats.kills - game.tutorialKillsAtStart);
+    if (ui.tutorialProgress) ui.tutorialProgress.textContent = `${Math.min(3, kills)}/3 bots`;
+    if (kills >= 3) setTutorialPhase(4);
+    return;
+  }
+
+  if (game.tutorialStep === 4) {
+    if (game.tutorialStage === "agent-test" && game.tutorialAbilityUsed) {
+      if (ui.tutorialProgress) ui.tutorialProgress.textContent = "Habilidade testada";
+      if (game.tutorialTimer > 1.2) setTutorialPhase(5);
+    }
+    return;
+  }
+
+  if (game.tutorialStep === 5) {
+    const collected = Math.max(0, 3 - game.ultOrbs.length);
+    if (ui.tutorialProgress) ui.tutorialProgress.textContent = game.tutorialStage === "ult-test"
+      ? `${game.tutorialFreeUlts} ultimates gratis restantes`
+      : `${collected}/3 orbs`;
+    if (game.tutorialStage === "orbs" && game.ultOrbs.length === 0) {
+      game.tutorialStage = "ult-test";
+      game.tutorialTimer = 0;
+      game.tutorialFreeUlts = 3;
+      setUltimatePoints(game.player, ULT_MAX_POINTS);
+      setTutorialPrompt("Fase 6 - Ultimate", "Aperte Q para testar a Ultimate escolhida", "3 ultimates gratis");
+      return;
+    }
+    if (game.tutorialStage === "ult-test" && (game.tutorialFreeUlts <= 0 || game.tutorialTimer > 10)) setTutorialPhase(6);
+    return;
+  }
+
+  if (game.tutorialStep === 6) {
+    if (ui.tutorialProgress) ui.tutorialProgress.textContent = `${Math.ceil(game.player.hp)}/${game.player.maxHp} HP`;
+    if (game.tutorialStage === "medkits" && game.player.hp >= game.player.maxHp) {
+      game.tutorialStage = "complete";
+      setTutorialPrompt("Tutorial finalizado!", "Deixe o seu 'GG' nos comentarios.", "Voltando ao menu principal");
+      setTimeout(() => {
+        game.tutorial = false;
+        game.paused = false;
+        ui.tutorialOverlay?.classList.add("hidden");
+        showMainMenu();
+      }, 2000);
     }
   }
 }
@@ -1611,10 +1802,17 @@ function limitedCastPoint(origin, target, maxRange) {
 
 function activateUltimate(entity) {
   const infiniteSandboxUlt = game.sandbox && entity?.id === "player";
-  if (!entity?.alive || (!infiniteSandboxUlt && getUltimatePoints(entity) < ULT_MAX_POINTS) || (!infiniteSandboxUlt && entity.ultimate)) return false;
+  const tutorialFreeUlt = game.tutorial && entity?.id === "player" && game.tutorialFreeUlts > 0;
+  if (!entity?.alive || (!infiniteSandboxUlt && !tutorialFreeUlt && getUltimatePoints(entity) < ULT_MAX_POINTS) || (!infiniteSandboxUlt && entity.ultimate)) return false;
   const agent = agentById(entity.agentId);
   const team = entityTeam(entity);
   if (infiniteSandboxUlt) entity.ultimate = null;
+  else if (tutorialFreeUlt) {
+    game.tutorialFreeUlts = Math.max(0, game.tutorialFreeUlts - 1);
+    game.tutorialUltUses += 1;
+    if (game.tutorialFreeUlts > 0) setUltimatePoints(entity, ULT_MAX_POINTS);
+    else setUltimatePoints(entity, 0);
+  }
   else {
     setUltimatePoints(entity, 0);
   }
@@ -1860,7 +2058,7 @@ const right = keys.has("d") || (game.arrowKeys && keys.has("arrowright"));
    const dx = (right ? 1 : 0) - (left ? 1 : 0);
    const dy = (down ? 1 : 0) - (up ? 1 : 0);
    const len = Math.hypot(dx, dy) || 1;
-   const movementLocked = game.tutorial && game.tutorialStep === 1;
+   const movementLocked = false;
    p.moving = !movementLocked && (dx !== 0 || dy !== 0);
   p.moveX = p.moving ? dx / len : 0;
   p.moveY = p.moving ? dy / len : 0;
@@ -1880,7 +2078,11 @@ const right = keys.has("d") || (game.arrowKeys && keys.has("arrowright"));
   if (pressed.has("e") && game.abilityCooldown <= 0 && game.phase === "action") {
     const used = game.selectedAgent.use(game);
     if (used !== false) {
-      game.abilityCooldown = game.sandbox ? 0 : game.selectedAgent.cooldown;
+      game.abilityCooldown = game.sandbox ? 0 : game.tutorial ? 2 : game.selectedAgent.cooldown;
+      if (game.tutorial && game.tutorialStep === 4) {
+        game.tutorialAbilityUsed = true;
+        game.tutorialTimer = 0;
+      }
       playSound("ability");
       setMessage(game.sandbox
         ? `${game.selectedAgent.ability} usada. Sandbox: habilidade sem recarga.`
@@ -4661,6 +4863,11 @@ function startTutorialMode() {
   game.training = false;
   game.tutorial = true;
   game.tutorialStep = 0;
+  game.tutorialStage = "movement";
+  game.tutorialTimer = 0;
+  game.tutorialAbilityUsed = false;
+  game.tutorialFreeUlts = 0;
+  game.tutorialUltUses = 0;
   game.allyCount = 0;
   game.enemyFireMultiplier = 2.2;
   hideMenuOverlay();
@@ -4886,7 +5093,8 @@ function loop(now) {
   const dt = Math.min(0.033, (now - loop.last) / 1000 || 0);
   loop.last = now;
   const tutorialSlowMotion = game.tutorial
-    && (game.tutorialStep === 1 || (game.tutorialStage === "defend" && game.tutorialSlowTimer > 0));
+    && game.tutorialStage === "defend"
+    && game.tutorialSlowTimer > 0;
   update(dt * (tutorialSlowMotion ? 0.2 : 1));
   draw();
   updateUi();
