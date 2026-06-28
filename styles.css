@@ -995,7 +995,7 @@ canvas {
   content: "";
   position: absolute;
   inset: 0;
-  background: url("assets/Logo_Valorant2D.png") center / min(360px, 42%) no-repeat;
+  background: url("assets/images/Logo_Valorant2D.png") center / min(360px, 42%) no-repeat;
   opacity: 0.055;
   filter: grayscale(1) brightness(2.2) drop-shadow(0 0 26px rgba(238, 247, 251, 0.12));
   mix-blend-mode: screen;
@@ -1212,7 +1212,7 @@ button.click-feedback::after {
   border: none !important;
   border-radius: 0;
   background-color: transparent !important;
-  background-image: url("assets/seta-voltar.png") !important;
+  background-image: url("assets/images/seta-voltar.png") !important;
   background-position: center;
   background-repeat: no-repeat;
   background-size: contain;
@@ -1234,7 +1234,7 @@ button.click-feedback::after {
 .menu-button.menu-back:focus-visible {
   border: none !important;
   background-color: transparent !important;
-  background-image: url("assets/seta-voltar.png") !important;
+  background-image: url("assets/images/seta-voltar.png") !important;
   box-shadow: none;
   transform: translateX(-4px);
 }
@@ -1269,11 +1269,11 @@ button.click-feedback::after {
   mix-blend-mode: screen;
 }
 
-.menu-icon-gamepad { background-image: url("assets/controle-menu-jogar.png"); }
-.menu-icon-tools { background-image: url("assets/ferramentas-menu-opcoes.png"); }
-.menu-icon-money { background-image: url("assets/dinheiro-menu-sandbox.png"); }
-.menu-icon-star { background-image: url("assets/uma-estrela-modo-facil.png"); }
-.menu-icon-link { background-image: url("assets/elo-menu-tutorial.png"); }
+.menu-icon-gamepad { background-image: url("assets/images/controle-menu-jogar.png"); }
+.menu-icon-tools { background-image: url("assets/images/ferramentas-menu-opcoes.png"); }
+.menu-icon-money { background-image: url("assets/images/dinheiro-menu-sandbox.png"); }
+.menu-icon-star { background-image: url("assets/images/uma-estrela-modo-facil.png"); }
+.menu-icon-link { background-image: url("assets/images/elo-menu-tutorial.png"); }
 .menu-state-difficulty {
   align-items: center;
   justify-content: center;
@@ -1379,15 +1379,15 @@ button.click-feedback::after {
 }
 
 .menu-state-difficulty .difficulty-button-1 .difficulty-glyph {
-  background-image: url("assets/uma-estrela-modo-facil.png");
+  background-image: url("assets/images/uma-estrela-modo-facil.png");
 }
 
 .menu-state-difficulty .difficulty-button-2 .difficulty-glyph {
-  background-image: url("assets/duas-estrelas-modo-medio.png");
+  background-image: url("assets/images/duas-estrelas-modo-medio.png");
 }
 
 .menu-state-difficulty .difficulty-button-3 .difficulty-glyph {
-  background-image: url("assets/tres-estrelas-modo-dificil.png");
+  background-image: url("assets/images/tres-estrelas-modo-dificil.png");
 }
 
 .menu-state-difficulty .difficulty-button:hover,

@@ -4159,9 +4159,8 @@ function draw() {
   if (game.tutorial) {
     ctx.fillStyle = game.tutorialStep === 2 ? "rgba(1, 6, 10, 0.48)" : "rgba(1, 6, 10, 0.28)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-  } else {
-    drawMedkitsAndOrbs();
   }
+  drawMedkitsAndOrbs();
 
   for (const zone of game.shadowZones) {
     const alpha = Math.max(0, zone.life / zone.maxLife);
@@ -4543,29 +4542,29 @@ function agentPresentation(agent) {
       className: "Duelista",
       tagline: "Velocidade e avanço agressivo",
       ultimate: "Sobrecarga Cinética",
-      icon: "assets/Neon_icon.webp",
-      artwork: "assets/Neon_Artwork_Full.webp",
+      icon: "assets/images/Neon_icon.webp",
+      artwork: "assets/images/Neon_Artwork_Full.webp",
     },
     viper: {
       className: "Controladora",
       tagline: "Domínio territorial com toxinas",
       ultimate: "Poço Químico",
-      icon: "assets/Viper_icon.webp",
-      artwork: "assets/Viper_Artwork_Full.webp",
+      icon: "assets/images/Viper_icon.webp",
+      artwork: "assets/images/Viper_Artwork_Full.webp",
     },
     sage: {
       className: "Sentinela",
       tagline: "Sustentação e recuperação da equipe",
       ultimate: "Restauração Total",
-      icon: "assets/Sage_icon.webp",
-      artwork: "assets/Sage_Artwork_Full.webp",
+      icon: "assets/images/Sage_icon.webp",
+      artwork: "assets/images/Sage_Artwork_Full.webp",
     },
     omen: {
       className: "Controlador",
       tagline: "Cegueira e redução de mobilidade",
       ultimate: "Domínio das Sombras",
-      icon: "assets/Omen_icon.webp",
-      artwork: "assets/Omen_Artwork_Full.webp",
+      icon: "assets/images/Omen_icon.webp",
+      artwork: "assets/images/Omen_Artwork_Full.webp",
     },
   };
   return details[agent.id] || {
