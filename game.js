@@ -978,7 +978,7 @@ function endRound(winner, reason, outcome = "standard") {
     2.8
   );
   playSound(won ? "round_win" : "round_lose");
-  if (game.playerScore + game.enemyScore >= MATCH_ROUNDS) {
+  if (game.playerScore >= MATCH_ROUNDS || game.enemyScore >= MATCH_ROUNDS) {
     showMatchResult();
   }
 }
