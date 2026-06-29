@@ -920,6 +920,7 @@ const game = {
   damageFlash: 0,
   botPlanSiteIndex: 0,
   pauseReturnState: null,
+  optionsReturnState: null,
   agentReturnState: "main",
 };
 
@@ -4795,8 +4796,12 @@ function handleEscape() {
     resumeFromPause();
     return;
   }
-  if (game.menuState === "difficulty" || game.menuState === "options") {
+  if (game.menuState === "difficulty") {
     showMainMenu();
+    return;
+  }
+  if (game.menuState === "options") {
+    backFromOptions();
     return;
   }
   if (game.menuState === "agent") {
@@ -4959,6 +4964,22 @@ function preloadAgentAsset(src) {
   return promise;
 }
 
+// ── Pré-carrega as artes grandes dos agentes assim que o jogo abre, em segundo plano,
+// para que já estejam prontas (baixadas + decodificadas) quando o jogador chegar
+// na tela de seleção de agente, em vez de começar a carregar só nesse momento.
+function preloadAllAgentArtworks() {
+  for (const agent of agents) {
+    const presentation = agentPresentation(agent);
+    preloadAgentAsset(presentation.icon);
+    preloadAgentAsset(presentation.artwork);
+  }
+}
+if ("requestIdleCallback" in window) {
+  requestIdleCallback(preloadAllAgentArtworks, { timeout: 1500 });
+} else {
+  setTimeout(preloadAllAgentArtworks, 300);
+}
+
 function showAgentSelect(onPick, returnState = "main") {
   closeShop();
   game.agentReturnState = returnState;
@@ -5117,7 +5138,7 @@ function restartCurrentMatch() {
 
 function openPauseOptions() {
   hidePauseOverlay();
-  showOptionsMenu();
+  openOptionsMenu("pause");
 }
 
 function quitToMainMenu() {
@@ -5602,7 +5623,7 @@ function renderOptionsMenu(skipFade = false) {
   [
     { label: "REPOR PADRÕES", action: resetOptionsSettings },
     { label: "APLICAR", action: applyOptionsSettings, primary: true },
-    { label: "VOLTAR", action: showMainMenu },
+    { label: "VOLTAR", action: backFromOptions },
   ].forEach((item) => {
     const button = createOptionElement("button", item.primary ? "is-primary" : "", item.label);
     button.type = "button";
@@ -5617,9 +5638,25 @@ function renderOptionsMenu(skipFade = false) {
   requestAnimationFrame(() => panel.classList.add("is-ready"));
 }
 
-function showOptionsMenu() {
+function openOptionsMenu(returnState) {
+  game.optionsReturnState = returnState;
   setMenu("OPÇÕES", "", [], "OPÇÕES", "options");
   renderOptionsMenu(true);
+}
+
+function showOptionsMenu() {
+  openOptionsMenu("main");
+}
+
+function backFromOptions() {
+  if (game.optionsReturnState === "pause") {
+    game.optionsReturnState = null;
+    hideMenuOverlay();
+    showPauseMenu();
+    return;
+  }
+  game.optionsReturnState = null;
+  showMainMenu();
 }
 
 function applyDifficulty(difficulty) {
