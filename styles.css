@@ -1507,6 +1507,253 @@ button.click-feedback::after {
   transform: translateY(-3px);
 }
 
+@keyframes difficultyCardIn {
+  0% { opacity: 0; transform: translateY(18px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes difficultyTitleIn {
+  0% { opacity: 0; transform: translateY(-10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes difficultyFooterIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes difficultyStarPop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.4) rotate(-8deg); }
+  70% { transform: scale(0.9) rotate(4deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+@keyframes difficultyStarFadeIn {
+  0% { opacity: 0; transform: scale(0.4) rotate(-20deg); }
+  60% { transform: scale(1.2) rotate(5deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+
+.menu-state-difficulty .menu-card {
+  width: min(620px, calc(100% - 32px));
+  max-width: 620px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.58);
+}
+
+.menu-state-difficulty .menu-copy {
+  display: none;
+}
+
+.difficulty-wrap {
+  width: 100%;
+  padding: 40px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+  border-radius: 12px;
+  background: #080e14;
+  font-family: "Rajdhani", "Barlow Condensed", sans-serif;
+}
+
+.difficulty-header {
+  text-align: center;
+  animation: difficultyTitleIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.difficulty-breadcrumb {
+  margin-bottom: 8px;
+  color: #3a5060;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.difficulty-title {
+  color: #fff;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.difficulty-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.difficulty-card {
+  min-height: 158px;
+  padding: 32px 16px 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  position: relative;
+  overflow: hidden;
+  border: 1.5px solid #1a2a38;
+  border-radius: 10px;
+  background: #0f1923;
+  cursor: pointer;
+  user-select: none;
+  animation: difficultyCardIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transition: border-color 0.25s, background 0.25s, transform 0.2s;
+}
+
+.difficulty-cards .difficulty-card:nth-child(1) { animation-delay: 0.05s; }
+.difficulty-cards .difficulty-card:nth-child(2) { animation-delay: 0.13s; }
+.difficulty-cards .difficulty-card:nth-child(3) { animation-delay: 0.21s; }
+
+.difficulty-card::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: transparent;
+  transition: background 0.25s;
+}
+
+.difficulty-card:hover {
+  border-color: #2a3a4a;
+  background: #111d27;
+  transform: translateY(-2px);
+}
+
+.difficulty-card.active {
+  border-color: #ff4655;
+  background: #12202e;
+  transform: translateY(-3px);
+}
+
+.difficulty-card.active::after {
+  background: #ff4655;
+}
+
+.difficulty-card:active {
+  transform: scale(0.97) translateY(0);
+}
+
+.difficulty-stars {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.difficulty-star {
+  width: 26px;
+  height: 26px;
+  transition: transform 0.2s;
+}
+
+.difficulty-star.pop {
+  animation: difficultyStarPop 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.difficulty-star.fadein {
+  animation: difficultyStarFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.difficulty-card-name {
+  color: #4a6070;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transition: color 0.25s, letter-spacing 0.25s;
+}
+
+.difficulty-card.active .difficulty-card-name {
+  color: #fff;
+  letter-spacing: 0.18em;
+}
+
+.difficulty-card:hover:not(.active) .difficulty-card-name {
+  color: #8a9bb0;
+}
+
+.difficulty-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  animation: difficultyFooterIn 0.4s ease 0.3s both;
+}
+
+.difficulty-back-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  color: #3a5060;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.2s, transform 0.15s;
+}
+
+.difficulty-back-btn:hover,
+.difficulty-back-btn:focus-visible {
+  color: #8a9bb0;
+  transform: translateX(-3px);
+}
+
+.difficulty-start-btn {
+  height: 44px;
+  padding: 0 28px;
+  position: relative;
+  overflow: hidden;
+  border: 0;
+  border-radius: 8px;
+  background: #ff4655;
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s, transform 0.15s;
+}
+
+.difficulty-start-btn::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.12);
+  transition: left 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.difficulty-start-btn:hover::before,
+.difficulty-start-btn:focus-visible::before {
+  left: 0;
+}
+
+.difficulty-start-btn:hover,
+.difficulty-start-btn:focus-visible {
+  background: #e03040;
+}
+
+.difficulty-start-btn:active {
+  transform: scale(0.96);
+}
+
 .menu-button.icon-only {
   width: var(--menu-icon-size);
   min-width: var(--menu-icon-size);

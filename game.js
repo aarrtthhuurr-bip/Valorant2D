@@ -5222,12 +5222,123 @@ function showDifficultyMenu(immediate = false) {
     }, 220);
     return;
   }
-  setMenu("Dificuldade", "", [
+  setMenu("", "", [], "", "difficulty");
+  renderDifficultyMenu();
+  void [
     { label: "FÁCIL", stars: 1, action: () => startMode("Fácil", "easy") },
     { label: "MÉDIO", stars: 2, action: () => startMode("Médio", "normal") },
     { label: "DIFÍCIL", stars: 3, action: () => startMode("Difícil", "hard") },
-    { label: "VOLTAR", back: true, action: showMainMenu },
-  ], "JOGAR", "difficulty");
+  ];
+}
+
+const DIFFICULTY_OPTIONS = [
+  { id: "facil", label: "Fácil", mode: "Fácil", difficulty: "easy", stars: 1 },
+  { id: "medio", label: "Médio", mode: "Médio", difficulty: "normal", stars: 2 },
+  { id: "dificil", label: "Difícil", mode: "Difícil", difficulty: "hard", stars: 3 },
+];
+
+const difficultyIdByMode = {
+  easy: "facil",
+  normal: "medio",
+  hard: "dificil",
+};
+
+let currentDifficulty = "medio";
+
+function difficultyStarSvg(filled) {
+  const fill = filled ? "#ff4655" : "none";
+  const stroke = filled ? "#ff4655" : "#2a3a4a";
+  const strokeWidth = filled ? "1" : "1.5";
+  return `
+    <svg class="difficulty-star" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+    </svg>`;
+}
+
+function renderDifficultyMenu() {
+  if (!ui.menuButtons) return;
+  currentDifficulty = difficultyIdByMode[game.difficulty] || "medio";
+  ui.menuButtons.innerHTML = "";
+  ui.menuButtons.className = "difficulty-wrap";
+
+  const header = document.createElement("div");
+  header.className = "difficulty-header";
+  header.innerHTML = `
+    <div class="difficulty-breadcrumb">Jogar</div>
+    <div class="difficulty-title">Dificuldade</div>`;
+
+  const cards = document.createElement("div");
+  cards.className = "difficulty-cards";
+
+  for (const option of DIFFICULTY_OPTIONS) {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.id = `difficulty-card-${option.id}`;
+    card.className = `difficulty-card ${option.id === currentDifficulty ? "active" : ""}`;
+    card.dataset.difficultyId = option.id;
+    card.innerHTML = `
+      <div class="difficulty-stars" id="difficulty-stars-${option.id}">
+        ${[1, 2, 3].map((star) => difficultyStarSvg(star <= option.stars)).join("")}
+      </div>
+      <div class="difficulty-card-name">${option.label}</div>`;
+    card.addEventListener("click", () => pickDifficulty(option.id));
+    cards.appendChild(card);
+  }
+
+  const footer = document.createElement("div");
+  footer.className = "difficulty-footer";
+
+  const backButton = document.createElement("button");
+  backButton.type = "button";
+  backButton.className = "difficulty-back-btn";
+  backButton.innerHTML = `
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false">
+      <path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    Voltar`;
+  backButton.addEventListener("click", showMainMenu);
+
+  const startButton = document.createElement("button");
+  startButton.type = "button";
+  startButton.className = "difficulty-start-btn";
+  startButton.textContent = "Iniciar Partida";
+  startButton.addEventListener("click", startSelectedDifficulty);
+
+  attachButtonFeedback(backButton);
+  attachButtonFeedback(startButton);
+  footer.append(backButton, startButton);
+  ui.menuButtons.append(header, cards, footer);
+}
+
+function pickDifficulty(id) {
+  if (id === currentDifficulty) return;
+  const previous = document.getElementById(`difficulty-card-${currentDifficulty}`);
+  previous?.classList.remove("active");
+  currentDifficulty = id;
+  const card = document.getElementById(`difficulty-card-${id}`);
+  card?.classList.add("active");
+  const option = DIFFICULTY_OPTIONS.find((item) => item.id === id);
+  if (option) animateDifficultyStars(id, option.stars);
+}
+
+function animateDifficultyStars(id, count) {
+  const container = document.getElementById(`difficulty-stars-${id}`);
+  if (!container) return;
+  const stars = container.querySelectorAll(".difficulty-star");
+  stars.forEach((star, index) => {
+    star.classList.remove("pop", "fadein");
+    void star.offsetWidth;
+    if (index < count) {
+      setTimeout(() => star.classList.add("fadein"), index * 60);
+    } else {
+      star.classList.add("pop");
+    }
+  });
+}
+
+function startSelectedDifficulty() {
+  const option = DIFFICULTY_OPTIONS.find((item) => item.id === currentDifficulty) || DIFFICULTY_OPTIONS[1];
+  startMode(option.mode, option.difficulty);
 }
 
 const OPTIONS_TABS = [
