@@ -4857,6 +4857,7 @@ function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
     button.addEventListener("click", item.action);
     ui.menuButtons.appendChild(button);
   });
+  window.lucide?.createIcons();
   ui.menuOverlay.className = `menu-overlay menu-state-${state}`;
   ui.menuOverlay?.classList.remove("hidden");
   game.paused = true;
@@ -4865,45 +4866,29 @@ function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
 
 function mainMenuIconSvg(icon) {
   const icons = {
-    gamepad: `
-      <svg class="menu-icon" width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-        <circle cx="28" cy="28" r="20" stroke="#ff4655" stroke-width="2"/>
-        <polygon points="23,19 23,37 41,28" fill="#ff4655"/>
-      </svg>`,
-    tools: `
-      <svg class="menu-icon" width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-        <line x1="14" y1="20" x2="42" y2="20" stroke="#ff4655" stroke-width="2" stroke-linecap="round"/>
-        <line x1="14" y1="28" x2="42" y2="28" stroke="#ff4655" stroke-width="2" stroke-linecap="round"/>
-        <line x1="14" y1="36" x2="42" y2="36" stroke="#ff4655" stroke-width="2" stroke-linecap="round"/>
-        <circle cx="22" cy="20" r="3.5" fill="#0f1923" stroke="#ff4655" stroke-width="2"/>
-        <circle cx="34" cy="28" r="3.5" fill="#0f1923" stroke="#ff4655" stroke-width="2"/>
-        <circle cx="22" cy="36" r="3.5" fill="#0f1923" stroke="#ff4655" stroke-width="2"/>
-      </svg>`,
-    money: `
-      <svg class="menu-icon" width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-        <rect x="13" y="13" width="13" height="13" rx="2" stroke="#ff4655" stroke-width="2"/>
-        <rect x="30" y="13" width="13" height="13" rx="2" stroke="#ff4655" stroke-width="2"/>
-        <rect x="13" y="30" width="13" height="13" rx="2" stroke="#ff4655" stroke-width="2"/>
-        <rect x="30" y="30" width="13" height="13" rx="2" stroke="#ff4655" stroke-width="2"/>
-      </svg>`,
-    star: `
-      <svg class="menu-icon" width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-        <circle cx="28" cy="28" r="3" fill="#ff4655"/>
-        <circle cx="28" cy="28" r="9" stroke="#ff4655" stroke-width="2"/>
-        <circle cx="28" cy="28" r="16" stroke="#ff4655" stroke-width="1.5" stroke-dasharray="3 3"/>
-        <line x1="28" y1="12" x2="28" y2="8" stroke="#ff4655" stroke-width="2" stroke-linecap="round"/>
-        <line x1="28" y1="44" x2="28" y2="48" stroke="#ff4655" stroke-width="2" stroke-linecap="round"/>
-        <line x1="12" y1="28" x2="8" y2="28" stroke="#ff4655" stroke-width="2" stroke-linecap="round"/>
-        <line x1="44" y1="28" x2="48" y2="28" stroke="#ff4655" stroke-width="2" stroke-linecap="round"/>
-      </svg>`,
-    link: `
-      <svg class="menu-icon" width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-        <circle cx="28" cy="28" r="18" stroke="#ff4655" stroke-width="2"/>
-        <line x1="28" y1="24" x2="28" y2="35" stroke="#ff4655" stroke-width="2.5" stroke-linecap="round"/>
-        <circle cx="28" cy="19" r="2" fill="#ff4655"/>
-      </svg>`,
+    gamepad: {
+      lucide: "play",
+      fallback: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><polygon points="6,3 20,12 6,21 6,3"></polygon></svg>',
+    },
+    tools: {
+      lucide: "settings-2",
+      fallback: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 7h-9"></path><path d="M14 17H5"></path><circle cx="17" cy="17" r="3"></circle><circle cx="7" cy="7" r="3"></circle></svg>',
+    },
+    money: {
+      lucide: "box",
+      fallback: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path><path d="m3.3 7 8.7 5 8.7-5"></path><path d="M12 22V12"></path></svg>',
+    },
+    star: {
+      lucide: "dumbbell",
+      fallback: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6.5 6.5 11 11"></path><path d="m21 21-1-1"></path><path d="m3 3 1 1"></path><path d="m18 22 4-4"></path><path d="m2 6 4-4"></path><path d="m3 10 7-7"></path><path d="m14 21 7-7"></path></svg>',
+    },
+    link: {
+      lucide: "lightbulb",
+      fallback: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 14c.2-1 .7-1.7 1.5-2.5A4.8 4.8 0 0 0 18 8 6 6 0 0 0 6 8c0 1.2.5 2.5 1.5 3.5.7.7 1.2 1.5 1.5 2.5"></path><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M10 14h4"></path></svg>',
+    },
   };
-  return icons[icon] || icons.star;
+  const selected = icons[icon] || icons.star;
+  return `<span class="menu-icon" data-lucide="${selected.lucide}" aria-hidden="true">${selected.fallback}</span>`;
 }
 
 function attachButtonFeedback(button) {
