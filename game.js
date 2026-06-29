@@ -4937,6 +4937,28 @@ function agentPresentation(agent) {
   };
 }
 
+const agentArtworkCache = new Map();
+
+function preloadAgentAsset(src) {
+  if (!src) return Promise.resolve("");
+  const cached = agentArtworkCache.get(src);
+  if (cached) return cached.promise;
+  const image = new Image();
+  const promise = new Promise((resolve) => {
+    image.onload = () => {
+      if (image.decode) {
+        image.decode().catch(() => {}).finally(() => resolve(src));
+        return;
+      }
+      resolve(src);
+    };
+    image.onerror = () => resolve(src);
+  });
+  image.src = src;
+  agentArtworkCache.set(src, { image, promise });
+  return promise;
+}
+
 function showAgentSelect(onPick, returnState = "main") {
   closeShop();
   game.agentReturnState = returnState;
@@ -4944,6 +4966,11 @@ function showAgentSelect(onPick, returnState = "main") {
   selector.querySelector(".agent-preview")?.remove();
   ui.agentSelectGrid.innerHTML = "";
   ui.agentSelectGrid.classList.remove("has-selection");
+  for (const agent of agents) {
+    const presentation = agentPresentation(agent);
+    preloadAgentAsset(presentation.icon);
+    preloadAgentAsset(presentation.artwork);
+  }
 
   const preview = document.createElement("section");
   preview.className = "agent-preview";
@@ -4969,14 +4996,17 @@ function showAgentSelect(onPick, returnState = "main") {
   const confirmButton = preview.querySelector(".agent-confirm");
   let selectedAgent = null;
   let agenteTravado = false;
+  let previewRenderId = 0;
 
   const renderPreview = (agent) => {
+     const renderId = ++previewRenderId;
      const presentation = agentPresentation(agent);
      preview.style.setProperty("--agent-color", agent.color);
      preview.dataset.agent = agent.id;
      const previewImage = preview.querySelector(".agent-preview-art img");
-     previewImage.src = presentation.artwork;
      previewImage.alt = `Arte da agente ${agent.name}`;
+     previewImage.classList.add("is-loading");
+     previewImage.removeAttribute("src");
      preview.querySelector(".agent-class").textContent = presentation.className;
      preview.querySelector("h3").textContent = agent.name;
      preview.querySelector("p").textContent = presentation.tagline;
@@ -4984,6 +5014,11 @@ function showAgentSelect(onPick, returnState = "main") {
      const cooldownEl = preview.querySelector(".agent-ability-cooldown");
      if (cooldownEl) cooldownEl.textContent = `(${agent.cooldown}s recarga)`;
      preview.querySelector(".ability-chip-ultimate b").textContent = presentation.ultimate;
+     preloadAgentAsset(presentation.artwork).then((src) => {
+       if (renderId !== previewRenderId) return;
+       previewImage.src = src;
+       requestAnimationFrame(() => previewImage.classList.remove("is-loading"));
+     });
   };
 
   const confirmSelection = () => {
@@ -5567,6 +5602,7 @@ function renderOptionsMenu(skipFade = false) {
   [
     { label: "REPOR PADRÕES", action: resetOptionsSettings },
     { label: "APLICAR", action: applyOptionsSettings, primary: true },
+    { label: "VOLTAR", action: showMainMenu },
   ].forEach((item) => {
     const button = createOptionElement("button", item.primary ? "is-primary" : "", item.label);
     button.type = "button";
