@@ -40,10 +40,7 @@ body {
   margin: 0;
   overflow: hidden;
   position: relative;
-  background:
-    radial-gradient(circle at 25% 20%, rgba(70, 168, 255, 0.14), transparent 32%),
-    radial-gradient(circle at 80% 85%, rgba(255, 77, 93, 0.13), transparent 30%),
-    var(--bg);
+  background: #000;
   color: var(--text);
   font-family: "Rajdhani", "Segoe UI", Arial, sans-serif;
   font-weight: 500;
@@ -68,48 +65,52 @@ button.active {
   transform: translateY(-1px);
 }
 
+#game-root {
+  width: 100vw;
+  height: 100vh;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+#game-viewport {
+  width: 1280px;
+  height: 720px;
+  position: relative;
+  overflow: hidden;
+  transform-origin: center center;
+}
+
 .shell {
   position: relative;
-  width: 100%;
-  height: 100%;
   min-width: 0;
   min-height: 0;
   padding: 0;
 }
 
 .game-stage {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: min(1024px, 95vw, calc(90vh * 16 / 9));
-  height: auto;
-  max-height: 90vh;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  justify-items: center;
-  align-content: center;
-  gap: 8px;
-  transform: translate(-50%, -50%);
   margin: 0;
-  overflow: hidden;
+  background:
+    radial-gradient(circle at 25% 20%, rgba(70, 168, 255, 0.14), transparent 32%),
+    radial-gradient(circle at 80% 85%, rgba(255, 77, 93, 0.13), transparent 30%),
+    var(--bg);
 }
 
 .game-wrap {
-  position: relative;
-  grid-row: 2;
-  width: 100%;
-  max-width: 1024px;
-  max-height: min(576px, calc(90vh - 118px));
-  aspect-ratio: 16 / 9;
-  overflow: hidden;
+  position: absolute;
+  inset: 0;
+  width: 1280px;
+  height: 720px;
   background: #0b1318;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 24px 90px rgba(0, 0, 0, 0.48);
+  border: 0;
+  box-shadow: none;
 }
 
 canvas {
-  width: 100%;
-  height: 100%;
+  width: 1280px;
+  height: 720px;
   display: block;
 }
 
@@ -121,23 +122,27 @@ canvas {
 }
 
 .top-hud {
-  position: relative;
-  grid-row: 1;
+  position: absolute;
+  top: 0;
+  left: 50%;
   z-index: 100;
+  height: 56px;
+  min-width: 320px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0;
-  padding: 6px 0;
-  transform: none;
+  padding: 0 24px;
+  transform: translateX(-50%);
   pointer-events: none;
-  border-radius: 4px;
+  border-radius: 0 0 8px 8px;
   animation: slideDown 420ms ease both;
   width: max-content;
-  max-width: 100%;
+  max-width: calc(100% - 32px);
   overflow: hidden;
-  background: rgba(6, 10, 15, 0.85);
+  background: rgba(15, 25, 35, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 0;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.34);
@@ -352,28 +357,43 @@ canvas {
 
 .status-card {
   position: absolute;
-  inset: auto 14px 14px 14px;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
+  inset: 0;
+  display: block;
   pointer-events: none;
   animation: slideUp 420ms ease both;
+  z-index: 100;
 }
 
 .vitals-panel,
 .weapon-panel {
+  position: absolute;
+  bottom: 0;
   border-radius: 8px;
   padding: 10px 12px;
   pointer-events: none;
+  background: rgba(15, 25, 35, 0.85);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
 
 .vitals-panel {
-  width: min(260px, 38vw);
+  left: 50%;
+  width: 560px;
+  min-width: 480px;
+  max-width: 640px;
+  height: 64px;
+  padding: 10px 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: center;
+  transform: translateX(-50%);
+  border-radius: 8px 8px 0 0;
 }
 
 .weapon-panel {
-  width: min(286px, 40vw);
+  right: 24px;
+  width: 286px;
+  border-radius: 8px 8px 0 0;
 }
 
 .status-main {
@@ -386,6 +406,7 @@ canvas {
 .status-main strong {
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .status-main span,
@@ -668,9 +689,9 @@ canvas {
 }
 
 .message {
-  position: relative;
-  grid-row: 3;
-  align-self: start;
+  position: absolute;
+  left: 50%;
+  bottom: 72px;
   z-index: 99;
   width: max-content;
   max-width: min(560px, calc(100% - 32px));
@@ -678,6 +699,7 @@ canvas {
   padding: 7px 11px;
   text-align: center;
   border-radius: 6px;
+  transform: translateX(-50%);
   pointer-events: none;
   animation: fadeIn 360ms ease both;
 }
@@ -2079,10 +2101,7 @@ button.click-feedback::after {
 }
 
 .tutorial-mode[data-tutorial-step="1"] .status-card {
-  display: flex;
-  left: auto;
-  right: 18px;
-  bottom: 18px;
+  display: block;
 }
 
 .tutorial-mode[data-tutorial-step="1"] .vitals-panel {
@@ -2146,8 +2165,8 @@ button.click-feedback::after {
 }
 
 @keyframes slideDown {
-  from { opacity: 0; transform: translateY(-14px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateX(-50%) translateY(-14px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
 @keyframes slideUp {
@@ -2181,7 +2200,7 @@ button.click-feedback::after {
   to { box-shadow: 0 0 28px rgba(255, 77, 93, 0.28); }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 0px) {
    .shell {
      padding: 0;
    }
@@ -2305,7 +2324,7 @@ button.click-feedback::after {
    }
  }
 
-@media (max-width: 620px) {
+@media (max-width: 0px) {
   .top-hud {
     gap: 0;
     padding: 6px 0;
@@ -2948,7 +2967,7 @@ button.click-feedback::after {
   letter-spacing: 0;
 }
 
-@media (max-width: 860px) {
+@media (max-width: 0px) {
   .menu-state-options .menu-card {
     width: calc(100% - 16px);
     padding: 16px;

@@ -8,9 +8,9 @@
   <link rel="stylesheet" href="styles.css?v=20260627-bottom-info-bar-9-rounds">
 </head>
 <body>
-  <main class="shell">
-    <div class="game-stage">
-      <div class="top-hud glass hidden" id="topHud">
+  <main class="shell" id="game-root">
+    <div class="game-stage" id="game-viewport">
+      <div class="top-hud hud-scoreboard glass hidden" id="topHud">
         <div class="hud-pill side-pill" id="sidePill">ATK</div>
         <div class="hud-pill timer-pill" id="timerPill">
           <span class="label">Tempo</span>
@@ -28,7 +28,7 @@
       <div class="fps-counter hidden" id="fpsCounter">0 FPS</div>
       <div class="audio-debug-label hidden" id="audioDebugLabel"></div>
       <div class="status-card">
-        <div class="vitals-panel glass">
+        <div class="vitals-panel glass" id="hud-player-info">
           <div class="status-main">
             <div class="agent-dot" id="agentDot"></div>
             <strong id="agentText">Vanguard</strong>
@@ -43,7 +43,7 @@
             <span class="ult-counter" id="ultCounter">ULT <b id="ultPointsText">0/7</b></span>
           </div>
         </div>
-        <div class="weapon-panel glass">
+        <div class="weapon-panel glass" id="hud-weapon-info">
           <div class="weapon-line">
             <strong id="weaponText">Pistol</strong>
             <span id="ammoText">12</span>

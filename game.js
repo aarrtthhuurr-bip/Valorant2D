@@ -1,7 +1,11 @@
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
+const BASE_WIDTH = 1280;
+const BASE_HEIGHT = 720;
 
 const ui = {
+  gameRoot: document.getElementById("game-root"),
+  gameViewport: document.getElementById("game-viewport"),
   topHud: document.getElementById("topHud"),
   timerPill: document.getElementById("timerPill"),
   timer: document.getElementById("timerText"),
@@ -85,7 +89,16 @@ const ui = {
 
 const keys = new Set();
 const pressed = new Set();
-const mouse = { x: canvas.width / 2, y: canvas.height / 2, down: false };
+const mouse = { x: BASE_WIDTH / 2, y: BASE_HEIGHT / 2, down: false };
+
+function escalarViewport() {
+  if (!ui.gameViewport) return;
+  const scaleX = window.innerWidth / BASE_WIDTH;
+  const scaleY = window.innerHeight / BASE_HEIGHT;
+  const scale = Math.min(scaleX, scaleY);
+  ui.gameViewport.style.transform = `scale(${scale})`;
+}
+
 const SPIKE_DETONATE_TIME = 38;
 const BOT_REACTION_TIME = 0.22;
 const BOT_SHOOT_GRACE_TIME = 0.42;
@@ -5503,7 +5516,7 @@ function applyOptionsSettings() {
   audio.enabled = !settings.muted;
   audio.volume = Math.max(0, Math.min(1, settings.masterVolume / 100));
   if (settings.displayMode === "fullscreen" && !document.fullscreenElement) {
-    document.querySelector(".game-wrap")?.requestFullscreen?.();
+    ui.gameRoot?.requestFullscreen?.();
   } else if (settings.displayMode === "window" && document.fullscreenElement) {
     document.exitFullscreen?.();
   }
@@ -5936,6 +5949,9 @@ if (window) window.addEventListener("keyup", (event) => {
   keys.delete(event.key.toLowerCase());
 });
 
+if (window) window.addEventListener("resize", escalarViewport);
+if (document) document.addEventListener("fullscreenchange", escalarViewport);
+
 if (canvas) canvas.addEventListener("mousemove", (event) => {
   const rect = canvas.getBoundingClientRect();
   mouse.x = ((event.clientX - rect.left) / rect.width) * canvas.width;
@@ -5969,6 +5985,7 @@ if (window) window.addEventListener("mouseup", () => {
 });
 
 if (ui.shopBackdrop) ui.shopBackdrop.addEventListener("click", () => { closeShop(); updateUi(); });
+escalarViewport();
 
 if (ui.shopTabs && typeof ui.shopTabs.querySelectorAll === "function") {
   ui.shopTabs.querySelectorAll("[data-shop-tab]").forEach((button) => {
