@@ -1378,22 +1378,11 @@ button.click-feedback::after {
   flex-shrink: 0;
   position: relative;
   z-index: 1;
-  background-size: contain;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-color: transparent;
   border: none;
   outline: none;
   box-shadow: none;
   pointer-events: none;
-  mix-blend-mode: screen;
 }
-
-.menu-icon-gamepad { background-image: url("assets/images/controle-menu-jogar.png"); }
-.menu-icon-tools { background-image: url("assets/images/ferramentas-menu-opcoes.png"); }
-.menu-icon-money { background-image: url("assets/images/dinheiro-menu-sandbox.png"); }
-.menu-icon-star { background-image: url("assets/images/uma-estrela-modo-facil.png"); }
-.menu-icon-link { background-image: url("assets/images/elo-menu-tutorial.png"); }
 .menu-state-difficulty {
   align-items: center;
   justify-content: center;
