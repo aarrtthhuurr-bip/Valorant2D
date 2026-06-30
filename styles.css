@@ -1224,9 +1224,9 @@ button.click-feedback::after {
 
 /* Lucide menu buttons - aplicado somente no menu principal. */
 .menu-state-main .menu-button {
-  min-height: 52px;
-  padding: 14px 18px;
-  gap: 16px;
+  min-height: 58px;
+  padding: 15px 20px;
+  gap: 18px;
   border: 1px solid #1e2e42;
   border-radius: 10px;
   background: #1a2535;
@@ -1245,16 +1245,16 @@ button.click-feedback::after {
 
 .menu-state-main .menu-button b {
   color: #c8d6e5;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: 0.12em;
   transition: color 0.15s ease;
 }
 
 .menu-state-main .menu-button .menu-icon {
-  width: 22px;
-  height: 22px;
-  flex: 0 0 22px;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
   position: relative;
   z-index: 1;
   color: #ff4655;
@@ -1264,8 +1264,8 @@ button.click-feedback::after {
 
 .menu-state-main .menu-button .menu-icon svg,
 .menu-state-main .menu-button svg.menu-icon {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   display: block;
   fill: none;
   stroke: #ff4655;
@@ -3024,6 +3024,17 @@ button.click-feedback::after {
   transition: opacity var(--transition);
 }
 
+.menu-state-options .options-tabs,
+.menu-state-options .options-content {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.menu-state-options .options-tabs::-webkit-scrollbar,
+.menu-state-options .options-content::-webkit-scrollbar {
+  display: none;
+}
+
 .options-content.is-fading {
   opacity: 0;
 }
@@ -3262,15 +3273,75 @@ button.click-feedback::after {
   border-radius: 50%;
 }
 
+.crosshair-preview .ring,
+.crosshair-preview .square,
+.crosshair-preview .diag-a,
+.crosshair-preview .diag-b {
+  display: none;
+}
+
+.crosshair-preview .ring {
+  width: 54px;
+  height: 54px;
+  border: var(--crosshair-thickness) solid var(--crosshair-color);
+  border-radius: 50%;
+  background: transparent;
+}
+
+.crosshair-preview .square {
+  width: 46px;
+  height: 46px;
+  border: var(--crosshair-thickness) solid var(--crosshair-color);
+  background: transparent;
+}
+
+.crosshair-preview .diag-a,
+.crosshair-preview .diag-b {
+  width: 54px;
+  height: var(--crosshair-thickness);
+}
+
+.crosshair-preview .diag-a {
+  transform: translate(-50%, -50%) scale(var(--crosshair-size)) rotate(45deg);
+}
+
+.crosshair-preview .diag-b {
+  transform: translate(-50%, -50%) scale(var(--crosshair-size)) rotate(-45deg);
+}
+
 .crosshair-preview[data-type="dot"] .top,
 .crosshair-preview[data-type="dot"] .right,
 .crosshair-preview[data-type="dot"] .bottom,
 .crosshair-preview[data-type="dot"] .left,
+.crosshair-preview[data-type="x"] .top,
+.crosshair-preview[data-type="x"] .right,
+.crosshair-preview[data-type="x"] .bottom,
+.crosshair-preview[data-type="x"] .left,
+.crosshair-preview[data-type="x"] .dot,
+.crosshair-preview[data-type="t"] .top,
+.crosshair-preview[data-type="t"] .dot,
+.crosshair-preview[data-type="square"] .top,
+.crosshair-preview[data-type="square"] .right,
+.crosshair-preview[data-type="square"] .bottom,
+.crosshair-preview[data-type="square"] .left,
+.crosshair-preview[data-type="square"] .dot,
+.crosshair-preview[data-type="ring"] .top,
+.crosshair-preview[data-type="ring"] .right,
+.crosshair-preview[data-type="ring"] .bottom,
+.crosshair-preview[data-type="ring"] .left,
+.crosshair-preview[data-type="ring"] .dot,
 .crosshair-preview[data-type="circle"] .top,
 .crosshair-preview[data-type="circle"] .right,
 .crosshair-preview[data-type="circle"] .bottom,
 .crosshair-preview[data-type="circle"] .left {
   display: none;
+}
+
+.crosshair-preview[data-type="x"] .diag-a,
+.crosshair-preview[data-type="x"] .diag-b,
+.crosshair-preview[data-type="square"] .square,
+.crosshair-preview[data-type="ring"] .ring {
+  display: block;
 }
 
 .crosshair-preview[data-type="circle"] .dot {

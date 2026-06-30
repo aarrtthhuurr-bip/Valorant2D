@@ -4108,28 +4108,57 @@ function drawCrosshair() {
   if (game.crosshairStyle === "minimal") {
     const gap = Math.max(3 * spreadScale, crosshairGap);
     const length = Math.max(7 * spreadScale, crosshairLength);
+    const type = settings.crosshairType;
     ctx.save();
     ctx.globalAlpha = crosshairAlpha;
     ctx.strokeStyle = crosshairColor;
     ctx.lineWidth = crosshairThickness;
-    ctx.beginPath();
-    ctx.moveTo(mouse.x - length, mouse.y);
-    ctx.lineTo(mouse.x - gap, mouse.y);
-    ctx.moveTo(mouse.x + gap, mouse.y);
-    ctx.lineTo(mouse.x + length, mouse.y);
-    ctx.moveTo(mouse.x, mouse.y - length);
-    ctx.lineTo(mouse.x, mouse.y - gap);
-    ctx.moveTo(mouse.x, mouse.y + gap);
-    ctx.lineTo(mouse.x, mouse.y + length);
-    ctx.stroke();
-    if (settings.crosshairType === "dot") {
+    if (type === "dot") {
       ctx.fillStyle = crosshairColor;
       ctx.beginPath();
-      ctx.arc(mouse.x, mouse.y, crosshairThickness * 1.3, 0, Math.PI * 2);
+      ctx.arc(mouse.x, mouse.y, Math.max(2, crosshairThickness * 1.5), 0, Math.PI * 2);
       ctx.fill();
-    } else if (settings.crosshairType === "circle") {
+    } else if (type === "x") {
+      ctx.beginPath();
+      ctx.moveTo(mouse.x - length, mouse.y - length);
+      ctx.lineTo(mouse.x - gap, mouse.y - gap);
+      ctx.moveTo(mouse.x + gap, mouse.y + gap);
+      ctx.lineTo(mouse.x + length, mouse.y + length);
+      ctx.moveTo(mouse.x + length, mouse.y - length);
+      ctx.lineTo(mouse.x + gap, mouse.y - gap);
+      ctx.moveTo(mouse.x - gap, mouse.y + gap);
+      ctx.lineTo(mouse.x - length, mouse.y + length);
+      ctx.stroke();
+    } else if (type === "t") {
+      ctx.beginPath();
+      ctx.moveTo(mouse.x - length, mouse.y);
+      ctx.lineTo(mouse.x - gap, mouse.y);
+      ctx.moveTo(mouse.x + gap, mouse.y);
+      ctx.lineTo(mouse.x + length, mouse.y);
+      ctx.moveTo(mouse.x, mouse.y + gap);
+      ctx.lineTo(mouse.x, mouse.y + length);
+      ctx.stroke();
+    } else if (type === "circle") {
       ctx.beginPath();
       ctx.arc(mouse.x, mouse.y, 10 * game.crosshairScale, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (type === "square") {
+      const side = Math.max(16 * game.crosshairScale, gap * 2 + crosshairThickness * 4);
+      ctx.strokeRect(mouse.x - side / 2, mouse.y - side / 2, side, side);
+    } else if (type === "ring") {
+      ctx.beginPath();
+      ctx.arc(mouse.x, mouse.y, Math.max(7 * game.crosshairScale, gap), 0, Math.PI * 2);
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(mouse.x - length, mouse.y);
+      ctx.lineTo(mouse.x - gap, mouse.y);
+      ctx.moveTo(mouse.x + gap, mouse.y);
+      ctx.lineTo(mouse.x + length, mouse.y);
+      ctx.moveTo(mouse.x, mouse.y - length);
+      ctx.lineTo(mouse.x, mouse.y - gap);
+      ctx.moveTo(mouse.x, mouse.y + gap);
+      ctx.lineTo(mouse.x, mouse.y + length);
       ctx.stroke();
     }
     ctx.restore();
@@ -5267,6 +5296,10 @@ function renderDifficultyMenu() {
       </div>
       <div class="difficulty-card-name">${option.label}</div>`;
     card.addEventListener("click", () => pickDifficulty(option.id));
+    card.addEventListener("dblclick", () => {
+      pickDifficulty(option.id);
+      startSelectedDifficulty();
+    });
     cards.appendChild(card);
   }
 
@@ -5531,7 +5564,7 @@ function updateCrosshairPreview() {
   preview.style.setProperty("--crosshair-thickness", `${optionsSettings.crosshairThickness}px`);
   preview.style.setProperty("--crosshair-opacity", optionsSettings.crosshairOpacity / 100);
   preview.style.setProperty("--crosshair-gap", `${optionsSettings.crosshairGap}px`);
-  ["top", "right", "bottom", "left", "dot"].forEach((part) => preview.appendChild(createOptionElement("i", part)));
+  ["top", "right", "bottom", "left", "dot", "ring", "square", "diag-a", "diag-b"].forEach((part) => preview.appendChild(createOptionElement("i", part)));
 }
 
 function CrosshairPreview() {
@@ -5622,6 +5655,10 @@ function renderCrosshairOptions() {
       { value: "cross", label: "CRUZ" },
       { value: "dot", label: "PONTO" },
       { value: "circle", label: "CÍRCULO" },
+      { value: "x", label: "X" },
+      { value: "t", label: "T" },
+      { value: "square", label: "QUADRADO" },
+      { value: "ring", label: "ANEL" },
     ]),
     crosshairColorPicker(),
     SettingSlider("Tamanho", "crosshairSize", 50, 200, 1, "%"),
