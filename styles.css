@@ -3024,15 +3024,25 @@ button.click-feedback::after {
   transition: opacity var(--transition);
 }
 
+.menu-state-options,
+.menu-state-options .menu-card,
+.menu-state-options .options-shell,
+.menu-state-options .options-panel,
 .menu-state-options .options-tabs,
 .menu-state-options .options-content {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
 
+.menu-state-options::-webkit-scrollbar,
+.menu-state-options .menu-card::-webkit-scrollbar,
+.menu-state-options .options-shell::-webkit-scrollbar,
+.menu-state-options .options-panel::-webkit-scrollbar,
 .menu-state-options .options-tabs::-webkit-scrollbar,
 .menu-state-options .options-content::-webkit-scrollbar {
   display: none;
+  width: 0;
+  height: 0;
 }
 
 .options-content.is-fading {

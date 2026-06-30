@@ -5618,13 +5618,6 @@ function renderGeneralOptions() {
       ToggleSwitch("Mostrar FPS", "showFps"),
       ToggleSwitch("Mostrar Ping", "showPing"),
     ]),
-    optionSection("MINIMAPA", [
-      ToggleGroup("Rotação", "minimapRotation", [{ value: "rotate", label: "RODAR" }, { value: "fixed", label: "FIXO" }]),
-      SettingSlider("Tamanho do minimapa", "minimapSize", 0.5, 2, 0.1, "x"),
-      SettingSlider("Zoom do minimapa", "minimapZoom", 0.5, 2, 0.1, "x"),
-      ToggleSwitch("Mostrar nomes de área", "showAreaNames"),
-      ToggleSwitch("Mostrar cones de visão", "showVisionCones"),
-    ]),
   ];
 }
 
