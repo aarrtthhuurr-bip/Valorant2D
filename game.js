@@ -224,6 +224,106 @@ const agents = [
       game.smokes.push({ x: mouse.x, y: mouse.y, r: 84, life: 6 });
     },
   },
+  {
+    id: "jett",
+    name: "Jett",
+    role: "Duelista",
+    color: "#9fe8ff",
+    ability: "Brisa de Impulso",
+    cooldown: 7,
+    use(game) {
+      const p = game.player;
+      const length = Math.hypot(p.moveX || 0, p.moveY || 0);
+      const angle = length > 0.1 ? Math.atan2(p.moveY, p.moveX) : p.angle;
+      const fromX = p.x;
+      const fromY = p.y;
+      safeDisplaceEntity(p, Math.cos(angle) * 170, Math.sin(angle) * 170, 12);
+      spawnDashTrail(p, fromX, fromY, p.x, p.y, "#d7f7ff");
+      game.screenTint = { color: "rgba(120, 220, 255, 0.22)", life: 0.22, maxLife: 0.22 };
+      return Math.hypot(p.x - fromX, p.y - fromY) > 8;
+    },
+  },
+  {
+    id: "killjoy",
+    name: "Killjoy",
+    role: "Sentinela",
+    color: "#f7d84a",
+    ability: "Torreta",
+    cooldown: 12,
+    use(game) {
+      const p = game.player;
+      const point = nearestWalkablePoint({
+        x: p.x + Math.cos(p.angle) * 46,
+        y: p.y + Math.sin(p.angle) * 46,
+      }, p);
+      game.turrets = game.turrets.filter((turret) => turret.ownerId !== "player");
+      game.turrets.push({
+        x: point.x,
+        y: point.y,
+        r: 14,
+        angle: p.angle,
+        ownerTeam: "player",
+        ownerId: "player",
+        fireTimer: 0.2,
+        burst: 0,
+        burstTimer: 0,
+        life: 28,
+        maxLife: 28,
+        targetId: null,
+      });
+      spawnParticles(point.x, point.y, "#f7d84a", 18, 115);
+      return true;
+    },
+  },
+  {
+    id: "raze",
+    name: "Raze",
+    role: "Duelista",
+    color: "#ff8a2a",
+    ability: "Cartuchos de Tinta",
+    cooldown: 10,
+    use(game) {
+      const p = game.player;
+      launchRazeGrenade(p, p.angle, false);
+      return true;
+    },
+  },
+  {
+    id: "yoru",
+    name: "Yoru",
+    role: "Duelista",
+    color: "#3e6bff",
+    ability: "Passagem Dimensional",
+    cooldown: 8,
+    use(game) {
+      const p = game.player;
+      const gate = game.yoruGatecrash;
+      if (gate?.active) {
+        const destination = nearestWalkablePoint({ x: gate.x, y: gate.y }, p);
+        if (!isPointSafeForEntity(p, destination.x, destination.y)) {
+          setMessage("Passagem bloqueada por parede.");
+          return false;
+        }
+        spawnParticles(p.x, p.y, "#315cff", 26, 180);
+        p.x = destination.x;
+        p.y = destination.y;
+        spawnParticles(p.x, p.y, "#80a0ff", 32, 220);
+        game.screenTint = { color: "rgba(20, 40, 140, 0.48)", life: 0.32, maxLife: 0.32 };
+        game.yoruGatecrash = null;
+        return true;
+      }
+      game.yoruGatecrash = {
+        active: true,
+        x: p.x + Math.cos(p.angle) * 28,
+        y: p.y + Math.sin(p.angle) * 28,
+        vx: Math.cos(p.angle) * 360,
+        vy: Math.sin(p.angle) * 360,
+        life: 5,
+        maxLife: 5,
+      };
+      return "noCooldown";
+    },
+  },
 ];
 
 const weapons = [
@@ -250,6 +350,7 @@ const damageFalloff = {
   dmr: { start: 520, end: 1250, min: 0.86 },
   lmg: { start: 300, end: 930, min: 0.68 },
   sniper: { start: 700, end: 1500, min: 0.93 },
+  "jett-knife": { start: 900, end: 1600, min: 0.9 },
 };
 
 const weaponAudio = {
@@ -902,6 +1003,12 @@ const game = {
   dashGhosts: [],
   neonTrails: [],
   ultimateEffects: [],
+  turrets: [],
+  grenades: [],
+  rockets: [],
+  paintDecals: [],
+  yoruGatecrash: null,
+  screenTint: null,
   destructibles: [],
   smokes: [],
   shadowZones: [],
@@ -1098,6 +1205,12 @@ game.bullets = [];
    game.dashGhosts = [];
    game.neonTrails = [];
    game.ultimateEffects = [];
+   game.turrets = [];
+   game.grenades = [];
+   game.rockets = [];
+   game.paintDecals = [];
+   game.yoruGatecrash = null;
+   game.screenTint = null;
    game.player.orbChannel = null;
    game.player.orbAssignment = null;
    game.allies.forEach((ally) => {
@@ -1296,6 +1409,7 @@ function currentPlayerDefuseTime() {
 
 function applyDamage(entity, amount) {
   if (entity.id === "player" && game.godMode) return 0;
+  if (entity.ultimate?.type === "yoru") return 0;
   if (amount > 0 && entity.orbChannel) entity.orbChannel = null;
   let remaining = amount;
   if (entity.armor > 0) {
@@ -1343,6 +1457,26 @@ function moveEntity(entity, dx, dy, walls) {
   entity.x = Math.max(entity.r, Math.min(map.width - entity.r, entity.x));
   entity.y = Math.max(entity.r, Math.min(map.height - entity.r, entity.y));
   return Math.hypot(entity.x - startX, entity.y - startY);
+}
+
+function isPointSafeForEntity(entity, x, y) {
+  const probe = { x, y, r: entity.r || 18 };
+  if (x < probe.r || y < probe.r || x > map.width - probe.r || y > map.height - probe.r) return false;
+  return !solidWalls().some((wall) => circleRectCollides(probe, wall));
+}
+
+function safeDisplaceEntity(entity, dx, dy, stepSize = 10) {
+  const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / stepSize));
+  let moved = 0;
+  for (let i = 0; i < steps; i++) {
+    const beforeX = entity.x;
+    const beforeY = entity.y;
+    moveEntity(entity, dx / steps, dy / steps, map.walls);
+    const stepMoved = Math.hypot(entity.x - beforeX, entity.y - beforeY);
+    moved += stepMoved;
+    if (stepMoved < 0.5) break;
+  }
+  return moved;
 }
 
 function spawnParticles(x, y, color, count = 8, power = 120) {
@@ -1395,6 +1529,93 @@ function spawnDashTrail(entity, fromX, fromY, toX, toY, color) {
   }
   spawnParticles(fromX, fromY, color, 6, 120);
   spawnParticles(toX, toY, color, 10, 180);
+}
+
+function addPaintDecal(x, y, color, radius = 42, life = 7) {
+  game.paintDecals.push({ x, y, color, radius, life, maxLife: life });
+}
+
+function explodeArea(x, y, radius, damage, color, options = {}) {
+  game.explosions.push({ x, y, r: 0, maxR: radius, life: 0.42, maxLife: 0.42, color });
+  addPaintDecal(x, y, color, Math.max(30, radius * 0.45), 8);
+  spawnParticles(x, y, color, options.particles || 30, options.power || 230);
+  game.shake = Math.max(game.shake, options.shake || 0.28);
+  for (const bot of game.bots) {
+    if (!bot.alive) continue;
+    const distance = Math.hypot(bot.x - x, bot.y - y);
+    if (distance > radius + bot.r) continue;
+    const falloff = 1 - Math.min(0.72, distance / Math.max(1, radius) * 0.72);
+    const actualDamage = applyDamage(bot, damage * falloff);
+    game.stats.damage += Math.round(actualDamage);
+    spawnDamageNumber(bot, actualDamage, false);
+    if (bot.hp <= 0) eliminateBot(bot, { playerCredit: true, weaponName: options.weaponName || "Explosao" });
+  }
+}
+
+function launchRazeGrenade(owner, angle, mini = false) {
+  game.grenades.push({
+    x: owner.x + Math.cos(angle) * (owner.r + 8),
+    y: owner.y + Math.sin(angle) * (owner.r + 8),
+    vx: Math.cos(angle) * (mini ? 270 : 430),
+    vy: Math.sin(angle) * (mini ? 270 : 430),
+    life: mini ? 0.85 : 0.72,
+    maxLife: mini ? 0.85 : 0.72,
+    r: mini ? 7 : 10,
+    mini,
+    color: mini ? "#ffcf45" : "#ff7b2f",
+  });
+}
+
+function throwJettKnife(owner, angle, spread = 0) {
+  if (!owner.ultimate || owner.ultimate.type !== "jett" || owner.ultimate.knives <= 0) return false;
+  owner.ultimate.knives -= 1;
+  game.bullets.push({
+    x: owner.x + Math.cos(angle) * owner.r,
+    y: owner.y + Math.sin(angle) * owner.r,
+    startX: owner.x,
+    startY: owner.y,
+    vx: Math.cos(angle + spread) * 1420,
+    vy: Math.sin(angle + spread) * 1420,
+    life: 0.88,
+    damage: 78,
+    team: entityTeam(owner) === "player" ? "player" : "bot",
+    weaponId: "jett-knife",
+    ultimateTrail: true,
+    knife: true,
+    hitIds: [],
+  });
+  game.neonTrails.push({ x1: owner.x, y1: owner.y, x2: owner.x + Math.cos(angle) * 42, y2: owner.y + Math.sin(angle) * 42, life: 0.38, maxLife: 0.38, color: "#c9f7ff" });
+  if (owner.ultimate.knives <= 0) owner.ultimate.life = Math.min(owner.ultimate.life, 0.65);
+  return true;
+}
+
+function fireJettKnifeBurst(owner) {
+  const count = owner.ultimate?.knives || 0;
+  if (count <= 0) return false;
+  const spreadStep = 0.12;
+  for (let i = 0; i < count; i++) {
+    const offset = (i - (count - 1) / 2) * spreadStep;
+    throwJettKnife(owner, owner.angle, offset);
+  }
+  owner.ultimate.knives = 0;
+  owner.ultimate.life = Math.min(owner.ultimate.life, 0.5);
+  return true;
+}
+
+function fireRazeRocket(owner) {
+  if (!owner.ultimate || owner.ultimate.type !== "raze" || owner.ultimate.fired) return false;
+  owner.ultimate.fired = true;
+  game.rockets.push({
+    x: owner.x + Math.cos(owner.angle) * (owner.r + 16),
+    y: owner.y + Math.sin(owner.angle) * (owner.r + 16),
+    vx: Math.cos(owner.angle) * 620,
+    vy: Math.sin(owner.angle) * 620,
+    life: 1.9,
+    maxLife: 1.9,
+    r: 13,
+  });
+  game.shake = Math.max(game.shake, 0.22);
+  return true;
 }
 
 function clamp(val, min, max) {
@@ -2016,6 +2237,20 @@ function advanceDefuse(defuserId, dt, totalTime) {
 
 function shoot(owner, targetX, targetY, weapon, team) {
   const now = performance.now() / 1000;
+  if ((owner.disarmedTimer || 0) > 0) return;
+  if (owner.ultimate?.type === "yoru") return;
+  if (owner.ultimate?.type === "raze" && team === "player") {
+    if (game.phase !== "action" || now - game.lastShot < 0.42) return;
+    game.lastShot = now;
+    fireRazeRocket(owner);
+    return;
+  }
+  if (owner.ultimate?.type === "jett" && team === "player") {
+    if (game.phase !== "action" || now - game.lastShot < 0.18) return;
+    game.lastShot = now;
+    throwJettKnife(owner, Math.atan2(targetY - owner.y, targetX - owner.x));
+    return;
+  }
   if (team === "player") {
     if (game.phase !== "action" || game.reloadTimer > 0 || now - game.lastShot < weapon.fireRate) return;
     if (owner.ammo <= 0) {
@@ -2147,6 +2382,33 @@ function activateUltimate(entity) {
   if (agent.id === "neon") {
     entity.ultimate = { type: "neon", life: 7, maxLife: 7 };
     addUltimateEffect("wind", entity, "#7df9ff", 7);
+  } else if (agent.id === "jett") {
+    entity.ultimate = { type: "jett", life: 12, maxLife: 12, knives: 5 };
+    addUltimateEffect("jett-knives", entity, "#c9f7ff", 12);
+  } else if (agent.id === "killjoy") {
+    entity.ultimate = { type: "killjoy", life: 10, maxLife: 10 };
+    game.ultimateEffects.push({
+      type: "lockdown",
+      entityId: entity.id,
+      x: entity.x,
+      y: entity.y,
+      color: "#65ff9a",
+      life: 13.5,
+      maxLife: 13.5,
+      countdown: 10,
+      radius: 40,
+      maxRadius: 270,
+      ownerTeam: team,
+      detonated: false,
+    });
+    spawnParticles(entity.x, entity.y, "#65ff9a", 34, 210);
+  } else if (agent.id === "raze") {
+    entity.ultimate = { type: "raze", life: 9, maxLife: 9, fired: false };
+    addUltimateEffect("showstopper", entity, "#ff8a2a", 9);
+  } else if (agent.id === "yoru") {
+    entity.ultimate = { type: "yoru", life: 8, maxLife: 8 };
+    game.screenTint = { color: "rgba(30, 58, 180, 0.34)", life: 8, maxLife: 8 };
+    addUltimateEffect("dimensional-mask", entity, "#3e6bff", 8);
   } else if (agent.id === "viper") {
     entity.ultimate = { type: "viper", life: 9, maxLife: 9 };
     const requested = entity.id === "player" ? mouse : entity;
@@ -2386,7 +2648,7 @@ function updatePlayer(dt) {
    const dx = (right ? 1 : 0) - (left ? 1 : 0);
    const dy = (down ? 1 : 0) - (up ? 1 : 0);
    const len = Math.hypot(dx, dy) || 1;
-   const movementLocked = false;
+   const movementLocked = (p.detainedTimer || 0) > 0;
    p.moving = !movementLocked && (dx !== 0 || dy !== 0);
   p.moveX = p.moving ? dx / len : 0;
   p.moveY = p.moving ? dy / len : 0;
@@ -2406,7 +2668,7 @@ function updatePlayer(dt) {
   if (keyPressed("ability1") && game.abilityCooldown <= 0 && game.phase === "action") {
     const used = game.selectedAgent.use(game);
     if (used !== false) {
-      game.abilityCooldown = game.sandbox ? 0 : game.tutorial ? 2 : game.selectedAgent.cooldown;
+      if (used !== "noCooldown") game.abilityCooldown = game.sandbox ? 0 : game.tutorial ? 2 : game.selectedAgent.cooldown;
       if (game.tutorial && game.tutorialStep === 4) {
         game.tutorialAbilityUsed = true;
         game.tutorialTimer = 0;
@@ -2728,7 +2990,7 @@ function moveBotToward(bot, target, dt, speedScale = 1) {
   bot.angle = angle;
   const ultimateSpeed = bot.ultimate?.type === "neon" ? 1.22 : 1;
   const shadowSlow = shadowSlowMultiplier(bot);
-  const movedNow = moveEntity(bot, Math.cos(angle) * bot.speed * speedScale * ultimateSpeed * shadowSlow * dt, Math.sin(angle) * bot.speed * speedScale * ultimateSpeed * shadowSlow * dt, map.walls);
+  const movedNow = (bot.detainedTimer || 0) > 0 ? 0 : moveEntity(bot, Math.cos(angle) * bot.speed * speedScale * ultimateSpeed * shadowSlow * dt, Math.sin(angle) * bot.speed * speedScale * ultimateSpeed * shadowSlow * dt, map.walls);
   bot.moving = movedNow > 0.5;
   if (movedNow < 0.5) {
     bot.stuck += dt;
@@ -2753,7 +3015,7 @@ function closestAliveBotTo(x, y) {
 
 function botCanSeePlayer(bot) {
   const p = game.player;
-  return p.alive && hasCombatLineOfSight(bot, p) && Math.hypot(p.x - bot.x, p.y - bot.y) < 540;
+  return p.alive && p.ultimate?.type !== "yoru" && hasCombatLineOfSight(bot, p) && Math.hypot(p.x - bot.x, p.y - bot.y) < 540;
 }
 
 function closestVisibleSquadTarget(bot) {
@@ -2763,7 +3025,7 @@ function closestVisibleSquadTarget(bot) {
 }
 
 function canSeeTarget(bot, target, range = 540) {
-  return target?.alive && hasCombatLineOfSight(bot, target) && Math.hypot(target.x - bot.x, target.y - bot.y) < range;
+  return target?.alive && target.ultimate?.type !== "yoru" && hasCombatLineOfSight(bot, target) && Math.hypot(target.x - bot.x, target.y - bot.y) < range;
 }
 
 function closestVisibleEnemy(bot) {
@@ -2861,7 +3123,7 @@ function botFightPlayer(bot, dt, options = {}) {
   } else if (options.strafe !== false) {
     bot.aiState = "fight";
     const side = angle + Math.PI / 2;
-    const movedNow = moveEntity(bot, Math.cos(side) * bot.speed * bot.strafe * 0.38 * dt, Math.sin(side) * bot.speed * bot.strafe * 0.38 * dt, map.walls);
+    const movedNow = (bot.detainedTimer || 0) > 0 ? 0 : moveEntity(bot, Math.cos(side) * bot.speed * bot.strafe * 0.38 * dt, Math.sin(side) * bot.speed * bot.strafe * 0.38 * dt, map.walls);
     if (movedNow < 0.5) bot.strafe *= -1;
   } else {
     bot.aiState = options.state || "fight";
@@ -3328,6 +3590,11 @@ function eliminateBot(bot, { playerCredit = false, weaponName = "Poison Cloud", 
    if (playerCredit) {
      game.stats.kills += 1;
      addKillFeedEntry(true, weaponName, headshot);
+     if (game.player?.ultimate?.type === "jett") {
+       game.player.ultimate.knives = 5;
+       game.player.ultimate.life = Math.max(game.player.ultimate.life, 5);
+       spawnParticles(game.player.x, game.player.y, "#c9f7ff", 18, 150);
+     }
    }
    if (!game.sandbox) {
      game.money += playerCredit ? (headshot ? ECONOMY.headshot : ECONOMY.kill) : Math.floor(ECONOMY.kill * 0.5);
@@ -3433,7 +3700,7 @@ function updateBullets(dt) {
           if (bot.hp <= 0) {
             eliminateBot(bot, {
               playerCredit: bullet.team === "player",
-              weaponName: game.selectedWeapon.name,
+              weaponName: bullet.knife ? "Tormenta de Aco" : game.selectedWeapon.name,
               headshot: region === "head",
             });
           }
@@ -3540,6 +3807,111 @@ function updateSpike(dt) {
   }
 }
 
+function updateAgentObjects(dt) {
+  if (game.yoruGatecrash?.active) {
+    const gate = game.yoruGatecrash;
+    const oldX = gate.x;
+    const oldY = gate.y;
+    gate.x += gate.vx * dt;
+    gate.y += gate.vy * dt;
+    gate.life -= dt;
+    if (lineIntersectsAnyWall(oldX, oldY, gate.x, gate.y) || gate.x < 18 || gate.y < 18 || gate.x > map.width - 18 || gate.y > map.height - 18) {
+      const point = firstWallPointOnLine(oldX, oldY, gate.x, gate.y);
+      gate.x = point.x;
+      gate.y = point.y;
+      gate.vx = 0;
+      gate.vy = 0;
+    }
+    if (gate.life <= 0) game.yoruGatecrash = null;
+  }
+
+  for (const turret of game.turrets) {
+    turret.life -= dt;
+    const targets = game.bots
+      .filter((bot) => bot.alive && !bot.isDead && hasLineOfSight(turret, bot) && Math.hypot(bot.x - turret.x, bot.y - turret.y) <= 360)
+      .sort((a, b) => Math.hypot(a.x - turret.x, a.y - turret.y) - Math.hypot(b.x - turret.x, b.y - turret.y));
+    const target = targets.find((bot) => {
+      const angle = Math.atan2(bot.y - turret.y, bot.x - turret.x);
+      const delta = Math.atan2(Math.sin(angle - turret.angle), Math.cos(angle - turret.angle));
+      return Math.abs(delta) <= Math.PI / 2;
+    }) || null;
+    if (!target) {
+      turret.targetId = null;
+      turret.angle += dt * 1.2;
+      turret.burst = 0;
+      continue;
+    }
+    turret.targetId = target.id;
+    turret.angle = Math.atan2(target.y - turret.y, target.x - turret.x);
+    turret.fireTimer -= dt;
+    turret.burstTimer -= dt;
+    if (turret.fireTimer <= 0 && turret.burst <= 0) {
+      turret.burst = 3;
+      turret.burstTimer = 0;
+      turret.fireTimer = 1.15;
+    }
+    if (turret.burst > 0 && turret.burstTimer <= 0) {
+      turret.burst -= 1;
+      turret.burstTimer = 0.11;
+      const damage = applyDamage(target, 9);
+      game.stats.damage += Math.round(damage);
+      spawnDamageNumber(target, damage, false);
+      game.neonTrails.push({ x1: turret.x, y1: turret.y, x2: target.x, y2: target.y, life: 0.18, maxLife: 0.18, color: "#ffd166" });
+      spawnParticles(target.x, target.y, "#ffd166", 4, 80);
+      if (target.hp <= 0) {
+        eliminateBot(target, { playerCredit: true, weaponName: "Torreta" });
+        turret.targetId = null;
+        turret.burst = 0;
+      }
+    }
+  }
+  game.turrets = game.turrets.filter((turret) => turret.life > 0);
+
+  for (const grenade of game.grenades) {
+    const oldX = grenade.x;
+    const oldY = grenade.y;
+    grenade.x += grenade.vx * dt;
+    grenade.y += grenade.vy * dt;
+    grenade.vx *= 0.98;
+    grenade.vy *= 0.98;
+    grenade.life -= dt;
+    if (lineIntersectsAnyWall(oldX, oldY, grenade.x, grenade.y)) grenade.life = 0;
+    if (grenade.life <= 0) {
+      explodeArea(grenade.x, grenade.y, grenade.mini ? 62 : 104, grenade.mini ? 42 : 78, grenade.mini ? "#ffcf45" : "#ff6b2f", { weaponName: grenade.mini ? "Mini Granada" : "Cartuchos de Tinta", particles: grenade.mini ? 18 : 34, power: grenade.mini ? 170 : 250, shake: grenade.mini ? 0.16 : 0.32 });
+      if (!grenade.mini) {
+        for (let i = 0; i < 4; i++) {
+          launchRazeGrenade({ x: grenade.x, y: grenade.y, r: 0 }, i * Math.PI / 2 + Math.PI / 4, true);
+        }
+      }
+    }
+  }
+  game.grenades = game.grenades.filter((grenade) => grenade.life > 0);
+
+  for (const rocket of game.rockets) {
+    const oldX = rocket.x;
+    const oldY = rocket.y;
+    rocket.x += rocket.vx * dt;
+    rocket.y += rocket.vy * dt;
+    rocket.life -= dt;
+    game.particles.push({ x: oldX, y: oldY, vx: (Math.random() - 0.5) * 45, vy: (Math.random() - 0.5) * 45, life: 0.45, maxLife: 0.45, color: "rgba(190,200,205,0.85)", size: 5 + Math.random() * 5 });
+    const hitWall = lineIntersectsAnyWall(oldX, oldY, rocket.x, rocket.y);
+    const hitBot = game.bots.find((bot) => bot.alive && segmentCircleHit(oldX, oldY, rocket.x, rocket.y, bot, 10));
+    if (hitWall || hitBot || rocket.life <= 0) {
+      explodeArea(rocket.x, rocket.y, 170, 260, "#ff7a2f", { weaponName: "Estraga-prazeres", particles: 52, power: 320, shake: 0.75 });
+      rocket.life = 0;
+      if (game.player?.ultimate?.type === "raze") game.player.ultimate.life = Math.min(game.player.ultimate.life, 0.65);
+    }
+  }
+  game.rockets = game.rockets.filter((rocket) => rocket.life > 0);
+
+  for (const decal of game.paintDecals) decal.life -= dt;
+  game.paintDecals = game.paintDecals.filter((decal) => decal.life > 0);
+  if (game.screenTint) {
+    game.screenTint.life -= dt;
+    if (game.screenTint.life <= 0) game.screenTint = null;
+  }
+}
+
 function updateTimers(dt) {
   if (game.introTimer > 0) {
     game.introTimer = Math.max(0, game.introTimer - dt);
@@ -3603,6 +3975,9 @@ function updateTimers(dt) {
   for (const zone of game.shadowZones) zone.life -= dt;
   game.shadowZones = game.shadowZones.filter((zone) => zone.life > 0);
   for (const entity of [game.player, ...game.allies, ...game.bots]) {
+    if (!entity) continue;
+    entity.detainedTimer = Math.max(0, (entity.detainedTimer || 0) - dt);
+    entity.disarmedTimer = Math.max(0, (entity.disarmedTimer || 0) - dt);
     if (!entity?.ultimate) continue;
     if (!entity.alive) {
       entity.ultimate = null;
@@ -3613,9 +3988,26 @@ function updateTimers(dt) {
   }
   for (const effect of game.ultimateEffects) {
     effect.life -= dt;
-    effect.radius += dt * (effect.type === "global-pulse" ? 360 : 72);
+    if (effect.type === "lockdown") {
+      effect.countdown = Math.max(0, (effect.countdown || 0) - dt);
+      effect.radius = Math.min(effect.maxRadius || 270, effect.radius + dt * 32);
+      if (!effect.detonated && effect.countdown <= 0) {
+        effect.detonated = true;
+        const targets = effect.ownerTeam === "player" ? game.bots : [game.player, ...game.allies];
+        for (const target of targets) {
+          if (!target?.alive) continue;
+          if (Math.hypot(target.x - effect.x, target.y - effect.y) > (effect.maxRadius || 270)) continue;
+          target.detainedTimer = 4;
+          target.disarmedTimer = 4;
+          spawnParticles(target.x, target.y, "#65ff9a", 24, 160);
+        }
+        game.shake = Math.max(game.shake, 0.36);
+      }
+    } else {
+      effect.radius += dt * (effect.type === "global-pulse" ? 360 : 72);
+    }
     const source = [game.player, ...game.allies, ...game.bots].find((entity) => entity?.id === effect.entityId);
-    if (source) {
+    if (source && effect.type !== "lockdown") {
       effect.x = source.x;
       effect.y = source.y;
     }
@@ -3762,6 +4154,7 @@ function update(dt) {
     updatePlayer(dt);
     updateAllies(dt);
     updateBots(dt);
+    updateAgentObjects(dt);
     updateBullets(dt);
     updateTrainingArena(dt);
     updateSpike(dt);
@@ -3842,6 +4235,15 @@ function weaponVisual(weapon) {
 }
 
 function drawHeldWeapon(entity, weapon, kind) {
+  if (entity.ultimate?.type === "raze") {
+    ctx.fillStyle = "rgba(0,0,0,0.46)";
+    ctx.fillRect(entity.r - 2, -7, 38, 14);
+    ctx.fillStyle = "#ff8a2a";
+    ctx.fillRect(entity.r, -6, 34, 12);
+    ctx.fillStyle = "#ffe0a0";
+    ctx.fillRect(entity.r + 26, -4, 10, 8);
+    return;
+  }
   const visual = weaponVisual(weapon);
   const scale = 0.72;
   const length = visual.length * scale;
@@ -3877,7 +4279,11 @@ function drawEntity(entity, color, label, kind = "bot") {
     const auraColor = entity.ultimate.type === "neon" ? "#65f5ff"
       : entity.ultimate.type === "viper" ? "#35c46a"
         : entity.ultimate.type === "sage" ? "#62e6a0"
-          : "#9a70dc";
+          : entity.ultimate.type === "jett" ? "#c9f7ff"
+            : entity.ultimate.type === "killjoy" ? "#65ff9a"
+              : entity.ultimate.type === "raze" ? "#ff8a2a"
+                : entity.ultimate.type === "yoru" ? "#3e6bff"
+                  : "#9a70dc";
     ctx.save();
     ctx.strokeStyle = auraColor;
     ctx.shadowColor = auraColor;
@@ -4508,6 +4914,20 @@ function drawUltimateEffects() {
       ctx.beginPath();
       ctx.arc(effect.x, effect.y, effect.radius, 0, Math.PI * 2);
       ctx.stroke();
+    } else if (effect.type === "lockdown") {
+      ctx.fillStyle = "rgba(101, 255, 154, 0.12)";
+      ctx.beginPath();
+      ctx.arc(effect.x, effect.y, effect.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.lineWidth = effect.detonated ? 8 : 4;
+      ctx.beginPath();
+      ctx.arc(effect.x, effect.y, effect.maxRadius || effect.radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = "#d8ffe5";
+      ctx.font = "bold 22px Segoe UI";
+      ctx.textAlign = "center";
+      ctx.fillText(effect.detonated ? "LOCK" : `${Math.ceil(effect.countdown || 0)}`, effect.x, effect.y + 7);
+      ctx.textAlign = "left";
     } else if (effect.type === "healing-beam" || effect.type === "orb-beam") {
       ctx.fillStyle = effect.color;
       const width = effect.type === "healing-beam" ? 34 : 12;
@@ -4521,6 +4941,135 @@ function drawUltimateEffects() {
         ctx.stroke();
       }
     }
+    ctx.restore();
+  }
+}
+
+function drawAgentObjects() {
+  for (const decal of game.paintDecals) {
+    const alpha = Math.max(0, decal.life / decal.maxLife) * 0.32;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = decal.color;
+    ctx.beginPath();
+    ctx.ellipse(decal.x, decal.y, decal.radius, decal.radius * 0.58, 0.35, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  if (game.yoruGatecrash?.active) {
+    const gate = game.yoruGatecrash;
+    const pulse = 1 + Math.sin(performance.now() / 95) * 0.12;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0.25, gate.life / gate.maxLife);
+    ctx.strokeStyle = "#7fa1ff";
+    ctx.fillStyle = "rgba(40, 70, 210, 0.42)";
+    ctx.shadowColor = "#315cff";
+    ctx.shadowBlur = 22;
+    ctx.beginPath();
+    ctx.arc(gate.x, gate.y, 16 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  for (const turret of game.turrets) {
+    ctx.save();
+    ctx.translate(turret.x, turret.y);
+    ctx.rotate(turret.angle);
+    ctx.fillStyle = "rgba(255, 209, 102, 0.12)";
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, 118, -Math.PI / 2, Math.PI / 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255, 70, 85, 0.45)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(118, 0);
+    ctx.stroke();
+    ctx.fillStyle = "#1f2a34";
+    ctx.fillRect(-11, -9, 22, 18);
+    ctx.fillStyle = "#ffd166";
+    ctx.fillRect(4, -4, 18, 8);
+    ctx.strokeStyle = "#ffd166";
+    ctx.strokeRect(-11, -9, 22, 18);
+    ctx.restore();
+  }
+
+  for (const grenade of game.grenades) {
+    ctx.save();
+    ctx.fillStyle = grenade.color;
+    ctx.shadowColor = grenade.color;
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.arc(grenade.x, grenade.y, grenade.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  for (const rocket of game.rockets) {
+    const angle = Math.atan2(rocket.vy, rocket.vx);
+    ctx.save();
+    ctx.translate(rocket.x, rocket.y);
+    ctx.rotate(angle);
+    ctx.fillStyle = "#ff8a2a";
+    ctx.fillRect(-15, -5, 30, 10);
+    ctx.fillStyle = "#ffe0a0";
+    ctx.beginPath();
+    ctx.moveTo(16, 0);
+    ctx.lineTo(5, -8);
+    ctx.lineTo(5, 8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawAgentScreenEffects() {
+  if (game.player?.ultimate?.type === "jett") {
+    const knives = game.player.ultimate.knives || 0;
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = "#c9f7ff";
+    ctx.shadowColor = "#7df9ff";
+    ctx.shadowBlur = 12;
+    for (let i = 0; i < knives; i++) {
+      const x = canvas.width / 2 - 52 + i * 26;
+      const y = canvas.height - 72;
+      ctx.beginPath();
+      ctx.moveTo(x, y - 14);
+      ctx.lineTo(x + 5, y + 10);
+      ctx.lineTo(x, y + 16);
+      ctx.lineTo(x - 5, y + 10);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.strokeStyle = "rgba(125,249,255,0.35)";
+    ctx.lineWidth = 6;
+    ctx.strokeRect(3, 3, canvas.width - 6, canvas.height - 6);
+    ctx.restore();
+  }
+
+  if (game.player?.ultimate?.type === "yoru") {
+    ctx.save();
+    ctx.fillStyle = "rgba(16, 46, 140, 0.16)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const gradient = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, 140, canvas.width / 2, canvas.height / 2, canvas.width * 0.65);
+    gradient.addColorStop(0, "rgba(0,0,0,0)");
+    gradient.addColorStop(1, "rgba(4, 12, 42, 0.72)");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+  }
+
+  if (game.screenTint) {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, game.screenTint.life / game.screenTint.maxLife);
+    ctx.fillStyle = game.screenTint.color;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
   }
 }
@@ -4542,6 +5091,7 @@ function draw() {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
   drawMedkitsAndOrbs();
+  drawAgentObjects();
 
   for (const zone of game.shadowZones) {
     const alpha = Math.max(0, zone.life / zone.maxLife);
@@ -4643,7 +5193,7 @@ function draw() {
   for (const explosion of game.explosions) {
     const alpha = Math.max(0, explosion.life / explosion.maxLife);
     ctx.globalAlpha = alpha;
-    ctx.strokeStyle = "#ffd166";
+    ctx.strokeStyle = explosion.color || "#ffd166";
     ctx.lineWidth = 10 * alpha;
     ctx.beginPath();
     ctx.arc(explosion.x, explosion.y, explosion.r, 0, Math.PI * 2);
@@ -4666,6 +5216,7 @@ function draw() {
   if (!game.tutorial || game.tutorialStep > 0) drawCrosshair();
   drawDamageFlash();
   drawShadowBlindness();
+  drawAgentScreenEffects();
   ctx.restore();
 }
 
@@ -4737,7 +5288,12 @@ function updateUi() {
   setText(ui.hp, `${Math.max(0, Math.ceil(game.player.hp))}`);
   setText(ui.ultPoints, game.sandbox ? "∞" : `${game.player.ultPoints}/${ULT_MAX_POINTS}`);
   toggleClass(ui.ultCounter, "ready", game.player.ultPoints >= ULT_MAX_POINTS);
-  setText(ui.ammo, game.reloadTimer > 0 ? "Recarregando" : `${game.player.ammo}`);
+  const ultimateAmmo = game.player.ultimate?.type === "jett"
+    ? `${game.player.ultimate.knives || 0} facas`
+    : game.player.ultimate?.type === "raze"
+      ? (game.player.ultimate.fired ? "Foguete usado" : "Foguete pronto")
+      : null;
+  setText(ui.ammo, ultimateAmmo || (game.reloadTimer > 0 ? "Recarregando" : `${game.player.ammo}`));
   setText(ui.spike, game.spike.state === "carried"
     ? game.spike.owner === "player" ? "Com você" : "Em transporte"
     : game.spike.state === "dropped"
@@ -4959,6 +5515,16 @@ function returnFromAgentSelect() {
   }
 }
 
+function agentFallbackArt(agent, type = "artwork") {
+  const color = encodeURIComponent(agent.color || "#ff4655");
+  const name = encodeURIComponent(agent.name || "Agent");
+  const small = type === "icon";
+  const svg = small
+    ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><rect width="120" height="120" fill="#101820"/><circle cx="60" cy="48" r="28" fill="${color}"/><path d="M22 112c8-28 28-42 38-42s30 14 38 42" fill="${color}" opacity=".72"/><text x="60" y="110" text-anchor="middle" font-family="Arial" font-size="18" fill="#fff">${name}</text></svg>`
+    : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 720"><defs><radialGradient id="g" cx="50%" cy="34%" r="60%"><stop stop-color="${color}" stop-opacity=".9"/><stop offset="1" stop-color="#0f1923"/></radialGradient></defs><rect width="520" height="720" fill="#0f1923"/><rect width="520" height="720" fill="url(#g)"/><circle cx="260" cy="210" r="92" fill="${color}" opacity=".92"/><path d="M118 680c24-190 102-310 142-310s118 120 142 310z" fill="${color}" opacity=".78"/><path d="M86 560c90-88 258-88 348 0" fill="none" stroke="#fff" stroke-width="18" opacity=".18"/><text x="260" y="104" text-anchor="middle" font-family="Arial" font-size="58" font-weight="700" fill="#fff">${name}</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${svg}`;
+}
+
 function agentPresentation(agent) {
   const details = {
     neon: {
@@ -4989,13 +5555,41 @@ function agentPresentation(agent) {
       icon: "assets/images/Omen_icon.webp",
       artwork: "assets/images/Omen_Artwork_Full.webp",
     },
+    jett: {
+      className: "Duelista",
+      tagline: "Mobilidade explosiva, facas precisas e pressão constante",
+      ultimate: "Tormenta de Aço",
+      icon: agentFallbackArt(agent, "icon"),
+      artwork: agentFallbackArt(agent, "artwork"),
+    },
+    killjoy: {
+      className: "Sentinela",
+      tagline: "Controle de área com torreta e confinamento tático",
+      ultimate: "Confinamento",
+      icon: agentFallbackArt(agent, "icon"),
+      artwork: agentFallbackArt(agent, "artwork"),
+    },
+    raze: {
+      className: "Duelista",
+      tagline: "Explosivos, dano em área e entrada agressiva",
+      ultimate: "Estraga-prazeres",
+      icon: agentFallbackArt(agent, "icon"),
+      artwork: agentFallbackArt(agent, "artwork"),
+    },
+    yoru: {
+      className: "Duelista",
+      tagline: "Infiltração, fendas dimensionais e reposicionamento",
+      ultimate: "Espionagem Dimensional",
+      icon: agentFallbackArt(agent, "icon"),
+      artwork: agentFallbackArt(agent, "artwork"),
+    },
   };
   return details[agent.id] || {
     className: agent.role,
     tagline: agent.ability,
     ultimate: "Ultimate",
-    icon: "",
-    artwork: "",
+    icon: agentFallbackArt(agent, "icon"),
+    artwork: agentFallbackArt(agent, "artwork"),
   };
 }
 
@@ -6204,6 +6798,11 @@ if (canvas) canvas.addEventListener("contextmenu", (event) => event.preventDefau
 
 if (canvas) canvas.addEventListener("mousedown", (event) => {
   initAudio();
+  if (event.button === 2 && game.phase === "action" && game.player?.ultimate?.type === "jett") {
+    event.preventDefault();
+    fireJettKnifeBurst(game.player);
+    return;
+  }
   if (game.sandbox && game.phase === "action" && event.button === 2) {
     event.preventDefault();
     const bot = makeBot({ x: mouse.x, y: mouse.y }, game.bots.length);
@@ -6219,7 +6818,7 @@ if (canvas) canvas.addEventListener("mousedown", (event) => {
     game.allies.push(ally);
     return;
   }
-  mouse.down = true;
+  if (event.button === 0) mouse.down = true;
 });
 
 if (window) window.addEventListener("mouseup", () => {
