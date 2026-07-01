@@ -127,7 +127,7 @@ const ECONOMY = {
 };
 const audio = {
   ctx: null,
-  enabled: true,
+  enabled: false,
   volume: 0.8,
   last: 0,
   cache: new Map(),
@@ -2238,7 +2238,12 @@ function advanceDefuse(defuserId, dt, totalTime) {
 function shoot(owner, targetX, targetY, weapon, team) {
   const now = performance.now() / 1000;
   if ((owner.disarmedTimer || 0) > 0) return;
-  if (owner.ultimate?.type === "yoru") return;
+  if (owner.ultimate?.type === "yoru") {
+    owner.ultimate = null;
+    if (owner.id === "player") game.screenTint = { color: "rgba(30, 58, 180, 0.28)", life: 0.22, maxLife: 0.22 };
+    setMessage("Espionagem Dimensional cancelada.");
+    return;
+  }
   if (owner.ultimate?.type === "raze" && team === "player") {
     if (game.phase !== "action" || now - game.lastShot < 0.42) return;
     game.lastShot = now;
@@ -4420,41 +4425,6 @@ function drawSpike() {
   }
 }
 
-function drawRadar() {
-  const x = 18;
-  const y = 18;
-  const w = 150;
-  const h = 86;
-  ctx.save();
-  ctx.fillStyle = "rgba(5, 10, 15, 0.62)";
-  ctx.fillRect(x, y, w, h);
-  ctx.strokeStyle = "rgba(238,247,251,0.18)";
-  ctx.strokeRect(x, y, w, h);
-  for (const site of map.sites) {
-    ctx.strokeStyle = "rgba(255,209,102,0.65)";
-    ctx.strokeRect(x + site.x / map.width * w, y + site.y / map.height * h, site.w / map.width * w, site.h / map.height * h);
-  }
-  const dot = (px, py, color, size = 3) => {
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(x + px / map.width * w, y + py / map.height * h, size, 0, Math.PI * 2);
-    ctx.fill();
-  };
-  dot(game.player.x, game.player.y, "#ffffff", 3.5);
-  for (const ally of game.allies) {
-    if (ally.alive) dot(ally.x, ally.y, "#62e6a0", 2.8);
-  }
-  for (const bot of game.bots) {
-    if (!bot.alive) continue;
-    const visible = game.revealTimer > 0 || hasLineOfSight(game.player, bot) || bot.memoryTimer > 0 || bot.revealedTimer > 0;
-    if (visible) {
-      dot(bot.x, bot.y, bot.side === "attackers" ? "#ff8a5b" : "#4fb3ff", bot.revealedTimer > 0 ? 3.2 : 2.8);
-    }
-  }
-  if (game.spike.state !== "carried") dot(game.spike.x, game.spike.y, "#ffd166", 3);
-  ctx.restore();
-}
-
 function drawCrosshair() {
   const spreadScale = game.crosshairScale * (1 + game.recoilHeat * 0.22);
   const crosshairColor = settings.crosshairColor || "#ffffff";
@@ -4637,6 +4607,7 @@ function drawDamageIndicator() {
 }
 
 function drawObjectiveHints() {
+  if (!settings.showTips) return;
   if (game.phase !== "action") return;
   ctx.save();
   ctx.lineWidth = 3;
@@ -4727,12 +4698,15 @@ function drawAbilityBar() {
   const by = canvas.height - 38;
   const bw = 120;
   const bh = 8;
+  const yoruUltimate = game.player?.ultimate?.type === "yoru" ? game.player.ultimate : null;
   ctx.fillStyle = "rgba(0,0,0,0.55)";
   ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
-  const cooldownRatio = game.abilityCooldown > 0
-    ? 1 - game.abilityCooldown / game.selectedAgent.cooldown
-    : 1;
-  const color = game.abilityCooldown <= 0 ? "#62e6a0" : "#46a8ff";
+  const cooldownRatio = yoruUltimate
+    ? yoruUltimate.life / yoruUltimate.maxLife
+    : game.abilityCooldown > 0
+      ? 1 - game.abilityCooldown / game.selectedAgent.cooldown
+      : 1;
+  const color = yoruUltimate ? "#3e6bff" : game.abilityCooldown <= 0 ? "#62e6a0" : "#46a8ff";
   ctx.fillStyle = color;
   ctx.fillRect(bx, by, bw * Math.min(1, cooldownRatio), bh);
   ctx.strokeStyle = "rgba(255,255,255,0.22)";
@@ -4741,8 +4715,10 @@ function drawAbilityBar() {
   ctx.fillStyle = "rgba(255,255,255,0.7)";
   ctx.font = "11px Segoe UI";
   ctx.textAlign = "center";
-  const label = game.sandbox ? "E livre" : game.abilityCooldown > 0 ? `${Math.ceil(game.abilityCooldown)}s` : "E pronto";
-  ctx.fillText(`${game.selectedAgent.ability} — ${label}`, canvas.width / 2, by - 4);
+  const label = yoruUltimate
+    ? `Ult ${Math.ceil(yoruUltimate.life)}s`
+    : game.sandbox ? "E livre" : game.abilityCooldown > 0 ? `${Math.ceil(game.abilityCooldown)}s` : "E pronto";
+  ctx.fillText(`${yoruUltimate ? "Espionagem Dimensional" : game.selectedAgent.ability} — ${label}`, canvas.width / 2, by - 4);
   ctx.textAlign = "left";
 }
 
@@ -4775,6 +4751,7 @@ function drawWorldActionBar() {
 }
 
 function drawSpikeHint() {
+  if (!settings.showTips) return;
   if (game.spike.state !== "planted" || game.phase !== "action") return;
   const cx = canvas.width / 2;
   const cy = 68;
@@ -5211,7 +5188,6 @@ function draw() {
   if (!game.tutorial) {
     drawAbilityBar();
     drawSpikeHint();
-    drawRadar();
   }
   if (!game.tutorial || game.tutorialStep > 0) drawCrosshair();
   drawDamageFlash();
@@ -5316,7 +5292,7 @@ function updateUi() {
   const gameplayHudVisible = game.menuState === "none" && ["buy", "action", "ended"].includes(game.phase);
   const tutorialActive = game.tutorial && game.menuState === "none";
   toggleClass(ui.topHud, "hidden", !gameplayHudVisible || tutorialActive);
-  toggleClass(ui.message, "hidden", !gameplayHudVisible || tutorialActive);
+  toggleClass(ui.message, "hidden", !gameplayHudVisible || tutorialActive || !settings.showTips);
   const metricsVisible = gameplayHudVisible && (game.showFps || game.showPing);
   toggleClass(ui.fpsCounter, "hidden", !metricsVisible);
   if (ui.fpsCounter && metricsVisible) {
@@ -5966,11 +5942,7 @@ const OPTIONS_DEFAULTS = {
   playerName: "Player",
   showFps: false,
   showPing: false,
-  minimapRotation: "fixed",
-  minimapSize: 1,
-  minimapZoom: 1,
-  showAreaNames: true,
-  showVisionCones: true,
+  showTips: true,
   movementScheme: "wasd",
   mouseSensitivity: 50,
   adsSensitivity: 50,
@@ -5987,7 +5959,7 @@ const OPTIONS_DEFAULTS = {
   musicVolume: 50,
   sfxVolume: 80,
   voiceVolume: 70,
-  muted: false,
+  muted: true,
   highlightSteps: true,
   impactEffects: true,
   displayMode: "window",
@@ -6211,6 +6183,7 @@ function renderGeneralOptions() {
       })()),
       ToggleSwitch("Mostrar FPS", "showFps"),
       ToggleSwitch("Mostrar Ping", "showPing"),
+      ToggleSwitch("Mostrar dicas", "showTips"),
     ]),
   ];
 }
@@ -6324,7 +6297,7 @@ function applyOptionsSettings() {
   settings.nomeJogador = settings.playerName;
   settings.mostrarFPS = settings.showFps;
   settings.mostrarPing = settings.showPing;
-  settings.minimapaRotacao = settings.minimapRotation === "rotate" ? "rodar" : "fixo";
+  settings.mostrarDicas = settings.showTips;
   game.arrowKeys = settings.movementScheme === "arrows";
   game.crosshairStyle = settings.crosshairType === "default" ? "default" : "minimal";
   game.crosshairScale = settings.crosshairSize / 100;
@@ -6346,7 +6319,7 @@ function applyOptionsSettings() {
 
 function resetOptionsSettings() {
   const tabDefaults = {
-    general: ["language", "playerName", "showFps", "showPing", "minimapRotation", "minimapSize", "minimapZoom", "showAreaNames", "showVisionCones"],
+    general: ["language", "playerName", "showFps", "showPing", "showTips"],
     controls: ["movementScheme", "mouseSensitivity", "adsSensitivity", "invertY", "keys"],
     crosshair: ["crosshairType", "crosshairColor", "crosshairCustomColor", "crosshairSize", "crosshairThickness", "crosshairOpacity", "crosshairGap"],
     audio: ["masterVolume", "musicVolume", "sfxVolume", "voiceVolume", "muted", "highlightSteps", "impactEffects"],
