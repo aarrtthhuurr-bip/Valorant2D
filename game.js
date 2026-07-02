@@ -245,7 +245,18 @@ const agents = [
     ability: "Smoke",
     cooldown: 8,
     use(game) {
-      game.smokes.push({ x: mouse.x, y: mouse.y, r: 84, life: 6 });
+      const p = game.player;
+      const castPoint = limitedCastPoint(p, mouse, VIPER_CAST_RANGE);
+      game.smokes.push({
+        ...nearestWalkablePoint(castPoint, p),
+        r: 22,
+        targetR: 94,
+        life: 7.5,
+        maxLife: 7.5,
+        omenSmoke: true,
+        ownerTeam: "player",
+        visualPhase: Math.random() * Math.PI * 2,
+      });
     },
   },
   {
@@ -2492,6 +2503,32 @@ function hasCombatLineOfSight(a, b) {
   return false;
 }
 
+function smokeBlockingSight(a, b) {
+  return game.smokes.find((smoke) =>
+    pointLineDistance(smoke.x, smoke.y, a.x, a.y, b.x, b.y) < smoke.r
+  ) || null;
+}
+
+function entityInsideSmoke(entity) {
+  if (!entity?.alive) return null;
+  return game.smokes.find((smoke) => Math.hypot(entity.x - smoke.x, entity.y - smoke.y) <= smoke.r + entity.r) || null;
+}
+
+function botSmokeProbeTarget(bot, target = game.player) {
+  if (!target?.alive || target.ultimate?.type === "yoru") return null;
+  if (lineIntersectsAnyWall(bot.x, bot.y, target.x, target.y)) return null;
+  const smoke = entityInsideSmoke(target) || smokeBlockingSight(bot, target);
+  if (!smoke) return null;
+  const centerVisible = !lineIntersectsAnyWall(bot.x, bot.y, smoke.x, smoke.y);
+  if (!centerVisible || Math.hypot(bot.x - smoke.x, bot.y - smoke.y) > 620) return null;
+  const jitter = smoke.r * 0.48;
+  return {
+    x: smoke.x + (Math.random() - 0.5) * jitter,
+    y: smoke.y + (Math.random() - 0.5) * jitter,
+    smoke,
+  };
+}
+
 function pointLineDistance(px, py, x1, y1, x2, y2) {
   const len2 = (x2 - x1) ** 2 + (y2 - y1) ** 2;
   if (len2 === 0) return Math.hypot(px - x1, py - y1);
@@ -2749,11 +2786,16 @@ function activateUltimate(entity) {
     addUltimateEffect("dimensional-mask", entity, "#3e6bff", 8);
   } else if (agent.id === "viper") {
     entity.ultimate = { type: "viper", life: 999, maxLife: 999, pitId: `viper-pit-${Date.now()}-${Math.random().toString(16).slice(2)}` };
+    const pitRadius = 230;
+    const activationPoint = nearestWalkablePoint({
+      x: clamp(entity.x, pitRadius, map.width - pitRadius),
+      y: clamp(entity.y, pitRadius, map.height - pitRadius),
+    }, entity);
     game.smokes.push({
-      x: entity.x,
-      y: entity.y,
+      x: activationPoint.x,
+      y: activationPoint.y,
       r: 48,
-      targetR: 230,
+      targetR: pitRadius,
       life: 999,
       maxLife: 999,
       poison: true,
@@ -2766,6 +2808,7 @@ function activateUltimate(entity) {
       exitTimer: 3,
       fadeLife: 3,
       visualPhase: 0,
+      anchored: true,
     });
     addUltimateEffect("chemical-fog", entity, "#35c46a", 999);
   } else if (agent.id === "sage") {
@@ -3304,6 +3347,7 @@ function attackBlockingDestructible(bot, target, dt) {
 function poisonAvoidanceTarget(entity, target) {
   const hostileClouds = game.smokes.filter((smoke) =>
     smoke.poison
+    && !smoke.viperPit
     && smoke.ownerTeam !== entityTeam(entity)
     && pointLineDistance(smoke.x, smoke.y, entity.x, entity.y, target.x, target.y) < smoke.r + entity.r + 18
   );
@@ -3379,13 +3423,28 @@ function closestVisibleEnemy(bot) {
     .sort((a, b) => Math.hypot(a.x - bot.x, a.y - bot.y) - Math.hypot(b.x - bot.x, b.y - bot.y))[0] || null;
 }
 
-function botShootAt(bot, target, dt, team, firePenalty = 1) {
+function botShootAt(bot, target, dt, team, firePenalty = 1, options = {}) {
   const weapon = bot.weapon || weapons[0];
-  const angle = Math.atan2(target.y - bot.y, target.x - bot.x);
+  const scatter = options.scatter || 0;
+  const aimX = target.x + (Math.random() - 0.5) * scatter;
+  const aimY = target.y + (Math.random() - 0.5) * scatter;
+  const angle = Math.atan2(aimY - bot.y, aimX - bot.x);
   bot.angle = angle;
   bot.fireTimer -= dt;
   if (bot.fireTimer <= 0) {
-    shoot(bot, target.x, target.y, weapon, team);
+    shoot(bot, aimX, aimY, weapon, team);
+    if (options.smokeProbe) {
+      game.neonTrails.push({
+        x1: bot.x,
+        y1: bot.y,
+        x2: aimX,
+        y2: aimY,
+        life: 0.18,
+        maxLife: 0.18,
+        color: "rgba(190, 170, 230, 0.55)",
+        wind: true,
+      });
+    }
     const multiplier = team === "bot" ? game.enemyFireMultiplier : 1;
     bot.fireTimer = (weapon.fireRate + 0.18 + Math.random() * 0.22) * multiplier * firePenalty;
     bot.strafe *= -1;
@@ -3403,7 +3462,9 @@ function updateBotAwareness(bot, visibleTarget, dt) {
     }
     bot.canShoot = bot.reactionTimer <= 0;
     bot.lastKnownPlayer = { x: visibleTarget.x, y: visibleTarget.y };
-    bot.memoryTimer = 3.2;
+    bot.lastSeenPlayerPos = { x: visibleTarget.x, y: visibleTarget.y };
+    bot.lastSeenTime = performance.now();
+    bot.memoryTimer = 5;
     bot.revealedTimer = 2.6;
     alertBotSquad(bot, bot.lastKnownPlayer);
   } else {
@@ -3413,6 +3474,7 @@ function updateBotAwareness(bot, visibleTarget, dt) {
       bot.canShoot = false;
     }
     bot.memoryTimer = Math.max(0, bot.memoryTimer - dt);
+    if (bot.memoryTimer <= 0) bot.lastSeenPlayerPos = null;
     bot.revealedTimer = Math.max(0, (bot.revealedTimer || 0) - dt);
   }
 }
@@ -3426,7 +3488,9 @@ function alertBotSquad(source, point) {
       x: point.x + (Math.random() - 0.5) * 36,
       y: point.y + (Math.random() - 0.5) * 36,
     };
-    bot.memoryTimer = Math.max(bot.memoryTimer || 0, 1.8);
+    bot.lastSeenPlayerPos = { ...bot.lastKnownPlayer };
+    bot.lastSeenTime = performance.now();
+    bot.memoryTimer = Math.max(bot.memoryTimer || 0, 2.8);
     bot.aiState = "alert";
   }
 }
@@ -3451,14 +3515,17 @@ function findCoverPoint(bot, threat) {
 function botFightPlayer(bot, dt, options = {}) {
   const target = closestVisibleSquadTarget(bot);
   const memTarget = !target && bot.lastKnownPlayer && bot.memoryTimer > 0 ? bot.lastKnownPlayer : null;
-  const shootTarget = target || memTarget;
+  const smokeTarget = !target && !memTarget ? botSmokeProbeTarget(bot, game.player) : null;
+  const shootTarget = target || memTarget || smokeTarget;
   if (!shootTarget) return false;
 
   const angle = Math.atan2(shootTarget.y - bot.y, shootTarget.x - bot.x);
   bot.angle = angle;
   if (target) {
     bot.lastKnownPlayer = { x: target.x, y: target.y };
-    bot.memoryTimer = 3.2;
+    bot.lastSeenPlayerPos = { x: target.x, y: target.y };
+    bot.lastSeenTime = performance.now();
+    bot.memoryTimer = 5;
   }
 
   const cover = (options.preferCover || bot.hp < 45) ? findCoverPoint(bot, shootTarget) : null;
@@ -3474,7 +3541,16 @@ function botFightPlayer(bot, dt, options = {}) {
     bot.aiState = options.state || "fight";
   }
 
-  if (target && bot.canShoot !== false) botShootAt(bot, target, dt, "bot", options.firePenalty || 1);
+  if (bot.canShoot !== false) {
+    if (target) {
+      botShootAt(bot, target, dt, "bot", options.firePenalty || 1);
+    } else if (memTarget) {
+      botShootAt(bot, memTarget, dt, "bot", (options.firePenalty || 1) * 1.28, { scatter: 42 });
+    } else if (smokeTarget) {
+      bot.aiState = "suppress-smoke";
+      botShootAt(bot, smokeTarget, dt, "bot", (options.firePenalty || 1) * 1.55, { scatter: smokeTarget.smoke?.r || 90, smokeProbe: true });
+    }
+  }
   return true;
 }
 
@@ -3809,7 +3885,7 @@ function updateBots(dt) {
     if (game.sandbox && bot.sandboxControl) {
       const visibleTarget = closestVisibleSquadTarget(bot);
       updateBotAwareness(bot, visibleTarget, dt);
-      if (bot.sandboxCanShoot !== false && visibleTarget) {
+      if (bot.sandboxCanShoot !== false && (visibleTarget || bot.memoryTimer > 0 || botSmokeProbeTarget(bot, game.player))) {
         botFightPlayer(bot, dt, { strafe: bot.sandboxCanMove !== false, state: "sandbox", firePenalty: 0.9 });
       }
       if (bot.sandboxCanMove !== false && bot.sandboxBehavior === "patrol") {
@@ -3917,12 +3993,13 @@ function updateBots(dt) {
     bot.angle = angle;
 
     if (!seesPlayer) {
+      const suppressingSmoke = botFightPlayer(bot, dt, { strafe: false, state: "suppress", firePenalty: 1.25 });
       if (bot.wait > 0) {
         bot.aiState = bot.aiState === "hold" ? "hold" : "patrol";
         bot.wait -= dt;
       } else {
         const speed = memoryTargetClear ? bot.speed * 1.15 : bot.speed;
-        const movedNow = moveBotToward(bot, target, dt, speed / bot.speed);
+        const movedNow = moveBotToward(bot, target, dt, suppressingSmoke ? 0.55 : speed / bot.speed);
         if (movedNow < 0.5) {
           bot.stuck += dt;
         }
@@ -4337,14 +4414,12 @@ function updateTimers(dt) {
     if (game.damageIndicator.life <= 0) game.damageIndicator = null;
   }
   for (const smoke of game.smokes) {
+    smoke.visualPhase = (smoke.visualPhase || 0) + dt;
     if (smoke.viperPit) {
       const owner = findEntityById(smoke.entityId);
       const ownerUltActive = owner?.alive && owner.ultimate?.type === "viper" && owner.ultimate.pitId === smoke.pitId;
       const ownerInside = ownerUltActive && Math.hypot(owner.x - smoke.x, owner.y - smoke.y) <= smoke.r + owner.r;
-      smoke.visualPhase = (smoke.visualPhase || 0) + dt;
       if (ownerInside) {
-        smoke.x += (owner.x - smoke.x) * Math.min(1, dt * 5.5);
-        smoke.y += (owner.y - smoke.y) * Math.min(1, dt * 5.5);
         smoke.life = 999;
         smoke.exitTimer = 3;
       } else {
@@ -5505,6 +5580,7 @@ function drawJettKunaiRing(entity) {
 }
 
 function drawAgentScreenEffects() {
+  const playerSmoke = entityInsideSmoke(game.player);
   const playerInViperPit = game.smokes.some((smoke) =>
     smoke.viperPit && game.player?.alive && Math.hypot(game.player.x - smoke.x, game.player.y - smoke.y) <= smoke.r
   );
@@ -5515,6 +5591,18 @@ function drawAgentScreenEffects() {
     const gradient = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, canvas.width * 0.18, canvas.width / 2, canvas.height / 2, canvas.width * 0.64);
     gradient.addColorStop(0, "rgba(0,0,0,0)");
     gradient.addColorStop(1, "rgba(4, 22, 9, 0.54)");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+  }
+
+  if (playerSmoke?.omenSmoke) {
+    ctx.save();
+    ctx.fillStyle = "rgba(22, 18, 38, 0.16)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const gradient = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, canvas.width * 0.16, canvas.width / 2, canvas.height / 2, canvas.width * 0.58);
+    gradient.addColorStop(0, "rgba(0,0,0,0)");
+    gradient.addColorStop(1, "rgba(12, 8, 24, 0.46)");
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
@@ -5599,6 +5687,12 @@ function draw() {
       gradient.addColorStop(0.48, "rgba(45, 199, 93, 0.66)");
       gradient.addColorStop(1, "rgba(8, 50, 31, 0.18)");
       ctx.fillStyle = gradient;
+    } else if (smoke.omenSmoke) {
+      const gradient = ctx.createRadialGradient(smoke.x, smoke.y, smoke.r * 0.1, smoke.x, smoke.y, smoke.r);
+      gradient.addColorStop(0, "rgba(96, 76, 132, 0.62)");
+      gradient.addColorStop(0.62, "rgba(57, 47, 82, 0.72)");
+      gradient.addColorStop(1, "rgba(23, 19, 37, 0.28)");
+      ctx.fillStyle = gradient;
     } else {
       ctx.fillStyle = smoke.poison ? "rgba(47, 179, 78, 0.62)" : "rgba(82, 71, 115, 0.78)";
     }
@@ -5623,6 +5717,35 @@ function draw() {
       ctx.font = "800 14px Rajdhani, Arial";
       ctx.textAlign = "center";
       ctx.fillText("35 DPS", smoke.x, smoke.y - smoke.r - 10);
+      ctx.fillStyle = "rgba(229, 255, 120, 0.82)";
+      ctx.beginPath();
+      ctx.arc(smoke.x, smoke.y, 5, 0, Math.PI * 2);
+      ctx.fill();
+      for (let i = 0; i < 14; i++) {
+        const orbit = smoke.r * (0.22 + (i % 5) * 0.13);
+        const angle = (smoke.visualPhase || 0) * (0.6 + (i % 3) * 0.2) + i * 2.37;
+        ctx.fillStyle = `rgba(192, 255, 98, ${0.18 + (i % 3) * 0.05})`;
+        ctx.beginPath();
+        ctx.arc(smoke.x + Math.cos(angle) * orbit, smoke.y + Math.sin(angle * 0.9) * orbit, 2 + (i % 3), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (smoke.omenSmoke) {
+      ctx.strokeStyle = "rgba(161, 130, 220, 0.34)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([8, 10]);
+      ctx.lineDashOffset = -(smoke.visualPhase || 0) * 24;
+      ctx.beginPath();
+      ctx.arc(smoke.x, smoke.y, smoke.r * 0.72, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      for (let i = 0; i < 8; i++) {
+        const angle = (smoke.visualPhase || 0) * 0.42 + i * 0.78;
+        const orbit = smoke.r * (0.28 + (i % 4) * 0.12);
+        ctx.fillStyle = "rgba(194, 178, 255, 0.16)";
+        ctx.beginPath();
+        ctx.arc(smoke.x + Math.cos(angle) * orbit, smoke.y + Math.sin(angle) * orbit, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
     ctx.restore();
   }
