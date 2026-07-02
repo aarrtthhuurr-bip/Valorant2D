@@ -20,6 +20,7 @@ const ui = {
   spike: document.getElementById("spikeText"),
   shop: document.getElementById("shop"),
   shopTabs: document.getElementById("shopTabs"),
+  weaponCategoryTabs: document.getElementById("weaponCategoryTabs"),
   message: document.getElementById("message"),
   weaponButtons: document.getElementById("weaponButtons"),
   equipmentButtons: document.getElementById("equipmentButtons"),
@@ -338,6 +339,35 @@ const weapons = [
   { id: "lmg", name: "LMG", price: 5600, damage: 24, fireRate: 0.14, speed: 930, spread: 0.12, mag: 50, reload: 3.2 },
   { id: "sniper", name: "Sniper", price: 6900, damage: 95, fireRate: 0.9, speed: 1450, spread: 0.01, mag: 5, reload: 2.1 },
 ];
+
+const weaponCategories = [
+  { id: "pistols", label: "Pistolas", key: "1", weaponIds: ["pistol", "light-pistol", "revolver"] },
+  { id: "smgs", label: "SMGs", key: "2", weaponIds: ["smg"] },
+  { id: "rifles", label: "Rifles", key: "3", weaponIds: ["carbine", "rifle", "dmr"] },
+  { id: "shotguns", label: "Shotguns", key: "4", weaponIds: ["shotgun"] },
+  { id: "snipers", label: "Snipers", key: "5", weaponIds: ["sniper"] },
+  { id: "heavy", label: "Pesadas", key: "6", weaponIds: ["lmg"] },
+];
+
+const weaponCategoryById = new Map(weaponCategories.map((category) => [category.id, category]));
+const weaponCategoryByKey = new Map(weaponCategories.map((category) => [category.key, category.id]));
+
+function weaponImagePath(weapon) {
+  return `assets/images/weapons/${weapon.id}.png`;
+}
+
+function weaponPlaceholderImage(weapon) {
+  const label = weapon.name.slice(0, 12).toUpperCase().replace(/[&<>]/g, "");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="112" viewBox="0 0 240 112"><rect width="240" height="112" rx="10" fill="#101926"/><path d="M37 69h112l16-18h34v13h-28l-15 18H37z" fill="#ff4655" opacity=".9"/><path d="M56 49h85l10-12h24l-10 22H56z" fill="#d7edff" opacity=".22"/><text x="24" y="31" fill="#d7edff" font-family="Arial, sans-serif" font-size="16" font-weight="700">${label}</text></svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function weaponsForCurrentCategory() {
+  const category = weaponCategoryById.get(game.shopWeaponCategory) || weaponCategories[0];
+  return category.weaponIds
+    .map((id) => weapons.find((weapon) => weapon.id === id))
+    .filter(Boolean);
+}
 
 const damageFalloff = {
   pistol: { start: 260, end: 760, min: 0.62 },
@@ -962,6 +992,8 @@ const game = {
   crosshairUnlockClicks: 0,
   agentLocked: false,
   shopTab: "weapons",
+  shopWeaponCategory: "pistols",
+  shopTransactionLocked: false,
   damageIndicator: null,
   scoreboardVisible: false,
   roundBannerTimer: 0,
@@ -1268,15 +1300,64 @@ function startActionRound() {
     : "Defesa: impeca o plant. Se plantarem, desarme com F.");
 }
 
+let shopKeyHandler = null;
+
+function isShopOpen() {
+  return !!ui.shop && !ui.shop.classList.contains("hidden");
+}
+
+function canUseShop() {
+  return !!game.player?.alive && (game.phase === "buy" || game.sandbox);
+}
+
+function attachShopKeyboard() {
+  if (shopKeyHandler || !window) return;
+  shopKeyHandler = (event) => {
+    if (!isShopOpen()) return;
+    const key = event.key;
+    if (weaponCategoryByKey.has(key)) {
+      event.preventDefault();
+      event.stopPropagation();
+      setWeaponCategory(weaponCategoryByKey.get(key));
+      return;
+    }
+    if (key === "ArrowLeft" || key === "ArrowRight") {
+      event.preventDefault();
+      event.stopPropagation();
+      const currentIndex = Math.max(0, weaponCategories.findIndex((category) => category.id === game.shopWeaponCategory));
+      const offset = key === "ArrowLeft" ? -1 : 1;
+      const nextIndex = (currentIndex + offset + weaponCategories.length) % weaponCategories.length;
+      setWeaponCategory(weaponCategories[nextIndex].id);
+    }
+  };
+  window.addEventListener("keydown", shopKeyHandler, true);
+}
+
+function detachShopKeyboard() {
+  if (!shopKeyHandler || !window) return;
+  window.removeEventListener("keydown", shopKeyHandler, true);
+  shopKeyHandler = null;
+}
+
 function openShop() {
+  if (!canUseShop()) {
+    setMessage(game.player?.alive ? "A loja so abre na fase de compra." : "Voce precisa estar vivo para comprar.");
+    updateUi();
+    return false;
+  }
   updateShopState();
-  ui.shop.classList.remove("hidden");
-  ui.shopBackdrop.classList.remove("hidden");
+  ui.shop?.classList.remove("hidden");
+  ui.shopBackdrop?.classList.remove("hidden");
+  attachShopKeyboard();
+  updateUi();
+  return true;
 }
 
 function closeShop() {
-  ui.shop.classList.add("hidden");
-  ui.shopBackdrop.classList.add("hidden");
+  ui.shop?.classList.add("hidden");
+  ui.shopBackdrop?.classList.add("hidden");
+  game.shopTransactionLocked = false;
+  detachShopKeyboard();
 }
 
 function fullReset() {
@@ -4154,6 +4235,9 @@ function update(dt) {
   if (game.paused) return;
   updateTimers(dt);
   if (game.introTimer > 0 || !game.clockActive) return;
+  if (isShopOpen() && !canUseShop()) {
+    closeShop();
+  }
   updateTutorial(dt);
   if (game.phase === "action") {
     updatePlayer(dt);
@@ -5291,9 +5375,12 @@ function updateUi() {
   updateScoreboard();
   const gameplayHudVisible = game.menuState === "none" && ["buy", "action", "ended"].includes(game.phase);
   const tutorialActive = game.tutorial && game.menuState === "none";
-  toggleClass(ui.topHud, "hidden", !gameplayHudVisible || tutorialActive);
-  toggleClass(ui.message, "hidden", !gameplayHudVisible || tutorialActive || !settings.showTips);
-  const metricsVisible = gameplayHudVisible && (game.showFps || game.showPing);
+  const shopOpen = isShopOpen();
+  toggleClass(ui.topHud, "hidden", !gameplayHudVisible || tutorialActive || shopOpen);
+  toggleClass(ui.message, "hidden", !gameplayHudVisible || tutorialActive || shopOpen || !settings.showTips);
+  toggleClass(ui.killFeed, "hidden", shopOpen);
+  toggleClass(ui.scoreboard, "hidden", shopOpen || !game.scoreboardVisible);
+  const metricsVisible = gameplayHudVisible && !shopOpen && (game.showFps || game.showPing);
   toggleClass(ui.fpsCounter, "hidden", !metricsVisible);
   if (ui.fpsCounter && metricsVisible) {
     const metrics = [];
@@ -5302,7 +5389,7 @@ function updateUi() {
     ui.fpsCounter.textContent = metrics.join("  |  ");
   }
   const gameWrap = document.querySelector(".game-wrap");
-  gameWrap?.classList.toggle("gameplay-ui-hidden", !gameplayHudVisible);
+  gameWrap?.classList.toggle("gameplay-ui-hidden", !gameplayHudVisible || shopOpen);
   gameWrap?.classList.toggle("tutorial-mode", tutorialActive);
   if (gameWrap) gameWrap.dataset.tutorialStep = tutorialActive ? String(game.tutorialStep) : "";
 }
@@ -5322,17 +5409,12 @@ function togglePause() {
 }
 
 function toggleShop() {
-  if (game.phase !== "buy" && !game.sandbox) {
-    setMessage("A loja so abre na fase de compra.");
-    updateUi();
-    return;
-  }
-  if (ui.shop.classList.contains("hidden")) {
+  if (ui.shop?.classList.contains("hidden")) {
     openShop();
   } else {
     closeShop();
+    updateUi();
   }
-  updateUi();
 }
 
 function setShopTab(tab) {
@@ -6560,33 +6642,8 @@ function updateBuyBar() {
 }
 
 function buildShop() {
-  ui.weaponButtons.innerHTML = "";
-  for (const weapon of weapons) {
-    const button = document.createElement("button");
-    button.className = "choice";
-    const owned = game.ownedWeapons.has(weapon.id);
-    button.innerHTML = `<b>${weapon.name} <em>${owned ? "Comprada" : `$${weapon.price}`}</em></b><span>Permanente na partida. ${weapon.damage} dano, pente ${weapon.mag}</span>`;
-    button.addEventListener("click", () => {
-      if (game.phase !== "buy" && !game.sandbox) return;
-      const alreadyOwned = game.ownedWeapons.has(weapon.id);
-      if (!alreadyOwned && game.money < weapon.price) {
-        setMessage("Creditos insuficientes.");
-        updateUi();
-        return;
-      }
-      if (!alreadyOwned) {
-        game.money -= weapon.price;
-        game.ownedWeapons.add(weapon.id);
-      }
-      game.selectedWeapon = weapon;
-      game.player.weapon = weapon;
-      game.player.ammo = currentMagSize();
-      setMessage(alreadyOwned ? `${weapon.name} equipada.` : `${weapon.name} comprada e equipada.`);
-      updateShopState();
-      updateUi();
-    });
-    ui.weaponButtons.appendChild(button);
-  }
+  renderWeaponCategoryTabs();
+  renderWeaponCards();
 
   ui.equipmentButtons.innerHTML = "";
   for (const item of equipment) {
@@ -6655,6 +6712,112 @@ function buildShop() {
   updateShopState();
 }
 
+function renderWeaponCategoryTabs() {
+  if (!ui.weaponCategoryTabs) return;
+  ui.weaponCategoryTabs.innerHTML = "";
+  for (const category of weaponCategories) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "weapon-category-tab";
+    button.classList.toggle("active", category.id === game.shopWeaponCategory);
+    button.innerHTML = `<span>${category.label}</span><em>${category.key}</em>`;
+    button.addEventListener("click", () => setWeaponCategory(category.id));
+    ui.weaponCategoryTabs.appendChild(button);
+  }
+}
+
+function renderWeaponCards() {
+  if (!ui.weaponButtons) return;
+  ui.weaponButtons.innerHTML = "";
+  for (const weapon of weaponsForCurrentCategory()) {
+    ui.weaponButtons.appendChild(createWeaponCard(weapon));
+  }
+}
+
+function createWeaponCard(weapon) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "choice weapon-choice";
+  const image = document.createElement("img");
+  image.alt = weapon.name;
+  image.loading = "lazy";
+  image.addEventListener("error", () => {
+    image.src = weaponPlaceholderImage(weapon);
+  }, { once: true });
+  image.src = weaponImagePath(weapon);
+
+  const art = document.createElement("span");
+  art.className = "weapon-art";
+  art.appendChild(image);
+
+  const title = document.createElement("b");
+  const name = document.createElement("span");
+  name.textContent = weapon.name;
+  const price = document.createElement("em");
+  title.append(name, price);
+
+  const meta = document.createElement("span");
+  meta.className = "weapon-meta";
+  meta.textContent = `${weapon.damage} dano | pente ${weapon.mag}`;
+
+  button.append(art, title, meta);
+  button.addEventListener("click", () => buyWeapon(weapon));
+  updateWeaponCardState(button, weapon);
+  return button;
+}
+
+function updateWeaponCardState(button, weapon) {
+  const owned = game.ownedWeapons.has(weapon.id);
+  const canBuy = owned || game.money >= weapon.price;
+  button.classList.toggle("active", weapon === game.selectedWeapon);
+  button.classList.toggle("owned", owned);
+  button.classList.toggle("can-buy", canBuy);
+  button.classList.toggle("cannot-buy", !canBuy);
+  button.disabled = !canUseShop();
+  const status = button.querySelector("em");
+  if (status) {
+    status.textContent = weapon === game.selectedWeapon
+      ? "Equipada"
+      : owned
+        ? "Comprada"
+        : `$${weapon.price}`;
+  }
+}
+
+function buyWeapon(weapon) {
+  if (game.shopTransactionLocked || !canUseShop()) return;
+  game.shopTransactionLocked = true;
+  const alreadyOwned = game.ownedWeapons.has(weapon.id);
+  if (!alreadyOwned && game.money < weapon.price) {
+    setMessage("Creditos insuficientes.");
+    game.shopTransactionLocked = false;
+    updateShopState();
+    updateUi();
+    return;
+  }
+  if (!alreadyOwned) {
+    game.money -= weapon.price;
+    game.ownedWeapons.add(weapon.id);
+  }
+  game.selectedWeapon = weapon;
+  game.player.weapon = weapon;
+  game.player.ammo = currentMagSize();
+  setMessage(alreadyOwned ? `${weapon.name} equipada.` : `${weapon.name} comprada e equipada.`);
+  updateShopState();
+  updateUi();
+  window.setTimeout(() => {
+    game.shopTransactionLocked = false;
+  }, 120);
+}
+
+function setWeaponCategory(categoryId) {
+  if (!weaponCategoryById.has(categoryId)) return;
+  game.shopWeaponCategory = categoryId;
+  renderWeaponCategoryTabs();
+  renderWeaponCards();
+  updateShopState();
+}
+
 function allyItemOwned(item) {
   if (!item) return false;
   if (item.id === "allyArmor") return game.allyLoadout.armor >= 35;
@@ -6680,14 +6843,10 @@ function updateShopState() {
   alliesPanel?.classList.toggle("disabled", !hasAllies);
   if (!hasAllies && game.shopTab === "allies") game.shopTab = "weapons";
   setShopTab(game.shopTab);
+  renderWeaponCategoryTabs();
   [...(ui.weaponButtons?.children || [])].forEach((button, i) => {
-    const weapon = weapons[i];
-    if (!weapon) return;
-    const owned = game.ownedWeapons.has(weapon.id);
-    button.classList.toggle("active", weapon === game.selectedWeapon);
-    button.classList.toggle("owned", owned);
-    const status = button.querySelector("em");
-    if (status) status.textContent = weapon === game.selectedWeapon ? "Equipada" : owned ? "Comprada" : `$${weapon.price}`;
+    const weapon = weaponsForCurrentCategory()[i];
+    if (weapon) updateWeaponCardState(button, weapon);
   });
   [...(ui.equipmentButtons?.children || [])].forEach((button, i) => button.classList.toggle("active", equipmentOwned(equipment[i])));
   [...(ui.allyButtons?.children || [])].forEach((button, i) => {
