@@ -119,7 +119,7 @@ const ui = {
 
 const keys = new Set();
 const pressed = new Set();
-const mouse = { x: BASE_WIDTH / 2, y: BASE_HEIGHT / 2, down: false };
+const mouse = { x: BASE_WIDTH / 2, y: BASE_HEIGHT / 2, down: false, rightDown: false };
 
 function escalarViewport() {
   if (!ui.gameViewport) return;
@@ -1066,6 +1066,7 @@ const game = {
   playerName: "Player",
   currentFps: 0,
   pingMs: 32,
+  messageTimer: 0,
   showAudioDebug: false,
   showHitboxes: false,
   timeScale: 1,
@@ -1834,7 +1835,7 @@ function updateNeonStamina(dt) {
     game.neonVignette = Math.max(0, game.neonVignette - dt * 3.2);
     return 1;
   }
-  const wantsBoost = keyHeld("ability1") || game.neonSpeedHeld;
+  const wantsBoost = keyHeld("ability1") || mouse.rightDown || game.neonSpeedHeld;
   const canBoost = wantsBoost && game.neonStamina > 0;
   game.neonSpeedActive = canBoost;
   if (canBoost) {
@@ -1889,17 +1890,18 @@ function launchRazeGrenade(owner, angle, mini = false) {
   });
 }
 
-function throwJettKnife(owner, angle, spread = 0) {
+function throwJettKnife(owner, angle = owner?.angle || 0, spread = 0) {
   if (!owner.ultimate || owner.ultimate.type !== "jett" || owner.ultimate.knives <= 0) return false;
+  const shotAngle = (Number.isFinite(owner.angle) ? owner.angle : angle) + spread;
   owner.ultimate.knives -= 1;
   owner.ultimate.spent = Math.min(6, (owner.ultimate.spent || 0) + 1);
   game.bullets.push({
-    x: owner.x + Math.cos(angle) * owner.r,
-    y: owner.y + Math.sin(angle) * owner.r,
+    x: owner.x + Math.cos(shotAngle) * owner.r,
+    y: owner.y + Math.sin(shotAngle) * owner.r,
     startX: owner.x,
     startY: owner.y,
-    vx: Math.cos(angle + spread) * 1420,
-    vy: Math.sin(angle + spread) * 1420,
+    vx: Math.cos(shotAngle) * 1420,
+    vy: Math.sin(shotAngle) * 1420,
     life: 0.92,
     damage: 84,
     team: entityTeam(owner) === "player" ? "player" : "bot",
@@ -1907,11 +1909,11 @@ function throwJettKnife(owner, angle, spread = 0) {
     ultimateTrail: true,
     knife: true,
     pierceLeft: 1,
-    angle: angle + spread,
+    angle: shotAngle,
     hitIds: [],
   });
-  game.neonTrails.push({ x1: owner.x - Math.cos(angle) * 18, y1: owner.y - Math.sin(angle) * 18, x2: owner.x + Math.cos(angle) * 54, y2: owner.y + Math.sin(angle) * 54, life: 0.42, maxLife: 0.42, color: "#c9f7ff", wind: true });
-  spawnParticles(owner.x + Math.cos(angle) * 22, owner.y + Math.sin(angle) * 22, "#dff9ff", 8, 120);
+  game.neonTrails.push({ x1: owner.x - Math.cos(shotAngle) * 18, y1: owner.y - Math.sin(shotAngle) * 18, x2: owner.x + Math.cos(shotAngle) * 54, y2: owner.y + Math.sin(shotAngle) * 54, life: 0.42, maxLife: 0.42, color: "#c9f7ff", wind: true });
+  spawnParticles(owner.x + Math.cos(shotAngle) * 22, owner.y + Math.sin(shotAngle) * 22, "#dff9ff", 8, 120);
   if (owner.ultimate.knives <= 0) owner.ultimate.life = 0;
   return true;
 }
@@ -2004,6 +2006,7 @@ function spawnSpikeExplosion(x, y) {
 }
 
 function setMessage(text) {
+  game.messageTimer = Math.max(1, Math.min(5, Number(settings.messageDuration) || 3));
   if (game.message === text) return;
   game.message = text;
   ui.message.classList.remove("pulse");
@@ -2694,6 +2697,11 @@ function limitedCastPoint(origin, target, maxRange) {
   return { x: origin.x + dx * scale, y: origin.y + dy * scale };
 }
 
+function findEntityById(id) {
+  if (!id) return null;
+  return [game.player, ...game.allies, ...game.bots].find((entity) => entity?.id === id) || null;
+}
+
 function activateUltimate(entity) {
   const infiniteSandboxUlt = game.sandbox && entity?.id === "player";
   const tutorialFreeUlt = game.tutorial && entity?.id === "player" && game.tutorialFreeUlts > 0;
@@ -2740,20 +2748,26 @@ function activateUltimate(entity) {
     game.screenTint = { color: "rgba(30, 58, 180, 0.34)", life: 8, maxLife: 8 };
     addUltimateEffect("dimensional-mask", entity, "#3e6bff", 8);
   } else if (agent.id === "viper") {
-    entity.ultimate = { type: "viper", life: 9, maxLife: 9 };
-    const requested = entity.id === "player" ? mouse : entity;
-    const center = limitedCastPoint(entity, requested, VIPER_CAST_RANGE);
+    entity.ultimate = { type: "viper", life: 999, maxLife: 999, pitId: `viper-pit-${Date.now()}-${Math.random().toString(16).slice(2)}` };
     game.smokes.push({
-      ...nearestWalkablePoint(center, entity),
-      r: 36,
-      targetR: 168,
-      life: 9,
+      x: entity.x,
+      y: entity.y,
+      r: 48,
+      targetR: 230,
+      life: 999,
+      maxLife: 999,
       poison: true,
-      damagePerSecond: 26,
+      damagePerSecond: 35,
       ownerTeam: team,
       ultimate: true,
+      viperPit: true,
+      entityId: entity.id,
+      pitId: entity.ultimate.pitId,
+      exitTimer: 3,
+      fadeLife: 3,
+      visualPhase: 0,
     });
-    addUltimateEffect("chemical-fog", entity, "#35c46a", 9);
+    addUltimateEffect("chemical-fog", entity, "#35c46a", 999);
   } else if (agent.id === "sage") {
     entity.ultimate = { type: "sage", life: 4, maxLife: 4 };
     const squad = team === "player" ? [game.player, ...game.allies] : game.bots;
@@ -4313,6 +4327,7 @@ function updateTimers(dt) {
   game.damageFlash = Math.max(0, game.damageFlash - dt * 1.9);
   const wasReloading = game.reloadTimer > 0;
   game.reloadTimer = Math.max(0, game.reloadTimer - dt);
+  game.messageTimer = Math.max(0, (game.messageTimer || 0) - dt);
   if (wasReloading && game.reloadTimer === 0) {
     game.player.ammo = currentMagSize();
   }
@@ -4322,7 +4337,24 @@ function updateTimers(dt) {
     if (game.damageIndicator.life <= 0) game.damageIndicator = null;
   }
   for (const smoke of game.smokes) {
-    smoke.life -= dt;
+    if (smoke.viperPit) {
+      const owner = findEntityById(smoke.entityId);
+      const ownerUltActive = owner?.alive && owner.ultimate?.type === "viper" && owner.ultimate.pitId === smoke.pitId;
+      const ownerInside = ownerUltActive && Math.hypot(owner.x - smoke.x, owner.y - smoke.y) <= smoke.r + owner.r;
+      smoke.visualPhase = (smoke.visualPhase || 0) + dt;
+      if (ownerInside) {
+        smoke.x += (owner.x - smoke.x) * Math.min(1, dt * 5.5);
+        smoke.y += (owner.y - smoke.y) * Math.min(1, dt * 5.5);
+        smoke.life = 999;
+        smoke.exitTimer = 3;
+      } else {
+        smoke.exitTimer = Math.max(0, (smoke.exitTimer ?? 3) - dt);
+        smoke.life = smoke.exitTimer;
+        if (owner?.ultimate?.type === "viper" && smoke.exitTimer <= 0) owner.ultimate = null;
+      }
+    } else {
+      smoke.life -= dt;
+    }
     if (smoke.targetR) smoke.r += (smoke.targetR - smoke.r) * Math.min(1, dt * 1.4);
     if (!smoke.poison) continue;
     smoke.tick = (smoke.tick || 0) - dt;
@@ -4386,6 +4418,7 @@ function updateTimers(dt) {
       effect.radius += dt * (effect.type === "global-pulse" ? 360 : 72);
     }
     const source = [game.player, ...game.allies, ...game.bots].find((entity) => entity?.id === effect.entityId);
+    if (effect.type === "chemical-fog" && source?.ultimate?.type !== "viper") effect.life = 0;
     if (source && effect.type !== "lockdown") {
       effect.x = source.x;
       effect.y = source.y;
@@ -5472,6 +5505,21 @@ function drawJettKunaiRing(entity) {
 }
 
 function drawAgentScreenEffects() {
+  const playerInViperPit = game.smokes.some((smoke) =>
+    smoke.viperPit && game.player?.alive && Math.hypot(game.player.x - smoke.x, game.player.y - smoke.y) <= smoke.r
+  );
+  if (playerInViperPit) {
+    ctx.save();
+    ctx.fillStyle = "rgba(17, 51, 25, 0.18)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const gradient = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, canvas.width * 0.18, canvas.width / 2, canvas.height / 2, canvas.width * 0.64);
+    gradient.addColorStop(0, "rgba(0,0,0,0)");
+    gradient.addColorStop(1, "rgba(4, 22, 9, 0.54)");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+  }
+
   if (game.neonVignette > 0) {
     ctx.save();
     const alpha = Math.min(0.34, game.neonVignette * 0.26);
@@ -5541,15 +5589,42 @@ function draw() {
   }
 
   for (const smoke of game.smokes) {
-    ctx.fillStyle = smoke.poison ? "rgba(47, 179, 78, 0.62)" : "rgba(82, 71, 115, 0.78)";
+    const fade = smoke.viperPit ? Math.max(0, Math.min(1, (smoke.exitTimer ?? 3) / (smoke.fadeLife || 3))) : 1;
+    const alpha = smoke.viperPit ? 0.22 + 0.4 * fade : 1;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    if (smoke.viperPit) {
+      const gradient = ctx.createRadialGradient(smoke.x, smoke.y, smoke.r * 0.12, smoke.x, smoke.y, smoke.r);
+      gradient.addColorStop(0, "rgba(216, 255, 84, 0.28)");
+      gradient.addColorStop(0.48, "rgba(45, 199, 93, 0.66)");
+      gradient.addColorStop(1, "rgba(8, 50, 31, 0.18)");
+      ctx.fillStyle = gradient;
+    } else {
+      ctx.fillStyle = smoke.poison ? "rgba(47, 179, 78, 0.62)" : "rgba(82, 71, 115, 0.78)";
+    }
     ctx.beginPath();
     ctx.arc(smoke.x, smoke.y, smoke.r, 0, Math.PI * 2);
     ctx.fill();
     if (smoke.poison) {
-      ctx.strokeStyle = "rgba(121, 255, 139, 0.82)";
-      ctx.lineWidth = 3;
+      ctx.strokeStyle = smoke.viperPit ? "rgba(188, 255, 89, 0.72)" : "rgba(121, 255, 139, 0.82)";
+      ctx.lineWidth = smoke.viperPit ? 5 : 3;
       ctx.stroke();
     }
+    if (smoke.viperPit) {
+      ctx.strokeStyle = "rgba(255, 230, 92, 0.28)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([12, 12]);
+      ctx.lineDashOffset = -(smoke.visualPhase || 0) * 34;
+      ctx.beginPath();
+      ctx.arc(smoke.x, smoke.y, smoke.r * 0.74, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "rgba(219, 255, 150, 0.86)";
+      ctx.font = "800 14px Rajdhani, Arial";
+      ctx.textAlign = "center";
+      ctx.fillText("35 DPS", smoke.x, smoke.y - smoke.r - 10);
+    }
+    ctx.restore();
   }
 
   drawSpike();
@@ -5768,8 +5843,9 @@ function updateUi() {
   const tutorialActive = game.tutorial && game.menuState === "none";
   const shopOpen = isShopOpen();
   toggleClass(ui.topHud, "hidden", !gameplayHudVisible || tutorialActive || shopOpen);
-  toggleClass(ui.message, "hidden", !gameplayHudVisible || tutorialActive || shopOpen || !settings.showTips);
-  toggleClass(ui.killFeed, "hidden", shopOpen);
+  toggleClass(ui.message, "hidden", !gameplayHudVisible || tutorialActive || shopOpen || !settings.showTips || game.messageTimer <= 0);
+  toggleClass(ui.killFeed, "hidden", shopOpen || !settings.showKillFeed);
+  setStyle(ui.killFeed, "transform", `scale(${Math.max(0.5, Math.min(2, (settings.killFeedScale || 100) / 100))})`);
   toggleClass(ui.scoreboard, "hidden", shopOpen || !game.scoreboardVisible);
   const metricsVisible = gameplayHudVisible && !shopOpen && (game.showFps || game.showPing);
   toggleClass(ui.fpsCounter, "hidden", !metricsVisible);
@@ -6574,12 +6650,18 @@ const OPTIONS_TABS = [
   { id: "video", label: "VÍDEO" },
 ];
 
+const OPTIONS_STORAGE_KEY = "valorant2d-options";
+
 const OPTIONS_DEFAULTS = {
   language: "pt-BR",
   playerName: "Player",
   showFps: false,
   showPing: false,
   showTips: true,
+  showKillFeed: true,
+  showMoneyDelta: true,
+  killFeedScale: 100,
+  messageDuration: 3,
   movementScheme: "wasd",
   mouseSensitivity: 50,
   adsSensitivity: 50,
@@ -6610,8 +6692,23 @@ const OPTIONS_DEFAULTS = {
   shadows: true,
 };
 
-let settings = cloneOptions(OPTIONS_DEFAULTS);
+function loadOptionsSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(OPTIONS_STORAGE_KEY) || "null");
+    return saved ? { ...cloneOptions(OPTIONS_DEFAULTS), ...saved, keys: { ...OPTIONS_DEFAULTS.keys, ...(saved.keys || {}) } } : cloneOptions(OPTIONS_DEFAULTS);
+  } catch {
+    return cloneOptions(OPTIONS_DEFAULTS);
+  }
+}
+
+let settings = loadOptionsSettings();
 let optionsSettings = cloneOptions(settings);
+game.playerName = settings.playerName?.trim?.() || OPTIONS_DEFAULTS.playerName;
+game.showFps = Boolean(settings.showFps);
+game.showPing = Boolean(settings.showPing);
+game.arrowKeys = settings.movementScheme === "arrows";
+game.crosshairScale = (Number(settings.crosshairSize) || 100) / 100;
+document.documentElement.style.setProperty("--kill-feed-scale", String((Number(settings.killFeedScale) || 100) / 100));
 let activeOptionsTab = "general";
 let pendingKeyBind = null;
 let optionsFeedback = "";
@@ -6822,6 +6919,12 @@ function renderGeneralOptions() {
       ToggleSwitch("Mostrar Ping", "showPing"),
       ToggleSwitch("Mostrar dicas", "showTips"),
     ]),
+    optionSection("INTERFACE", [
+      ToggleSwitch("Mostrar Kill Feed", "showKillFeed"),
+      ToggleSwitch("Mostrar dinheiro ganho", "showMoneyDelta"),
+      SettingSlider("Tamanho do Kill Feed", "killFeedScale", 50, 200, 5, "%"),
+      SettingSlider("Duração das mensagens", "messageDuration", 1, 5, 0.5, "s"),
+    ]),
   ];
 }
 
@@ -6935,15 +7038,24 @@ function applyOptionsSettings() {
   settings.mostrarFPS = settings.showFps;
   settings.mostrarPing = settings.showPing;
   settings.mostrarDicas = settings.showTips;
+  settings.showKillFeed = Boolean(settings.showKillFeed);
+  settings.showMoneyDelta = Boolean(settings.showMoneyDelta);
+  settings.killFeedScale = Math.max(50, Math.min(200, Number(settings.killFeedScale) || 100));
+  settings.messageDuration = Math.max(1, Math.min(5, Number(settings.messageDuration) || 3));
   game.arrowKeys = settings.movementScheme === "arrows";
   game.crosshairStyle = settings.crosshairType === "default" ? "default" : "minimal";
   game.crosshairScale = settings.crosshairSize / 100;
   game.playerName = settings.playerName.trim() || OPTIONS_DEFAULTS.playerName;
   game.showFps = Boolean(settings.showFps);
   game.showPing = Boolean(settings.showPing);
+  game.messageTimer = Math.max(game.messageTimer || 0, settings.messageDuration);
+  document.documentElement.style.setProperty("--kill-feed-scale", String(settings.killFeedScale / 100));
   game.hudOpacity = Math.max(0.5, Math.min(1.5, settings.brightness / 100));
   audio.enabled = !settings.muted;
   audio.volume = Math.max(0, Math.min(1, settings.masterVolume / 100));
+  try {
+    localStorage.setItem(OPTIONS_STORAGE_KEY, JSON.stringify(settings));
+  } catch {}
   if (settings.displayMode === "fullscreen" && !document.fullscreenElement) {
     ui.gameRoot?.requestFullscreen?.();
   } else if (settings.displayMode === "window" && document.fullscreenElement) {
@@ -7154,6 +7266,7 @@ function showIntro() {
 const killFeedEntries = [];
 
 function addKillFeedEntry(killerIsPlayer, weaponName, headshot) {
+  if (!settings.showKillFeed || !ui.killFeed) return;
   const entry = document.createElement("div");
   entry.className = "kill-entry";
   const killer = killerIsPlayer
@@ -7174,14 +7287,14 @@ function addKillFeedEntry(killerIsPlayer, weaponName, headshot) {
     entry.style.transition = "opacity 0.5s";
     entry.style.opacity = "0";
     setTimeout(() => entry.remove(), 500);
-  }, 4000);
+  }, Math.max(1000, Math.min(5000, (Number(settings.messageDuration) || 3) * 1000)));
 }
 
 let lastMoney = 800;
 function flashMoneyDelta(newVal) {
   const diff = newVal - lastMoney;
   lastMoney = newVal;
-  if (diff === 0) return;
+  if (diff === 0 || !settings.showMoneyDelta) return;
   const el = ui.moneyDelta;
   if (!el) return;
   el.className = "money-delta " + (diff > 0 ? "pos" : "neg");
@@ -7541,6 +7654,12 @@ if (canvas) canvas.addEventListener("mousedown", (event) => {
     cancelSandboxPlacement();
     return;
   }
+  if (event.button === 2 && game.selectedAgent?.id === "neon" && game.phase === "action") {
+    event.preventDefault();
+    mouse.rightDown = true;
+    game.neonSpeedHeld = true;
+    return;
+  }
   if (game.sandbox && game.phase === "action" && event.button === 2) {
     event.preventDefault();
     sandboxSpawnBotAt({ x: mouse.x, y: mouse.y }, { team: "enemy", behavior: "combat", canShoot: true, canMove: true, agentId: agents[0].id });
@@ -7556,8 +7675,9 @@ if (canvas) canvas.addEventListener("mousedown", (event) => {
   if (event.button === 0) mouse.down = true;
 });
 
-if (window) window.addEventListener("mouseup", () => {
-  mouse.down = false;
+if (window) window.addEventListener("mouseup", (event) => {
+  if (!event || event.button === 0) mouse.down = false;
+  if (!event || event.button === 2) mouse.rightDown = false;
 });
 
 if (ui.shopBackdrop) ui.shopBackdrop.addEventListener("click", () => { closeShop(); updateUi(); });
