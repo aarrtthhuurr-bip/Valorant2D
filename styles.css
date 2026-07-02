@@ -1017,6 +1017,49 @@ canvas {
   font-size: 13px;
 }
 
+.bar.neon-stamina {
+  height: 5px;
+  background: rgba(0, 217, 255, 0.16);
+  border-color: rgba(0, 217, 255, 0.42);
+}
+
+.bar.neon-stamina i {
+  background: linear-gradient(90deg, #62e6a0, #00d9ff);
+  box-shadow: 0 0 14px rgba(0, 217, 255, 0.58);
+}
+
+.bar.neon-stamina.mid i {
+  background: linear-gradient(90deg, #ffd166, #00d9ff);
+}
+
+.bar.neon-stamina.low i {
+  background: linear-gradient(90deg, #ff4655, #ffd166);
+}
+
+.bar.neon-stamina.flash {
+  animation: staminaFlash 0.18s linear infinite alternate;
+}
+
+.jett-knife-hud {
+  min-width: 42px;
+  padding: 2px 7px;
+  border: 1px solid rgba(201, 247, 255, 0.48);
+  border-radius: 999px;
+  color: #e8fbff;
+  background: rgba(201, 247, 255, 0.1);
+  box-shadow: 0 0 12px rgba(125, 249, 255, 0.2);
+  font-weight: 900;
+}
+
+.jett-knife-hud.hidden {
+  display: none;
+}
+
+@keyframes staminaFlash {
+  from { filter: brightness(1); border-color: rgba(255, 70, 85, 0.5); }
+  to { filter: brightness(1.8); border-color: rgba(255, 70, 85, 1); }
+}
+
 .sandbox-tools {
   position: absolute;
   left: 12px;

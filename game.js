@@ -102,6 +102,9 @@ const ui = {
   armorBar: document.getElementById("armorBar"),
   armorText: document.getElementById("armorText"),
   armorValueText: document.getElementById("armorValueText"),
+  neonStaminaWrap: document.getElementById("neonStaminaWrap"),
+  neonStaminaBar: document.getElementById("neonStaminaBar"),
+  jettKnifeHud: document.getElementById("jettKnifeHud"),
   killFeed: document.getElementById("killFeed"),
   tutorialOverlay: document.getElementById("tutorialOverlay"),
   tutorialPrompt: document.getElementById("tutorialPrompt"),
@@ -189,22 +192,16 @@ const agents = [
     name: "Neon",
     role: "Entrada",
     color: "#00d9ff",
-    ability: "Dash curto",
-    cooldown: 7,
+    ability: "Alta Voltagem",
+    cooldown: 0,
     use(game) {
-      const p = game.player;
-      const length = Math.hypot(p.moveX || 0, p.moveY || 0);
-      if (length < 0.1) {
-        setMessage("Mova-se com WASD para definir a direção do Dash.");
+      if ((game.neonStamina || 0) <= 0) {
+        game.neonStaminaFlash = 0.42;
+        setMessage("Neon: energia esgotada.");
         return false;
       }
-      const fromX = p.x;
-      const fromY = p.y;
-      const dx = (p.moveX / length) * 120;
-      const dy = (p.moveY / length) * 120;
-      moveEntity(p, dx, dy, game.map.walls);
-      spawnDashTrail(p, fromX, fromY, p.x, p.y, game.selectedAgent.color);
-      return true;
+      game.neonSpeedHeld = true;
+      return "noCooldown";
     },
   },
   {
@@ -1135,6 +1132,11 @@ const game = {
   message: "Plante a spike em A ou B.",
   lastMessage: "",
   abilityCooldown: 0,
+  neonStamina: 100,
+  neonSpeedHeld: false,
+  neonSpeedActive: false,
+  neonVignette: 0,
+  neonStaminaFlash: 0,
   playerUltPoints: 0,
   lastShot: 0,
   reloadTimer: 0,
@@ -1472,6 +1474,11 @@ game.bullets = [];
   }
   game.revealTimer = 0;
   game.abilityCooldown = 0;
+  game.neonStamina = 100;
+  game.neonSpeedHeld = false;
+  game.neonSpeedActive = false;
+  game.neonVignette = 0;
+  game.neonStaminaFlash = 0;
   game.player.ultPoints = game.playerUltPoints;
   game.lastShot = 0;
   game.reloadTimer = 0;
@@ -1819,6 +1826,34 @@ function spawnDashTrail(entity, fromX, fromY, toX, toY, color) {
   spawnParticles(toX, toY, color, 10, 180);
 }
 
+function updateNeonStamina(dt) {
+  const isNeon = game.selectedAgent?.id === "neon" && game.player?.alive && game.phase === "action";
+  if (!isNeon) {
+    game.neonSpeedHeld = false;
+    game.neonSpeedActive = false;
+    game.neonVignette = Math.max(0, game.neonVignette - dt * 3.2);
+    return 1;
+  }
+  const wantsBoost = keyHeld("ability1") || game.neonSpeedHeld;
+  const canBoost = wantsBoost && game.neonStamina > 0;
+  game.neonSpeedActive = canBoost;
+  if (canBoost) {
+    game.neonStamina = Math.max(0, game.neonStamina - dt * 24);
+    game.neonVignette = Math.min(1, game.neonVignette + dt * 4.2);
+    if (game.neonStamina <= 0) {
+      game.neonStaminaFlash = 0.45;
+      game.neonSpeedActive = false;
+      setMessage("Neon: stamina esgotada.");
+    }
+  } else {
+    game.neonStamina = Math.min(100, game.neonStamina + dt * 18);
+    game.neonVignette = Math.max(0, game.neonVignette - dt * 3.1);
+  }
+  game.neonStaminaFlash = Math.max(0, game.neonStaminaFlash - dt);
+  game.neonSpeedHeld = false;
+  return game.neonSpeedActive ? 1.33 : 1;
+}
+
 function addPaintDecal(x, y, color, radius = 42, life = 7) {
   game.paintDecals.push({ x, y, color, radius, life, maxLife: life });
 }
@@ -1857,6 +1892,7 @@ function launchRazeGrenade(owner, angle, mini = false) {
 function throwJettKnife(owner, angle, spread = 0) {
   if (!owner.ultimate || owner.ultimate.type !== "jett" || owner.ultimate.knives <= 0) return false;
   owner.ultimate.knives -= 1;
+  owner.ultimate.spent = Math.min(6, (owner.ultimate.spent || 0) + 1);
   game.bullets.push({
     x: owner.x + Math.cos(angle) * owner.r,
     y: owner.y + Math.sin(angle) * owner.r,
@@ -1864,16 +1900,19 @@ function throwJettKnife(owner, angle, spread = 0) {
     startY: owner.y,
     vx: Math.cos(angle + spread) * 1420,
     vy: Math.sin(angle + spread) * 1420,
-    life: 0.88,
-    damage: 78,
+    life: 0.92,
+    damage: 84,
     team: entityTeam(owner) === "player" ? "player" : "bot",
     weaponId: "jett-knife",
     ultimateTrail: true,
     knife: true,
+    pierceLeft: 1,
+    angle: angle + spread,
     hitIds: [],
   });
-  game.neonTrails.push({ x1: owner.x, y1: owner.y, x2: owner.x + Math.cos(angle) * 42, y2: owner.y + Math.sin(angle) * 42, life: 0.38, maxLife: 0.38, color: "#c9f7ff" });
-  if (owner.ultimate.knives <= 0) owner.ultimate.life = Math.min(owner.ultimate.life, 0.65);
+  game.neonTrails.push({ x1: owner.x - Math.cos(angle) * 18, y1: owner.y - Math.sin(angle) * 18, x2: owner.x + Math.cos(angle) * 54, y2: owner.y + Math.sin(angle) * 54, life: 0.42, maxLife: 0.42, color: "#c9f7ff", wind: true });
+  spawnParticles(owner.x + Math.cos(angle) * 22, owner.y + Math.sin(angle) * 22, "#dff9ff", 8, 120);
+  if (owner.ultimate.knives <= 0) owner.ultimate.life = 0;
   return true;
 }
 
@@ -2006,7 +2045,7 @@ function setTutorialPrompt(kicker, instruction, progress = "") {
 
 function tutorialAgentDescription(agent) {
   const descriptions = {
-    neon: ["Entrada agressiva", "Dash direcional e Ultimate de velocidade com tiros neon."],
+    neon: ["Entrada agressiva", "Speed boost com energia e Ultimate de tiros neon."],
     viper: ["Controle de espaço", "Nuvem venenosa e Ultimate química para negar áreas."],
     sage: ["Suporte da equipe", "Cura direta e Ultimate que restaura vida e escudos aliados."],
     omen: ["Controle tático", "Smoke para cortar visão e criar rotas seguras."],
@@ -2674,10 +2713,8 @@ function activateUltimate(entity) {
 
   if (agent.id === "neon") {
     entity.ultimate = { type: "neon", life: 7, maxLife: 7 };
-    addUltimateEffect("wind", entity, "#7df9ff", 7);
   } else if (agent.id === "jett") {
-    entity.ultimate = { type: "jett", life: 12, maxLife: 12, knives: 5 };
-    addUltimateEffect("jett-knives", entity, "#c9f7ff", 12);
+    entity.ultimate = { type: "jett", life: 14, maxLife: 14, knives: 6, maxKnives: 6, spent: 0 };
   } else if (agent.id === "killjoy") {
     entity.ultimate = { type: "killjoy", life: 10, maxLife: 10 };
     game.ultimateEffects.push({
@@ -2945,10 +2982,11 @@ function updatePlayer(dt) {
    p.moving = !movementLocked && (dx !== 0 || dy !== 0);
   p.moveX = p.moving ? dx / len : 0;
   p.moveY = p.moving ? dy / len : 0;
-  const ultimateSpeed = p.ultimate?.type === "neon" ? 1.28 : 1;
+  const neonSpeed = updateNeonStamina(dt);
+  const ultimateSpeed = 1;
   const shadowSlow = shadowSlowMultiplier(p);
   if (!movementLocked) {
-    moveEntity(p, (dx / len) * p.speed * ultimateSpeed * shadowSlow * dt, (dy / len) * p.speed * ultimateSpeed * shadowSlow * dt, map.walls);
+    moveEntity(p, (dx / len) * p.speed * ultimateSpeed * neonSpeed * shadowSlow * dt, (dy / len) * p.speed * ultimateSpeed * neonSpeed * shadowSlow * dt, map.walls);
   }
   p.angle = Math.atan2(mouse.y - p.y, mouse.x - p.x);
   if (game.spike.state === "carried" && game.spike.owner === "player") {
@@ -3916,7 +3954,9 @@ function eliminateBot(bot, { playerCredit = false, weaponName = "Poison Cloud", 
      game.stats.kills += 1;
      addKillFeedEntry(true, weaponName, headshot);
      if (game.player?.ultimate?.type === "jett") {
-       game.player.ultimate.knives = 5;
+       game.player.ultimate.knives = 6;
+       game.player.ultimate.maxKnives = 6;
+       game.player.ultimate.spent = 0;
        game.player.ultimate.life = Math.max(game.player.ultimate.life, 5);
        spawnParticles(game.player.x, game.player.y, "#c9f7ff", 18, 150);
      }
@@ -3984,7 +4024,16 @@ function updateBullets(dt) {
     bullet.y += bullet.vy * dt;
     bullet.life -= dt;
     if (bullet.ultimateTrail) {
-      game.neonTrails.push({ x1: oldX, y1: oldY, x2: bullet.x, y2: bullet.y, life: 1.15, maxLife: 1.15, color: "#5df6ff" });
+      game.neonTrails.push({
+        x1: oldX,
+        y1: oldY,
+        x2: bullet.x,
+        y2: bullet.y,
+        life: bullet.knife ? 0.22 : 1.15,
+        maxLife: bullet.knife ? 0.22 : 1.15,
+        color: bullet.knife ? "#dff9ff" : "#5df6ff",
+        wind: !!bullet.knife,
+      });
     }
 
     const hitDestructible = game.destructibles.find((box) => lineIntersectsRect(oldX, oldY, bullet.x, bullet.y, box));
@@ -4021,7 +4070,12 @@ function updateBullets(dt) {
           game.hitMarkers.push({ x: bot.x, y: bot.y - 28, life: 0.35, maxLife: 0.35, color: region === "head" ? "#ff4d5d" : "#ffd166" });
           spawnParticles(bullet.x, bullet.y, "#4fb3ff", 10, 130);
           playSound(region === "head" ? "headshot" : "hit");
-          if (!bullet.ultimateTrail) bullet.life = 0;
+          if (bullet.knife) {
+            bullet.pierceLeft = (bullet.pierceLeft || 0) - 1;
+            if (bullet.pierceLeft < 0) bullet.life = 0;
+          } else if (!bullet.ultimateTrail) {
+            bullet.life = 0;
+          }
           if (bot.hp <= 0) {
             eliminateBot(bot, {
               playerCredit: bullet.team === "player",
@@ -4029,7 +4083,7 @@ function updateBullets(dt) {
               headshot: region === "head",
             });
           }
-          if (!bullet.ultimateTrail) break;
+          if (!bullet.ultimateTrail || bullet.life <= 0) break;
         }
       }
     } else {
@@ -4661,26 +4715,6 @@ function drawEntity(entity, color, label, kind = "bot") {
   if (!entity.alive) return;
   const weapon = kind === "player" ? game.selectedWeapon : entity.weapon;
   const armorRatio = (entity.maxArmor || 0) > 0 ? Math.max(0, entity.armor || 0) / entity.maxArmor : 0;
-  if (entity.ultimate) {
-    const pulse = 1 + Math.sin(performance.now() / 90) * 0.12;
-    const auraColor = entity.ultimate.type === "neon" ? "#65f5ff"
-      : entity.ultimate.type === "viper" ? "#35c46a"
-        : entity.ultimate.type === "sage" ? "#62e6a0"
-          : entity.ultimate.type === "jett" ? "#c9f7ff"
-            : entity.ultimate.type === "killjoy" ? "#65ff9a"
-              : entity.ultimate.type === "raze" ? "#ff8a2a"
-                : entity.ultimate.type === "yoru" ? "#3e6bff"
-                  : "#9a70dc";
-    ctx.save();
-    ctx.strokeStyle = auraColor;
-    ctx.shadowColor = auraColor;
-    ctx.shadowBlur = 22;
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.arc(entity.x, entity.y, (entity.r + 11) * pulse, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-  }
   ctx.save();
   ctx.translate(entity.x, entity.y);
   ctx.rotate(entity.angle);
@@ -5292,13 +5326,21 @@ function drawUltimateEffects() {
       const width = effect.type === "healing-beam" ? 34 : 12;
       ctx.fillRect(effect.x - width / 2, 0, width, effect.y);
     } else {
-      ctx.lineWidth = 5;
-      for (let i = 0; i < 3; i++) {
-        const angle = performance.now() / 260 + i * Math.PI * 2 / 3;
-        ctx.beginPath();
-        ctx.arc(effect.x, effect.y, effect.radius + i * 12, angle, angle + Math.PI * 1.25);
-        ctx.stroke();
-      }
+      const size = 16 + (1 - alpha) * 18;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(effect.x, effect.y - size);
+      ctx.lineTo(effect.x + size, effect.y);
+      ctx.lineTo(effect.x, effect.y + size);
+      ctx.lineTo(effect.x - size, effect.y);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(effect.x - size * 1.3, effect.y);
+      ctx.lineTo(effect.x + size * 1.3, effect.y);
+      ctx.moveTo(effect.x, effect.y - size * 1.3);
+      ctx.lineTo(effect.x, effect.y + size * 1.3);
+      ctx.stroke();
     }
     ctx.restore();
   }
@@ -5387,28 +5429,57 @@ function drawAgentObjects() {
   }
 }
 
+function drawKunaiShape(x, y, angle, scale = 1, alpha = 1) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.globalAlpha *= alpha;
+  ctx.shadowColor = "#c9f7ff";
+  ctx.shadowBlur = 16 * scale;
+  ctx.fillStyle = "#f8fdff";
+  if (ctx.roundRect) {
+    ctx.beginPath();
+    ctx.roundRect(-4 * scale, -18 * scale, 8 * scale, 32 * scale, 4 * scale);
+    ctx.fill();
+  } else {
+    ctx.fillRect(-4 * scale, -18 * scale, 8 * scale, 32 * scale);
+  }
+  ctx.fillStyle = "#ff4655";
+  ctx.fillRect(-5 * scale, -3 * scale, 10 * scale, 5 * scale);
+  ctx.beginPath();
+  ctx.moveTo(0, -27 * scale);
+  ctx.lineTo(7 * scale, -15 * scale);
+  ctx.lineTo(-7 * scale, -15 * scale);
+  ctx.closePath();
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawJettKunaiRing(entity) {
+  const ultimate = entity?.ultimate;
+  if (!entity?.alive || ultimate?.type !== "jett") return;
+  const maxKnives = ultimate.maxKnives || 6;
+  const knives = Math.max(0, Math.min(maxKnives, ultimate.knives || 0));
+  const radius = entity.r + 28;
+  for (let i = 0; i < maxKnives; i++) {
+    const angle = -Math.PI / 2 + (Math.PI * 2 * i) / maxKnives;
+    const filled = i < knives;
+    const x = entity.x + Math.cos(angle) * radius;
+    const y = entity.y + Math.sin(angle) * radius;
+    drawKunaiShape(x, y, angle + Math.PI / 2, 0.82, filled ? 0.92 : 0.18);
+  }
+}
+
 function drawAgentScreenEffects() {
-  if (game.player?.ultimate?.type === "jett") {
-    const knives = game.player.ultimate.knives || 0;
+  if (game.neonVignette > 0) {
     ctx.save();
-    ctx.globalAlpha = 0.9;
-    ctx.fillStyle = "#c9f7ff";
-    ctx.shadowColor = "#7df9ff";
-    ctx.shadowBlur = 12;
-    for (let i = 0; i < knives; i++) {
-      const x = canvas.width / 2 - 52 + i * 26;
-      const y = canvas.height - 72;
-      ctx.beginPath();
-      ctx.moveTo(x, y - 14);
-      ctx.lineTo(x + 5, y + 10);
-      ctx.lineTo(x, y + 16);
-      ctx.lineTo(x - 5, y + 10);
-      ctx.closePath();
-      ctx.fill();
-    }
-    ctx.strokeStyle = "rgba(125,249,255,0.35)";
-    ctx.lineWidth = 6;
-    ctx.strokeRect(3, 3, canvas.width - 6, canvas.height - 6);
+    const alpha = Math.min(0.34, game.neonVignette * 0.26);
+    const gradient = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, canvas.width * 0.22, canvas.width / 2, canvas.height / 2, canvas.width * 0.72);
+    gradient.addColorStop(0, "rgba(0,0,0,0)");
+    gradient.addColorStop(1, `rgba(0, 217, 255, ${alpha})`);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
   }
 
@@ -5504,6 +5575,7 @@ function draw() {
     drawEntity(ally, "#62e6a0", `ALLY ${ally.weapon?.name || "Pistol"}`, "ally");
   }
   drawEntity(game.player, game.selectedAgent.color, game.playerSide === "attackers" ? "YOU ATK" : "YOU DEF", "player");
+  drawJettKunaiRing(game.player);
   drawSandboxOverlay();
   drawWorldActionBar();
   drawOrbChannelBars();
@@ -5511,9 +5583,13 @@ function draw() {
 
   ctx.fillStyle = "#f8fafc";
   for (const bullet of game.bullets) {
-    ctx.beginPath();
-    ctx.arc(bullet.x, bullet.y, 3, 0, Math.PI * 2);
-    ctx.fill();
+    if (bullet.knife) {
+      drawKunaiShape(bullet.x, bullet.y, (bullet.angle ?? Math.atan2(bullet.vy, bullet.vx)) + Math.PI / 2, 0.72, 1);
+    } else {
+      ctx.beginPath();
+      ctx.arc(bullet.x, bullet.y, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   for (const particle of game.particles) {
@@ -5622,6 +5698,18 @@ function updateUi() {
     setText(ui.armorValueText, Math.ceil(game.player.armor));
   }
 
+  const isNeon = game.selectedAgent?.id === "neon";
+  const staminaRatio = Math.max(0, Math.min(1, (game.neonStamina || 0) / 100));
+  toggleClass(ui.neonStaminaWrap, "hidden", !isNeon);
+  toggleClass(ui.neonStaminaWrap, "low", isNeon && staminaRatio <= 0.25);
+  toggleClass(ui.neonStaminaWrap, "mid", isNeon && staminaRatio > 0.25 && staminaRatio <= 0.58);
+  toggleClass(ui.neonStaminaWrap, "flash", isNeon && game.neonStaminaFlash > 0);
+  if (ui.neonStaminaBar) ui.neonStaminaBar.style.transform = `scaleX(${staminaRatio})`;
+
+  const jettUltimate = game.player?.ultimate?.type === "jett" ? game.player.ultimate : null;
+  toggleClass(ui.jettKnifeHud, "hidden", !jettUltimate);
+  if (jettUltimate) setText(ui.jettKnifeHud, `${jettUltimate.knives || 0}/${jettUltimate.maxKnives || 6}`);
+
   setText(ui.phase, game.paused
     ? "Pause"
     : game.phase === "buy"
@@ -5648,7 +5736,7 @@ function updateUi() {
   setText(ui.ultPoints, game.sandbox ? "∞" : `${game.player.ultPoints}/${ULT_MAX_POINTS}`);
   toggleClass(ui.ultCounter, "ready", game.player.ultPoints >= ULT_MAX_POINTS);
   const ultimateAmmo = game.player.ultimate?.type === "jett"
-    ? `${game.player.ultimate.knives || 0} facas`
+    ? `${game.player.ultimate.knives || 0}/${game.player.ultimate.maxKnives || 6} dardos`
     : game.player.ultimate?.type === "raze"
       ? (game.player.ultimate.fired ? "Foguete usado" : "Foguete pronto")
       : null;
@@ -7451,11 +7539,6 @@ if (canvas) canvas.addEventListener("mousedown", (event) => {
     if (type === "wall") sandboxAddWallAt(point);
     if (type === "remove-wall") sandboxRemoveWallNear(point);
     cancelSandboxPlacement();
-    return;
-  }
-  if (event.button === 2 && game.phase === "action" && game.player?.ultimate?.type === "jett") {
-    event.preventDefault();
-    fireJettKnifeBurst(game.player);
     return;
   }
   if (game.sandbox && game.phase === "action" && event.button === 2) {
