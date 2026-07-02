@@ -503,12 +503,12 @@ canvas {
 .shop {
   position: absolute;
   top: auto;
-  bottom: 24px;
+  bottom: 16px;
   left: 50%;
   transform: translateX(-50%) scale(1);
   width: min(1120px, 88vw);
-  height: min(300px, calc(100% - 40px));
-  max-height: 300px;
+  height: min(360px, calc(100% - 32px));
+  max-height: 360px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -537,17 +537,24 @@ canvas {
 }
 
 .shop-inner-scroll {
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   flex: 1;
   min-height: 0;
-  padding: 0 18px 16px;
+  padding: 0 18px 14px;
   display: flex;
   flex-direction: column;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.shop-inner-scroll::-webkit-scrollbar {
+  display: none;
 }
 
 .shop header {
   margin-bottom: 0;
-  padding: 12px 18px;
+  padding: 10px 18px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -599,8 +606,8 @@ canvas {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 5px;
-  margin: 0 -18px 8px;
-  padding: 8px 18px;
+  margin: 0 -18px 7px;
+  padding: 7px 18px;
   position: relative;
   z-index: 10;
   background: var(--panel-strong);
@@ -740,10 +747,10 @@ canvas {
 }
 
 .weapon-choice {
-  min-height: 150px;
+  min-height: 140px;
   padding: 10px;
   display: grid;
-  grid-template-rows: 78px auto auto;
+  grid-template-rows: 70px auto auto;
   gap: 7px;
   transition: border-color 140ms ease, background 140ms ease, filter 140ms ease, transform 140ms ease;
 }
@@ -779,7 +786,7 @@ canvas {
   width: min(100%, 190px);
   max-width: 100%;
   height: 100%;
-  max-height: 62px;
+  max-height: 56px;
   object-fit: contain;
   object-position: center;
 }
@@ -2820,7 +2827,7 @@ button.click-feedback::after {
      top: auto;
      bottom: 8px;
      width: min(1120px, calc(100% - 16px));
-     height: min(300px, calc(100% - 16px));
+     height: min(360px, calc(100% - 16px));
    }
 
   .message {
