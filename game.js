@@ -60,7 +60,33 @@ const ui = {
   spawnAllyButton: document.getElementById("spawnAllyButton"),
   resetSpikeButton: document.getElementById("resetSpikeButton"),
   godModeButton: document.getElementById("godModeButton"),
+  sandboxMenuButton: document.getElementById("sandboxMenuButton"),
   clearSandboxButton: document.getElementById("clearSandboxButton"),
+  sandboxPanel: document.getElementById("sandboxPanel"),
+  sandboxPanelClose: document.getElementById("sandboxPanelClose"),
+  sandboxTabs: document.getElementById("sandboxTabs"),
+  sandboxBotCount: document.getElementById("sandboxBotCount"),
+  sandboxBotTeam: document.getElementById("sandboxBotTeam"),
+  sandboxBotBehavior: document.getElementById("sandboxBotBehavior"),
+  sandboxBotAgent: document.getElementById("sandboxBotAgent"),
+  sandboxBotCanShoot: document.getElementById("sandboxBotCanShoot"),
+  sandboxBotCanMove: document.getElementById("sandboxBotCanMove"),
+  sandboxPlaceBotButton: document.getElementById("sandboxPlaceBotButton"),
+  sandboxSpawnCenterButton: document.getElementById("sandboxSpawnCenterButton"),
+  sandboxBotList: document.getElementById("sandboxBotList"),
+  sandboxMapSelect: document.getElementById("sandboxMapSelect"),
+  sandboxLoadMapButton: document.getElementById("sandboxLoadMapButton"),
+  sandboxAddWallButton: document.getElementById("sandboxAddWallButton"),
+  sandboxRemoveWallButton: document.getElementById("sandboxRemoveWallButton"),
+  sandboxClearWallsButton: document.getElementById("sandboxClearWallsButton"),
+  sandboxItemType: document.getElementById("sandboxItemType"),
+  sandboxPlaceItemButton: document.getElementById("sandboxPlaceItemButton"),
+  sandboxClearItemsButton: document.getElementById("sandboxClearItemsButton"),
+  sandboxPierceWallsToggle: document.getElementById("sandboxPierceWallsToggle"),
+  sandboxGodToggle: document.getElementById("sandboxGodToggle"),
+  sandboxSaveButton: document.getElementById("sandboxSaveButton"),
+  sandboxLoadButton: document.getElementById("sandboxLoadButton"),
+  pauseSandboxButton: document.getElementById("pauseSandboxButton"),
   kills: document.getElementById("killsText"),
   deaths: document.getElementById("deathsText"),
   headshots: document.getElementById("headshotsText"),
@@ -1021,6 +1047,12 @@ const game = {
   difficulty: "normal",
   sandbox: false,
   godMode: false,
+  sandboxPanelOpen: false,
+  sandboxTab: "bots",
+  sandboxPlacement: null,
+  sandboxBotLimit: 18,
+  sandboxBulletsPierceWalls: false,
+  sandboxCustomWalls: [],
   allyCount: 0,
   enemyFireMultiplier: 1.25,
   introTimer: 0,
@@ -1226,6 +1258,128 @@ function makeAlly(spawn, index) {
     ultimate: null,
     orbChannel: null,
   };
+}
+
+const SANDBOX_SAVE_KEY = "valorant2d-sandbox-config";
+
+function sandboxEntityCount() {
+  return game.bots.filter((bot) => bot.alive).length + game.allies.filter((ally) => ally.alive).length;
+}
+
+function sandboxValidPoint(point, radius = 18) {
+  if (!point) return false;
+  if (point.x < radius || point.x > map.width - radius || point.y < radius || point.y > map.height - radius) return false;
+  return !solidWalls().some((wall) => circleRectCollides({ x: point.x, y: point.y, r: radius }, wall));
+}
+
+function sandboxSafePoint(point, radius = 18) {
+  const fallback = game.player || map.attackersSpawn;
+  const safe = nearestWalkablePoint({ x: point.x, y: point.y }, fallback);
+  return sandboxValidPoint(safe, radius) ? safe : { x: fallback.x, y: fallback.y };
+}
+
+function sandboxBotTemplateFromUi() {
+  const behavior = ui.sandboxBotBehavior?.value || "combat";
+  const canShoot = ui.sandboxBotCanShoot?.classList.contains("is-on") ?? true;
+  const canMove = ui.sandboxBotCanMove?.classList.contains("is-on") ?? true;
+  return {
+    team: ui.sandboxBotTeam?.value || "enemy",
+    behavior,
+    canShoot: behavior === "static" ? canShoot : canShoot,
+    canMove: behavior === "static" ? false : canMove,
+    agentId: ui.sandboxBotAgent?.value || agents[0].id,
+  };
+}
+
+function applySandboxConfigToEntity(entity, config) {
+  entity.sandboxControl = true;
+  entity.sandboxBehavior = config.behavior;
+  entity.sandboxCanShoot = config.canShoot;
+  entity.sandboxCanMove = config.canMove;
+  entity.agentId = config.agentId || entity.agentId;
+  entity.aiState = config.canMove ? config.behavior : "static";
+  if (!config.canMove) entity.speed = 0;
+  return entity;
+}
+
+function sandboxSpawnBotAt(point, config = sandboxBotTemplateFromUi()) {
+  if (sandboxEntityCount() >= game.sandboxBotLimit) {
+    setMessage(`Sandbox: limite de ${game.sandboxBotLimit} bots atingido.`);
+    return null;
+  }
+  const safe = sandboxSafePoint(point, 18);
+  const baseIndex = config.team === "ally" ? game.allies.length : game.bots.length;
+  const uniqueId = `${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  const entity = config.team === "ally" ? makeAlly(safe, baseIndex) : makeBot(safe, baseIndex);
+  entity.id = `${config.team === "ally" ? "ally" : "bot"}-sandbox-${uniqueId}`;
+  entity.hasSpike = false;
+  applySandboxConfigToEntity(entity, config);
+  sanitizeEntityPosition(entity);
+  if (config.team === "ally") game.allies.push(entity);
+  else game.bots.push(entity);
+  spawnParticles(entity.x, entity.y, config.team === "ally" ? "#62e6a0" : "#ff4d5d", 18, 145);
+  renderSandboxPanel();
+  return entity;
+}
+
+function sandboxSpawnMany(point, config = sandboxBotTemplateFromUi()) {
+  const amount = Math.max(1, Math.min(12, Number(ui.sandboxBotCount?.value) || 1));
+  for (let i = 0; i < amount; i++) {
+    const angle = (Math.PI * 2 * i) / amount;
+    sandboxSpawnBotAt({ x: point.x + Math.cos(angle) * 26 * i, y: point.y + Math.sin(angle) * 26 * i }, config);
+  }
+  setMessage(`Sandbox: ${amount} ${config.team === "ally" ? "aliado(s)" : "inimigo(s)"} criado(s).`);
+}
+
+function sandboxPlaceItemAt(point) {
+  const safe = sandboxSafePoint(point, 18);
+  const type = ui.sandboxItemType?.value || "spike";
+  if (type === "spike") {
+    game.spike = { state: "dropped", owner: null, x: safe.x, y: safe.y, timer: 0, site: null, plantProgress: 0, defuseProgress: 0, defuseCheckpoint: 0, defuserId: null };
+    spawnParticles(safe.x, safe.y, "#66e48f", 20, 145);
+  } else if (type === "orb") {
+    game.ultOrbs.push({ x: safe.x, y: safe.y, id: `sandbox-orb-${Date.now()}`, phase: Math.random() * 3, reservadaPor: null });
+    spawnParticles(safe.x, safe.y, "#bd67ff", 18, 145);
+  } else {
+    game.medkits.push({ x: safe.x, y: safe.y, id: `sandbox-medkit-${Date.now()}`, phase: Math.random() * 3 });
+    spawnParticles(safe.x, safe.y, "#62e6a0", 18, 145);
+  }
+  setMessage(`Sandbox: ${type} posicionado.`);
+}
+
+function sandboxAddWallAt(point) {
+  const x = Math.max(20, Math.min(map.width - 100, point.x - 50));
+  const y = Math.max(20, Math.min(map.height - 30, point.y - 15));
+  const wall = { x, y, w: 100, h: 30, hp: 9999, sandboxWall: true };
+  game.destructibles.push(wall);
+  game.sandboxCustomWalls.push(wall);
+  spawnParticles(x + wall.w / 2, y + wall.h / 2, "#ffd166", 14, 100);
+  setMessage("Sandbox: parede adicionada.");
+}
+
+function sandboxRemoveWallNear(point) {
+  const walls = game.sandboxCustomWalls.length ? game.sandboxCustomWalls : game.destructibles;
+  const nearest = walls
+    .map((wall) => ({ wall, dist: Math.hypot(point.x - (wall.x + wall.w / 2), point.y - (wall.y + wall.h / 2)) }))
+    .sort((a, b) => a.dist - b.dist)[0];
+  if (!nearest || nearest.dist > 130) {
+    setMessage("Sandbox: nenhuma parede custom proxima.");
+    return;
+  }
+  game.destructibles = game.destructibles.filter((wall) => wall !== nearest.wall);
+  game.sandboxCustomWalls = game.sandboxCustomWalls.filter((wall) => wall !== nearest.wall);
+  spawnParticles(nearest.wall.x + nearest.wall.w / 2, nearest.wall.y + nearest.wall.h / 2, "#ffd166", 14, 120);
+  setMessage("Sandbox: parede removida.");
+}
+
+function setSandboxPlacement(type) {
+  if (!game.sandbox) return;
+  game.sandboxPlacement = { type };
+  setMessage("Sandbox: escolha a posicao no mapa.");
+}
+
+function cancelSandboxPlacement() {
+  game.sandboxPlacement = null;
 }
 
 function spawnRoundPickups() {
@@ -3518,6 +3672,15 @@ function updateAllies(dt) {
   game.allies.forEach((ally, index) => {
     if (!ally.alive) return;
     const enemy = closestVisibleEnemy(ally);
+    if (game.sandbox && ally.sandboxControl) {
+      if (ally.sandboxCanShoot !== false && enemy) botShootAt(ally, enemy, dt, "ally");
+      if (ally.sandboxCanMove !== false && ally.sandboxBehavior === "patrol") {
+        const target = allyObjectivePoint(ally, index);
+        if (Math.hypot(ally.x - target.x, ally.y - target.y) > 36) moveBotToward(ally, target, dt, 0.85);
+      }
+      keepSquadSpacing(ally, squad, dt);
+      return;
+    }
     // Hierarquia absoluta: sobreviver > objetivo da Spike > recursos opcionais.
     if (seekCriticalMedkit(ally, dt, enemy)) {
       keepSquadSpacing(ally, squad, dt);
@@ -3580,6 +3743,21 @@ function updateBots(dt) {
     if (!bot.alive) continue;
     if (bot.tutorialStatic) {
       bot.moving = false;
+      continue;
+    }
+    if (game.sandbox && bot.sandboxControl) {
+      const visibleTarget = closestVisibleSquadTarget(bot);
+      updateBotAwareness(bot, visibleTarget, dt);
+      if (bot.sandboxCanShoot !== false && visibleTarget) {
+        botFightPlayer(bot, dt, { strafe: bot.sandboxCanMove !== false, state: "sandbox", firePenalty: 0.9 });
+      }
+      if (bot.sandboxCanMove !== false && bot.sandboxBehavior === "patrol") {
+        const route = map.botRoutes[bot.patrol % map.botRoutes.length] || [];
+        const target = route[bot.routeIndex % route.length] || { x: bot.x, y: bot.y };
+        if (Math.hypot(bot.x - target.x, bot.y - target.y) < 28) bot.routeIndex += 1;
+        else moveBotToward(bot, target, dt, 0.8);
+      }
+      keepBotSpacing(bot, dt);
       continue;
     }
     const seesPlayer = botCanSeePlayer(bot);
@@ -3812,7 +3990,7 @@ function updateBullets(dt) {
       continue;
     }
 
-    if (map.walls.some((wall) => lineIntersectsRect(oldX, oldY, bullet.x, bullet.y, wall))) {
+    if (!(game.sandbox && game.sandboxBulletsPierceWalls) && map.walls.some((wall) => lineIntersectsRect(oldX, oldY, bullet.x, bullet.y, wall))) {
       spawnWallImpact(bullet.x, bullet.y, oldX, oldY);
       bullet.life = 0;
       continue;
@@ -4193,33 +4371,19 @@ function checkWinConditions() {
   if (game.phase !== "action") return;
   if (game.tutorial) return;
   if (game.training) return;
+  if (game.sandbox) {
+    game.bots = game.bots.filter((bot) => bot.alive);
+    game.allies = game.allies.filter((ally) => ally.alive);
+    if (game.sandboxPanelOpen) renderSandboxPanel();
+    return;
+  }
   if (game.bots.every((bot) => !bot.alive)) {
-    if (game.training || game.sandbox) {
+    if (game.training) {
       const botSpawns = game.playerSide === "attackers" ? map.defendersSpawn : map.attackerBotSpawns;
       game.bots = botSpawns.map(makeBot);
       game.bots.forEach(sanitizeEntityPosition);
       game.bullets = [];
-      if (game.sandbox) {
-        game.phase = "action";
-        game.phaseTime = 9999;
-        game.clockActive = true;
-        game.roundOverTimer = 0;
-        const carrier = game.bots.find((bot) => bot.hasSpike) || game.bots[0] || game.player;
-        game.spike = {
-          state: "carried",
-          owner: game.playerSide === "attackers" ? "player" : "bot",
-          x: game.playerSide === "attackers" ? game.player.x : carrier.x,
-          y: game.playerSide === "attackers" ? game.player.y : carrier.y,
-          timer: 0,
-          site: null,
-          plantProgress: 0,
-          defuseProgress: 0,
-          defuseCheckpoint: 0,
-          defuserId: null,
-        };
-        spawnRoundPickups();
-      }
-      setMessage(game.sandbox ? "Sandbox: nova equipe inimiga gerada." : "Treino: novos bots apareceram.");
+      setMessage("Treino: novos bots apareceram.");
       return;
     }
     if (game.playerSide === "defenders" && game.spike.state === "planted") {
@@ -4301,6 +4465,52 @@ function update(dt) {
     updateSpike(dt);
     updatePickups(dt);
     checkWinConditions();
+  }
+}
+
+function drawSandboxOverlay() {
+  if (!game.sandbox) return;
+  for (const bot of game.bots) {
+    if (!bot.alive) continue;
+    ctx.save();
+    ctx.strokeStyle = "#ff4d5d";
+    ctx.fillStyle = "rgba(255, 77, 93, 0.16)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(bot.x, bot.y, bot.r + 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+  for (const ally of game.allies) {
+    if (!ally.alive) continue;
+    ctx.save();
+    ctx.strokeStyle = "#46a8ff";
+    ctx.fillStyle = "rgba(70, 168, 255, 0.14)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(ally.x, ally.y, ally.r + 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+  if (game.sandboxPlacement) {
+    const valid = sandboxValidPoint(mouse, game.sandboxPlacement.type === "wall" || game.sandboxPlacement.type === "remove-wall" ? 8 : 18);
+    ctx.save();
+    ctx.globalAlpha = 0.58;
+    ctx.strokeStyle = valid ? "#62e6a0" : "#ff4d5d";
+    ctx.fillStyle = valid ? "rgba(98, 230, 160, 0.16)" : "rgba(255, 77, 93, 0.18)";
+    ctx.lineWidth = 3;
+    if (game.sandboxPlacement.type === "wall") {
+      ctx.fillRect(mouse.x - 50, mouse.y - 15, 100, 30);
+      ctx.strokeRect(mouse.x - 50, mouse.y - 15, 100, 30);
+    } else {
+      ctx.beginPath();
+      ctx.arc(mouse.x, mouse.y, 22, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 }
 
@@ -5258,6 +5468,7 @@ function draw() {
     drawEntity(ally, "#62e6a0", `ALLY ${ally.weapon?.name || "Pistol"}`, "ally");
   }
   drawEntity(game.player, game.selectedAgent.color, game.playerSide === "attackers" ? "YOU ATK" : "YOU DEF", "player");
+  drawSandboxOverlay();
   drawWorldActionBar();
   drawOrbChannelBars();
   drawUltimateEffects();
@@ -5423,7 +5634,11 @@ function updateUi() {
       ? "WASD move, E habilidade, Q Ultimate, F planta, B loja, Esc pause."
       : "WASD move, E habilidade, Q Ultimate, F desarma, B loja, Esc pause.");
   toggleClass(ui.sandboxTools, "hidden", !game.sandbox || game.menuState !== "none");
+  toggleClass(ui.sandboxPanel, "hidden", !game.sandbox || !game.sandboxPanelOpen);
+  toggleClass(ui.pauseSandboxButton, "hidden", !game.sandbox);
   setText(ui.godModeButton, `God: ${game.godMode ? "ON" : "OFF"}`);
+  setSwitch(ui.sandboxGodToggle, game.godMode);
+  setSwitch(ui.sandboxPierceWallsToggle, game.sandboxBulletsPierceWalls);
   updateScoreboard();
   const gameplayHudVisible = game.menuState === "none" && ["buy", "action", "ended"].includes(game.phase);
   const tutorialActive = game.tutorial && game.menuState === "none";
@@ -5486,7 +5701,163 @@ function setShopTab(tab) {
   game.shopTab = nextTab;
 }
 
+function setSandboxTab(tab) {
+  game.sandboxTab = tab || "bots";
+  ui.sandboxTabs?.querySelectorAll("[data-sandbox-tab]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.sandboxTab === game.sandboxTab);
+  });
+  document.querySelectorAll("[data-sandbox-panel]").forEach((panel) => {
+    panel.classList.toggle("hidden", panel.dataset.sandboxPanel !== game.sandboxTab);
+  });
+}
+
+function setSwitch(button, enabled) {
+  button?.classList.toggle("is-on", !!enabled);
+}
+
+function populateSandboxSelectors() {
+  if (ui.sandboxBotAgent && !ui.sandboxBotAgent.children.length) {
+    ui.sandboxBotAgent.innerHTML = agents.map((agent) => `<option value="${agent.id}">${agent.name}</option>`).join("");
+  }
+  if (ui.sandboxMapSelect && !ui.sandboxMapSelect.children.length) {
+    ui.sandboxMapSelect.innerHTML = MAPS.map((item, index) => `<option value="${index}">${item.name}</option>`).join("");
+  }
+}
+
+function renderSandboxBotList() {
+  if (!ui.sandboxBotList) return;
+  const entities = [
+    ...game.bots.map((entity) => ({ entity, team: "enemy" })),
+    ...game.allies.map((entity) => ({ entity, team: "ally" })),
+  ].filter((item) => item.entity?.alive);
+  if (!entities.length) {
+    ui.sandboxBotList.innerHTML = `<p>Nenhum bot ativo. Use "Posicionar no mapa" ou clique direito/esquerdo no mapa.</p>`;
+    return;
+  }
+  ui.sandboxBotList.innerHTML = "";
+  for (const { entity, team } of entities) {
+    const row = document.createElement("div");
+    row.className = `sandbox-bot-row ${team}`;
+    const agent = agents.find((item) => item.id === entity.agentId)?.name || "Agente";
+    row.innerHTML = `
+      <span><b>${team === "ally" ? "Aliado" : "Inimigo"}</b><em>${agent} · ${entity.sandboxBehavior || entity.aiState || "combat"}</em></span>
+      <button type="button" data-action="toggle-shoot">${entity.sandboxCanShoot === false ? "Sem tiro" : "Atira"}</button>
+      <button type="button" data-action="toggle-move">${entity.sandboxCanMove === false ? "Parado" : "Move"}</button>
+      <button type="button" data-action="remove">Remover</button>
+    `;
+    row.querySelector('[data-action="toggle-shoot"]')?.addEventListener("click", () => {
+      entity.sandboxCanShoot = entity.sandboxCanShoot === false;
+      renderSandboxPanel();
+    });
+    row.querySelector('[data-action="toggle-move"]')?.addEventListener("click", () => {
+      entity.sandboxCanMove = entity.sandboxCanMove === false;
+      entity.speed = entity.sandboxCanMove ? (team === "ally" ? 126 : 118) : 0;
+      renderSandboxPanel();
+    });
+    row.querySelector('[data-action="remove"]')?.addEventListener("click", () => {
+      entity.alive = false;
+      spawnParticles(entity.x, entity.y, team === "ally" ? "#62e6a0" : "#ff4d5d", 12, 100);
+      game.bots = game.bots.filter((bot) => bot.alive);
+      game.allies = game.allies.filter((ally) => ally.alive);
+      renderSandboxPanel();
+      setMessage("Sandbox: bot removido.");
+    });
+    ui.sandboxBotList.appendChild(row);
+  }
+}
+
+function renderSandboxPanel() {
+  populateSandboxSelectors();
+  ui.sandboxPanel?.classList.toggle("hidden", !game.sandbox || !game.sandboxPanelOpen);
+  setSandboxTab(game.sandboxTab);
+  setSwitch(ui.sandboxPierceWallsToggle, game.sandboxBulletsPierceWalls);
+  setSwitch(ui.sandboxGodToggle, game.godMode);
+  renderSandboxBotList();
+}
+
+function openSandboxPanel() {
+  if (!game.sandbox) return;
+  closeShop();
+  game.sandboxPanelOpen = true;
+  renderSandboxPanel();
+}
+
+function closeSandboxPanel() {
+  const resumeSandbox = game.sandbox && game.paused && game.menuState === "none";
+  game.sandboxPanelOpen = false;
+  cancelSandboxPlacement();
+  if (resumeSandbox) game.paused = false;
+  renderSandboxPanel();
+}
+
+function loadSandboxMap(index) {
+  const next = MAPS[Number(index)] || MAPS[0];
+  map = next;
+  map.botRoutes = randomizedBotRoutes(map);
+  game.map = map;
+  game.mapName = map.name;
+  game.bots = [];
+  game.allies = [];
+  game.bullets = [];
+  game.destructibles = cloneRects(map.destructibles || []);
+  game.sandboxCustomWalls = [];
+  game.medkits = [];
+  game.ultOrbs = [];
+  game.spike.state = "disabled";
+  game.player.x = map.attackersSpawn.x;
+  game.player.y = map.attackersSpawn.y;
+  sanitizeEntityPosition(game.player);
+  renderSandboxPanel();
+  setMessage(`Sandbox: mapa ${map.name} carregado.`);
+}
+
+function saveSandboxConfig() {
+  const payload = {
+    mapName: game.mapName,
+    pierce: game.sandboxBulletsPierceWalls,
+    god: game.godMode,
+    walls: game.sandboxCustomWalls,
+    medkits: game.medkits,
+    ultOrbs: game.ultOrbs,
+    spike: game.spike,
+  };
+  localStorage.setItem(SANDBOX_SAVE_KEY, JSON.stringify(payload));
+  setMessage("Sandbox: configuração salva.");
+}
+
+function loadSandboxConfig() {
+  try {
+    const payload = JSON.parse(localStorage.getItem(SANDBOX_SAVE_KEY) || "null");
+    if (!payload) {
+      setMessage("Sandbox: nenhum save encontrado.");
+      return;
+    }
+    const index = MAPS.findIndex((item) => item.name === payload.mapName);
+    if (index >= 0) loadSandboxMap(index);
+    game.sandboxBulletsPierceWalls = !!payload.pierce;
+    game.godMode = !!payload.god;
+    game.sandboxCustomWalls = cloneRects(payload.walls || []);
+    game.destructibles = [...cloneRects(map.destructibles || []), ...game.sandboxCustomWalls];
+    game.medkits = (payload.medkits || []).map((item) => ({ ...item }));
+    game.ultOrbs = (payload.ultOrbs || []).map((item) => ({ ...item }));
+    if (payload.spike) game.spike = { ...game.spike, ...payload.spike };
+    renderSandboxPanel();
+    setMessage("Sandbox: configuração restaurada.");
+  } catch {
+    setMessage("Sandbox: save inválido.");
+  }
+}
+
 function handleEscape() {
+  if (game.sandboxPlacement) {
+    cancelSandboxPlacement();
+    setMessage("Sandbox: posicionamento cancelado.");
+    return;
+  }
+  if (game.sandboxPanelOpen) {
+    closeSandboxPanel();
+    return;
+  }
   if (game.menuState === "pause") {
     resumeFromPause();
     return;
@@ -5916,6 +6287,7 @@ function quitToMainMenu() {
 function showMainMenu() {
   preloadInitialVisualAssets();
   hidePauseOverlay();
+  closeSandboxPanel();
   ui.introOverlay?.classList.add("hidden");
   ui.matchOverlay?.classList.add("hidden");
   ui.agentOverlay?.classList.add("hidden");
@@ -6539,6 +6911,8 @@ function backFromOptions() {
 function applyDifficulty(difficulty) {
   game.difficulty = difficulty;
   game.sandbox = false;
+  game.sandboxPanelOpen = false;
+  game.sandboxPlacement = null;
   game.godMode = false;
   if (difficulty === "easy") {
     game.allyCount = 2;
@@ -6571,6 +6945,10 @@ function startSandboxMode() {
   game.sandbox = true;
   game.training = false;
   game.tutorial = false;
+  game.sandboxPanelOpen = false;
+  game.sandboxPlacement = null;
+  game.sandboxBulletsPierceWalls = false;
+  game.sandboxCustomWalls = [];
   game.allyCount = 2;
   game.enemyFireMultiplier = 1.2;
   hideMenuOverlay();
@@ -7028,6 +7406,17 @@ if (canvas) canvas.addEventListener("contextmenu", (event) => event.preventDefau
 
 if (canvas) canvas.addEventListener("mousedown", (event) => {
   initAudio();
+  if (game.sandbox && game.phase === "action" && game.sandboxPlacement && event.button === 0) {
+    event.preventDefault();
+    const point = { x: mouse.x, y: mouse.y };
+    const type = game.sandboxPlacement.type;
+    if (type === "bot") sandboxSpawnMany(point);
+    if (type === "item") sandboxPlaceItemAt(point);
+    if (type === "wall") sandboxAddWallAt(point);
+    if (type === "remove-wall") sandboxRemoveWallNear(point);
+    cancelSandboxPlacement();
+    return;
+  }
   if (event.button === 2 && game.phase === "action" && game.player?.ultimate?.type === "jett") {
     event.preventDefault();
     fireJettKnifeBurst(game.player);
@@ -7035,17 +7424,14 @@ if (canvas) canvas.addEventListener("mousedown", (event) => {
   }
   if (game.sandbox && game.phase === "action" && event.button === 2) {
     event.preventDefault();
-    const bot = makeBot({ x: mouse.x, y: mouse.y }, game.bots.length);
-    bot.hasSpike = false;
-    sanitizeEntityPosition(bot);
-    game.bots.push(bot);
+    sandboxSpawnBotAt({ x: mouse.x, y: mouse.y }, { team: "enemy", behavior: "combat", canShoot: true, canMove: true, agentId: agents[0].id });
+    setMessage("Sandbox: inimigo criado.");
     return;
   }
   if (game.sandbox && game.phase === "action" && event.button === 1) {
     event.preventDefault();
-    const ally = makeAlly({ x: mouse.x, y: mouse.y }, game.allies.length);
-    sanitizeEntityPosition(ally);
-    game.allies.push(ally);
+    sandboxSpawnBotAt({ x: mouse.x, y: mouse.y }, { team: "ally", behavior: "combat", canShoot: true, canMove: true, agentId: agents[1]?.id || agents[0].id });
+    setMessage("Sandbox: aliado criado.");
     return;
   }
   if (event.button === 0) mouse.down = true;
@@ -7066,18 +7452,13 @@ if (ui.shopTabs && typeof ui.shopTabs.querySelectorAll === "function") {
 
 if (ui.spawnBotButton) ui.spawnBotButton.addEventListener("click", () => {
   if (!game.sandbox) return;
-  const bot = makeBot({ x: mouse.x || map.width / 2, y: mouse.y || map.height / 2 }, game.bots.length);
-  bot.hasSpike = false;
-  sanitizeEntityPosition(bot);
-  game.bots.push(bot);
+  sandboxSpawnBotAt({ x: mouse.x || map.width / 2, y: mouse.y || map.height / 2 }, { team: "enemy", behavior: "combat", canShoot: true, canMove: true, agentId: agents[0].id });
   setMessage("Sandbox: inimigo criado.");
 });
 
 if (ui.spawnAllyButton) ui.spawnAllyButton.addEventListener("click", () => {
   if (!game.sandbox) return;
-  const ally = makeAlly({ x: mouse.x || map.width / 2, y: mouse.y || map.height / 2 }, game.allies.length);
-  sanitizeEntityPosition(ally);
-  game.allies.push(ally);
+  sandboxSpawnBotAt({ x: mouse.x || map.width / 2, y: mouse.y || map.height / 2 }, { team: "ally", behavior: "combat", canShoot: true, canMove: true, agentId: agents[1]?.id || agents[0].id });
   setMessage("Sandbox: aliado criado.");
 });
 
@@ -7101,6 +7482,7 @@ if (ui.resetSpikeButton) ui.resetSpikeButton.addEventListener("click", () => {
 if (ui.godModeButton) ui.godModeButton.addEventListener("click", () => {
   if (!game.sandbox) return;
   game.godMode = !game.godMode;
+  renderSandboxPanel();
   setMessage(`Sandbox: God Mode ${game.godMode ? "ligado" : "desligado"}.`);
 });
 
@@ -7109,8 +7491,53 @@ if (ui.clearSandboxButton) ui.clearSandboxButton.addEventListener("click", () =>
   game.bots = [];
   game.allies = [];
   game.destructibles = [];
+  game.sandboxCustomWalls = [];
+  game.bullets = [];
+  renderSandboxPanel();
   setMessage("Sandbox: mapa limpo.");
 });
+
+ui.sandboxMenuButton?.addEventListener("click", openSandboxPanel);
+ui.sandboxPanelClose?.addEventListener("click", closeSandboxPanel);
+ui.pauseSandboxButton?.addEventListener("click", () => {
+  hidePauseOverlay();
+  game.paused = true;
+  game.menuState = "none";
+  openSandboxPanel();
+});
+ui.sandboxTabs?.querySelectorAll("[data-sandbox-tab]").forEach((button) => {
+  button.addEventListener("click", () => setSandboxTab(button.dataset.sandboxTab));
+});
+ui.sandboxBotCanShoot?.addEventListener("click", () => ui.sandboxBotCanShoot.classList.toggle("is-on"));
+ui.sandboxBotCanMove?.addEventListener("click", () => ui.sandboxBotCanMove.classList.toggle("is-on"));
+ui.sandboxPlaceBotButton?.addEventListener("click", () => setSandboxPlacement("bot"));
+ui.sandboxSpawnCenterButton?.addEventListener("click", () => sandboxSpawnMany({ x: mouse.x || map.width / 2, y: mouse.y || map.height / 2 }));
+ui.sandboxLoadMapButton?.addEventListener("click", () => loadSandboxMap(ui.sandboxMapSelect?.value || 0));
+ui.sandboxAddWallButton?.addEventListener("click", () => setSandboxPlacement("wall"));
+ui.sandboxRemoveWallButton?.addEventListener("click", () => setSandboxPlacement("remove-wall"));
+ui.sandboxClearWallsButton?.addEventListener("click", () => {
+  game.destructibles = game.destructibles.filter((wall) => !game.sandboxCustomWalls.includes(wall));
+  game.sandboxCustomWalls = [];
+  setMessage("Sandbox: estruturas custom removidas.");
+});
+ui.sandboxPlaceItemButton?.addEventListener("click", () => setSandboxPlacement("item"));
+ui.sandboxClearItemsButton?.addEventListener("click", () => {
+  game.medkits = [];
+  game.ultOrbs = [];
+  game.spike.state = "disabled";
+  setMessage("Sandbox: itens removidos.");
+});
+ui.sandboxPierceWallsToggle?.addEventListener("click", () => {
+  game.sandboxBulletsPierceWalls = !game.sandboxBulletsPierceWalls;
+  renderSandboxPanel();
+  setMessage(`Sandbox: tiros atravessando paredes ${game.sandboxBulletsPierceWalls ? "ON" : "OFF"}.`);
+});
+ui.sandboxGodToggle?.addEventListener("click", () => {
+  game.godMode = !game.godMode;
+  renderSandboxPanel();
+});
+ui.sandboxSaveButton?.addEventListener("click", saveSandboxConfig);
+ui.sandboxLoadButton?.addEventListener("click", loadSandboxConfig);
 
 if (ui.newGameButton) ui.newGameButton.addEventListener("click", () => {
   ui.matchOverlay?.classList.add("hidden");

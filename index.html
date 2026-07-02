@@ -124,8 +124,70 @@
         <button type="button" id="spawnAllyButton">Aliado</button>
         <button type="button" id="resetSpikeButton">Spike</button>
         <button type="button" id="godModeButton">God: OFF</button>
+        <button type="button" id="sandboxMenuButton">Cheats</button>
         <button type="button" id="clearSandboxButton">Limpar</button>
       </div>
+
+      <aside class="sandbox-panel hidden glass" id="sandboxPanel" aria-label="Menu Sandbox">
+        <header>
+          <div>
+            <span class="label">Sandbox</span>
+            <h2>Cheats e Treino</h2>
+          </div>
+          <button type="button" id="sandboxPanelClose" aria-label="Fechar Sandbox">×</button>
+        </header>
+        <div class="sandbox-tabs" id="sandboxTabs">
+          <button type="button" data-sandbox-tab="bots">Bots</button>
+          <button type="button" data-sandbox-tab="map">Mapa</button>
+          <button type="button" data-sandbox-tab="items">Itens</button>
+          <button type="button" data-sandbox-tab="physics">Física</button>
+        </div>
+
+        <section class="sandbox-section" data-sandbox-panel="bots">
+          <div class="sandbox-control-row">
+            <label>Qtd.<input id="sandboxBotCount" type="number" min="1" max="12" value="1"></label>
+            <label>Time<select id="sandboxBotTeam"><option value="enemy">Inimigo</option><option value="ally">Aliado</option></select></label>
+          </div>
+          <div class="sandbox-control-row">
+            <label>Tipo<select id="sandboxBotBehavior"><option value="combat">Atirando</option><option value="patrol">Patrulhando</option><option value="static">Parado</option></select></label>
+            <label>Agente<select id="sandboxBotAgent"></select></label>
+          </div>
+          <div class="sandbox-toggle-row">
+            <span>Atirar</span><button type="button" class="sandbox-switch is-on" id="sandboxBotCanShoot"><span></span></button>
+            <span>Mover</span><button type="button" class="sandbox-switch is-on" id="sandboxBotCanMove"><span></span></button>
+          </div>
+          <button type="button" class="sandbox-primary" id="sandboxPlaceBotButton">Posicionar no mapa</button>
+          <button type="button" id="sandboxSpawnCenterButton">Spawn no centro</button>
+          <div class="sandbox-list" id="sandboxBotList"></div>
+        </section>
+
+        <section class="sandbox-section hidden" data-sandbox-panel="map">
+          <label>Mapa<select id="sandboxMapSelect"></select></label>
+          <button type="button" class="sandbox-primary" id="sandboxLoadMapButton">Carregar mapa</button>
+          <button type="button" id="sandboxAddWallButton">Adicionar parede no mapa</button>
+          <button type="button" id="sandboxRemoveWallButton">Remover parede próxima</button>
+          <button type="button" id="sandboxClearWallsButton">Limpar estruturas custom</button>
+        </section>
+
+        <section class="sandbox-section hidden" data-sandbox-panel="items">
+          <label>Item<select id="sandboxItemType"><option value="spike">Spike</option><option value="orb">Orb ultimate</option><option value="medkit">Med-kit</option></select></label>
+          <button type="button" class="sandbox-primary" id="sandboxPlaceItemButton">Posicionar item</button>
+          <button type="button" id="sandboxClearItemsButton">Limpar itens</button>
+        </section>
+
+        <section class="sandbox-section hidden" data-sandbox-panel="physics">
+          <div class="sandbox-toggle-row">
+            <span>Tiros atravessam paredes</span>
+            <button type="button" class="sandbox-switch" id="sandboxPierceWallsToggle"><span></span></button>
+          </div>
+          <div class="sandbox-toggle-row">
+            <span>God Mode</span>
+            <button type="button" class="sandbox-switch" id="sandboxGodToggle"><span></span></button>
+          </div>
+          <button type="button" id="sandboxSaveButton">Salvar configuração</button>
+          <button type="button" id="sandboxLoadButton">Restaurar configuração</button>
+        </section>
+      </aside>
 
       <div class="match-overlay hidden" id="matchOverlay">
         <div class="match-card glass">
@@ -142,6 +204,7 @@
           <div class="pause-menu-actions" aria-label="Pause actions">
             <button type="button" id="pauseResumeButton">Resume</button>
             <button type="button" id="pauseOptionsButton">Options</button>
+            <button type="button" id="pauseSandboxButton" class="hidden">Cheats</button>
             <button type="button" id="pauseRestartButton">Restart</button>
             <button type="button" id="pauseQuitButton">Quit</button>
           </div>
