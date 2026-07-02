@@ -1081,6 +1081,7 @@ const game = {
   showAudioDebug: false,
   showHitboxes: false,
   timeScale: 1,
+  omenUlt: null,
   devModeUnlocked: false,
   crosshairUnlockClicks: 0,
   agentLocked: false,
@@ -1462,6 +1463,8 @@ game.bullets = [];
    game.rockets = [];
    game.paintDecals = [];
    game.yoruGatecrash = null;
+   game.omenUlt = null;
+   game.timeScale = 1;
    game.screenTint = null;
    game.player.orbChannel = null;
    game.player.orbAssignment = null;
@@ -1716,6 +1719,7 @@ function currentPlayerDefuseTime() {
 
 function applyDamage(entity, amount) {
   if (entity.id === "player" && game.godMode) return 0;
+  if (entity.invulnerable || entity.untargetable) return 0;
   if (entity.ultimate?.type === "yoru") return 0;
   if (amount > 0 && entity.orbChannel) entity.orbChannel = null;
   let remaining = amount;
@@ -2739,6 +2743,121 @@ function findEntityById(id) {
   return [game.player, ...game.allies, ...game.bots].find((entity) => entity?.id === id) || null;
 }
 
+function isValidOmenTeleportPoint(point, entity = game.player) {
+  if (!point || !entity) return false;
+  const radius = entity.r || 18;
+  if (point.x < radius || point.x > map.width - radius || point.y < radius || point.y > map.height - radius) return false;
+  return !solidWalls().some((wall) => circleRectCollides({ x: point.x, y: point.y, r: radius }, wall));
+}
+
+function addOmenVortex(x, y, mode = "out") {
+  game.ultimateEffects.push({
+    type: "omen-vortex",
+    mode,
+    x,
+    y,
+    color: "#9b5cff",
+    life: 0.58,
+    maxLife: 0.58,
+    radius: 18,
+    spin: Math.random() * Math.PI * 2,
+  });
+  spawnParticles(x, y, "#9b5cff", 34, 210);
+  game.shake = Math.max(game.shake, 0.22);
+}
+
+function cancelOmenUltimate(message = "Ultimate do Omen cancelada.") {
+  if (!game.omenUlt) return false;
+  if (game.player?.ultimate?.type === "omen" && game.omenUlt.state !== "travel") {
+    game.player.ultimate = null;
+  }
+  if (game.player) {
+    game.player.invulnerable = false;
+    game.player.untargetable = false;
+  }
+  game.omenUlt = null;
+  game.timeScale = 1;
+  setMessage(message);
+  return true;
+}
+
+function beginOmenUltimate(entity) {
+  if (entity.id !== "player") return false;
+  if (game.omenUlt) return false;
+  entity.ultimate = { type: "omen", life: 5, maxLife: 5, selecting: true };
+  game.omenUlt = {
+    state: "select",
+    ownerId: entity.id,
+    from: { x: entity.x, y: entity.y },
+    destination: null,
+    timer: 5,
+    travelTimer: 0,
+    fade: 1,
+  };
+  game.timeScale = 0.28;
+  setMessage("Omen: escolha um destino com o clique esquerdo. ESC cancela.");
+  return true;
+}
+
+function commitOmenTeleport(point) {
+  const p = game.player;
+  if (!p || !game.omenUlt || game.omenUlt.state !== "select") return false;
+  if (!isValidOmenTeleportPoint(point, p)) {
+    setMessage("Omen: destino bloqueado.");
+    return false;
+  }
+  const destination = { x: point.x, y: point.y };
+  game.omenUlt.state = "travel";
+  game.omenUlt.destination = destination;
+  game.omenUlt.travelTimer = 0.42;
+  game.omenUlt.fade = 0;
+  game.timeScale = 1;
+  p.invulnerable = true;
+  p.untargetable = true;
+  p.x = game.omenUlt.from.x;
+  p.y = game.omenUlt.from.y;
+  addOmenVortex(p.x, p.y, "out");
+  setMessage("Omen atravessando as sombras...");
+  return true;
+}
+
+function updateOmenUltimate(dt) {
+  const state = game.omenUlt;
+  if (!state) return;
+  const p = game.player;
+  if (!p?.alive) {
+    cancelOmenUltimate("");
+    return;
+  }
+  if (state.state === "select") {
+    state.timer -= dt;
+    state.fade = Math.min(1, (state.fade || 0) + dt * 4);
+    if (p.ultimate?.type === "omen") p.ultimate.life = Math.max(0, state.timer);
+    if (state.timer <= 0) cancelOmenUltimate("Ultimate do Omen expirada.");
+    return;
+  }
+  if (state.state === "travel") {
+    state.travelTimer -= dt;
+    p.invulnerable = true;
+    p.untargetable = true;
+    p.moving = false;
+    if (state.travelTimer <= 0) {
+      const destination = nearestWalkablePoint(state.destination, state.from);
+      p.x = destination.x;
+      p.y = destination.y;
+      p.lastX = destination.x;
+      p.lastY = destination.y;
+      p.invulnerable = false;
+      p.untargetable = false;
+      p.ultimate = null;
+      addOmenVortex(destination.x, destination.y, "in");
+      game.omenUlt = null;
+      game.timeScale = 1;
+      setMessage("Omen materializou nas sombras.");
+    }
+  }
+}
+
 function activateUltimate(entity) {
   const infiniteSandboxUlt = game.sandbox && entity?.id === "player";
   const tutorialFreeUlt = game.tutorial && entity?.id === "player" && game.tutorialFreeUlts > 0;
@@ -2823,6 +2942,10 @@ function activateUltimate(entity) {
     }
     addUltimateEffect("healing-beam", entity, "#62e6a0", 4);
   } else {
+    if (agent.id === "omen" && entity.id === "player" && beginOmenUltimate(entity)) {
+      playSound("ability");
+      return true;
+    }
     entity.ultimate = { type: "omen", life: 9, maxLife: 9 };
     const requested = entity.id === "player" ? mouse : entity;
     const center = limitedCastPoint(entity, requested, 300);
@@ -3026,6 +3149,18 @@ function plantOrDefuse(dt) {
 function updatePlayer(dt) {
   const p = game.player;
   if (!p.alive) return;
+  if (game.omenUlt) {
+    p.moving = false;
+    p.moveX = 0;
+    p.moveY = 0;
+    p.angle = Math.atan2(mouse.y - p.y, mouse.x - p.x);
+    updateNeonStamina(dt);
+    if (game.spike.state === "carried" && game.spike.owner === "player") {
+      game.spike.x = p.x;
+      game.spike.y = p.y;
+    }
+    return;
+  }
 
    const useArrows = game.arrowKeys;
    const right = useArrows ? keys.has("arrowright") : keys.has("d");
@@ -3404,7 +3539,7 @@ function closestAliveBotTo(x, y) {
 
 function botCanSeePlayer(bot) {
   const p = game.player;
-  return p.alive && p.ultimate?.type !== "yoru" && hasCombatLineOfSight(bot, p) && Math.hypot(p.x - bot.x, p.y - bot.y) < 540;
+  return p.alive && !p.untargetable && p.ultimate?.type !== "yoru" && hasCombatLineOfSight(bot, p) && Math.hypot(p.x - bot.x, p.y - bot.y) < 540;
 }
 
 function closestVisibleSquadTarget(bot) {
@@ -3414,7 +3549,7 @@ function closestVisibleSquadTarget(bot) {
 }
 
 function canSeeTarget(bot, target, range = 540) {
-  return target?.alive && target.ultimate?.type !== "yoru" && hasCombatLineOfSight(bot, target) && Math.hypot(target.x - bot.x, target.y - bot.y) < range;
+  return target?.alive && !target.untargetable && target.ultimate?.type !== "yoru" && hasCombatLineOfSight(bot, target) && Math.hypot(target.x - bot.x, target.y - bot.y) < range;
 }
 
 function closestVisibleEnemy(bot) {
@@ -4413,6 +4548,7 @@ function updateTimers(dt) {
     game.damageIndicator.life -= dt;
     if (game.damageIndicator.life <= 0) game.damageIndicator = null;
   }
+  updateOmenUltimate(dt / Math.max(0.1, game.timeScale || 1));
   for (const smoke of game.smokes) {
     smoke.visualPhase = (smoke.visualPhase || 0) + dt;
     if (smoke.viperPit) {
@@ -5433,6 +5569,26 @@ function drawUltimateEffects() {
       ctx.fillStyle = effect.color;
       const width = effect.type === "healing-beam" ? 34 : 12;
       ctx.fillRect(effect.x - width / 2, 0, width, effect.y);
+    } else if (effect.type === "omen-vortex") {
+      const progress = 1 - alpha;
+      const spin = (effect.spin || 0) + progress * Math.PI * 3.6;
+      const radius = 22 + progress * 34;
+      ctx.lineWidth = 3;
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.arc(effect.x, effect.y, radius - i * 7, spin + i * 1.8, spin + i * 1.8 + Math.PI * 1.22);
+        ctx.stroke();
+      }
+      ctx.fillStyle = effect.color;
+      for (let i = 0; i < 12; i++) {
+        const angle = spin + i * 0.82;
+        const pull = effect.mode === "in" ? progress : 1 - progress;
+        const orbit = 10 + radius * pull * (0.35 + (i % 4) * 0.12);
+        ctx.globalAlpha = Math.min(1, alpha * (0.45 + (i % 3) * 0.12));
+        ctx.beginPath();
+        ctx.arc(effect.x + Math.cos(angle) * orbit, effect.y + Math.sin(angle) * orbit, 2 + (i % 3), 0, Math.PI * 2);
+        ctx.fill();
+      }
     } else {
       const size = 16 + (1 - alpha) * 18;
       ctx.lineWidth = 4;
@@ -5640,6 +5796,45 @@ function drawAgentScreenEffects() {
   }
 }
 
+function drawOmenUltimateOverlay() {
+  if (!game.omenUlt) return;
+  const state = game.omenUlt;
+  const fade = Math.max(0, Math.min(1, state.fade ?? 1));
+  ctx.save();
+  ctx.fillStyle = `rgba(4, 4, 12, ${0.48 * fade})`;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const pulse = 1 + Math.sin(performance.now() / 160) * 0.05;
+  const valid = state.state === "select" && isValidOmenTeleportPoint(mouse, game.player);
+  if (state.state === "select") {
+    ctx.strokeStyle = valid ? "rgba(109, 255, 165, 0.94)" : "rgba(255, 76, 97, 0.94)";
+    ctx.fillStyle = valid ? "rgba(109, 255, 165, 0.12)" : "rgba(255, 76, 97, 0.12)";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([8, 8]);
+    ctx.beginPath();
+    ctx.arc(mouse.x, mouse.y, (game.player?.r || 18) * 1.8 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(mouse.x - 18, mouse.y);
+    ctx.lineTo(mouse.x + 18, mouse.y);
+    ctx.moveTo(mouse.x, mouse.y - 18);
+    ctx.lineTo(mouse.x, mouse.y + 18);
+    ctx.stroke();
+    ctx.fillStyle = "#d8ccff";
+    ctx.font = "800 16px Rajdhani, Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(valid ? "DESTINO" : "BLOQUEADO", mouse.x, mouse.y - 32);
+    ctx.fillText(`${Math.ceil(state.timer || 0)}s`, canvas.width / 2, 82);
+  } else if (state.state === "travel" && state.destination) {
+    ctx.fillStyle = "rgba(155, 92, 255, 0.2)";
+    ctx.beginPath();
+    ctx.arc(state.destination.x, state.destination.y, 34 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 function draw() {
   if (game.menuState !== "none" && game.phase !== "action") {
     drawMenuSlideshow();
@@ -5772,12 +5967,15 @@ function draw() {
   for (const ally of game.allies) {
     drawEntity(ally, "#62e6a0", `ALLY ${ally.weapon?.name || "Pistol"}`, "ally");
   }
-  drawEntity(game.player, game.selectedAgent.color, game.playerSide === "attackers" ? "YOU ATK" : "YOU DEF", "player");
+  if (!game.player?.untargetable) {
+    drawEntity(game.player, game.selectedAgent.color, game.playerSide === "attackers" ? "YOU ATK" : "YOU DEF", "player");
+  }
   drawJettKunaiRing(game.player);
   drawSandboxOverlay();
   drawWorldActionBar();
   drawOrbChannelBars();
   drawUltimateEffects();
+  drawOmenUltimateOverlay();
 
   ctx.fillStyle = "#f8fafc";
   for (const bullet of game.bullets) {
@@ -5970,6 +6168,7 @@ function updateUi() {
   toggleClass(ui.killFeed, "hidden", shopOpen || !settings.showKillFeed);
   setStyle(ui.killFeed, "transform", `scale(${Math.max(0.5, Math.min(2, (settings.killFeedScale || 100) / 100))})`);
   toggleClass(ui.scoreboard, "hidden", shopOpen || !game.scoreboardVisible);
+  if (canvas?.style) canvas.style.cursor = game.omenUlt?.state === "select" ? "crosshair" : "";
   const metricsVisible = gameplayHudVisible && !shopOpen && (game.showFps || game.showPing);
   toggleClass(ui.fpsCounter, "hidden", !metricsVisible);
   if (ui.fpsCounter && metricsVisible) {
@@ -6172,6 +6371,10 @@ function loadSandboxConfig() {
 }
 
 function handleEscape() {
+  if (game.omenUlt) {
+    cancelOmenUltimate();
+    return;
+  }
   if (game.sandboxPlacement) {
     cancelSandboxPlacement();
     setMessage("Sandbox: posicionamento cancelado.");
@@ -7704,7 +7907,7 @@ function loop(now) {
   const tutorialSlowMotion = game.tutorial
     && game.tutorialStage === "defend"
     && game.tutorialSlowTimer > 0;
-  update(dt * (tutorialSlowMotion ? 0.2 : 1));
+  update(dt * (tutorialSlowMotion ? 0.2 : 1) * (game.timeScale || 1));
   draw();
   updateUi();
   pressed.clear();
@@ -7766,6 +7969,13 @@ if (canvas) canvas.addEventListener("contextmenu", (event) => event.preventDefau
 
 if (canvas) canvas.addEventListener("mousedown", (event) => {
   initAudio();
+  if (game.omenUlt) {
+    event.preventDefault();
+    if (event.button === 0 && game.omenUlt.state === "select") {
+      commitOmenTeleport({ x: mouse.x, y: mouse.y });
+    }
+    return;
+  }
   if (game.sandbox && game.phase === "action" && game.sandboxPlacement && event.button === 0) {
     event.preventDefault();
     const point = { x: mouse.x, y: mouse.y };
