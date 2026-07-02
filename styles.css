@@ -792,6 +792,98 @@ canvas {
   font-size: 11px;
 }
 
+#equipmentButtons {
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.equip-card {
+  position: relative;
+  min-height: 150px;
+  padding: 18px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: center;
+  border: 1px solid rgba(215, 237, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.042);
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, opacity 0.18s ease;
+}
+
+.equip-card:hover:not(:disabled) {
+  border-color: rgba(255, 77, 93, 0.55);
+  background: rgba(255, 77, 93, 0.08);
+  transform: translateY(-3px);
+}
+
+.equip-card .equip-icon {
+  display: grid;
+  place-items: center;
+  min-height: 38px;
+}
+
+.equip-card b {
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+
+.equip-card span:not(.equip-icon):not(.equip-owned-badge) {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.equip-card em {
+  color: var(--yellow);
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.equip-owned-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: none;
+  padding: 1px 6px;
+  border: 1px solid var(--green);
+  border-radius: 4px;
+  color: var(--green);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.equip-card.owned {
+  border-color: rgba(98, 230, 160, 0.45);
+  background: rgba(98, 230, 160, 0.08);
+  cursor: default;
+  pointer-events: none;
+}
+
+.equip-card.owned .equip-icon,
+.equip-card.owned em {
+  opacity: 0.5;
+}
+
+.equip-card.owned .equip-owned-badge {
+  display: inline-flex;
+}
+
+.equip-card.cant-afford {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .message {
   position: absolute;
   left: 50%;

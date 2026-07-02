@@ -6641,6 +6641,18 @@ function updateBuyBar() {
   }
 }
 
+// Icones inline da aba Equip. mantidos no JS para cada card acompanhar o item renderizado.
+function equipmentIconSvg(itemId) {
+  const icons = {
+    lightArmor: `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true"><path d="M18 4L6 9v9c0 7 5.4 13 12 15 6.6-2 12-8 12-15V9z" stroke="#ff4655" stroke-width="1.8" stroke-linejoin="round"/><text x="18" y="22" text-anchor="middle" fill="#ff4655" font-size="9" font-family="Rajdhani,Arial,sans-serif" font-weight="700">25</text></svg>`,
+    heavyArmor: `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true"><path d="M18 3L5 8.5v10C5 26 11 32.5 18 34c7-1.5 13-8 13-15.5V8.5z" stroke="#ff4655" stroke-width="2" fill="rgba(255,70,85,0.08)" stroke-linejoin="round"/><text x="18" y="22" text-anchor="middle" fill="#ff4655" font-size="9" font-family="Rajdhani,Arial,sans-serif" font-weight="700">50</text></svg>`,
+    boots: `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true"><path d="M10 8v14l-2 4h18v-4h-8V8z" stroke="#ff4655" stroke-width="1.8" stroke-linejoin="round"/><line x1="8" y1="26" x2="26" y2="26" stroke="#ff4655" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+    magazine: `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true"><rect x="11" y="6" width="14" height="22" rx="3" stroke="#ff4655" stroke-width="1.8"/><line x1="15" y1="11" x2="21" y2="11" stroke="#ff4655" stroke-width="1.5" stroke-linecap="round"/><line x1="15" y1="15" x2="21" y2="15" stroke="#ff4655" stroke-width="1.5" stroke-linecap="round"/><line x1="15" y1="19" x2="21" y2="19" stroke="#ff4655" stroke-width="1.5" stroke-linecap="round"/><rect x="14" y="28" width="8" height="4" rx="1" stroke="#ff4655" stroke-width="1.5"/></svg>`,
+    reloadKit: `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true"><path d="M26 10a10 10 0 1 1-14 0" stroke="#ff4655" stroke-width="1.8" stroke-linecap="round"/><polyline points="22,6 26,10 22,14" stroke="#ff4655" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  };
+  return icons[itemId] || icons.reloadKit;
+}
+
 function buildShop() {
   renderWeaponCategoryTabs();
   renderWeaponCards();
@@ -6648,9 +6660,15 @@ function buildShop() {
   ui.equipmentButtons.innerHTML = "";
   for (const item of equipment) {
     const button = document.createElement("button");
-    button.className = "choice";
+    button.className = "equip-card";
     const kind = item.id.includes("Armor") ? "Consumivel por round" : "Upgrade permanente";
-    button.innerHTML = `<b>${item.name} - $${item.price}</b><span>${kind}. ${item.desc}</span>`;
+    button.innerHTML = `
+      <span class="equip-owned-badge">Obtido</span>
+      <span class="equip-icon">${equipmentIconSvg(item.id)}</span>
+      <b>${item.name}</b>
+      <span>${kind}. ${item.desc}</span>
+      <em>$${item.price}</em>
+    `;
     button.addEventListener("click", () => {
       if (game.phase !== "buy" && !game.sandbox) return;
       if (equipmentOwned(item)) {
@@ -6675,6 +6693,7 @@ function buildShop() {
       updateShopState();
       updateUi();
     });
+    updateEquipmentCardState(button, item);
     ui.equipmentButtons.appendChild(button);
   }
 
@@ -6710,6 +6729,15 @@ function buildShop() {
     ui.allyButtons.appendChild(button);
   }
   updateShopState();
+}
+
+function updateEquipmentCardState(button, item) {
+  const owned = equipmentOwned(item);
+  const cantAfford = !owned && game.money < item.price;
+  button.classList.toggle("active", owned);
+  button.classList.toggle("owned", owned);
+  button.classList.toggle("cant-afford", cantAfford);
+  button.disabled = !canUseShop() || owned;
 }
 
 function renderWeaponCategoryTabs() {
@@ -6848,7 +6876,10 @@ function updateShopState() {
     const weapon = weaponsForCurrentCategory()[i];
     if (weapon) updateWeaponCardState(button, weapon);
   });
-  [...(ui.equipmentButtons?.children || [])].forEach((button, i) => button.classList.toggle("active", equipmentOwned(equipment[i])));
+  [...(ui.equipmentButtons?.children || [])].forEach((button, i) => {
+    const item = equipment[i];
+    if (item) updateEquipmentCardState(button, item);
+  });
   [...(ui.allyButtons?.children || [])].forEach((button, i) => {
     const item = allyItems[i];
     if (!item) return;
