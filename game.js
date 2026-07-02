@@ -1477,11 +1477,12 @@ game.bullets = [];
   game.reloadTimer = 0;
   game.roundOverTimer = 0;
   const carrier = game.bots.find((bot) => bot.hasSpike);
+  const spikeCarrierPoint = carrier || game.player || map.attackersSpawn;
   game.spike = {
     state: game.training ? "disabled" : "carried",
     owner: game.training ? null : game.playerSide === "attackers" ? "player" : "bot",
-    x: game.playerSide === "attackers" ? game.player.x : carrier.x,
-    y: game.playerSide === "attackers" ? game.player.y : carrier.y,
+    x: game.playerSide === "attackers" ? game.player.x : spikeCarrierPoint.x,
+    y: game.playerSide === "attackers" ? game.player.y : spikeCarrierPoint.y,
     timer: 0,
     site: null,
     plantProgress: 0,
@@ -3433,6 +3434,14 @@ function ensureBotSpikeCarrier() {
     if (carrier) carrier.hasSpike = true;
   }
   if (!carrier) {
+    if (game.sandbox) {
+      if (game.spike.owner === "bot") {
+        game.spike.state = "disabled";
+        game.spike.owner = null;
+        game.spike.plantProgress = 0;
+      }
+      return null;
+    }
     endRound("defenders", "Atacantes eliminados antes do plant. Defensores venceram.", "elimination");
     return null;
   }
@@ -4457,14 +4466,41 @@ function update(dt) {
   updateTutorial(dt);
   if (game.phase === "action") {
     updatePlayer(dt);
-    updateAllies(dt);
-    updateBots(dt);
-    updateAgentObjects(dt);
-    updateBullets(dt);
-    updateTrainingArena(dt);
-    updateSpike(dt);
-    updatePickups(dt);
-    checkWinConditions();
+    if (game.sandbox) {
+      try {
+        updateAllies(dt);
+        updateBots(dt);
+        updateAgentObjects(dt);
+        updateBullets(dt);
+        updateTrainingArena(dt);
+        updateSpike(dt);
+        updatePickups(dt);
+        checkWinConditions();
+      } catch (error) {
+        console.warn("Sandbox loop recovered", error);
+        game.phase = "action";
+        game.phaseTime = 9999;
+        game.clockActive = true;
+        game.paused = false;
+        game.bots = game.bots.filter((bot) => bot?.alive);
+        game.allies = game.allies.filter((ally) => ally?.alive);
+        if (game.spike.owner === "bot" && !game.bots.some((bot) => bot.hasSpike)) {
+          game.spike.state = "disabled";
+          game.spike.owner = null;
+          game.spike.plantProgress = 0;
+        }
+        setMessage("Sandbox: loop recuperado, continue spawnando ou testando.");
+      }
+    } else {
+      updateAllies(dt);
+      updateBots(dt);
+      updateAgentObjects(dt);
+      updateBullets(dt);
+      updateTrainingArena(dt);
+      updateSpike(dt);
+      updatePickups(dt);
+      checkWinConditions();
+    }
   }
 }
 
@@ -7493,6 +7529,13 @@ if (ui.clearSandboxButton) ui.clearSandboxButton.addEventListener("click", () =>
   game.destructibles = [];
   game.sandboxCustomWalls = [];
   game.bullets = [];
+  game.phase = "action";
+  game.phaseTime = 9999;
+  game.clockActive = true;
+  game.paused = false;
+  game.spike.state = "disabled";
+  game.spike.owner = null;
+  game.spike.plantProgress = 0;
   renderSandboxPanel();
   setMessage("Sandbox: mapa limpo.");
 });
