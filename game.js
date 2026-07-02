@@ -328,16 +328,16 @@ const agents = [
 ];
 
 const weapons = [
-  { id: "pistol", name: "Pistol", price: 0, damage: 28, fireRate: 0.34, speed: 980, spread: 0.04, mag: 12, reload: 1.1 },
-  { id: "light-pistol", name: "Light Pistol", price: 650, damage: 20, fireRate: 0.18, speed: 930, spread: 0.075, mag: 15, reload: 1.2 },
-  { id: "revolver", name: "Revolver", price: 1050, damage: 54, fireRate: 0.44, speed: 1180, spread: 0.035, mag: 6, reload: 1.35 },
-  { id: "smg", name: "SMG", price: 1450, damage: 18, fireRate: 0.09, speed: 900, spread: 0.09, mag: 25, reload: 1.4 },
-  { id: "shotgun", name: "Shotgun", price: 2150, damage: 15, fireRate: 0.65, speed: 760, spread: 0.22, mag: 6, reload: 1.5, pellets: 6 },
-  { id: "carbine", name: "Carbine", price: 3200, damage: 33, fireRate: 0.12, speed: 1080, spread: 0.055, mag: 24, reload: 1.6 },
-  { id: "rifle", name: "Rifle", price: 3900, damage: 39, fireRate: 0.15, speed: 1120, spread: 0.045, mag: 25, reload: 1.7 },
-  { id: "dmr", name: "DMR", price: 4600, damage: 62, fireRate: 0.36, speed: 1260, spread: 0.022, mag: 12, reload: 1.75 },
-  { id: "lmg", name: "LMG", price: 5600, damage: 24, fireRate: 0.14, speed: 930, spread: 0.12, mag: 50, reload: 3.2 },
-  { id: "sniper", name: "Sniper", price: 6900, damage: 95, fireRate: 0.9, speed: 1450, spread: 0.01, mag: 5, reload: 2.1 },
+  { id: "pistol", name: "Classic", price: 0, damage: 28, fireRate: 0.34, speed: 980, spread: 0.04, mag: 12, reload: 1.1 },
+  { id: "light-pistol", name: "Shorty", price: 650, damage: 20, fireRate: 0.18, speed: 930, spread: 0.075, mag: 15, reload: 1.2 },
+  { id: "revolver", name: "Sheriff", price: 1050, damage: 54, fireRate: 0.44, speed: 1180, spread: 0.035, mag: 6, reload: 1.35 },
+  { id: "smg", name: "Spectre", price: 1450, damage: 18, fireRate: 0.09, speed: 900, spread: 0.09, mag: 25, reload: 1.4 },
+  { id: "shotgun", name: "Judge", price: 2150, damage: 15, fireRate: 0.65, speed: 760, spread: 0.22, mag: 6, reload: 1.5, pellets: 6 },
+  { id: "carbine", name: "Bulldog", price: 3200, damage: 33, fireRate: 0.12, speed: 1080, spread: 0.055, mag: 24, reload: 1.6 },
+  { id: "rifle", name: "Vandal", price: 3900, damage: 39, fireRate: 0.15, speed: 1120, spread: 0.045, mag: 25, reload: 1.7 },
+  { id: "dmr", name: "Guardian", price: 4600, damage: 62, fireRate: 0.36, speed: 1260, spread: 0.022, mag: 12, reload: 1.75 },
+  { id: "lmg", name: "Odin", price: 5600, damage: 24, fireRate: 0.14, speed: 930, spread: 0.12, mag: 50, reload: 3.2 },
+  { id: "sniper", name: "Operator", price: 6900, damage: 95, fireRate: 0.9, speed: 1450, spread: 0.01, mag: 5, reload: 2.1 },
 ];
 
 const weaponCategories = [
@@ -352,14 +352,66 @@ const weaponCategories = [
 const weaponCategoryById = new Map(weaponCategories.map((category) => [category.id, category]));
 const weaponCategoryByKey = new Map(weaponCategories.map((category) => [category.key, category.id]));
 
+const weaponImageFiles = {
+  pistol: "Classic_icon.webp",
+  "light-pistol": "Shorty_icon.webp",
+  revolver: "Sheriff_icon.webp",
+  smg: "Spectre_icon.webp",
+  shotgun: "Judge_icon.webp",
+  carbine: "Bulldog_icon.webp",
+  rifle: "Vandal_icon.webp",
+  dmr: "Guardian_icon.webp",
+  lmg: "Odin_icon.webp",
+  sniper: "Operator_icon.webp",
+};
+
+const weaponImageFallbackFiles = {
+  rifle: "Phantom_icon.webp",
+};
+
+const weaponImageCache = new Map();
+
 function weaponImagePath(weapon) {
-  return `assets/images/weapons/${weapon.id}.png`;
+  return `assets/weapon-incon/${weaponImageFiles[weapon.id] || `${weapon.name}_icon.webp`}`;
+}
+
+function fallbackWeaponImagePath(weapon) {
+  const fallbackFile = weaponImageFallbackFiles[weapon.id];
+  return fallbackFile ? `assets/weapon-incon/${fallbackFile}` : "";
 }
 
 function weaponPlaceholderImage(weapon) {
   const label = weapon.name.slice(0, 12).toUpperCase().replace(/[&<>]/g, "");
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="112" viewBox="0 0 240 112"><rect width="240" height="112" rx="10" fill="#101926"/><path d="M37 69h112l16-18h34v13h-28l-15 18H37z" fill="#ff4655" opacity=".9"/><path d="M56 49h85l10-12h24l-10 22H56z" fill="#d7edff" opacity=".22"/><text x="24" y="31" fill="#d7edff" font-family="Arial, sans-serif" font-size="16" font-weight="700">${label}</text></svg>`;
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function preloadWeaponAsset(src) {
+  if (!src || typeof Image === "undefined") return Promise.resolve(src || "");
+  const cached = weaponImageCache.get(src);
+  if (cached) return cached.promise;
+  const image = new Image();
+  const promise = new Promise((resolve) => {
+    image.onload = () => {
+      if (image.decode) {
+        image.decode().catch(() => {}).finally(() => resolve(src));
+        return;
+      }
+      resolve(src);
+    };
+    image.onerror = () => resolve("");
+  });
+  image.src = src;
+  weaponImageCache.set(src, { image, promise });
+  return promise;
+}
+
+function preloadAllWeaponImages() {
+  for (const weapon of weapons) {
+    preloadWeaponAsset(weaponImagePath(weapon)).then((src) => {
+      if (!src) preloadWeaponAsset(fallbackWeaponImagePath(weapon));
+    });
+  }
 }
 
 function weaponsForCurrentCategory() {
@@ -5683,10 +5735,16 @@ function preloadAllAgentArtworks() {
     preloadAgentAsset(presentation.artwork);
   }
 }
+
+function preloadInitialVisualAssets() {
+  preloadAllAgentArtworks();
+  preloadAllWeaponImages();
+}
+
 if ("requestIdleCallback" in window) {
-  requestIdleCallback(preloadAllAgentArtworks, { timeout: 1500 });
+  requestIdleCallback(preloadInitialVisualAssets, { timeout: 800 });
 } else {
-  setTimeout(preloadAllAgentArtworks, 300);
+  setTimeout(preloadInitialVisualAssets, 150);
 }
 
 function showAgentSelect(onPick, returnState = "main") {
@@ -5856,6 +5914,7 @@ function quitToMainMenu() {
 }
 
 function showMainMenu() {
+  preloadInitialVisualAssets();
   hidePauseOverlay();
   ui.introOverlay?.classList.add("hidden");
   ui.matchOverlay?.classList.add("hidden");
@@ -6747,6 +6806,7 @@ function renderWeaponCategoryTabs() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "weapon-category-tab";
+    button.dataset.weaponCategory = category.id;
     button.classList.toggle("active", category.id === game.shopWeaponCategory);
     button.innerHTML = `<span>${category.label}</span><em>${category.key}</em>`;
     button.addEventListener("click", () => setWeaponCategory(category.id));
@@ -6768,10 +6828,17 @@ function createWeaponCard(weapon) {
   button.className = "choice weapon-choice";
   const image = document.createElement("img");
   image.alt = weapon.name;
-  image.loading = "lazy";
+  image.loading = "eager";
+  image.decoding = "async";
   image.addEventListener("error", () => {
+    const fallback = fallbackWeaponImagePath(weapon);
+    if (fallback && image.dataset.fallbackTried !== "true") {
+      image.dataset.fallbackTried = "true";
+      image.src = fallback;
+      return;
+    }
     image.src = weaponPlaceholderImage(weapon);
-  }, { once: true });
+  });
   image.src = weaponImagePath(weapon);
 
   const art = document.createElement("span");
