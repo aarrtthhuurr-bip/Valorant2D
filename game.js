@@ -1109,6 +1109,7 @@ const game = {
   omenUlt: null,
   fovMode: localStorage.getItem(FOV_STORAGE_KEY) === "on",
   fovSegmentsCache: { key: null, segments: null },
+  lastFovPolygon: null,
   ultFlashTimer: 0,
   devModeUnlocked: false,
   crosshairUnlockClicks: 0,
@@ -1493,7 +1494,7 @@ game.bullets = [];
    game.yoruGatecrash = null;
    game.omenUlt = null;
    game.timeScale = 1;
-   game.fovSegmentsCache = { key: null, segments: null };
+   resetFogRenderState();
    game.screenTint = null;
    game.player.orbChannel = null;
    game.player.orbAssignment = null;
@@ -2575,6 +2576,21 @@ function fovCacheKey() {
   return `${game.mapName}:${map.walls.length}:${game.destructibles.length}:${game.destructibles.map((wall) => `${wall.x},${wall.y},${wall.w},${wall.h}`).join("|")}`;
 }
 
+function isFovModeEnabled() {
+  return Boolean(game.fovMode);
+}
+
+function resetCanvasCompositeState() {
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
+}
+
+function resetFogRenderState() {
+  game.fovSegmentsCache = { key: null, segments: null };
+  game.lastFovPolygon = null;
+  resetCanvasCompositeState();
+}
+
 function wallsToSegments() {
   const key = fovCacheKey();
   if (game.fovSegmentsCache.key === key && game.fovSegmentsCache.segments) return game.fovSegmentsCache.segments;
@@ -2635,7 +2651,7 @@ function buildFOVPolygon() {
 }
 
 function isBotVisible(bot) {
-  if (!game.fovMode) return true;
+  if (!isFovModeEnabled()) return true;
   if (!game.player?.alive || !bot?.alive) return false;
   if (Math.hypot(bot.x - game.player.x, bot.y - game.player.y) > FOV_MAX_DISTANCE) return false;
   const segmentToBot = { p1: { x: game.player.x, y: game.player.y }, p2: { x: bot.x, y: bot.y } };
@@ -2650,24 +2666,32 @@ function isBotVisible(bot) {
 }
 
 function renderFOV() {
-  if (!game.fovMode || !game.player?.alive) return;
+  if (!isFovModeEnabled() || !game.player?.alive) return;
   const polygon = buildFOVPolygon();
-  if (polygon.length < 4) return;
+  if (polygon.length >= 4) game.lastFovPolygon = polygon;
+  const visiblePolygon = polygon.length >= 4 ? polygon : game.lastFovPolygon;
+  if (!visiblePolygon || visiblePolygon.length < 4) return;
   ctx.save();
-  ctx.fillStyle = `rgba(0, 0, 0, ${FOV_DARKNESS_OPACITY})`;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.globalCompositeOperation = "destination-out";
-  const gradient = ctx.createRadialGradient(game.player.x, game.player.y, 24, game.player.x, game.player.y, FOV_MAX_DISTANCE);
-  gradient.addColorStop(0, "rgba(255,255,255,1)");
-  gradient.addColorStop(0.78, "rgba(255,255,255,0.98)");
-  gradient.addColorStop(1, "rgba(255,255,255,0.7)");
-  ctx.fillStyle = gradient;
-  ctx.beginPath();
-  ctx.moveTo(polygon[0].x, polygon[0].y);
-  for (let i = 1; i < polygon.length; i++) ctx.lineTo(polygon[i].x, polygon[i].y);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
+  try {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    resetCanvasCompositeState();
+    ctx.fillStyle = `rgba(0, 0, 0, ${FOV_DARKNESS_OPACITY})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.globalCompositeOperation = "destination-out";
+    const gradient = ctx.createRadialGradient(game.player.x, game.player.y, 24, game.player.x, game.player.y, FOV_MAX_DISTANCE);
+    gradient.addColorStop(0, "rgba(255,255,255,1)");
+    gradient.addColorStop(0.78, "rgba(255,255,255,0.98)");
+    gradient.addColorStop(1, "rgba(255,255,255,0.7)");
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.moveTo(visiblePolygon[0].x, visiblePolygon[0].y);
+    for (let i = 1; i < visiblePolygon.length; i++) ctx.lineTo(visiblePolygon[i].x, visiblePolygon[i].y);
+    ctx.closePath();
+    ctx.fill();
+  } finally {
+    ctx.restore();
+    resetCanvasCompositeState();
+  }
 }
 
 function segmentCircleHit(x1, y1, x2, y2, circle, padding = 0) {
@@ -6488,7 +6512,7 @@ function loadSandboxMap(index) {
   game.allies = [];
   game.bullets = [];
   game.destructibles = cloneRects(map.destructibles || []);
-  game.fovSegmentsCache = { key: null, segments: null };
+  resetFogRenderState();
   game.sandboxCustomWalls = [];
   game.medkits = [];
   game.ultOrbs = [];
@@ -6979,6 +7003,7 @@ function quitToMainMenu() {
 
 function setFovMode(enabled) {
   game.fovMode = Boolean(enabled);
+  resetFogRenderState();
   localStorage.setItem(FOV_STORAGE_KEY, game.fovMode ? "on" : "off");
   setMessage(game.fovMode ? "Modo Névoa ativado." : "Modo Normal ativado.");
   if (game.menuState === "main") renderFovModeSwitch();
