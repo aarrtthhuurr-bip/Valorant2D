@@ -139,7 +139,7 @@ const BUY_TIME = 8;
 const MATCH_ROUNDS = 9;
 const POISON_TICK_INTERVAL = 0.35;
 const FOV_RAY_COUNT = 360;
-const FOV_MAX_DISTANCE = 300;
+const FOV_MAX_DISTANCE = 2400;
 const FOV_DARKNESS_OPACITY = 0.91;
 const FOV_STORAGE_KEY = "valorant2d-fov-mode";
 // Custo de orbs por agente para ativar a ultimate
@@ -2573,7 +2573,7 @@ function pointLineDistance(px, py, x1, y1, x2, y2) {
 }
 
 function fovCacheKey() {
-  return `${game.mapName}:${map.walls.length}:${game.destructibles.length}:${game.destructibles.map((wall) => `${wall.x},${wall.y},${wall.w},${wall.h}`).join("|")}`;
+  return `${game.mapName}:${map.width}x${map.height}:${map.walls.length}:${game.destructibles.length}:${game.destructibles.map((wall) => `${wall.x},${wall.y},${wall.w},${wall.h}`).join("|")}`;
 }
 
 function isFovModeEnabled() {
@@ -2591,6 +2591,22 @@ function resetFogRenderState() {
   resetCanvasCompositeState();
 }
 
+function isRoundTransitionRevealActive() {
+  return game.roundBannerTimer > 0 || game.phase === "ended" || game.phase === "matchOver";
+}
+
+function fovRayDistanceLimit(origin) {
+  const width = Math.max(map.width || BASE_WIDTH, canvas?.width || BASE_WIDTH);
+  const height = Math.max(map.height || BASE_HEIGHT, canvas?.height || BASE_HEIGHT);
+  const cornerDistances = [
+    Math.hypot(origin.x, origin.y),
+    Math.hypot(width - origin.x, origin.y),
+    Math.hypot(origin.x, height - origin.y),
+    Math.hypot(width - origin.x, height - origin.y),
+  ];
+  return Math.max(FOV_MAX_DISTANCE, ...cornerDistances) + 32;
+}
+
 function wallsToSegments() {
   const key = fovCacheKey();
   if (game.fovSegmentsCache.key === key && game.fovSegmentsCache.segments) return game.fovSegmentsCache.segments;
@@ -2606,6 +2622,12 @@ function wallsToSegments() {
       { p1: { x: x1, y: y2 }, p2: { x: x1, y: y1 } },
     ];
   });
+  segments.push(
+    { p1: { x: 0, y: 0 }, p2: { x: map.width, y: 0 } },
+    { p1: { x: map.width, y: 0 }, p2: { x: map.width, y: map.height } },
+    { p1: { x: map.width, y: map.height }, p2: { x: 0, y: map.height } },
+    { p1: { x: 0, y: map.height }, p2: { x: 0, y: 0 } }
+  );
   game.fovSegmentsCache = { key, segments };
   return segments;
 }
@@ -2630,7 +2652,7 @@ function castRay(angle) {
   rayDir.x /= mag;
   rayDir.y /= mag;
   const origin = game.player || { x: BASE_WIDTH / 2, y: BASE_HEIGHT / 2 };
-  let nearest = FOV_MAX_DISTANCE;
+  let nearest = fovRayDistanceLimit(origin);
   for (const segment of wallsToSegments()) {
     const hit = raySegmentIntersection(origin, rayDir, segment);
     if (hit !== null && hit < nearest) nearest = hit;
@@ -2652,8 +2674,8 @@ function buildFOVPolygon() {
 
 function isBotVisible(bot) {
   if (!isFovModeEnabled()) return true;
+  if (isRoundTransitionRevealActive()) return true;
   if (!game.player?.alive || !bot?.alive) return false;
-  if (Math.hypot(bot.x - game.player.x, bot.y - game.player.y) > FOV_MAX_DISTANCE) return false;
   const segmentToBot = { p1: { x: game.player.x, y: game.player.y }, p2: { x: bot.x, y: bot.y } };
   const dir = { x: bot.x - game.player.x, y: bot.y - game.player.y };
   const distance = Math.hypot(dir.x, dir.y) || 1;
@@ -2667,6 +2689,10 @@ function isBotVisible(bot) {
 
 function renderFOV() {
   if (!isFovModeEnabled() || !game.player?.alive) return;
+  if (isRoundTransitionRevealActive()) {
+    resetCanvasCompositeState();
+    return;
+  }
   const polygon = buildFOVPolygon();
   if (polygon.length >= 4) game.lastFovPolygon = polygon;
   const visiblePolygon = polygon.length >= 4 ? polygon : game.lastFovPolygon;
@@ -2678,15 +2704,14 @@ function renderFOV() {
     ctx.fillStyle = `rgba(0, 0, 0, ${FOV_DARKNESS_OPACITY})`;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.globalCompositeOperation = "destination-out";
-    const gradient = ctx.createRadialGradient(game.player.x, game.player.y, 24, game.player.x, game.player.y, FOV_MAX_DISTANCE);
-    gradient.addColorStop(0, "rgba(255,255,255,1)");
-    gradient.addColorStop(0.78, "rgba(255,255,255,0.98)");
-    gradient.addColorStop(1, "rgba(255,255,255,0.7)");
-    ctx.fillStyle = gradient;
+    ctx.fillStyle = "#fff";
     ctx.beginPath();
     ctx.moveTo(visiblePolygon[0].x, visiblePolygon[0].y);
     for (let i = 1; i < visiblePolygon.length; i++) ctx.lineTo(visiblePolygon[i].x, visiblePolygon[i].y);
     ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(game.player.x, game.player.y, (game.player.r || 18) + 14, 0, Math.PI * 2);
     ctx.fill();
   } finally {
     ctx.restore();
