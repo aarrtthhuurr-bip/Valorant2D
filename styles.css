@@ -1522,9 +1522,9 @@ canvas {
   content: "";
   position: absolute;
   inset: 0;
-  background: url("assets/images/Logo_Valorant2D.png") center / min(360px, 42%) no-repeat;
-  opacity: 0.055;
-  filter: grayscale(1) brightness(2.2) drop-shadow(0 0 26px rgba(238, 247, 251, 0.12));
+  background: url("assets/Favicon/Favicon_V2D.png") center / min(520px, 58%) no-repeat;
+  opacity: 0.42;
+  filter: drop-shadow(0 0 34px rgba(255, 70, 85, 0.22)) drop-shadow(0 0 74px rgba(238, 247, 251, 0.12));
   mix-blend-mode: screen;
   pointer-events: none;
 }
