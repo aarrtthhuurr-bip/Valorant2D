@@ -453,6 +453,7 @@ canvas {
 }
 
 .ult-counter {
+  display: inline-block;
   color: #c89cff;
   font-weight: 700;
   text-shadow: 0 0 12px rgba(176, 84, 255, 0.72);
@@ -463,9 +464,23 @@ canvas {
   animation: ultReadyPulse 0.8s ease-in-out infinite alternate;
 }
 
+.ult-counter.warning {
+  color: #ff4655;
+  text-shadow: 0 0 16px rgba(255, 70, 85, 0.9);
+}
+
+.ult-counter.pulse {
+  animation: ultErrorPulse 0.28s ease-in-out alternate infinite;
+}
+
 @keyframes ultReadyPulse {
   from { text-shadow: 0 0 8px rgba(176, 84, 255, 0.55); }
   to { text-shadow: 0 0 22px rgba(213, 130, 255, 1); }
+}
+
+@keyframes ultErrorPulse {
+  from { transform: scale(1); }
+  to { transform: scale(1.08); }
 }
 
 .weapon-line {
@@ -1712,6 +1727,44 @@ button.click-feedback::after {
   flex-direction: column;
   align-items: stretch;
   gap: 10px;
+}
+
+.fov-mode-switch {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr 1.45fr;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding: 8px;
+  border: 1px solid rgba(255, 70, 85, 0.18);
+  border-radius: 8px;
+  background: rgba(10, 17, 26, 0.64);
+}
+
+.fov-mode-switch span {
+  color: #8fa5b9;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.fov-mode-switch button {
+  min-height: 34px;
+  border-radius: 6px;
+  border: 1px solid rgba(200, 214, 229, 0.14);
+  background: rgba(26, 37, 53, 0.92);
+  color: #c8d6e5;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.fov-mode-switch button.active {
+  border-color: rgba(255, 70, 85, 0.78);
+  background: rgba(255, 70, 85, 0.22);
+  color: #ffffff;
+  box-shadow: 0 0 18px rgba(255, 70, 85, 0.16);
 }
 
 .menu-state-main .menu-button {

@@ -138,7 +138,22 @@ const PLANT_TIME = 2.0;
 const BUY_TIME = 8;
 const MATCH_ROUNDS = 9;
 const POISON_TICK_INTERVAL = 0.35;
-const ULT_MAX_POINTS = 7;
+const FOV_RAY_COUNT = 360;
+const FOV_MAX_DISTANCE = 300;
+const FOV_DARKNESS_OPACITY = 0.91;
+const FOV_STORAGE_KEY = "valorant2d-fov-mode";
+// Custo de orbs por agente para ativar a ultimate
+const ULT_COSTS = {
+  neon:     5,
+  viper:    6,
+  sage:     5,
+  omen:     6,
+  jett:     4,
+  killjoy:  4,
+  raze:     8,
+  yoru:     5,
+};
+const ULT_MAX_POINTS = 8; // máximo de orbs que o jogador pode acumular
 const MEDKIT_HEAL = 50;
 const ORB_CHANNEL_TIME = 3;
 const VIPER_CAST_RANGE = 330;
@@ -192,6 +207,7 @@ const agents = [
     name: "Neon",
     role: "Entrada",
     color: "#00d9ff",
+    ultCost: 5,
     ability: "Alta Voltagem",
     cooldown: 0,
     use(game) {
@@ -209,6 +225,7 @@ const agents = [
     name: "Viper",
     role: "Controle",
     color: "#0f7f3b",
+    ultCost: 6,
     ability: "Nuvem de veneno",
     cooldown: 9,
     use(game) {
@@ -231,6 +248,7 @@ const agents = [
     name: "Sage",
     role: "Suporte",
     color: "#00cfa6",
+    ultCost: 5,
     ability: "Cura",
     cooldown: 9,
     use(game) {
@@ -242,6 +260,7 @@ const agents = [
     name: "Omen",
     role: "Controle",
     color: "#5a2b9e",
+    ultCost: 6,
     ability: "Smoke",
     cooldown: 8,
     use(game) {
@@ -264,6 +283,7 @@ const agents = [
     name: "Jett",
     role: "Duelista",
     color: "#9fe8ff",
+    ultCost: 4,
     ability: "Brisa de Impulso",
     cooldown: 7,
     use(game) {
@@ -283,6 +303,7 @@ const agents = [
     name: "Killjoy",
     role: "Sentinela",
     color: "#f7d84a",
+    ultCost: 4,
     ability: "Torreta",
     cooldown: 12,
     use(game) {
@@ -315,6 +336,7 @@ const agents = [
     name: "Raze",
     role: "Duelista",
     color: "#ff8a2a",
+    ultCost: 8,
     ability: "Cartuchos de Tinta",
     cooldown: 10,
     use(game) {
@@ -328,6 +350,7 @@ const agents = [
     name: "Yoru",
     role: "Duelista",
     color: "#3e6bff",
+    ultCost: 5,
     ability: "Passagem Dimensional",
     cooldown: 8,
     use(game) {
@@ -743,6 +766,8 @@ function playSound(name) {
   if (name === "round_lose") { playTone(392, 0.1, "sine", 0.04); playTone(330, 0.1, "sine", 0.04); playTone(262, 0.22,"sine", 0.045); }
   if (name === "spike")   playTone(80,  0.3,  "sawtooth",  0.055);
   if (name === "ability") playTone(620, 0.14, "triangle",  0.038);
+  if (name === "pickup")  { playTone(760, 0.06, "sine", 0.035); playTone(1040, 0.08, "sine", 0.026); }
+  if (name === "denied")  { playTone(180, 0.08, "sawtooth", 0.032); playTone(120, 0.12, "sawtooth", 0.024); }
 }
 
 const DEFAULT_MAP = {
@@ -1082,6 +1107,9 @@ const game = {
   showHitboxes: false,
   timeScale: 1,
   omenUlt: null,
+  fovMode: localStorage.getItem(FOV_STORAGE_KEY) === "on",
+  fovSegmentsCache: { key: null, segments: null },
+  ultFlashTimer: 0,
   devModeUnlocked: false,
   crosshairUnlockClicks: 0,
   agentLocked: false,
@@ -1465,6 +1493,7 @@ game.bullets = [];
    game.yoruGatecrash = null;
    game.omenUlt = null;
    game.timeScale = 1;
+   game.fovSegmentsCache = { key: null, segments: null };
    game.screenTint = null;
    game.player.orbChannel = null;
    game.player.orbAssignment = null;
@@ -2542,6 +2571,105 @@ function pointLineDistance(px, py, x1, y1, x2, y2) {
   return Math.hypot(px - x, py - y);
 }
 
+function fovCacheKey() {
+  return `${game.mapName}:${map.walls.length}:${game.destructibles.length}:${game.destructibles.map((wall) => `${wall.x},${wall.y},${wall.w},${wall.h}`).join("|")}`;
+}
+
+function wallsToSegments() {
+  const key = fovCacheKey();
+  if (game.fovSegmentsCache.key === key && game.fovSegmentsCache.segments) return game.fovSegmentsCache.segments;
+  const segments = solidWalls().flatMap((wall) => {
+    const x1 = wall.x;
+    const y1 = wall.y;
+    const x2 = wall.x + wall.w;
+    const y2 = wall.y + wall.h;
+    return [
+      { p1: { x: x1, y: y1 }, p2: { x: x2, y: y1 } },
+      { p1: { x: x2, y: y1 }, p2: { x: x2, y: y2 } },
+      { p1: { x: x2, y: y2 }, p2: { x: x1, y: y2 } },
+      { p1: { x: x1, y: y2 }, p2: { x: x1, y: y1 } },
+    ];
+  });
+  game.fovSegmentsCache = { key, segments };
+  return segments;
+}
+
+function raySegmentIntersection(rayOrigin, rayDir, segment) {
+  const sx = segment.p2.x - segment.p1.x;
+  const sy = segment.p2.y - segment.p1.y;
+  const denom = rayDir.x * sy - rayDir.y * sx;
+  if (Math.abs(denom) < 0.00001) return null;
+  const qpx = segment.p1.x - rayOrigin.x;
+  const qpy = segment.p1.y - rayOrigin.y;
+  const t = (qpx * sy - qpy * sx) / denom;
+  const u = (qpx * rayDir.y - qpy * rayDir.x) / denom;
+  if (t < 0 || u < 0 || u > 1) return null;
+  return t;
+}
+
+function castRay(angle) {
+  const radians = ((angle % 360) + 360) % 360 * Math.PI / 180;
+  const rayDir = { x: Math.cos(radians), y: Math.sin(radians) };
+  const mag = Math.hypot(rayDir.x, rayDir.y) || 1;
+  rayDir.x /= mag;
+  rayDir.y /= mag;
+  const origin = game.player || { x: BASE_WIDTH / 2, y: BASE_HEIGHT / 2 };
+  let nearest = FOV_MAX_DISTANCE;
+  for (const segment of wallsToSegments()) {
+    const hit = raySegmentIntersection(origin, rayDir, segment);
+    if (hit !== null && hit < nearest) nearest = hit;
+  }
+  const x = Math.max(0, Math.min(map.width, origin.x + rayDir.x * nearest));
+  const y = Math.max(0, Math.min(map.height, origin.y + rayDir.y * nearest));
+  return { x, y };
+}
+
+function buildFOVPolygon() {
+  if (!game.player?.alive) return [];
+  const points = [{ x: game.player.x, y: game.player.y }];
+  const step = 360 / FOV_RAY_COUNT;
+  for (let angle = 0; angle < 360; angle += step) {
+    points.push(castRay(angle));
+  }
+  return points;
+}
+
+function isBotVisible(bot) {
+  if (!game.fovMode) return true;
+  if (!game.player?.alive || !bot?.alive) return false;
+  if (Math.hypot(bot.x - game.player.x, bot.y - game.player.y) > FOV_MAX_DISTANCE) return false;
+  const segmentToBot = { p1: { x: game.player.x, y: game.player.y }, p2: { x: bot.x, y: bot.y } };
+  const dir = { x: bot.x - game.player.x, y: bot.y - game.player.y };
+  const distance = Math.hypot(dir.x, dir.y) || 1;
+  dir.x /= distance;
+  dir.y /= distance;
+  return !wallsToSegments().some((segment) => {
+    const hit = raySegmentIntersection(segmentToBot.p1, dir, segment);
+    return hit !== null && hit < distance - bot.r;
+  });
+}
+
+function renderFOV() {
+  if (!game.fovMode || !game.player?.alive) return;
+  const polygon = buildFOVPolygon();
+  if (polygon.length < 4) return;
+  ctx.save();
+  ctx.fillStyle = `rgba(0, 0, 0, ${FOV_DARKNESS_OPACITY})`;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.globalCompositeOperation = "destination-out";
+  const gradient = ctx.createRadialGradient(game.player.x, game.player.y, 24, game.player.x, game.player.y, FOV_MAX_DISTANCE);
+  gradient.addColorStop(0, "rgba(255,255,255,1)");
+  gradient.addColorStop(0.78, "rgba(255,255,255,0.98)");
+  gradient.addColorStop(1, "rgba(255,255,255,0.7)");
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.moveTo(polygon[0].x, polygon[0].y);
+  for (let i = 1; i < polygon.length; i++) ctx.lineTo(polygon[i].x, polygon[i].y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
 function segmentCircleHit(x1, y1, x2, y2, circle, padding = 0) {
   return pointLineDistance(circle.x, circle.y, x1, y1, x2, y2) <= circle.r + padding;
 }
@@ -2858,21 +2986,41 @@ function updateOmenUltimate(dt) {
   }
 }
 
+function getUltCost(entity) {
+  const agent = agentById(entity?.agentId);
+  const configured = Number(agent?.ultCost ?? ULT_COSTS[agent?.id]);
+  if (!Number.isFinite(configured)) console.warn("Ult cost missing for agent", agent?.id);
+  return Number.isFinite(configured) ? configured : 6;
+}
+
 function activateUltimate(entity) {
   const infiniteSandboxUlt = game.sandbox && entity?.id === "player";
   const tutorialFreeUlt = game.tutorial && entity?.id === "player" && game.tutorialFreeUlts > 0;
-  if (!entity?.alive || (!infiniteSandboxUlt && !tutorialFreeUlt && getUltimatePoints(entity) < ULT_MAX_POINTS) || (!infiniteSandboxUlt && entity.ultimate)) return false;
+  const cost = getUltCost(entity);
+  if (!entity?.alive || (!infiniteSandboxUlt && !tutorialFreeUlt && getUltimatePoints(entity) < cost) || (!infiniteSandboxUlt && entity.ultimate)) {
+    // Feedback visual quando não há orbs suficientes
+    if (entity?.id === "player" && !entity.ultimate && !infiniteSandboxUlt && !tutorialFreeUlt) {
+      const current = getUltimatePoints(entity);
+      if (current < cost) {
+        game.ultFlashTimer = 0.55;
+        playSound("denied");
+        setMessage(`Ultimate: ${current}/${cost} orbs - colete mais orbs!`);
+      }
+    }
+    return false;
+  }
   const agent = agentById(entity.agentId);
   const team = entityTeam(entity);
   if (infiniteSandboxUlt) entity.ultimate = null;
   else if (tutorialFreeUlt) {
     game.tutorialFreeUlts = Math.max(0, game.tutorialFreeUlts - 1);
     game.tutorialUltUses += 1;
-    if (game.tutorialFreeUlts > 0) setUltimatePoints(entity, ULT_MAX_POINTS);
+    if (game.tutorialFreeUlts > 0) setUltimatePoints(entity, cost);
     else setUltimatePoints(entity, 0);
   }
   else {
-    setUltimatePoints(entity, 0);
+    // Consome exatamente o custo de orbs do agente
+    setUltimatePoints(entity, getUltimatePoints(entity) - cost);
   }
 
   if (agent.id === "neon") {
@@ -2931,14 +3079,21 @@ function activateUltimate(entity) {
     });
     addUltimateEffect("chemical-fog", entity, "#35c46a", 999);
   } else if (agent.id === "sage") {
-    entity.ultimate = { type: "sage", life: 4, maxLife: 4 };
-    const squad = team === "player" ? [game.player, ...game.allies] : game.bots;
+    entity.ultimate = { type: "sage", life: 1, maxLife: 1 };
+    // Ultimate da Sage: restaura vida e escudo totais instantaneamente
+    const squad = [entity];
     for (const target of squad) {
       if (!target.alive) continue;
-      target.hp = target.maxHp;
-      target.armor = target.maxArmor || 0;
+      target.hp = target.maxHp;           // vida total
+      target.armor = target.maxArmor || 0; // escudo total
       if (target.id === "player") game.armor = target.armor;
-      spawnParticles(target.x, target.y, "#62e6a0", 22, 150);
+      // Efeito visual de cura: partículas verdes em espiral
+      for (let i = 0; i < 4; i++) {
+        setTimeout(() => {
+          if (target.alive) spawnParticles(target.x, target.y, i % 2 ? "#eafff8" : "#62e6a0", 18, 160);
+        }, i * 150);
+      }
+      game.screenTint = { color: "rgba(0, 207, 166, 0.24)", life: 0.72, maxLife: 0.72 };
     }
     addUltimateEffect("healing-beam", entity, "#62e6a0", 4);
   } else {
@@ -2977,6 +3132,10 @@ function nearestPickup(entity, pickups) {
 
 function completeOrbCollection(entity, orb) {
    setUltimatePoints(entity, getUltimatePoints(entity) + 1);
+   if (entity.id === "player") {
+     game.ultFlashTimer = 0.28;
+     playSound("pickup");
+   }
    entity.orbChannel = null;
    entity.orbAssignment = null;
    if (orb) orb.reservadaPor = null;
@@ -3922,7 +4081,7 @@ function seekUltimateOrb(entity, dt) {
  }
 
 function maybeUseBotUltimate(bot, visibleTarget) {
-  if (getUltimatePoints(bot) < ULT_MAX_POINTS || bot.ultimate) return false;
+  if (getUltimatePoints(bot) < getUltCost(bot) || bot.ultimate) return false;
   const agentId = bot.agentId;
   const alliedSquad = entityTeam(bot) === "player" ? [game.player, ...game.allies] : game.bots;
   if (agentId === "sage") {
@@ -4548,6 +4707,7 @@ function updateTimers(dt) {
     game.damageIndicator.life -= dt;
     if (game.damageIndicator.life <= 0) game.damageIndicator = null;
   }
+  game.ultFlashTimer = Math.max(0, (game.ultFlashTimer || 0) - dt);
   updateOmenUltimate(dt / Math.max(0.1, game.timeScale || 1));
   for (const smoke of game.smokes) {
     smoke.visualPhase = (smoke.visualPhase || 0) + dt;
@@ -5959,6 +6119,7 @@ function draw() {
   ctx.globalAlpha = 1;
 
   for (const bot of game.bots) {
+    if (!isBotVisible(bot)) continue;
     const visible = game.revealTimer > 0 || hasLineOfSight(game.player, bot);
     const label = `${bot.side === "attackers" ? "ATK" : "DEF"} ${bot.weapon?.name || "Pistol"}`;
     const color = bot.side === "attackers" ? "#ff8a5b" : "#4fb3ff";
@@ -6048,6 +6209,7 @@ function draw() {
   drawDamageFlash();
   drawShadowBlindness();
   drawAgentScreenEffects();
+  renderFOV();
   ctx.restore();
 }
 
@@ -6129,8 +6291,12 @@ function updateUi() {
   setText(ui.agent, `${game.playerName} · ${game.selectedAgent.name} ${atk ? "ATK" : "DEF"} · ${game.sandbox ? "E livre" : game.abilityCooldown > 0 ? `${Math.ceil(game.abilityCooldown)}s` : "E"}`);
   setText(ui.weapon, game.selectedWeapon.name);
   setText(ui.hp, `${Math.max(0, Math.ceil(game.player.hp))}`);
-  setText(ui.ultPoints, game.sandbox ? "∞" : `${game.player.ultPoints}/${ULT_MAX_POINTS}`);
-  toggleClass(ui.ultCounter, "ready", game.player.ultPoints >= ULT_MAX_POINTS);
+  const ultCost = getUltCost(game.player);
+  const ultReady = getUltimatePoints(game.player) >= ultCost;
+  setText(ui.ultPoints, game.sandbox ? "∞" : `${getUltimatePoints(game.player)}/${ultCost}`);
+  toggleClass(ui.ultCounter, "ready", game.sandbox || ultReady);
+  toggleClass(ui.ultCounter, "warning", game.ultFlashTimer > 0 && !ultReady);
+  toggleClass(ui.ultCounter, "pulse", game.ultFlashTimer > 0);
   const ultimateAmmo = game.player.ultimate?.type === "jett"
     ? `${game.player.ultimate.knives || 0}/${game.player.ultimate.maxKnives || 6} dardos`
     : game.player.ultimate?.type === "raze"
@@ -6322,6 +6488,7 @@ function loadSandboxMap(index) {
   game.allies = [];
   game.bullets = [];
   game.destructibles = cloneRects(map.destructibles || []);
+  game.fovSegmentsCache = { key: null, segments: null };
   game.sandboxCustomWalls = [];
   game.medkits = [];
   game.ultOrbs = [];
@@ -6810,6 +6977,31 @@ function quitToMainMenu() {
   showMainMenu();
 }
 
+function setFovMode(enabled) {
+  game.fovMode = Boolean(enabled);
+  localStorage.setItem(FOV_STORAGE_KEY, game.fovMode ? "on" : "off");
+  setMessage(game.fovMode ? "Modo Névoa ativado." : "Modo Normal ativado.");
+  if (game.menuState === "main") renderFovModeSwitch();
+}
+
+function renderFovModeSwitch() {
+  if (!ui.menuButtons || game.menuState !== "main") return;
+  ui.menuButtons.querySelector(".fov-mode-switch")?.remove();
+  const switcher = document.createElement("div");
+  switcher.className = "fov-mode-switch";
+  switcher.innerHTML = `
+    <span>VISÃO</span>
+    <button type="button" data-fov-mode="normal">Normal</button>
+    <button type="button" data-fov-mode="fog">Modo Névoa</button>
+  `;
+  switcher.querySelectorAll("button").forEach((button) => {
+    const active = button.dataset.fovMode === (game.fovMode ? "fog" : "normal");
+    button.classList.toggle("active", active);
+    button.addEventListener("click", () => setFovMode(button.dataset.fovMode === "fog"));
+  });
+  ui.menuButtons.prepend(switcher);
+}
+
 function showMainMenu() {
   preloadInitialVisualAssets();
   hidePauseOverlay();
@@ -6834,6 +7026,7 @@ function showMainMenu() {
     { label: "TREINO", icon: "star", action: startTrainingMode },
     { label: "TUTORIAL", icon: "link", action: startTutorialMode },
   ], "MENU", "main");
+  renderFovModeSwitch();
 }
 
 function showDifficultyMenu(immediate = false) {
