@@ -140,7 +140,7 @@ const MATCH_ROUNDS = 9;
 const POISON_TICK_INTERVAL = 0.35;
 const FOV_RAY_COUNT = 360;
 const FOV_MAX_DISTANCE = 2400;
-const FOV_DARKNESS_OPACITY = 0.91;
+const FOV_DARKNESS_OPACITY = 0.58;
 const FOV_STORAGE_KEY = "valorant2d-fov-mode";
 // Custo de orbs por agente para ativar a ultimate
 const ULT_COSTS = {
@@ -2711,7 +2711,7 @@ function renderFOV() {
     ctx.closePath();
     ctx.fill();
     ctx.beginPath();
-    ctx.arc(game.player.x, game.player.y, (game.player.r || 18) + 14, 0, Math.PI * 2);
+    ctx.arc(game.player.x, game.player.y, Math.max(96, (game.player.r || 18) + 64), 0, Math.PI * 2);
     ctx.fill();
   } finally {
     ctx.restore();
@@ -6259,6 +6259,10 @@ function draw() {
   drawShadowBlindness();
   drawAgentScreenEffects();
   renderFOV();
+  if (isFovModeEnabled() && !isRoundTransitionRevealActive() && !game.player?.untargetable) {
+    drawEntity(game.player, game.selectedAgent.color, game.playerSide === "attackers" ? "YOU ATK" : "YOU DEF", "player");
+    drawJettKunaiRing(game.player);
+  }
   ctx.restore();
 }
 
