@@ -138,9 +138,9 @@ const PLANT_TIME = 2.0;
 const BUY_TIME = 8;
 const MATCH_ROUNDS = 9;
 const POISON_TICK_INTERVAL = 0.35;
-const FOV_RAY_COUNT = 360;
 const FOV_VISIBILITY_RADIUS = 200;
-const FOV_DARKNESS_OPACITY = 0.82;
+const FOV_ANGLE_EPSILON = 0.0008;
+const FOV_DARKNESS_OPACITY = 1;
 const FOV_STORAGE_KEY = "valorant2d-fov-mode";
 // Custo de orbs por agente para ativar a ultimate
 const ULT_COSTS = {
@@ -1109,6 +1109,7 @@ const game = {
   omenUlt: null,
   fovMode: localStorage.getItem(FOV_STORAGE_KEY) === "on",
   fovSegmentsCache: { key: null, segments: null },
+  fovPolygonCache: { key: null, polygon: null },
   ultFlashTimer: 0,
   devModeUnlocked: false,
   crosshairUnlockClicks: 0,
@@ -2586,6 +2587,7 @@ function resetCanvasCompositeState() {
 
 function resetFogRenderState() {
   game.fovSegmentsCache = { key: null, segments: null };
+  game.fovPolygonCache = { key: null, polygon: null };
   resetCanvasCompositeState();
 }
 
@@ -2642,8 +2644,7 @@ function fovRayDistanceLimit(origin) {
   ) + 32;
 }
 
-function castFovRay(angle) {
-  const radians = ((angle % 360) + 360) % 360 * Math.PI / 180;
+function castFovRay(radians) {
   const rayDir = { x: Math.cos(radians), y: Math.sin(radians) };
   const origin = game.player || { x: BASE_WIDTH / 2, y: BASE_HEIGHT / 2 };
   let nearest = Math.min(FOV_VISIBILITY_RADIUS, fovRayDistanceLimit(origin));
@@ -2654,17 +2655,58 @@ function castFovRay(angle) {
   return {
     x: Math.max(0, Math.min(map.width, origin.x + rayDir.x * nearest)),
     y: Math.max(0, Math.min(map.height, origin.y + rayDir.y * nearest)),
+    angle: radians,
   };
 }
 
 function buildFovPolygon() {
   if (!game.player?.alive) return [];
-  const points = [];
-  const step = 360 / FOV_RAY_COUNT;
-  for (let angle = 0; angle < 360; angle += step) {
-    points.push(castFovRay(angle));
+  const origin = game.player;
+  const cacheKey = `${Math.round(origin.x * 10)},${Math.round(origin.y * 10)}:${fovCacheKey()}`;
+  if (game.fovPolygonCache.key === cacheKey && game.fovPolygonCache.polygon) return game.fovPolygonCache.polygon;
+
+  const angles = [];
+  const seen = new Set();
+  const addAngle = (angle) => {
+    for (const offset of [-FOV_ANGLE_EPSILON, 0, FOV_ANGLE_EPSILON]) {
+      const adjusted = angle + offset;
+      const bucket = Math.round(adjusted * 1000000);
+      if (seen.has(bucket)) continue;
+      seen.add(bucket);
+      angles.push(adjusted);
+    }
+  };
+
+  for (const segment of wallsToSegments()) {
+    for (const point of [segment.p1, segment.p2]) {
+      if (Math.hypot(point.x - origin.x, point.y - origin.y) > FOV_VISIBILITY_RADIUS + 80) continue;
+      addAngle(Math.atan2(point.y - origin.y, point.x - origin.x));
+    }
   }
-  return points;
+
+  for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 12) addAngle(angle);
+
+  const polygon = angles
+    .map(castFovRay)
+    .sort((a, b) => a.angle - b.angle)
+    .map(({ x, y }) => ({ x, y }));
+  game.fovPolygonCache = { key: cacheKey, polygon };
+  return polygon;
+}
+
+function pointInsidePolygon(point, polygon) {
+  if (!point || !polygon || polygon.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].x;
+    const yi = polygon[i].y;
+    const xj = polygon[j].x;
+    const yj = polygon[j].y;
+    const intersects = ((yi > point.y) !== (yj > point.y))
+      && (point.x < (xj - xi) * (point.y - yi) / ((yj - yi) || 0.00001) + xi);
+    if (intersects) inside = !inside;
+  }
+  return inside;
 }
 
 function estaNoCampoDeVisao(objeto, radius = 0) {
@@ -2676,7 +2718,16 @@ function estaNoCampoDeVisao(objeto, radius = 0) {
   const distance = Math.hypot(dx, dy);
   if (distance <= (game.player.r || 18) + radius + 8) return true;
   if (distance > FOV_VISIBILITY_RADIUS + radius) return false;
-  const dir = { x: dx / distance, y: dy / distance };
+  const polygon = buildFovPolygon();
+  const samples = [
+    objeto,
+    { x: objeto.x + radius, y: objeto.y },
+    { x: objeto.x - radius, y: objeto.y },
+    { x: objeto.x, y: objeto.y + radius },
+    { x: objeto.x, y: objeto.y - radius },
+  ];
+  if (!samples.some((sample) => pointInsidePolygon(sample, polygon))) return false;
+  const dir = { x: dx / (distance || 1), y: dy / (distance || 1) };
   return !wallsToSegments().some((segment) => {
     const hit = raySegmentIntersection(game.player, dir, segment);
     return hit !== null && hit < distance - radius;
@@ -2703,8 +2754,8 @@ function renderFOV() {
     ctx.globalCompositeOperation = "destination-out";
     ctx.fillStyle = "#fff";
     ctx.beginPath();
-    ctx.moveTo(game.player.x, game.player.y);
-    for (const point of polygon) ctx.lineTo(point.x, point.y);
+    ctx.moveTo(polygon[0].x, polygon[0].y);
+    for (let i = 1; i < polygon.length; i++) ctx.lineTo(polygon[i].x, polygon[i].y);
     ctx.closePath();
     ctx.fill();
     ctx.beginPath();
