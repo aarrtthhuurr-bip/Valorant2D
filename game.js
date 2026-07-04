@@ -140,7 +140,7 @@ const MATCH_ROUNDS = 9;
 const POISON_TICK_INTERVAL = 0.35;
 const FOV_VISIBILITY_RADIUS = 200;
 const FOV_ANGLE_EPSILON = 0.0008;
-const FOV_DARKNESS_OPACITY = 1;
+const FOV_DARKNESS_OPACITY = 0.5;
 const FOV_STORAGE_KEY = "valorant2d-fov-mode";
 // Custo de orbs por agente para ativar a ultimate
 const ULT_COSTS = {
@@ -2749,7 +2749,7 @@ function renderFOV() {
   ctx.save();
   try {
     resetCanvasCompositeState();
-    ctx.fillStyle = `rgba(0, 0, 0, ${FOV_DARKNESS_OPACITY})`;
+    ctx.fillStyle = `rgba(15, 15, 20, ${FOV_DARKNESS_OPACITY})`;
     ctx.fillRect(-canvas.width, -canvas.height, canvas.width * 3, canvas.height * 3);
     ctx.globalCompositeOperation = "destination-out";
     ctx.fillStyle = "#fff";
@@ -2757,9 +2757,6 @@ function renderFOV() {
     ctx.moveTo(polygon[0].x, polygon[0].y);
     for (let i = 1; i < polygon.length; i++) ctx.lineTo(polygon[i].x, polygon[i].y);
     ctx.closePath();
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(game.player.x, game.player.y, Math.max(34, (game.player.r || 18) + 18), 0, Math.PI * 2);
     ctx.fill();
   } finally {
     ctx.restore();
@@ -5063,6 +5060,7 @@ function drawSandboxOverlay() {
   if (!game.sandbox) return;
   for (const bot of game.bots) {
     if (!bot.alive) continue;
+    if (!isBotVisible(bot)) continue;
     ctx.save();
     ctx.strokeStyle = "#ff4d5d";
     ctx.fillStyle = "rgba(255, 77, 93, 0.16)";
@@ -5075,6 +5073,7 @@ function drawSandboxOverlay() {
   }
   for (const ally of game.allies) {
     if (!ally.alive) continue;
+    if (!estaNoCampoDeVisao(ally, ally.r || 0)) continue;
     ctx.save();
     ctx.strokeStyle = "#46a8ff";
     ctx.fillStyle = "rgba(70, 168, 255, 0.14)";
@@ -5295,7 +5294,6 @@ function drawSpike() {
   if (game.spike.state === "carried") return;
   const x = game.spike.x;
   const y = game.spike.y;
-  if (!estaNoCampoDeVisao({ x, y }, 38)) return;
   const planted = game.spike.state === "planted";
   ctx.save();
   ctx.translate(x, y);
@@ -6239,6 +6237,7 @@ function draw() {
     drawEntity(bot, visible ? color : "#274351", visible ? label : "", "bot");
   }
   for (const ally of game.allies) {
+    if (!estaNoCampoDeVisao(ally, ally.r || 0)) continue;
     drawEntity(ally, "#62e6a0", `ALLY ${ally.weapon?.name || "Pistol"}`, "ally");
   }
   if (!game.player?.untargetable) {
