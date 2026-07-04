@@ -138,6 +138,8 @@ const PLANT_TIME = 2.0;
 const BUY_TIME = 8;
 const MATCH_ROUNDS = 9;
 const POISON_TICK_INTERVAL = 0.35;
+const FOV_RAY_COUNT = 360;
+const FOV_DARKNESS_OPACITY = 0.82;
 const FOV_STORAGE_KEY = "valorant2d-fov-mode";
 // Custo de orbs por agente para ativar a ultimate
 const ULT_COSTS = {
@@ -2628,6 +2630,42 @@ function raySegmentIntersection(rayOrigin, rayDir, segment) {
   return t;
 }
 
+function fovRayDistanceLimit(origin) {
+  const width = map.width || canvas.width || BASE_WIDTH;
+  const height = map.height || canvas.height || BASE_HEIGHT;
+  return Math.max(
+    Math.hypot(origin.x, origin.y),
+    Math.hypot(width - origin.x, origin.y),
+    Math.hypot(origin.x, height - origin.y),
+    Math.hypot(width - origin.x, height - origin.y)
+  ) + 32;
+}
+
+function castFovRay(angle) {
+  const radians = ((angle % 360) + 360) % 360 * Math.PI / 180;
+  const rayDir = { x: Math.cos(radians), y: Math.sin(radians) };
+  const origin = game.player || { x: BASE_WIDTH / 2, y: BASE_HEIGHT / 2 };
+  let nearest = fovRayDistanceLimit(origin);
+  for (const segment of wallsToSegments()) {
+    const hit = raySegmentIntersection(origin, rayDir, segment);
+    if (hit !== null && hit < nearest) nearest = hit;
+  }
+  return {
+    x: Math.max(0, Math.min(map.width, origin.x + rayDir.x * nearest)),
+    y: Math.max(0, Math.min(map.height, origin.y + rayDir.y * nearest)),
+  };
+}
+
+function buildFovPolygon() {
+  if (!game.player?.alive) return [];
+  const points = [];
+  const step = 360 / FOV_RAY_COUNT;
+  for (let angle = 0; angle < 360; angle += step) {
+    points.push(castFovRay(angle));
+  }
+  return points;
+}
+
 function isWorldPointVisibleInFov(point, radius = 0) {
   if (!isFovModeEnabled()) return true;
   if (isRoundTransitionRevealActive()) return true;
@@ -2649,7 +2687,31 @@ function isBotVisible(bot) {
 }
 
 function renderFOV() {
-  resetCanvasCompositeState();
+  if (!isFovModeEnabled() || !game.player?.alive || isRoundTransitionRevealActive()) {
+    resetCanvasCompositeState();
+    return;
+  }
+  const polygon = buildFovPolygon();
+  if (polygon.length < 3) return;
+  ctx.save();
+  try {
+    resetCanvasCompositeState();
+    ctx.fillStyle = `rgba(0, 0, 0, ${FOV_DARKNESS_OPACITY})`;
+    ctx.fillRect(-canvas.width, -canvas.height, canvas.width * 3, canvas.height * 3);
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.moveTo(game.player.x, game.player.y);
+    for (const point of polygon) ctx.lineTo(point.x, point.y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(game.player.x, game.player.y, Math.max(34, (game.player.r || 18) + 18), 0, Math.PI * 2);
+    ctx.fill();
+  } finally {
+    ctx.restore();
+    resetCanvasCompositeState();
+  }
 }
 
 function segmentCircleHit(x1, y1, x2, y2, circle, padding = 0) {
@@ -5369,6 +5431,7 @@ function drawBotDebug() {
   ctx.textAlign = "center";
   for (const bot of game.bots) {
     if (!bot.alive) continue;
+    if (!isBotVisible(bot)) continue;
     const target = bot.lastKnownPlayer || defenderHoldPoint(bot);
     ctx.strokeStyle = bot.stuck > 0.5 ? "rgba(255,77,93,0.85)" : "rgba(255,209,102,0.58)";
     ctx.lineWidth = 2;
@@ -5540,6 +5603,7 @@ function drawWorldActionBar() {
   }
 
   if (!actor || !actor.alive || progress <= 0) return;
+  if (!isWorldPointVisibleInFov(actor, actor.r || 18)) return;
   const width = 62;
   const height = 6;
   const x = actor.x - width / 2;
@@ -5641,6 +5705,7 @@ function drawOrbChannelBars() {
   for (const entity of [game.player, ...game.allies, ...game.bots]) {
     const channel = entity?.orbChannel;
     if (!entity?.alive || !channel || channel.progress <= 0) continue;
+    if (!isWorldPointVisibleInFov(entity, entity.r || 18)) continue;
     const width = 58;
     const height = 5;
     const x = entity.x - width / 2;
@@ -5815,6 +5880,7 @@ function drawAgentObjects() {
   }
 
   for (const grenade of game.grenades) {
+    if (!isWorldPointVisibleInFov(grenade, grenade.r || 8)) continue;
     ctx.save();
     ctx.fillStyle = grenade.color;
     ctx.shadowColor = grenade.color;
@@ -5826,6 +5892,7 @@ function drawAgentObjects() {
   }
 
   for (const rocket of game.rockets) {
+    if (!isWorldPointVisibleInFov(rocket, 18)) continue;
     const angle = Math.atan2(rocket.vy, rocket.vx);
     ctx.save();
     ctx.translate(rocket.x, rocket.y);
@@ -6196,6 +6263,7 @@ function draw() {
   }
   ctx.globalAlpha = 1;
 
+  renderFOV();
   drawBotDebug();
   drawDamageIndicator();
   if (!game.tutorial) {
@@ -6206,7 +6274,6 @@ function draw() {
   drawDamageFlash();
   drawShadowBlindness();
   drawAgentScreenEffects();
-  renderFOV();
   ctx.restore();
 }
 
