@@ -138,9 +138,6 @@ const PLANT_TIME = 2.0;
 const BUY_TIME = 8;
 const MATCH_ROUNDS = 9;
 const POISON_TICK_INTERVAL = 0.35;
-const FOV_RAY_COUNT = 360;
-const FOV_MAX_DISTANCE = 2400;
-const FOV_DARKNESS_OPACITY = 0.58;
 const FOV_STORAGE_KEY = "valorant2d-fov-mode";
 // Custo de orbs por agente para ativar a ultimate
 const ULT_COSTS = {
@@ -1109,7 +1106,6 @@ const game = {
   omenUlt: null,
   fovMode: localStorage.getItem(FOV_STORAGE_KEY) === "on",
   fovSegmentsCache: { key: null, segments: null },
-  lastFovPolygon: null,
   ultFlashTimer: 0,
   devModeUnlocked: false,
   crosshairUnlockClicks: 0,
@@ -2587,24 +2583,11 @@ function resetCanvasCompositeState() {
 
 function resetFogRenderState() {
   game.fovSegmentsCache = { key: null, segments: null };
-  game.lastFovPolygon = null;
   resetCanvasCompositeState();
 }
 
 function isRoundTransitionRevealActive() {
   return game.roundBannerTimer > 0 || game.phase === "ended" || game.phase === "matchOver";
-}
-
-function fovRayDistanceLimit(origin) {
-  const width = Math.max(map.width || BASE_WIDTH, canvas?.width || BASE_WIDTH);
-  const height = Math.max(map.height || BASE_HEIGHT, canvas?.height || BASE_HEIGHT);
-  const cornerDistances = [
-    Math.hypot(origin.x, origin.y),
-    Math.hypot(width - origin.x, origin.y),
-    Math.hypot(origin.x, height - origin.y),
-    Math.hypot(width - origin.x, height - origin.y),
-  ];
-  return Math.max(FOV_MAX_DISTANCE, ...cornerDistances) + 32;
 }
 
 function wallsToSegments() {
@@ -2645,78 +2628,28 @@ function raySegmentIntersection(rayOrigin, rayDir, segment) {
   return t;
 }
 
-function castRay(angle) {
-  const radians = ((angle % 360) + 360) % 360 * Math.PI / 180;
-  const rayDir = { x: Math.cos(radians), y: Math.sin(radians) };
-  const mag = Math.hypot(rayDir.x, rayDir.y) || 1;
-  rayDir.x /= mag;
-  rayDir.y /= mag;
-  const origin = game.player || { x: BASE_WIDTH / 2, y: BASE_HEIGHT / 2 };
-  let nearest = fovRayDistanceLimit(origin);
-  for (const segment of wallsToSegments()) {
-    const hit = raySegmentIntersection(origin, rayDir, segment);
-    if (hit !== null && hit < nearest) nearest = hit;
-  }
-  const x = Math.max(0, Math.min(map.width, origin.x + rayDir.x * nearest));
-  const y = Math.max(0, Math.min(map.height, origin.y + rayDir.y * nearest));
-  return { x, y };
-}
-
-function buildFOVPolygon() {
-  if (!game.player?.alive) return [];
-  const points = [{ x: game.player.x, y: game.player.y }];
-  const step = 360 / FOV_RAY_COUNT;
-  for (let angle = 0; angle < 360; angle += step) {
-    points.push(castRay(angle));
-  }
-  return points;
-}
-
-function isBotVisible(bot) {
+function isWorldPointVisibleInFov(point, radius = 0) {
   if (!isFovModeEnabled()) return true;
   if (isRoundTransitionRevealActive()) return true;
-  if (!game.player?.alive || !bot?.alive) return false;
-  const segmentToBot = { p1: { x: game.player.x, y: game.player.y }, p2: { x: bot.x, y: bot.y } };
-  const dir = { x: bot.x - game.player.x, y: bot.y - game.player.y };
-  const distance = Math.hypot(dir.x, dir.y) || 1;
-  dir.x /= distance;
-  dir.y /= distance;
+  if (!game.player?.alive || !point) return false;
+  const dx = point.x - game.player.x;
+  const dy = point.y - game.player.y;
+  const distance = Math.hypot(dx, dy);
+  if (distance <= (game.player.r || 18) + radius + 8) return true;
+  const dir = { x: dx / distance, y: dy / distance };
   return !wallsToSegments().some((segment) => {
-    const hit = raySegmentIntersection(segmentToBot.p1, dir, segment);
-    return hit !== null && hit < distance - bot.r;
+    const hit = raySegmentIntersection(game.player, dir, segment);
+    return hit !== null && hit < distance - radius;
   });
 }
 
+function isBotVisible(bot) {
+  if (!bot?.alive) return false;
+  return isWorldPointVisibleInFov(bot, bot.r || 0);
+}
+
 function renderFOV() {
-  if (!isFovModeEnabled() || !game.player?.alive) return;
-  if (isRoundTransitionRevealActive()) {
-    resetCanvasCompositeState();
-    return;
-  }
-  const polygon = buildFOVPolygon();
-  if (polygon.length >= 4) game.lastFovPolygon = polygon;
-  const visiblePolygon = polygon.length >= 4 ? polygon : game.lastFovPolygon;
-  if (!visiblePolygon || visiblePolygon.length < 4) return;
-  ctx.save();
-  try {
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    resetCanvasCompositeState();
-    ctx.fillStyle = `rgba(0, 0, 0, ${FOV_DARKNESS_OPACITY})`;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.globalCompositeOperation = "destination-out";
-    ctx.fillStyle = "#fff";
-    ctx.beginPath();
-    ctx.moveTo(visiblePolygon[0].x, visiblePolygon[0].y);
-    for (let i = 1; i < visiblePolygon.length; i++) ctx.lineTo(visiblePolygon[i].x, visiblePolygon[i].y);
-    ctx.closePath();
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(game.player.x, game.player.y, Math.max(96, (game.player.r || 18) + 64), 0, Math.PI * 2);
-    ctx.fill();
-  } finally {
-    ctx.restore();
-    resetCanvasCompositeState();
-  }
+  resetCanvasCompositeState();
 }
 
 function segmentCircleHit(x1, y1, x2, y2, circle, padding = 0) {
@@ -5247,6 +5180,7 @@ function drawSpike() {
   if (game.spike.state === "carried") return;
   const x = game.spike.x;
   const y = game.spike.y;
+  if (!isWorldPointVisibleInFov({ x, y }, 38)) return;
   const planted = game.spike.state === "planted";
   ctx.save();
   ctx.translate(x, y);
@@ -5513,6 +5447,7 @@ function drawDamageNumbers() {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   for (const number of game.damageNumbers) {
+    if (!isWorldPointVisibleInFov(number, 16)) continue;
     const ratio = Math.max(0, number.life / number.maxLife);
     const scale = 0.82 + (1 - ratio) * 0.28;
     ctx.globalAlpha = ratio;
@@ -5648,6 +5583,7 @@ function drawSpikeHint() {
 function drawMedkitsAndOrbs() {
   const now = performance.now() / 1000;
   for (const kit of game.medkits) {
+    if (!isWorldPointVisibleInFov(kit, 28)) continue;
     const floatY = Math.sin(now * 1.8 + kit.phase) * 4;
     const pulse = 0.7 + Math.sin(now * 1.4 + kit.phase) * 0.22;
     ctx.save();
@@ -5677,6 +5613,7 @@ function drawMedkitsAndOrbs() {
     ctx.restore();
   }
   for (const orb of game.ultOrbs) {
+    if (!isWorldPointVisibleInFov(orb, 32)) continue;
     const pulse = 1 + Math.sin(now * 1.5 + orb.phase) * 0.12;
     ctx.save();
     ctx.translate(orb.x, orb.y);
@@ -5735,6 +5672,7 @@ function drawShadowBlindness() {
 
 function drawUltimateEffects() {
   for (const trail of game.neonTrails) {
+    if (!isWorldPointVisibleInFov({ x: trail.x1, y: trail.y1 }, 8) && !isWorldPointVisibleInFov({ x: trail.x2, y: trail.y2 }, 8)) continue;
     const alpha = Math.max(0, trail.life / trail.maxLife);
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -5749,6 +5687,7 @@ function drawUltimateEffects() {
     ctx.restore();
   }
   for (const effect of game.ultimateEffects) {
+    if (!isWorldPointVisibleInFov(effect, effect.radius || effect.maxRadius || 36)) continue;
     const alpha = Math.max(0, effect.life / effect.maxLife);
     ctx.save();
     ctx.globalAlpha = Math.min(1, alpha * 1.5);
@@ -5821,6 +5760,7 @@ function drawUltimateEffects() {
 
 function drawAgentObjects() {
   for (const decal of game.paintDecals) {
+    if (!isWorldPointVisibleInFov(decal, decal.radius || 24)) continue;
     const alpha = Math.max(0, decal.life / decal.maxLife) * 0.32;
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -5831,7 +5771,7 @@ function drawAgentObjects() {
     ctx.restore();
   }
 
-  if (game.yoruGatecrash?.active) {
+  if (game.yoruGatecrash?.active && isWorldPointVisibleInFov(game.yoruGatecrash, 22)) {
     const gate = game.yoruGatecrash;
     const pulse = 1 + Math.sin(performance.now() / 95) * 0.12;
     ctx.save();
@@ -5849,6 +5789,7 @@ function drawAgentObjects() {
   }
 
   for (const turret of game.turrets) {
+    if (!isWorldPointVisibleInFov(turret, turret.r || 28)) continue;
     ctx.save();
     ctx.translate(turret.x, turret.y);
     ctx.rotate(turret.angle);
@@ -6064,6 +6005,7 @@ function draw() {
   drawAgentObjects();
 
   for (const zone of game.shadowZones) {
+    if (!isWorldPointVisibleInFov(zone, zone.r || 80)) continue;
     const alpha = Math.max(0, zone.life / zone.maxLife);
     const pulse = 0.92 + Math.sin(performance.now() / 180 + zone.x) * 0.06;
     ctx.save();
@@ -6081,6 +6023,7 @@ function draw() {
   }
 
   for (const smoke of game.smokes) {
+    if (!isWorldPointVisibleInFov(smoke, smoke.r || 90)) continue;
     const fade = smoke.viperPit ? Math.max(0, Math.min(1, (smoke.exitTimer ?? 3) / (smoke.fadeLife || 3))) : 1;
     const alpha = smoke.viperPit ? 0.22 + 0.4 * fade : 1;
     ctx.save();
@@ -6158,6 +6101,7 @@ function draw() {
   if (!game.tutorial || game.tutorialStep === 2) drawObjectiveHints();
 
   for (const ghost of game.dashGhosts) {
+    if (!isWorldPointVisibleInFov(ghost, ghost.r || 18)) continue;
     const alpha = Math.max(0, ghost.life / ghost.maxLife) * 0.34;
     ctx.globalAlpha = alpha;
     ctx.fillStyle = ghost.color;
@@ -6189,6 +6133,7 @@ function draw() {
 
   ctx.fillStyle = "#f8fafc";
   for (const bullet of game.bullets) {
+    if (!isWorldPointVisibleInFov(bullet, bullet.knife ? 10 : 4)) continue;
     if (bullet.knife) {
       drawKunaiShape(bullet.x, bullet.y, (bullet.angle ?? Math.atan2(bullet.vy, bullet.vx)) + Math.PI / 2, 0.72, 1);
     } else {
@@ -6199,6 +6144,7 @@ function draw() {
   }
 
   for (const particle of game.particles) {
+    if (!isWorldPointVisibleInFov(particle, particle.size || 4)) continue;
     const alpha = Math.max(0, particle.life / particle.maxLife);
     ctx.globalAlpha = alpha;
     ctx.fillStyle = particle.color;
@@ -6209,6 +6155,7 @@ function draw() {
   ctx.globalAlpha = 1;
 
   for (const marker of game.hitMarkers) {
+    if (!isWorldPointVisibleInFov(marker, 24)) continue;
     const alpha = Math.max(0, marker.life / marker.maxLife);
     ctx.globalAlpha = alpha;
     ctx.strokeStyle = marker.color || "rgba(255,255,255,0.95)";
@@ -6233,6 +6180,7 @@ function draw() {
   drawDamageNumbers();
 
   for (const explosion of game.explosions) {
+    if (!isWorldPointVisibleInFov(explosion, explosion.r || 24)) continue;
     const alpha = Math.max(0, explosion.life / explosion.maxLife);
     ctx.globalAlpha = alpha;
     ctx.strokeStyle = explosion.color || "#ffd166";
@@ -6259,10 +6207,6 @@ function draw() {
   drawShadowBlindness();
   drawAgentScreenEffects();
   renderFOV();
-  if (isFovModeEnabled() && !isRoundTransitionRevealActive() && !game.player?.untargetable) {
-    drawEntity(game.player, game.selectedAgent.color, game.playerSide === "attackers" ? "YOU ATK" : "YOU DEF", "player");
-    drawJettKunaiRing(game.player);
-  }
   ctx.restore();
 }
 
