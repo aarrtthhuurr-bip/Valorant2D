@@ -3148,10 +3148,10 @@ function activateUltimate(entity) {
   } else if (agent.id === "viper") {
     entity.ultimate = { type: "viper", life: 999, maxLife: 999, pitId: `viper-pit-${Date.now()}-${Math.random().toString(16).slice(2)}` };
     const pitRadius = 230;
-    const activationPoint = nearestWalkablePoint({
-      x: clamp(entity.x, pitRadius, map.width - pitRadius),
-      y: clamp(entity.y, pitRadius, map.height - pitRadius),
-    }, entity);
+    const activationPoint = {
+      x: clamp(entity.x, 0, map.width),
+      y: clamp(entity.y, 0, map.height),
+    };
     game.smokes.push({
       x: activationPoint.x,
       y: activationPoint.y,
@@ -3174,13 +3174,17 @@ function activateUltimate(entity) {
     addUltimateEffect("chemical-fog", entity, "#35c46a", 999);
   } else if (agent.id === "sage") {
     entity.ultimate = { type: "sage", life: 1, maxLife: 1 };
-    // Ultimate da Sage: restaura vida e escudo totais instantaneamente
+    // Ultimate da Sage: restaura vida e concede escudo total mesmo sem compra previa.
     const squad = [entity];
     for (const target of squad) {
       if (!target.alive) continue;
-      target.hp = target.maxHp;           // vida total
-      target.armor = target.maxArmor || 0; // escudo total
-      if (target.id === "player") game.armor = target.armor;
+      target.hp = target.maxHp;
+      target.maxArmor = Math.max(target.maxArmor || 0, 100);
+      target.armor = target.maxArmor;
+      if (target.id === "player") {
+        game.upgrades.armorCapacity = Math.max(game.upgrades.armorCapacity || 0, target.maxArmor);
+        game.armor = target.armor;
+      }
       // Efeito visual de cura: partículas verdes em espiral
       for (let i = 0; i < 4; i++) {
         setTimeout(() => {
@@ -3189,7 +3193,7 @@ function activateUltimate(entity) {
       }
       game.screenTint = { color: "rgba(0, 207, 166, 0.24)", life: 0.72, maxLife: 0.72 };
     }
-    addUltimateEffect("healing-beam", entity, "#62e6a0", 4);
+    addUltimateEffect("healing-beam", entity, "#62e6a0", 0.9);
   } else {
     if (agent.id === "omen" && entity.id === "player" && beginOmenUltimate(entity)) {
       playSound("ability");
@@ -6005,20 +6009,6 @@ function drawJettKunaiRing(entity) {
 
 function drawAgentScreenEffects() {
   const playerSmoke = entityInsideSmoke(game.player);
-  const playerInViperPit = game.smokes.some((smoke) =>
-    smoke.viperPit && game.player?.alive && Math.hypot(game.player.x - smoke.x, game.player.y - smoke.y) <= smoke.r
-  );
-  if (playerInViperPit) {
-    ctx.save();
-    ctx.fillStyle = "rgba(17, 51, 25, 0.18)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    const gradient = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, canvas.width * 0.18, canvas.width / 2, canvas.height / 2, canvas.width * 0.64);
-    gradient.addColorStop(0, "rgba(0,0,0,0)");
-    gradient.addColorStop(1, "rgba(4, 22, 9, 0.54)");
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.restore();
-  }
 
   if (playerSmoke?.omenSmoke) {
     ctx.save();
