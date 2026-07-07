@@ -84,6 +84,7 @@ const ui = {
   sandboxClearItemsButton: document.getElementById("sandboxClearItemsButton"),
   sandboxPierceWallsToggle: document.getElementById("sandboxPierceWallsToggle"),
   sandboxGodToggle: document.getElementById("sandboxGodToggle"),
+  sandboxBlackoutToggle: document.getElementById("sandboxBlackoutToggle"),
   sandboxSaveButton: document.getElementById("sandboxSaveButton"),
   sandboxLoadButton: document.getElementById("sandboxLoadButton"),
   pauseSandboxButton: document.getElementById("pauseSandboxButton"),
@@ -138,8 +139,8 @@ const PLANT_TIME = 2.0;
 const BUY_TIME = 8;
 const MATCH_ROUNDS = 9;
 const POISON_TICK_INTERVAL = 0.35;
-const FOV_VISIBILITY_RADIUS = 200;
-const FOV_ANGLE_EPSILON = 0.0008;
+const FOV_VISIBILITY_RADIUS = 99999; // visão "infinita" — vai até a parede ou borda do mapa
+const FOV_ANGLE_EPSILON = 0.0001;    // desvio menor = polígono mais preciso nas quinas
 const FOV_DARKNESS_OPACITY = 0.5;
 const FOV_STORAGE_KEY = "valorant2d-fov-mode";
 // Custo de orbs por agente para ativar a ultimate
@@ -1106,6 +1107,7 @@ const game = {
   showAudioDebug: false,
   showHitboxes: false,
   timeScale: 1,
+  fogMode: false,
   omenUlt: null,
   fovMode: localStorage.getItem(FOV_STORAGE_KEY) === "on",
   fovSegmentsCache: { key: null, segments: null },
@@ -2679,7 +2681,7 @@ function buildFovPolygon() {
 
   for (const segment of wallsToSegments()) {
     for (const point of [segment.p1, segment.p2]) {
-      if (Math.hypot(point.x - origin.x, point.y - origin.y) > FOV_VISIBILITY_RADIUS + 80) continue;
+      // Sem filtro de distância: todos os vértices recebem raios extras, evitando vazamento nas quinas
       addAngle(Math.atan2(point.y - origin.y, point.x - origin.x));
     }
   }
@@ -5479,6 +5481,60 @@ function drawCrosshair() {
   ctx.restore();
 }
 
+// ── Fog of War — névoa homogênea com polígono de visão recortado via destination-out ──
+// Usa o buildFovPolygon() já existente (raycasting preciso com cache por frame).
+const fogCanvas = document.createElement("canvas");
+fogCanvas.width = BASE_WIDTH;
+fogCanvas.height = BASE_HEIGHT;
+const fogCtx = fogCanvas.getContext("2d");
+
+function drawFogOfWar() {
+  if (!game.fovMode || isRoundTransitionRevealActive()) return;
+
+  const fovPoints = buildFovPolygon();
+  if (!fovPoints || fovPoints.length < 3) return;
+
+  const px = game.player.x;
+  const py = game.player.y;
+
+  // Ordena os pontos por ângulo em relação ao jogador (garante polígono contínuo)
+  fovPoints.sort((a, b) =>
+    Math.atan2(a.y - py, a.x - px) - Math.atan2(b.y - py, b.x - px)
+  );
+
+  // Redimensiona o canvas offscreen se o mapa mudou de tamanho
+  if (fogCanvas.width !== canvas.width || fogCanvas.height !== canvas.height) {
+    fogCanvas.width = canvas.width;
+    fogCanvas.height = canvas.height;
+  }
+
+  // 1. Preenche tudo com a névoa escura
+  fogCtx.clearRect(0, 0, fogCanvas.width, fogCanvas.height);
+  fogCtx.globalCompositeOperation = "source-over";
+  fogCtx.fillStyle = "rgba(8, 12, 18, 0.88)";
+  fogCtx.fillRect(0, 0, fogCanvas.width, fogCanvas.height);
+
+  // 2. Perfura a névoa com o polígono de visão em leque a partir do jogador.
+  // Desenhar como leque (jogador → ponta[0] → ponta[1] → ... → ponta[n] → jogador)
+  // garante que o preenchimento cubra 100% da área entre os raios,
+  // sem triângulos escuros entre raios consecutivos distantes.
+  fogCtx.globalCompositeOperation = "destination-out";
+  fogCtx.beginPath();
+  fogCtx.moveTo(px, py);
+  for (const pt of fovPoints) {
+    fogCtx.lineTo(pt.x, pt.y);
+  }
+  fogCtx.closePath();
+  fogCtx.fillStyle = "black";
+  fogCtx.fill();
+  fogCtx.globalCompositeOperation = "source-over";
+
+  // 3. Cola a camada de névoa no canvas principal sem afetar o composite global
+  ctx.save();
+  ctx.drawImage(fogCanvas, 0, 0);
+  ctx.restore();
+}
+
 function drawBotDebug() {
   if (!game.debugRoutes) return;
   ctx.save();
@@ -6109,6 +6165,10 @@ function draw() {
     ctx.fillStyle = game.tutorialStep === 2 ? "rgba(1, 6, 10, 0.48)" : "rgba(1, 6, 10, 0.28)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
+  // ── Névoa desenhada AQUI: antes de qualquer entidade.
+  // Isso garante que bots, aliados e o jogador sejam renderizados
+  // POR CIMA da camada de fóg, eliminando o efeito de piscar.
+  drawFogOfWar();
   drawMedkitsAndOrbs();
   drawAgentObjects();
 
@@ -6227,8 +6287,30 @@ function draw() {
     drawEntity(bot, visible ? color : "#274351", visible ? label : "", "bot");
   }
   for (const ally of game.allies) {
-    if (!estaNoCampoDeVisao(ally, ally.r || 0)) continue;
-    drawEntity(ally, "#62e6a0", `ALLY ${ally.weapon?.name || "Pistol"}`, "ally");
+    if (!ally.alive) continue;
+    const inFov = estaNoCampoDeVisao(ally, ally.r || 0);
+    if (inFov) {
+      // Aliado visível normalmente dentro do FOV
+      drawEntity(ally, "#62e6a0", `ALLY ${ally.weapon?.name || "Pistol"}`, "ally");
+    } else if (game.fovMode) {
+      // Radar tático: aliado fora do FOV aparece como círculo verde semitransparente
+      // (sempre visível para controle de equipe, igual a um radar de squad)
+      ctx.save();
+      ctx.globalAlpha = 0.72;
+      ctx.strokeStyle = "#62e6a0";
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.arc(ally.x, ally.y, (ally.r || 18) + 3, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = "#62e6a0";
+      ctx.fill();
+      ctx.restore();
+    } else {
+      // FOV desligado: comportamento normal, aliado sempre visível
+      drawEntity(ally, "#62e6a0", `ALLY ${ally.weapon?.name || "Pistol"}`, "ally");
+    }
   }
   if (!game.player?.untargetable) {
     drawEntity(game.player, game.selectedAgent.color, game.playerSide === "attackers" ? "YOU ATK" : "YOU DEF", "player");
@@ -6305,7 +6387,6 @@ function draw() {
   }
   ctx.globalAlpha = 1;
 
-  renderFOV();
   drawBotDebug();
   drawDamageIndicator();
   if (!game.tutorial) {
@@ -6566,6 +6647,7 @@ function renderSandboxPanel() {
   setSandboxTab(game.sandboxTab);
   setSwitch(ui.sandboxPierceWallsToggle, game.sandboxBulletsPierceWalls);
   setSwitch(ui.sandboxGodToggle, game.godMode);
+  setSwitch(ui.sandboxBlackoutToggle, game.fovMode);
   renderSandboxBotList();
 }
 
@@ -7087,26 +7169,29 @@ function setFovMode(enabled) {
   game.fovMode = Boolean(enabled);
   resetFogRenderState();
   localStorage.setItem(FOV_STORAGE_KEY, game.fovMode ? "on" : "off");
-  setMessage(game.fovMode ? "Modo Névoa ativado." : "Modo Normal ativado.");
-  if (game.menuState === "main") renderFovModeSwitch();
+  setMessage(game.fovMode ? "Modo Blackout ativado." : "Modo Blackout desativado.");
+  // Atualiza o visual do switch onde quer que ele esteja renderizado
+  document.querySelectorAll(".fov-mode-switch button").forEach((button) => {
+    const active = button.dataset.fovMode === (game.fovMode ? "fog" : "normal");
+    button.classList.toggle("active", active);
+  });
 }
 
-function renderFovModeSwitch() {
-  if (!ui.menuButtons || game.menuState !== "main") return;
-  ui.menuButtons.querySelector(".fov-mode-switch")?.remove();
+function renderBlackoutSwitch(container) {
+  container.querySelector(".fov-mode-switch")?.remove();
   const switcher = document.createElement("div");
   switcher.className = "fov-mode-switch";
   switcher.innerHTML = `
-    <span>VISÃO</span>
-    <button type="button" data-fov-mode="normal">Normal</button>
-    <button type="button" data-fov-mode="fog">Modo Névoa</button>
+    <span>🌑 MODO BLACKOUT</span>
+    <button type="button" data-fov-mode="normal">OFF</button>
+    <button type="button" data-fov-mode="fog">ON</button>
   `;
   switcher.querySelectorAll("button").forEach((button) => {
     const active = button.dataset.fovMode === (game.fovMode ? "fog" : "normal");
     button.classList.toggle("active", active);
     button.addEventListener("click", () => setFovMode(button.dataset.fovMode === "fog"));
   });
-  ui.menuButtons.prepend(switcher);
+  container.prepend(switcher);
 }
 
 function showMainMenu() {
@@ -7133,7 +7218,6 @@ function showMainMenu() {
     { label: "TREINO", icon: "star", action: startTrainingMode },
     { label: "TUTORIAL", icon: "link", action: startTutorialMode },
   ], "MENU", "main");
-  renderFovModeSwitch();
 }
 
 function showDifficultyMenu(immediate = false) {
@@ -7234,6 +7318,7 @@ function renderDifficultyMenu() {
   attachButtonFeedback(backButton);
   attachButtonFeedback(startButton);
   footer.append(backButton, startButton);
+  renderBlackoutSwitch(footer);
   ui.menuButtons.append(header, cards, footer);
 }
 
@@ -8241,6 +8326,10 @@ if (window) window.addEventListener("keydown", (event) => {
     game.allies = [];
     setMessage("Sandbox: aliados removidos.");
   }
+  if (game.sandbox && !event.repeat && event.key.toLowerCase() === "n") {
+    setFovMode(!game.fovMode);
+    renderSandboxPanel();
+  }
   if (event.key === "Escape") {
     handleEscape();
   }
@@ -8413,6 +8502,10 @@ ui.sandboxPierceWallsToggle?.addEventListener("click", () => {
 });
 ui.sandboxGodToggle?.addEventListener("click", () => {
   game.godMode = !game.godMode;
+  renderSandboxPanel();
+});
+ui.sandboxBlackoutToggle?.addEventListener("click", () => {
+  setFovMode(!game.fovMode);
   renderSandboxPanel();
 });
 ui.sandboxSaveButton?.addEventListener("click", saveSandboxConfig);
