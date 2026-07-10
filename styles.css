@@ -35,8 +35,10 @@ html,
 body {
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   min-width: 100vw;
   min-height: 100vh;
+  min-height: 100dvh;
   margin: 0;
   overflow: hidden;
   position: relative;
@@ -68,6 +70,7 @@ button.active {
 #game-root {
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   background: #000;
   display: flex;
   align-items: center;

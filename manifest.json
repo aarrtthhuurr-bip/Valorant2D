@@ -1,0 +1,22 @@
+{
+  "name": "Valorant 2D Mobile",
+  "short_name": "Valorant2D",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "assets/Favicon/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "assets/Favicon/V2D_transparent.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

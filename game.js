@@ -121,13 +121,175 @@ const ui = {
 const keys = new Set();
 const pressed = new Set();
 const mouse = { x: BASE_WIDTH / 2, y: BASE_HEIGHT / 2, down: false, rightDown: false };
+const touchControls = {
+  enabled: false,
+  activeTouches: new Map(),
+  movementTouchId: null,
+  joystick: {
+    active: false,
+    baseX: 0,
+    baseY: 0,
+    knobX: 0,
+    knobY: 0,
+    x: 0,
+    y: 0,
+    radius: 50,
+    knobRadius: 25,
+  },
+  firing: false,
+  fireButton: { x: BASE_WIDTH - 118, y: BASE_HEIGHT - 112, r: 62 },
+  blackoutButton: { x: BASE_WIDTH - 204, y: 32, w: 176, h: 46 },
+};
 
 function escalarViewport() {
   if (!ui.gameViewport) return;
-  const scaleX = window.innerWidth / BASE_WIDTH;
-  const scaleY = window.innerHeight / BASE_HEIGHT;
+  const viewport = window.visualViewport || window;
+  const scaleX = viewport.width / BASE_WIDTH;
+  const scaleY = viewport.height / BASE_HEIGHT;
   const scale = Math.min(scaleX, scaleY);
   ui.gameViewport.style.transform = `scale(${scale})`;
+}
+
+function escalarViewportAposOrientacao() {
+  escalarViewport();
+  window.setTimeout(escalarViewport, 250);
+  window.setTimeout(escalarViewport, 500);
+}
+
+function rodandoComoPwa() {
+  return window.matchMedia?.("(display-mode: standalone)").matches ||
+    window.matchMedia?.("(display-mode: fullscreen)").matches ||
+    window.navigator?.standalone === true;
+}
+
+async function travarOrientacaoPaisagem() {
+  if (!rodandoComoPwa() || !screen.orientation?.lock) return;
+  try {
+    await screen.orientation.lock("landscape");
+  } catch (error) {
+    console.debug("Screen Orientation API indisponivel para travar em landscape.", error);
+  }
+}
+
+function canvasPointFromTouch(touch) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: ((touch.clientX - rect.left) / rect.width) * canvas.width,
+    y: ((touch.clientY - rect.top) / rect.height) * canvas.height,
+  };
+}
+
+function isPointInsideCircle(point, circle) {
+  return Math.hypot(point.x - circle.x, point.y - circle.y) <= circle.r;
+}
+
+function isPointInsideRect(point, rect) {
+  return point.x >= rect.x && point.x <= rect.x + rect.w && point.y >= rect.y && point.y <= rect.y + rect.h;
+}
+
+function resetTouchMovement() {
+  touchControls.movementTouchId = null;
+  touchControls.joystick.active = false;
+  touchControls.joystick.x = 0;
+  touchControls.joystick.y = 0;
+}
+
+function updateTouchMovementFromPoint(point) {
+  const joystick = touchControls.joystick;
+  const rawX = point.x - joystick.baseX;
+  const rawY = point.y - joystick.baseY;
+  const distance = Math.hypot(rawX, rawY);
+  const limit = joystick.radius;
+  const clampedDistance = Math.min(distance, limit);
+  const angle = distance > 0 ? Math.atan2(rawY, rawX) : 0;
+  joystick.knobX = joystick.baseX + Math.cos(angle) * clampedDistance;
+  joystick.knobY = joystick.baseY + Math.sin(angle) * clampedDistance;
+  joystick.x = distance > 6 ? (Math.cos(angle) * clampedDistance) / limit : 0;
+  joystick.y = distance > 6 ? (Math.sin(angle) * clampedDistance) / limit : 0;
+}
+
+function deriveTouchControls() {
+  const joystick = touchControls.joystick;
+  if (touchControls.movementTouchId !== null) {
+    const movementPoint = touchControls.activeTouches.get(touchControls.movementTouchId);
+    if (movementPoint) updateTouchMovementFromPoint(movementPoint);
+    else resetTouchMovement();
+  }
+
+  touchControls.firing = [...touchControls.activeTouches.values()]
+    .some((point) => isPointInsideCircle(point, touchControls.fireButton));
+  mouse.down = touchControls.firing;
+}
+
+function handleCanvasTouchStart(event) {
+  event.preventDefault();
+  initAudio();
+  touchControls.enabled = true;
+  for (const touch of event.changedTouches) {
+    const point = canvasPointFromTouch(touch);
+    touchControls.activeTouches.set(touch.identifier, point);
+    if (game.sandbox && isPointInsideRect(point, touchControls.blackoutButton)) {
+      setFovMode(!game.fovMode);
+      renderSandboxPanel();
+      continue;
+    }
+    const isLeftSide = point.x < BASE_WIDTH / 2;
+    const isLowerScreen = point.y > BASE_HEIGHT * 0.35;
+    if (touchControls.movementTouchId === null && isLeftSide && isLowerScreen) {
+      touchControls.movementTouchId = touch.identifier;
+      touchControls.joystick.active = true;
+      touchControls.joystick.baseX = point.x;
+      touchControls.joystick.baseY = point.y;
+      touchControls.joystick.knobX = point.x;
+      touchControls.joystick.knobY = point.y;
+      touchControls.joystick.x = 0;
+      touchControls.joystick.y = 0;
+    }
+  }
+  deriveTouchControls();
+}
+
+function handleCanvasTouchMove(event) {
+  event.preventDefault();
+  for (const touch of event.changedTouches) {
+    touchControls.activeTouches.set(touch.identifier, canvasPointFromTouch(touch));
+  }
+  deriveTouchControls();
+}
+
+function handleCanvasTouchEnd(event) {
+  event.preventDefault();
+  for (const touch of event.changedTouches) {
+    touchControls.activeTouches.delete(touch.identifier);
+    if (touch.identifier === touchControls.movementTouchId) resetTouchMovement();
+  }
+  deriveTouchControls();
+}
+
+function encontrarAlvoAutoMira() {
+  const p = game.player;
+  if (!p?.alive || !Array.isArray(game.bots)) return null;
+  let closest = null;
+  let closestDistance = Infinity;
+  for (const bot of game.bots) {
+    if (!bot?.alive || bot.hp <= 0 || bot.untargetable) continue;
+    const distance = Math.hypot(bot.x - p.x, bot.y - p.y);
+    if (distance < closestDistance) {
+      closest = bot;
+      closestDistance = distance;
+    }
+  }
+  return closest;
+}
+
+function aplicarAutoMiraTouch() {
+  if (!touchControls.enabled || game.phase !== "action") return null;
+  const target = encontrarAlvoAutoMira();
+  if (!target) return null;
+  mouse.x = target.x;
+  mouse.y = target.y;
+  if (game.player) game.player.angle = Math.atan2(target.y - game.player.y, target.x - game.player.x);
+  return target;
 }
 
 const SPIKE_DETONATE_TIME = 38;
@@ -3426,11 +3588,15 @@ function updatePlayer(dt) {
    const left = useArrows ? keys.has("arrowleft") : keys.has("a");
    const down = useArrows ? keys.has("arrowdown") : keys.has("s");
    const up = useArrows ? keys.has("arrowup") : keys.has("w");
-   const dx = (right ? 1 : 0) - (left ? 1 : 0);
-   const dy = (down ? 1 : 0) - (up ? 1 : 0);
-   const len = Math.hypot(dx, dy) || 1;
+   const keyboardDx = (right ? 1 : 0) - (left ? 1 : 0);
+   const keyboardDy = (down ? 1 : 0) - (up ? 1 : 0);
+   const joystick = touchControls.joystick;
+   const joystickActive = joystick.active && Math.hypot(joystick.x, joystick.y) > 0.08;
+   const dx = joystickActive ? joystick.x : keyboardDx;
+   const dy = joystickActive ? joystick.y : keyboardDy;
+   const len = joystickActive ? 1 : (Math.hypot(dx, dy) || 1);
    const movementLocked = (p.detainedTimer || 0) > 0;
-   p.moving = !movementLocked && (dx !== 0 || dy !== 0);
+   p.moving = !movementLocked && Math.hypot(dx, dy) > 0.08;
   p.moveX = p.moving ? dx / len : 0;
   p.moveY = p.moving ? dy / len : 0;
   const neonSpeed = updateNeonStamina(dt);
@@ -3439,6 +3605,7 @@ function updatePlayer(dt) {
   if (!movementLocked) {
     moveEntity(p, (dx / len) * p.speed * ultimateSpeed * neonSpeed * shadowSlow * dt, (dy / len) * p.speed * ultimateSpeed * neonSpeed * shadowSlow * dt, map.walls);
   }
+  aplicarAutoMiraTouch();
   p.angle = Math.atan2(mouse.y - p.y, mouse.x - p.x);
   if (game.spike.state === "carried" && game.spike.owner === "player") {
     game.spike.x = p.x;
@@ -6149,6 +6316,76 @@ function drawOmenUltimateOverlay() {
   ctx.restore();
 }
 
+function drawTouchButtonLabel(text, x, y, size = 20) {
+  ctx.font = `800 ${size}px Rajdhani, Arial`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#f8fafc";
+  ctx.fillText(text, x, y);
+}
+
+function drawTouchControls() {
+  if (game.menuState !== "none" || !["buy", "action", "ended"].includes(game.phase)) return;
+  const joystick = touchControls.joystick;
+
+  if (joystick.active) {
+    ctx.save();
+    ctx.globalAlpha = 0.88;
+    ctx.fillStyle = "rgba(5, 8, 13, 0.48)";
+    ctx.strokeStyle = "rgba(238, 247, 251, 0.58)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(joystick.baseX, joystick.baseY, joystick.radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(98, 230, 160, 0.82)";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.74)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(joystick.knobX, joystick.knobY, joystick.knobRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  if (game.phase === "action") {
+    const fire = touchControls.fireButton;
+    ctx.save();
+    ctx.globalAlpha = touchControls.firing ? 0.98 : 0.84;
+    ctx.fillStyle = touchControls.firing ? "rgba(255, 70, 85, 0.88)" : "rgba(255, 70, 85, 0.62)";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.78)";
+    ctx.lineWidth = 4;
+    ctx.shadowColor = "rgba(255, 70, 85, 0.34)";
+    ctx.shadowBlur = touchControls.firing ? 22 : 12;
+    ctx.beginPath();
+    ctx.arc(fire.x, fire.y, fire.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    drawTouchButtonLabel("ATIRAR", fire.x, fire.y, 19);
+    ctx.restore();
+  }
+
+  if (game.sandbox) {
+    const blackout = touchControls.blackoutButton;
+    ctx.save();
+    ctx.fillStyle = game.fovMode ? "rgba(98, 230, 160, 0.8)" : "rgba(5, 8, 13, 0.72)";
+    ctx.strokeStyle = game.fovMode ? "rgba(98, 230, 160, 0.95)" : "rgba(238, 247, 251, 0.42)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    if (ctx.roundRect) {
+      ctx.roundRect(blackout.x, blackout.y, blackout.w, blackout.h, 12);
+    } else {
+      ctx.rect(blackout.x, blackout.y, blackout.w, blackout.h);
+    }
+    ctx.fill();
+    ctx.stroke();
+    drawTouchButtonLabel("\u{1F311} BLACKOUT", blackout.x + blackout.w / 2, blackout.y + blackout.h / 2, 18);
+    ctx.restore();
+  }
+}
+
 function draw() {
   if (game.menuState !== "none" && game.phase !== "action") {
     drawMenuSlideshow();
@@ -6398,6 +6635,7 @@ function draw() {
   drawShadowBlindness();
   drawAgentScreenEffects();
   ctx.restore();
+  drawTouchControls();
 }
 
 function updateUi() {
@@ -8346,13 +8584,23 @@ if (window) window.addEventListener("keyup", (event) => {
 });
 
 if (window) window.addEventListener("resize", escalarViewport);
+if (window) window.addEventListener("orientationchange", escalarViewportAposOrientacao);
+if (window.visualViewport) window.visualViewport.addEventListener("resize", escalarViewport);
 if (document) document.addEventListener("fullscreenchange", escalarViewport);
+if (document) document.addEventListener("fullscreenchange", travarOrientacaoPaisagem);
 
-if (canvas) canvas.addEventListener("mousemove", (event) => {
-  const rect = canvas.getBoundingClientRect();
-  mouse.x = ((event.clientX - rect.left) / rect.width) * canvas.width;
-  mouse.y = ((event.clientY - rect.top) / rect.height) * canvas.height;
-});
+if (canvas) {
+  canvas.style.touchAction = "none";
+  canvas.addEventListener("mousemove", (event) => {
+    const rect = canvas.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * canvas.width;
+    mouse.y = ((event.clientY - rect.top) / rect.height) * canvas.height;
+  });
+  canvas.addEventListener("touchstart", handleCanvasTouchStart, { passive: false });
+  canvas.addEventListener("touchmove", handleCanvasTouchMove, { passive: false });
+  canvas.addEventListener("touchend", handleCanvasTouchEnd, { passive: false });
+  canvas.addEventListener("touchcancel", handleCanvasTouchEnd, { passive: false });
+}
 
 if (canvas) canvas.addEventListener("contextmenu", (event) => event.preventDefault());
 
@@ -8404,6 +8652,7 @@ if (window) window.addEventListener("mouseup", (event) => {
 
 if (ui.shopBackdrop) ui.shopBackdrop.addEventListener("click", () => { closeShop(); updateUi(); });
 escalarViewport();
+travarOrientacaoPaisagem();
 
 if (ui.shopTabs && typeof ui.shopTabs.querySelectorAll === "function") {
   ui.shopTabs.querySelectorAll("[data-shop-tab]").forEach((button) => {
