@@ -174,12 +174,38 @@ const ECONOMY = {
 const audio = {
   ctx: null,
   enabled: false,
-  volume: 0.8,
+  volume: 0.4,
   last: 0,
+  lastByType: new Map(),
   cache: new Map(),
   cachePrimed: false,
   buffers: new Map(),
   buffersPrimed: false,
+  outputReady: false,
+  masterGain: null,
+  compressor: null,
+};
+const AUDIO_MASTER_HEADROOM = 0.75;
+const AUDIO_MIX = {
+  shot: 0.34,
+  reload: 0.24,
+  hit: 0.28,
+  headshot: 0.34,
+  plant: 0.32,
+  round_win: 0.42,
+  round_lose: 0.36,
+  spike: 0.44,
+  ability: 0.3,
+  pickup: 0.32,
+  denied: 0.24,
+};
+const AUDIO_THROTTLE_MS = {
+  shot: 24,
+  reload: 120,
+  hit: 32,
+  headshot: 48,
+  pickup: 70,
+  denied: 90,
 };
 const AUDIO_NAMES = {
   shot: "Tiro",
@@ -593,6 +619,68 @@ const allyItems = [
   { id: "allySniper", name: "Sniper aliado", price: 5200, desc: "Um tiro forte, cadencia baixa", weaponId: "sniper", apply: () => { game.allyLoadout.weaponId = "sniper"; } },
 ];
 
+function clamp01(value) {
+  return Math.max(0, Math.min(1, Number.isFinite(Number(value)) ? Number(value) : 0));
+}
+
+function soundMix(name, multiplier = 1) {
+  const sfx = Number(settings?.sfxVolume);
+  const sfxScale = Number.isFinite(sfx) ? sfx / 100 : 1;
+  return clamp01((AUDIO_MIX[name] ?? AUDIO_MIX.ability) * multiplier * sfxScale);
+}
+
+function audioOutputNode() {
+  return audio.masterGain || audio.ctx?.destination || null;
+}
+
+function refreshAudioOutputGain() {
+  if (audio.masterGain) {
+    audio.masterGain.gain.value = AUDIO_MASTER_HEADROOM * clamp01(audio.volume);
+  }
+}
+
+function ensureAudioOutputGraph() {
+  if (!audio.ctx || audio.outputReady) return;
+  audio.masterGain = audio.ctx.createGain();
+  audio.compressor = audio.ctx.createDynamicsCompressor?.() || null;
+  refreshAudioOutputGain();
+  if (audio.compressor) {
+    audio.compressor.threshold.value = -28;
+    audio.compressor.knee.value = 28;
+    audio.compressor.ratio.value = 8;
+    audio.compressor.attack.value = 0.004;
+    audio.compressor.release.value = 0.18;
+    audio.masterGain.connect(audio.compressor);
+    audio.compressor.connect(audio.ctx.destination);
+  } else {
+    audio.masterGain.connect(audio.ctx.destination);
+  }
+  audio.outputReady = true;
+}
+
+function shouldThrottleAudio(name) {
+  const minGap = AUDIO_THROTTLE_MS[name] || 0;
+  if (!minGap) return false;
+  const now = performance.now();
+  const last = audio.lastByType.get(name) || 0;
+  if (now - last < minGap) return true;
+  audio.lastByType.set(name, now);
+  return false;
+}
+
+function setMasterAudioVolume(value) {
+  audio.volume = clamp01(value);
+  refreshAudioOutputGain();
+  for (const pool of audio.cache.values()) {
+    for (const clip of pool.clips || []) clip.volume = Math.min(clip.volume, audio.volume);
+  }
+}
+
+function panForAudioOrigin(origin) {
+  if (!origin || !game.player) return 0;
+  return Math.max(-1, Math.min(1, (origin.x - game.player.x) / 460));
+}
+
 function initAudio() {
   if (!audio.enabled) return;
   if (!audio.ctx) {
@@ -600,6 +688,7 @@ function initAudio() {
     if (AudioContext) audio.ctx = new AudioContext();
   }
   if (audio.ctx?.state === "suspended") audio.ctx.resume?.()?.catch?.(() => {});
+  ensureAudioOutputGraph();
   primeWeaponAudioBuffers();
   primeWeaponAudioCache();
 }
@@ -608,16 +697,18 @@ function playTone(freq, duration = 0.06, type = "square", gain = 0.035) {
   if (!audio.enabled) return;
   initAudio();
   if (!audio.ctx) return;
+  const output = audioOutputNode();
+  if (!output) return;
   const now = audio.ctx.currentTime;
   const osc = audio.ctx.createOscillator();
   const amp = audio.ctx.createGain();
   osc.type = type;
   osc.frequency.value = freq;
   amp.gain.setValueAtTime(0.0001, now);
-  amp.gain.exponentialRampToValueAtTime(gain * audio.volume, now + 0.01);
+  amp.gain.exponentialRampToValueAtTime(Math.max(0.0001, gain), now + 0.01);
   amp.gain.exponentialRampToValueAtTime(0.0001, now + duration);
   osc.connect(amp);
-  amp.connect(audio.ctx.destination);
+  amp.connect(output);
   osc.start(now);
   osc.stop(now + duration + 0.02);
 }
@@ -648,7 +739,7 @@ function makeAudioClip(src) {
 }
 
 function audioPoolSize(src) {
-  return src.includes("/Tiro/") ? 5 : 2;
+  return src.includes("/Tiro/") ? 3 : 2;
 }
 
 function primeWeaponAudioCache() {
@@ -698,9 +789,12 @@ function primeWeaponAudioBuffers() {
   for (const src of weaponAudioPaths()) loadAudioBuffer(src);
 }
 
-function playDecodedAudioBuffer(src, volume = audio.volume) {
+function playDecodedAudioBuffer(src, volume = soundMix("shot"), origin = null) {
   if (!audio.enabled || !audio.ctx || !src) return false;
   if (audio.ctx.state === "suspended") audio.ctx.resume?.()?.catch?.(() => {});
+  ensureAudioOutputGraph();
+  const output = audioOutputNode();
+  if (!output) return false;
   const entry = audio.buffers.get(src);
   if (!entry?.buffer) {
     loadAudioBuffer(src);
@@ -709,14 +803,21 @@ function playDecodedAudioBuffer(src, volume = audio.volume) {
   const source = audio.ctx.createBufferSource();
   const gain = audio.ctx.createGain();
   source.buffer = entry.buffer;
-  gain.gain.value = Math.max(0, Math.min(1, volume));
+  gain.gain.value = clamp01(volume);
   source.connect(gain);
-  gain.connect(audio.ctx.destination);
+  if (audio.ctx.createStereoPanner && origin) {
+    const panner = audio.ctx.createStereoPanner();
+    panner.pan.value = panForAudioOrigin(origin);
+    gain.connect(panner);
+    panner.connect(output);
+  } else {
+    gain.connect(output);
+  }
   source.start(0);
   return true;
 }
 
-function playAudioElement(src, volume = audio.volume) {
+function playAudioElement(src, volume = soundMix("shot")) {
   if (!audio.enabled || !src || typeof Audio === "undefined") return false;
   primeWeaponAudioCache();
   const pool = audio.cache.get(src);
@@ -734,41 +835,44 @@ function playAudioElement(src, volume = audio.volume) {
     clip = makeAudioClip(src);
     clips.push(clip);
   }
+  if (pool && !clip.paused && !clip.ended && clip.currentTime > 0 && clips.length >= pool.max) return false;
   if (pool) pool.index = (clips.indexOf(clip) + 1) % clips.length;
-  clip.volume = Math.max(0, Math.min(1, volume));
+  clip.volume = clamp01(volume * audio.volume);
   clip.currentTime = 0;
   const playback = clip.play();
   if (playback?.catch) playback.catch(() => {});
   return true;
 }
 
-function playWeaponSound(weapon, action) {
+function playWeaponSound(weapon, action, origin = null) {
+  const soundName = action === "reload" ? "reload" : "shot";
   const config = weaponAudio[weapon?.id];
   const paths = action === "reload" ? config?.sonsReload : config?.sonsTiro;
   const src = randomAudioPath(paths);
   if (!src) {
-    playSound(action === "reload" ? "reload" : "shot");
+    playSound(soundName);
     return false;
   }
-  const volume = action === "reload" ? audio.volume * 0.82 : audio.volume * 0.92;
-  return playDecodedAudioBuffer(src, volume) || playAudioElement(src, volume);
+  if (shouldThrottleAudio(soundName)) return false;
+  const weaponBoost = weapon?.id === "sniper" ? 1.08 : weapon?.id === "lmg" ? 0.9 : 1;
+  const volume = soundMix(soundName, weaponBoost);
+  return playDecodedAudioBuffer(src, volume, origin) || playAudioElement(src, volume);
 }
 
 function playSound(name) {
-  const now = performance.now();
-  if (name === "shot" && now - audio.last < 45) return;
-  audio.last = now;
-  if (name === "shot")    playTone(110, 0.05, "square",   0.028);
-  if (name === "hit")     { playTone(900, 0.04, "triangle", 0.04); playTone(600, 0.06, "triangle", 0.02); }
-  if (name === "headshot"){ playTone(1200,0.05, "triangle", 0.05); playTone(800, 0.08, "sine",     0.03); }
-  if (name === "reload")  playTone(280, 0.1,  "sawtooth",  0.022);
-  if (name === "plant")   { playTone(440, 0.08, "sine", 0.04); playTone(660, 0.12, "sine", 0.03); }
-  if (name === "round_win")  { playTone(523, 0.1, "sine", 0.04); playTone(659, 0.1, "sine", 0.04); playTone(784, 0.2, "sine", 0.045); }
-  if (name === "round_lose") { playTone(392, 0.1, "sine", 0.04); playTone(330, 0.1, "sine", 0.04); playTone(262, 0.22,"sine", 0.045); }
-  if (name === "spike")   playTone(80,  0.3,  "sawtooth",  0.055);
-  if (name === "ability") playTone(620, 0.14, "triangle",  0.038);
-  if (name === "pickup")  { playTone(760, 0.06, "sine", 0.035); playTone(1040, 0.08, "sine", 0.026); }
-  if (name === "denied")  { playTone(180, 0.08, "sawtooth", 0.032); playTone(120, 0.12, "sawtooth", 0.024); }
+  if (shouldThrottleAudio(name)) return;
+  const mix = soundMix(name);
+  if (name === "shot")    playTone(110, 0.05, "square",   0.08 * mix);
+  if (name === "hit")     { playTone(900, 0.04, "triangle", 0.12 * mix); playTone(600, 0.06, "triangle", 0.06 * mix); }
+  if (name === "headshot"){ playTone(1200,0.05, "triangle", 0.14 * mix); playTone(800, 0.08, "sine",     0.08 * mix); }
+  if (name === "reload")  playTone(280, 0.1,  "sawtooth",  0.09 * mix);
+  if (name === "plant")   { playTone(440, 0.08, "sine", 0.11 * mix); playTone(660, 0.12, "sine", 0.08 * mix); }
+  if (name === "round_win")  { playTone(523, 0.1, "sine", 0.09 * mix); playTone(659, 0.1, "sine", 0.09 * mix); playTone(784, 0.2, "sine", 0.1 * mix); }
+  if (name === "round_lose") { playTone(392, 0.1, "sine", 0.09 * mix); playTone(330, 0.1, "sine", 0.09 * mix); playTone(262, 0.22,"sine", 0.1 * mix); }
+  if (name === "spike")   playTone(80,  0.3,  "sawtooth",  0.12 * mix);
+  if (name === "ability") playTone(620, 0.14, "triangle",  0.11 * mix);
+  if (name === "pickup")  { playTone(760, 0.06, "sine", 0.12 * mix); playTone(1040, 0.08, "sine", 0.09 * mix); }
+  if (name === "denied")  { playTone(180, 0.08, "sawtooth", 0.11 * mix); playTone(120, 0.12, "sawtooth", 0.08 * mix); }
 }
 
 const DEFAULT_MAP = {
@@ -2863,7 +2967,7 @@ function shoot(owner, targetX, targetY, weapon, team) {
     const recoilGain = weapon.id === "sniper" ? 0.5 : weapon.id === "lmg" ? 0.26 : weapon.id === "smg" ? 0.22 : 0.18;
     game.recoilHeat = Math.min(2.6, game.recoilHeat + recoilGain);
     game.shake = Math.max(game.shake, shakeForWeapon(weapon));
-    playWeaponSound(weapon, "shot");
+    playWeaponSound(weapon, "shot", owner);
     spawnParticles(owner.x + Math.cos(owner.angle) * 24, owner.y + Math.sin(owner.angle) * 24, "#ffe6a8", 5, 90);
     if (owner.ammo <= 0) reload();
   }
@@ -2897,7 +3001,7 @@ function reload() {
   if (game.reloadTimer > 0) return;
   if (game.player.ammo >= currentMagSize()) return;
   game.reloadTimer = currentReloadTime();
-  playWeaponSound(game.selectedWeapon, "reload");
+  playWeaponSound(game.selectedWeapon, "reload", game.player);
 }
 
 function entityTeam(entity) {
@@ -7385,11 +7489,11 @@ const OPTIONS_DEFAULTS = {
   crosshairThickness: 2,
   crosshairOpacity: 100,
   crosshairGap: 6,
-  masterVolume: 80,
+  masterVolume: 40,
   musicVolume: 50,
   sfxVolume: 80,
   voiceVolume: 70,
-  muted: true,
+  muted: false,
   highlightSteps: true,
   impactEffects: true,
   displayMode: "window",
@@ -7414,6 +7518,8 @@ function loadOptionsSettings() {
 
 let settings = loadOptionsSettings();
 let optionsSettings = cloneOptions(settings);
+audio.enabled = !settings.muted;
+setMasterAudioVolume((Number.isFinite(Number(settings.masterVolume)) ? Number(settings.masterVolume) : OPTIONS_DEFAULTS.masterVolume) / 100);
 game.playerName = settings.playerName?.trim?.() || OPTIONS_DEFAULTS.playerName;
 game.showFps = Boolean(settings.showFps);
 game.showPing = Boolean(settings.showPing);
@@ -7505,6 +7611,13 @@ function SettingSlider(label, key, min, max, step = 1, unit = "") {
     const parsed = Number(step) % 1 === 0 ? Number.parseInt(input.value, 10) : Number.parseFloat(input.value);
     optionsSettings[key] = parsed;
     value.textContent = `${parsed}${unit}`;
+    if (key === "masterVolume") {
+      setMasterAudioVolume(parsed / 100);
+      if (!settings.muted && !optionsSettings.muted) {
+        audio.enabled = true;
+        playSound("pickup");
+      }
+    }
     updateCrosshairPreview();
   });
   wrap.append(input, value);
@@ -7763,7 +7876,8 @@ function applyOptionsSettings() {
   document.documentElement.style.setProperty("--kill-feed-scale", String(settings.killFeedScale / 100));
   game.hudOpacity = Math.max(0.5, Math.min(1.5, settings.brightness / 100));
   audio.enabled = !settings.muted;
-  audio.volume = Math.max(0, Math.min(1, settings.masterVolume / 100));
+  setMasterAudioVolume(settings.masterVolume / 100);
+  if (audio.enabled) initAudio();
   try {
     localStorage.setItem(OPTIONS_STORAGE_KEY, JSON.stringify(settings));
   } catch {}
