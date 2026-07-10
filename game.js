@@ -522,84 +522,84 @@ const damageFalloff = {
 const weaponAudio = {
   pistol: {
     sonsTiro: [
-      "assets/Sounds/Tiro/Pistol%20shot%20sound.mp3",
-      "assets/Sounds/Tiro/%232%20pistol%20shot%20sound%20effect.mp3",
+      "assets/Sounds/pistol/pistol_shot_01.mp3",
+      "assets/Sounds/pistol/pistol_shot_02.mp3",
+      "assets/Sounds/pistol/pistol_shot_03.mp3",
+      "assets/Sounds/pistol/pistol_shot_04.mp3",
     ],
     sonsReload: [
-      "assets/Sounds/Reload/%231%20Pistol%20reload%20sound%20effect.mp3",
-      "assets/Sounds/Reload/%232%20pistol%20reload%20sound%20effect.mp3",
-      "assets/Sounds/Reload/%233%20pistol%20reload%20sound%20effect.mp3",
+      "assets/Sounds/pistol/pistol_reload_01.mp3",
+      "assets/Sounds/pistol/pistol_reload_02.mp3",
+      "assets/Sounds/pistol/pistol_reload_03.mp3",
     ],
   },
   "light-pistol": {
-    sonsTiro: ["assets/Sounds/Tiro/Light%20Pistol%20shot%20sound.mp3"],
-    sonsReload: ["assets/Sounds/Reload/Light%20pistol%20reload%20sound%20effect.mp3"],
+    sonsTiro: ["assets/Sounds/light-pistol/light_pistol_shot_01.mp3"],
+    sonsReload: ["assets/Sounds/light-pistol/light_pistol_reload_01.mp3"],
   },
   revolver: {
-    sonsTiro: [
-      "assets/Sounds/Tiro/%231%20Revolver%20shot%20sound.mp3",
-    ],
-    sonsReload: ["assets/Sounds/Reload/Revolver%20reload%20sound%20effect.mp3"],
+    sonsTiro: ["assets/Sounds/revolver/revolver_shot_01.mp3"],
+    sonsReload: ["assets/Sounds/revolver/revolver_reload_01.mp3"],
   },
   smg: {
     sonsTiro: [
-      "assets/Sounds/Tiro/%231%20SMG%20single%20shot%20sound%20effect.mp3",
-      "assets/Sounds/Tiro/%232%20SMG%20single%20shot%20sound%20effect.mp3",
-      "assets/Sounds/Tiro/%233%20SMG%20single%20shot%20sound%20effect.mp3",
+      "assets/Sounds/smg/smg_shot_01.mp3",
+      "assets/Sounds/smg/smg_shot_02.mp3",
+      "assets/Sounds/smg/smg_shot_03.mp3",
     ],
     sonsReload: [
-      "assets/Sounds/Reload/%231%20SMG%20reload%20sound%20effect.mp3",
-      "assets/Sounds/Reload/%232%20SMG%20reload%20sound%20effect.mp3",
+      "assets/Sounds/smg/smg_reload_01.mp3",
+      "assets/Sounds/smg/smg_reload_02.mp3",
     ],
   },
   shotgun: {
-    sonsTiro: ["assets/Sounds/Tiro/Shotgun%20shot%20sound%20effect.mp3"],
-    sonsReload: ["assets/Sounds/Reload/shotgun%20reload%20sound%20effect.mp3"],
+    sonsTiro: ["assets/Sounds/shotgun/shotgun_shot_01.mp3"],
+    sonsReload: ["assets/Sounds/shotgun/shotgun_reload_01.mp3"],
   },
   carbine: {
-    sonsTiro: ["assets/Sounds/Tiro/assault_rifle_shot%20sound%20effect.mp3"],
+    sonsTiro: ["assets/Sounds/carbine/carbine_shot_01.mp3"],
     sonsReload: [
-      "assets/Sounds/Reload/%231%20assault%20rifle%20reload%20sound%20effect.mp3",
-      "assets/Sounds/Reload/%232%20assault%20rifle%20reload%20sound%20effect.mp3",
-      "assets/Sounds/Reload/%233%20assault%20rifle%20reload%20sound%20effect.mp3",
+      "assets/Sounds/carbine/carbine_reload_01.mp3",
+      "assets/Sounds/carbine/carbine_reload_02.mp3",
+      "assets/Sounds/carbine/carbine_reload_03.mp3",
     ],
   },
   rifle: {
-    sonsTiro: ["assets/Sounds/Tiro/Rifle%20shot%20sound%20effect.mp3"],
+    sonsTiro: ["assets/Sounds/rifle/rifle_shot_01.mp3"],
     sonsReload: [
-      "assets/Sounds/Reload/%231%20rifle%20reload%20sound%20effect.mp3",
-      "assets/Sounds/Reload/%232%20Rifle%20reload%20sound%20effect.mp3",
+      "assets/Sounds/rifle/rifle_reload_01.mp3",
+      "assets/Sounds/rifle/rifle_reload_02.mp3",
     ],
   },
   dmr: {
-    sonsTiro: ["assets/Sounds/Tiro/DMR%20shot%20sound%20effect.mp3"],
+    sonsTiro: ["assets/Sounds/dmr/dmr_shot_01.mp3"],
     sonsReload: [
-      "assets/Sounds/Reload/%231%20DMR%20reload%20sound%20effect.mp3",
-      "assets/Sounds/Reload/%232%20DMR%20reload%20sound%20effect.mp3",
-      "assets/Sounds/Reload/%233%20DMR%20reload%20sound%20effect.mp3",
+      "assets/Sounds/dmr/dmr_reload_01.mp3",
+      "assets/Sounds/dmr/dmr_reload_02.mp3",
+      "assets/Sounds/dmr/dmr_reload_03.mp3",
     ],
   },
   lmg: {
     sonsTiro: [
-      "assets/Sounds/Tiro/%231%20LMG%20single%20shot%20sound%20effect.mp3",
-      "assets/Sounds/Tiro/%232%20LMG%20single%20shot%20sound%20effect.mp3",
-      "assets/Sounds/Tiro/%233%20LMG%20single%20shot%20sound%20effect%20(stuffy).mp3",
+      "assets/Sounds/lmg/lmg_shot_01.mp3",
+      "assets/Sounds/lmg/lmg_shot_02.mp3",
+      "assets/Sounds/lmg/lmg_shot_03.mp3",
     ],
     sonsReload: [
-      "assets/Sounds/Reload/%231%20LMG%20reload%20sound%20effect.mp3",
-      "assets/Sounds/Reload/%232%20LMG%20reload%20sound%20effect.mp3",
+      "assets/Sounds/lmg/lmg_reload_01.mp3",
+      "assets/Sounds/lmg/lmg_reload_02.mp3",
     ],
   },
   sniper: {
     sonsTiro: [
-      "assets/Sounds/Tiro/%231%20Sniper%20shot%20sound.mp3",
-      "assets/Sounds/Tiro/%232%20Sniper%20shot%20sound%20effect.mp3",
-      "assets/Sounds/Tiro/%233%20Sniper%20shot%20sound%20effect.mp3",
+      "assets/Sounds/sniper/sniper_shot_01.mp3",
+      "assets/Sounds/sniper/sniper_shot_02.mp3",
+      "assets/Sounds/sniper/sniper_shot_03.mp3",
     ],
     sonsReload: [
-      "assets/Sounds/Reload/Sniper%20reload%20sound%20effect.mp3",
-      "assets/Sounds/Reload/%232%20Sniper%20reload%20sound%20effect.mp3",
-      "assets/Sounds/Reload/%233%20Sniper%20reload%20sound%20effect.mp3",
+      "assets/Sounds/sniper/sniper_reload_01.mp3",
+      "assets/Sounds/sniper/sniper_reload_02.mp3",
+      "assets/Sounds/sniper/sniper_reload_03.mp3",
     ],
   },
 };
