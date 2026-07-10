@@ -2698,7 +2698,7 @@ function resetFogRenderState() {
 }
 
 function isRoundTransitionRevealActive() {
-  return game.roundBannerTimer > 0 || game.phase === "ended" || game.phase === "matchOver";
+  return game.phase === "ended" || game.phase === "matchOver";
 }
 
 function wallsToSegments() {
