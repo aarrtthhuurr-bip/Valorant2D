@@ -2698,7 +2698,7 @@ function resetFogRenderState() {
 }
 
 function isRoundTransitionRevealActive() {
-  return game.phase === "ended" || game.phase === "matchOver";
+  return game.introTimer > 0 && !ui.introOverlay?.classList.contains("hidden");
 }
 
 function wallsToSegments() {
