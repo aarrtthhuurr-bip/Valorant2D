@@ -1,8 +1,13 @@
 {
+  "id": "./",
   "name": "Valorant 2D Mobile",
   "short_name": "Valorant2D",
-  "start_url": "/Valorant2D/index.html",
-  "scope": "/Valorant2D/",
+  "start_url": "./index.html",
+  "scope": "./",
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
+  "display_override": ["fullscreen", "standalone"],
   "display": "standalone",
   "orientation": "landscape",
   "background_color": "#000000",

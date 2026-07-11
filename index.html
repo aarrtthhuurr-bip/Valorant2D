@@ -4,9 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta http-equiv="Cache-Control" content="no-store">
+  <meta name="theme-color" content="#000000">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="application-name" content="Valorant2D">
   <title>Valorant2D</title>
-  <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="styles.css?v=20260703-main-menu-art">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="stylesheet" href="styles.css?v=20260711-mobile-fullscreen-fit">
   <script src="https://unpkg.com/lucide@latest"></script>
   <link rel="shortcut icon" href="assets/Favicon/favicon.ico" type="image/x-icon">
 </head>
@@ -268,12 +271,12 @@
     </div>
   </main>
 
-  <script src="game.js?v=20260627-bottom-info-bar-9-rounds"></script>
+  <script src="game.js?v=20260711-mobile-fullscreen-fit"></script>
   <script>window.lucide?.createIcons();</script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
-        navigator.serviceWorker.register("sw.js").catch((error) => {
+        navigator.serviceWorker.register("./sw.js", { scope: "./" }).catch((error) => {
           console.warn("Service worker registration failed.", error);
         });
       });

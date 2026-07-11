@@ -24,6 +24,9 @@
   --menu-icon-size: 48px;
   --menu-element-gap: 14px;
   --hud-opacity: 1;
+  --game-scale: 1;
+  --game-logical-width: 1280px;
+  --game-logical-height: 720px;
 }
 
 * {
@@ -40,7 +43,10 @@ body {
   min-height: 100vh;
   min-height: 100dvh;
   margin: 0;
+  padding: 0;
   overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
   position: relative;
   background: #000;
   color: var(--text);
@@ -71,26 +77,35 @@ button.active {
   width: 100vw;
   height: 100vh;
   height: 100dvh;
+  min-height: 100dvh;
   background: #000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
+  position: fixed;
+  inset: 0;
   overflow: hidden;
 }
 
 #game-viewport {
-  width: 1280px;
-  height: 720px;
-  position: relative;
+  width: var(--game-logical-width);
+  height: var(--game-logical-height);
+  position: absolute;
+  top: 50%;
+  left: 50%;
   overflow: hidden;
+  transform: translate3d(-50%, -50%, 0) scale(var(--game-scale));
   transform-origin: center center;
+  will-change: transform;
 }
 
 .shell {
-  position: relative;
+  position: fixed;
+  inset: 0;
   min-width: 0;
   min-height: 0;
   padding: 0;
+  width: 100vw;
+  height: 100dvh;
+  overflow: hidden;
 }
 
 .game-stage {
@@ -104,17 +119,20 @@ button.active {
 .game-wrap {
   position: absolute;
   inset: 0;
-  width: 1280px;
-  height: 720px;
+  width: var(--game-logical-width);
+  height: var(--game-logical-height);
   background: #0b1318;
   border: 0;
   box-shadow: none;
 }
 
 canvas {
-  width: 1280px;
-  height: 720px;
+  width: var(--game-logical-width);
+  height: var(--game-logical-height);
   display: block;
+  max-width: none;
+  max-height: none;
+  touch-action: none;
 }
 
 .glass {

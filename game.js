@@ -2,6 +2,12 @@ const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 const BASE_WIDTH = 1280;
 const BASE_HEIGHT = 720;
+const BASE_ASPECT = BASE_WIDTH / BASE_HEIGHT;
+const viewportLayout = {
+  width: BASE_WIDTH,
+  height: BASE_HEIGHT,
+  scale: 1,
+};
 
 const ui = {
   gameRoot: document.getElementById("game-root"),
@@ -142,12 +148,44 @@ const touchControls = {
 };
 
 function escalarViewport() {
-  if (!ui.gameViewport) return;
+  if (!ui.gameViewport || !ui.gameRoot) return;
   const viewport = window.visualViewport || window;
-  const scaleX = viewport.width / BASE_WIDTH;
-  const scaleY = viewport.height / BASE_HEIGHT;
-  const scale = Math.min(scaleX, scaleY);
-  ui.gameViewport.style.transform = `scale(${scale})`;
+  const width = Math.max(
+    1,
+    window.innerWidth || 0,
+    document.documentElement?.clientWidth || 0,
+    viewport.width || 0
+  );
+  const height = Math.max(
+    1,
+    window.innerHeight || 0,
+    document.documentElement?.clientHeight || 0,
+    viewport.height || 0
+  );
+  const screenAspect = width / height;
+  const logicalWidth = Math.round(screenAspect >= BASE_ASPECT ? BASE_HEIGHT * screenAspect : BASE_WIDTH);
+  const logicalHeight = Math.round(screenAspect >= BASE_ASPECT ? BASE_HEIGHT : BASE_WIDTH / screenAspect);
+  const scale = Math.min(width / logicalWidth, height / logicalHeight);
+
+  viewportLayout.width = logicalWidth;
+  viewportLayout.height = logicalHeight;
+  viewportLayout.scale = scale;
+
+  if (canvas.width !== logicalWidth) canvas.width = logicalWidth;
+  if (canvas.height !== logicalHeight) canvas.height = logicalHeight;
+
+  touchControls.fireButton.x = logicalWidth - 118;
+  touchControls.fireButton.y = logicalHeight - 112;
+  touchControls.blackoutButton.x = logicalWidth - 204;
+  touchControls.blackoutButton.y = 32;
+
+  ui.gameRoot.style.setProperty("--game-scale", String(scale));
+  ui.gameRoot.style.setProperty("--game-logical-width", `${logicalWidth}px`);
+  ui.gameRoot.style.setProperty("--game-logical-height", `${logicalHeight}px`);
+  document.documentElement.style.setProperty("--game-scale", String(scale));
+  document.documentElement.style.setProperty("--game-logical-width", `${logicalWidth}px`);
+  document.documentElement.style.setProperty("--game-logical-height", `${logicalHeight}px`);
+  resetFogRenderState?.();
 }
 
 function escalarViewportAposOrientacao() {
@@ -233,8 +271,8 @@ function handleCanvasTouchStart(event) {
       renderSandboxPanel();
       continue;
     }
-    const isLeftSide = point.x < BASE_WIDTH / 2;
-    const isLowerScreen = point.y > BASE_HEIGHT * 0.35;
+    const isLeftSide = point.x < canvas.width / 2;
+    const isLowerScreen = point.y > canvas.height * 0.35;
     if (touchControls.movementTouchId === null && isLeftSide && isLowerScreen) {
       touchControls.movementTouchId = touch.identifier;
       touchControls.joystick.active = true;
