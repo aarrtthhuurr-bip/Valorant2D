@@ -126,6 +126,8 @@ const ui = {
 
 const keys = new Set();
 const pressed = new Set();
+const touchKeys = new Set();
+const touchPressed = new Set();
 const mouse = { x: BASE_WIDTH / 2, y: BASE_HEIGHT / 2, down: false, rightDown: false };
 const touchControls = {
   enabled: false,
@@ -144,7 +146,15 @@ const touchControls = {
   },
   firing: false,
   fireButton: { x: BASE_WIDTH - 118, y: BASE_HEIGHT - 112, r: 62 },
+  actionButtons: {
+    interact: { key: "f", label: "F", sublabel: "USAR", x: BASE_WIDTH - 276, y: BASE_HEIGHT - 112, r: 42, visible: true },
+    ability: { key: "e", label: "E", sublabel: "HAB", x: BASE_WIDTH - 198, y: BASE_HEIGHT - 202, r: 40, visible: true },
+    ultimate: { key: "x", label: "X", sublabel: "ULT", x: BASE_WIDTH - 98, y: BASE_HEIGHT - 224, r: 40, visible: true },
+    shop: { key: "b", label: "B", sublabel: "LOJA", x: BASE_WIDTH - 308, y: 92, r: 38, visible: false },
+    pause: { key: "escape", label: "II", sublabel: "PAUSE", x: BASE_WIDTH - 72, y: 58, r: 34, visible: true },
+  },
   blackoutButton: { x: BASE_WIDTH - 204, y: 32, w: 176, h: 46 },
+  buttonTouches: new Map(),
 };
 
 function escalarViewport() {
@@ -176,6 +186,16 @@ function escalarViewport() {
 
   touchControls.fireButton.x = logicalWidth - 118;
   touchControls.fireButton.y = logicalHeight - 112;
+  touchControls.actionButtons.interact.x = logicalWidth - 276;
+  touchControls.actionButtons.interact.y = logicalHeight - 112;
+  touchControls.actionButtons.ability.x = logicalWidth - 198;
+  touchControls.actionButtons.ability.y = logicalHeight - 202;
+  touchControls.actionButtons.ultimate.x = logicalWidth - 98;
+  touchControls.actionButtons.ultimate.y = logicalHeight - 224;
+  touchControls.actionButtons.shop.x = logicalWidth - 308;
+  touchControls.actionButtons.shop.y = 92;
+  touchControls.actionButtons.pause.x = logicalWidth - 72;
+  touchControls.actionButtons.pause.y = 58;
   touchControls.blackoutButton.x = logicalWidth - 204;
   touchControls.blackoutButton.y = 32;
 
@@ -225,6 +245,41 @@ function isPointInsideRect(point, rect) {
   return point.x >= rect.x && point.x <= rect.x + rect.w && point.y >= rect.y && point.y <= rect.y + rect.h;
 }
 
+function shouldShowTouchActionButton(buttonId) {
+  if (buttonId === "shop") return game.phase === "buy" && game.menuState === "none";
+  if (buttonId === "pause") return game.menuState === "none" && ["buy", "action", "ended"].includes(game.phase);
+  return game.phase === "action" && game.menuState === "none";
+}
+
+function findTouchActionButton(point) {
+  for (const [id, button] of Object.entries(touchControls.actionButtons)) {
+    if (!shouldShowTouchActionButton(id)) continue;
+    if (isPointInsideCircle(point, button)) return { id, button };
+  }
+  return null;
+}
+
+function pressTouchKey(key) {
+  touchKeys.add(key);
+  touchPressed.add(key);
+}
+
+function releaseTouchKey(key) {
+  touchKeys.delete(key);
+}
+
+function triggerTouchAction(id, key) {
+  if (id === "pause") {
+    handleEscape();
+    return;
+  }
+  if (id === "shop") {
+    if (game.phase === "buy" && game.menuState === "none") toggleShop();
+    return;
+  }
+  pressTouchKey(key);
+}
+
 function resetTouchMovement() {
   touchControls.movementTouchId = null;
   touchControls.joystick.active = false;
@@ -266,6 +321,12 @@ function handleCanvasTouchStart(event) {
   for (const touch of event.changedTouches) {
     const point = canvasPointFromTouch(touch);
     touchControls.activeTouches.set(touch.identifier, point);
+    const action = findTouchActionButton(point);
+    if (action) {
+      touchControls.buttonTouches.set(touch.identifier, action.button.key);
+      triggerTouchAction(action.id, action.button.key);
+      continue;
+    }
     if (game.sandbox && isPointInsideRect(point, touchControls.blackoutButton)) {
       setFovMode(!game.fovMode);
       renderSandboxPanel();
@@ -298,6 +359,11 @@ function handleCanvasTouchMove(event) {
 function handleCanvasTouchEnd(event) {
   event.preventDefault();
   for (const touch of event.changedTouches) {
+    const actionKey = touchControls.buttonTouches.get(touch.identifier);
+    if (actionKey) {
+      releaseTouchKey(actionKey);
+      touchControls.buttonTouches.delete(touch.identifier);
+    }
     touchControls.activeTouches.delete(touch.identifier);
     if (touch.identifier === touchControls.movementTouchId) resetTouchMovement();
   }
@@ -6362,6 +6428,28 @@ function drawTouchButtonLabel(text, x, y, size = 20) {
   ctx.fillText(text, x, y);
 }
 
+function drawTouchActionButton(id, button) {
+  if (!shouldShowTouchActionButton(id)) return;
+  const active = touchKeys.has(button.key) || touchPressed.has(button.key);
+  ctx.save();
+  ctx.globalAlpha = active ? 0.98 : 0.82;
+  ctx.fillStyle = active ? "rgba(98, 230, 160, 0.82)" : "rgba(5, 8, 13, 0.62)";
+  ctx.strokeStyle = active ? "rgba(98, 230, 160, 0.98)" : "rgba(238, 247, 251, 0.54)";
+  ctx.lineWidth = 3;
+  ctx.shadowColor = active ? "rgba(98, 230, 160, 0.34)" : "rgba(0, 0, 0, 0.28)";
+  ctx.shadowBlur = active ? 16 : 8;
+  ctx.beginPath();
+  ctx.arc(button.x, button.y, button.r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  drawTouchButtonLabel(button.label, button.x, button.y - 5, id === "pause" ? 18 : 20);
+  ctx.font = "800 10px Rajdhani, Arial";
+  ctx.fillStyle = "rgba(238, 247, 251, 0.78)";
+  ctx.fillText(button.sublabel, button.x, button.y + 18);
+  ctx.restore();
+}
+
 function drawTouchControls() {
   if (game.menuState !== "none" || !["buy", "action", "ended"].includes(game.phase)) return;
   const joystick = touchControls.joystick;
@@ -6405,6 +6493,10 @@ function drawTouchControls() {
     ctx.restore();
   }
 
+  for (const [id, button] of Object.entries(touchControls.actionButtons)) {
+    drawTouchActionButton(id, button);
+  }
+
   if (game.sandbox) {
     const blackout = touchControls.blackoutButton;
     ctx.save();
@@ -6419,7 +6511,7 @@ function drawTouchControls() {
     }
     ctx.fill();
     ctx.stroke();
-    drawTouchButtonLabel("\u{1F311} BLACKOUT", blackout.x + blackout.w / 2, blackout.y + blackout.h / 2, 18);
+    drawTouchButtonLabel("BLACKOUT", blackout.x + blackout.w / 2, blackout.y + blackout.h / 2, 18);
     ctx.restore();
   }
 }
@@ -7832,13 +7924,13 @@ function settingKey(action) {
 function keyHeld(action) {
   const key = settingKey(action);
   if (key === "mouse1") return mouse.down;
-  return keys.has(key);
+  return keys.has(key) || touchKeys.has(key);
 }
 
 function keyPressed(action) {
   const key = settingKey(action);
   if (key === "mouse1") return false;
-  return pressed.has(key);
+  return pressed.has(key) || touchPressed.has(key);
 }
 
 function updateCrosshairPreview() {
@@ -8572,6 +8664,7 @@ function loop(now) {
   draw();
   updateUi();
   pressed.clear();
+  touchPressed.clear();
   requestAnimationFrame(loop);
 }
 loop.last = performance.now();

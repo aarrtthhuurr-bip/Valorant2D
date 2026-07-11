@@ -3127,6 +3127,106 @@ button.click-feedback::after {
   }
 }
 
+@media (orientation: landscape) and (max-height: 560px) {
+  .menu-overlay,
+  .agent-overlay,
+  .intro-overlay {
+    overflow: hidden;
+  }
+
+  .menu-card {
+    width: min(360px, 34vw);
+    min-width: 280px;
+    max-height: 100dvh;
+    padding: clamp(14px, 3.2vh, 24px) 18px;
+    overflow: hidden;
+  }
+
+  .menu-copy {
+    margin-bottom: 12px;
+  }
+
+  .menu-card h2 {
+    font-size: clamp(28px, 8vh, 42px);
+    line-height: 0.95;
+  }
+
+  .menu-grid {
+    gap: 10px;
+  }
+
+  .menu-button {
+    min-height: 48px;
+    padding: 8px 12px;
+  }
+
+  .menu-state-difficulty .menu-card {
+    width: min(560px, 92vw);
+    max-width: 560px;
+    max-height: 92dvh;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .difficulty-wrap {
+    padding: clamp(14px, 3.2vh, 22px) clamp(16px, 3vw, 26px);
+    gap: clamp(12px, 3vh, 20px);
+    overflow: hidden;
+  }
+
+  .difficulty-title {
+    font-size: clamp(20px, 6vh, 28px);
+  }
+
+  .difficulty-breadcrumb {
+    margin-bottom: 4px;
+    font-size: 10px;
+  }
+
+  .difficulty-cards {
+    gap: 8px;
+  }
+
+  .difficulty-card {
+    min-height: 108px;
+    padding: 16px 10px 14px;
+    gap: 10px;
+  }
+
+  .difficulty-star {
+    width: 20px;
+    height: 20px;
+  }
+
+  .difficulty-card-name {
+    font-size: 12px;
+  }
+
+  .difficulty-footer {
+    gap: 12px;
+  }
+
+  .difficulty-start-btn {
+    height: 38px;
+    padding: 0 18px;
+  }
+
+  .agent-panel,
+  .agent-select-panel,
+  .tutorial-agent-panel {
+    max-height: 92dvh;
+    overflow: hidden;
+  }
+
+  .agent-select-grid {
+    gap: 10px;
+  }
+
+  .agent-card {
+    min-height: 128px;
+  }
+}
+
 @media (max-width: 0px) {
    .shell {
      padding: 0;
