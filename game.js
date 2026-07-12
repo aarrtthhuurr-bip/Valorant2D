@@ -7887,9 +7887,9 @@ function renderBlackoutSwitch(container) {
   const switcher = document.createElement("div");
   switcher.className = "fov-mode-switch";
   switcher.innerHTML = `
-    <span>🌑 MODO BLACKOUT</span>
-    <button type="button" data-fov-mode="normal">OFF</button>
-    <button type="button" data-fov-mode="fog">ON</button>
+    <span>Modo de jogo</span>
+    <button type="button" data-fov-mode="normal">Default</button>
+    <button type="button" data-fov-mode="fog">Blackout Mode</button>
   `;
   switcher.querySelectorAll("button").forEach((button) => {
     const active = button.dataset.fovMode === (game.fovMode ? "fog" : "normal");
@@ -8023,8 +8023,12 @@ function renderDifficultyMenu() {
   attachButtonFeedback(backButton);
   attachButtonFeedback(startButton);
   footer.append(backButton, startButton);
-  renderBlackoutSwitch(footer);
-  ui.menuButtons.append(header, cards, footer);
+
+  const modeRow = document.createElement("div");
+  modeRow.className = "difficulty-mode-row";
+  renderBlackoutSwitch(modeRow);
+
+  ui.menuButtons.append(header, modeRow, cards, footer);
 }
 
 function pickDifficulty(id) {
