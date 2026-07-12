@@ -1,4 +1,4 @@
-const CACHE_NAME = "valorant2d-mobile-v3";
+const CACHE_NAME = "valorant2d-mobile-v4";
 const CORE_ASSETS = [
   "./",
   "./index.html",

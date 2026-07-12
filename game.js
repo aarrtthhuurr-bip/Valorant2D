@@ -3,11 +3,40 @@ const ctx = canvas.getContext("2d");
 const BASE_WIDTH = 1280;
 const BASE_HEIGHT = 720;
 const BASE_ASPECT = BASE_WIDTH / BASE_HEIGHT;
+const MOBILE_HUD_STORAGE_KEY = "valorant2d-mobile-hud";
 const viewportLayout = {
   width: BASE_WIDTH,
   height: BASE_HEIGHT,
   scale: 1,
 };
+
+function defaultMobileHudLayout() {
+  return {
+    joystick: { x: 0.14, y: 0.74, r: 56, opacity: 0.86 },
+    aim: { x: 0.78, y: 0.66, r: 54, opacity: 0.56 },
+    fire: { x: 0.91, y: 0.82, r: 62, opacity: 0.86 },
+    interact: { x: 0.79, y: 0.82, r: 42, opacity: 0.82 },
+    ability: { x: 0.85, y: 0.66, r: 40, opacity: 0.82 },
+    ultimate: { x: 0.93, y: 0.62, r: 40, opacity: 0.82 },
+    shop: { x: 0.76, y: 0.13, r: 38, opacity: 0.82 },
+    pause: { x: 0.95, y: 0.08, r: 34, opacity: 0.82 },
+  };
+}
+
+function loadMobileHudLayout() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(MOBILE_HUD_STORAGE_KEY) || "null");
+    return saved ? { ...defaultMobileHudLayout(), ...saved } : defaultMobileHudLayout();
+  } catch {
+    return defaultMobileHudLayout();
+  }
+}
+
+function saveMobileHudLayout(layout) {
+  try {
+    localStorage.setItem(MOBILE_HUD_STORAGE_KEY, JSON.stringify(layout));
+  } catch {}
+}
 
 const ui = {
   gameRoot: document.getElementById("game-root"),
@@ -131,8 +160,24 @@ const touchPressed = new Set();
 const mouse = { x: BASE_WIDTH / 2, y: BASE_HEIGHT / 2, down: false, rightDown: false };
 const touchControls = {
   enabled: false,
+  hudLayout: loadMobileHudLayout(),
+  hudEditor: {
+    active: false,
+    selectedId: null,
+    dragTouchId: null,
+    dragOffsetX: 0,
+    dragOffsetY: 0,
+    controls: {
+      sizeDown: { x: 0, y: 0, w: 74, h: 42, label: "SIZE -" },
+      sizeUp: { x: 0, y: 0, w: 74, h: 42, label: "SIZE +" },
+      opacityDown: { x: 0, y: 0, w: 74, h: 42, label: "OPAC -" },
+      opacityUp: { x: 0, y: 0, w: 74, h: 42, label: "OPAC +" },
+      save: { x: 0, y: 0, w: 110, h: 42, label: "SALVAR" },
+    },
+  },
   activeTouches: new Map(),
   movementTouchId: null,
+  aimTouchId: null,
   joystick: {
     active: false,
     baseX: 0,
@@ -141,8 +186,23 @@ const touchControls = {
     knobY: 0,
     x: 0,
     y: 0,
+    dirX: 0,
+    dirY: 0,
     radius: 50,
     knobRadius: 25,
+  },
+  aimJoystick: {
+    active: false,
+    baseX: 0,
+    baseY: 0,
+    knobX: 0,
+    knobY: 0,
+    x: 1,
+    y: 0,
+    dirX: 1,
+    dirY: 0,
+    radius: 54,
+    knobRadius: 22,
   },
   firing: false,
   fireButton: { x: BASE_WIDTH - 118, y: BASE_HEIGHT - 112, r: 62 },
@@ -184,18 +244,7 @@ function escalarViewport() {
   if (canvas.width !== logicalWidth) canvas.width = logicalWidth;
   if (canvas.height !== logicalHeight) canvas.height = logicalHeight;
 
-  touchControls.fireButton.x = logicalWidth - 118;
-  touchControls.fireButton.y = logicalHeight - 112;
-  touchControls.actionButtons.interact.x = logicalWidth - 276;
-  touchControls.actionButtons.interact.y = logicalHeight - 112;
-  touchControls.actionButtons.ability.x = logicalWidth - 198;
-  touchControls.actionButtons.ability.y = logicalHeight - 202;
-  touchControls.actionButtons.ultimate.x = logicalWidth - 98;
-  touchControls.actionButtons.ultimate.y = logicalHeight - 224;
-  touchControls.actionButtons.shop.x = logicalWidth - 308;
-  touchControls.actionButtons.shop.y = 92;
-  touchControls.actionButtons.pause.x = logicalWidth - 72;
-  touchControls.actionButtons.pause.y = 58;
+  applyMobileHudLayout();
   touchControls.blackoutButton.x = logicalWidth - 204;
   touchControls.blackoutButton.y = 32;
 
@@ -206,6 +255,43 @@ function escalarViewport() {
   document.documentElement.style.setProperty("--game-logical-width", `${logicalWidth}px`);
   document.documentElement.style.setProperty("--game-logical-height", `${logicalHeight}px`);
   resetFogRenderState?.();
+}
+
+function positionHudCircle(target, config, width = canvas.width, height = canvas.height) {
+  target.x = Math.round(clamp((config?.x ?? 0.5) * width, 28, width - 28));
+  target.y = Math.round(clamp((config?.y ?? 0.5) * height, 28, height - 28));
+  target.r = Math.round(clamp(config?.r ?? target.r ?? 42, 24, 92));
+  target.opacity = clamp(config?.opacity ?? 0.82, 0.25, 1);
+}
+
+function applyMobileHudLayout() {
+  const layout = touchControls.hudLayout || defaultMobileHudLayout();
+  const width = canvas.width || BASE_WIDTH;
+  const height = canvas.height || BASE_HEIGHT;
+  positionHudCircle(touchControls.joystick, layout.joystick, width, height);
+  touchControls.joystick.knobRadius = Math.max(18, Math.round(touchControls.joystick.r * 0.45));
+  positionHudCircle(touchControls.aimJoystick, layout.aim, width, height);
+  touchControls.aimJoystick.knobRadius = Math.max(16, Math.round(touchControls.aimJoystick.r * 0.42));
+  positionHudCircle(touchControls.fireButton, layout.fire, width, height);
+  for (const [id, button] of Object.entries(touchControls.actionButtons)) {
+    positionHudCircle(button, layout[id], width, height);
+  }
+}
+
+function updateHudLayoutFromCircle(id, circle) {
+  const layout = touchControls.hudLayout;
+  if (!layout[id]) layout[id] = {};
+  layout[id].x = clamp(circle.x / Math.max(1, canvas.width), 0.02, 0.98);
+  layout[id].y = clamp(circle.y / Math.max(1, canvas.height), 0.02, 0.98);
+  layout[id].r = clamp(circle.r, 24, 92);
+  layout[id].opacity = clamp(circle.opacity ?? 0.82, 0.25, 1);
+}
+
+function mobileHudElementById(id) {
+  if (id === "joystick") return touchControls.joystick;
+  if (id === "aim") return touchControls.aimJoystick;
+  if (id === "fire") return touchControls.fireButton;
+  return touchControls.actionButtons[id] || null;
 }
 
 function escalarViewportAposOrientacao() {
@@ -229,6 +315,19 @@ async function travarOrientacaoPaisagem() {
   }
 }
 
+async function solicitarTelaCheiaImersiva() {
+  const root = document.documentElement || ui.gameRoot;
+  try {
+    if (!document.fullscreenElement && root?.requestFullscreen) {
+      await root.requestFullscreen({ navigationUI: "hide" });
+    }
+  } catch (error) {
+    console.debug("Fullscreen imersivo indisponivel neste contexto.", error);
+  }
+  await travarOrientacaoPaisagem();
+  escalarViewportAposOrientacao();
+}
+
 function canvasPointFromTouch(touch) {
   const rect = canvas.getBoundingClientRect();
   return {
@@ -246,6 +345,7 @@ function isPointInsideRect(point, rect) {
 }
 
 function shouldShowTouchActionButton(buttonId) {
+  if (touchControls.hudEditor.active) return true;
   if (buttonId === "shop") return game.phase === "buy" && game.menuState === "none";
   if (buttonId === "pause") return game.menuState === "none" && ["buy", "action", "ended"].includes(game.phase);
   return game.phase === "action" && game.menuState === "none";
@@ -277,18 +377,126 @@ function triggerTouchAction(id, key) {
     if (game.phase === "buy" && game.menuState === "none") toggleShop();
     return;
   }
+  if (id === "ultimate") {
+    if (game.phase === "action" && game.menuState === "none") activateUltimate(game.player);
+    return;
+  }
   pressTouchKey(key);
+}
+
+function enterMobileHudEditor() {
+  touchControls.enabled = true;
+  touchControls.hudEditor.active = true;
+  touchControls.hudEditor.selectedId = "fire";
+  touchControls.hudEditor.dragTouchId = null;
+  game.menuState = "none";
+  game.paused = true;
+  hideMenuOverlay();
+  closeShop();
+  document.body?.classList.add("mobile-hud-editing");
+  setMessage("Editor de HUD: arraste os botões e salve.");
+}
+
+function exitMobileHudEditor(save = true) {
+  if (save) saveMobileHudLayout(touchControls.hudLayout);
+  touchControls.hudEditor.active = false;
+  touchControls.hudEditor.dragTouchId = null;
+  touchControls.hudEditor.selectedId = null;
+  document.body?.classList.remove("mobile-hud-editing");
+  game.paused = false;
+  showOptionsMenu?.();
+}
+
+function hudEditorElementAt(point) {
+  const candidates = [
+    ["joystick", touchControls.joystick],
+    ["aim", touchControls.aimJoystick],
+    ["fire", touchControls.fireButton],
+    ...Object.entries(touchControls.actionButtons),
+  ];
+  for (let i = candidates.length - 1; i >= 0; i--) {
+    const [id, circle] = candidates[i];
+    if (isPointInsideCircle(point, circle)) return { id, circle };
+  }
+  return null;
+}
+
+function layoutEditorControls() {
+  const controls = touchControls.hudEditor.controls;
+  const y = canvas.height - 54;
+  const center = canvas.width / 2;
+  controls.sizeDown.x = center - 230;
+  controls.sizeUp.x = center - 150;
+  controls.opacityDown.x = center - 66;
+  controls.opacityUp.x = center + 14;
+  controls.save.x = center + 104;
+  for (const control of Object.values(controls)) control.y = y;
+}
+
+function hudEditorControlAt(point) {
+  layoutEditorControls();
+  for (const [id, rect] of Object.entries(touchControls.hudEditor.controls)) {
+    if (isPointInsideRect(point, rect)) return id;
+  }
+  return null;
+}
+
+function adjustSelectedHudElement(kind) {
+  const id = touchControls.hudEditor.selectedId;
+  const circle = mobileHudElementById(id);
+  if (!circle) return;
+  const layout = touchControls.hudLayout[id] || {};
+  if (kind === "sizeDown") circle.r = clamp(circle.r - 4, 24, 92);
+  if (kind === "sizeUp") circle.r = clamp(circle.r + 4, 24, 92);
+  if (kind === "opacityDown") circle.opacity = clamp((circle.opacity ?? layout.opacity ?? 0.82) - 0.08, 0.25, 1);
+  if (kind === "opacityUp") circle.opacity = clamp((circle.opacity ?? layout.opacity ?? 0.82) + 0.08, 0.25, 1);
+  updateHudLayoutFromCircle(id, circle);
+}
+
+function handleHudEditorTouchStart(point, touchId) {
+  const control = hudEditorControlAt(point);
+  if (control === "save") {
+    exitMobileHudEditor(true);
+    return true;
+  }
+  if (control) {
+    adjustSelectedHudElement(control);
+    return true;
+  }
+  const hit = hudEditorElementAt(point);
+  if (!hit) return true;
+  touchControls.hudEditor.selectedId = hit.id;
+  touchControls.hudEditor.dragTouchId = touchId;
+  touchControls.hudEditor.dragOffsetX = point.x - hit.circle.x;
+  touchControls.hudEditor.dragOffsetY = point.y - hit.circle.y;
+  return true;
+}
+
+function handleHudEditorTouchMove(point, touchId) {
+  if (touchControls.hudEditor.dragTouchId !== touchId) return;
+  const id = touchControls.hudEditor.selectedId;
+  const circle = mobileHudElementById(id);
+  if (!circle) return;
+  circle.x = clamp(point.x - touchControls.hudEditor.dragOffsetX, circle.r, canvas.width - circle.r);
+  circle.y = clamp(point.y - touchControls.hudEditor.dragOffsetY, circle.r, canvas.height - circle.r);
+  updateHudLayoutFromCircle(id, circle);
 }
 
 function resetTouchMovement() {
   touchControls.movementTouchId = null;
   touchControls.joystick.active = false;
-  touchControls.joystick.x = 0;
-  touchControls.joystick.y = 0;
+  touchControls.joystick.dirX = 0;
+  touchControls.joystick.dirY = 0;
 }
 
-function updateTouchMovementFromPoint(point) {
-  const joystick = touchControls.joystick;
+function resetTouchAim() {
+  touchControls.aimTouchId = null;
+  touchControls.aimJoystick.active = false;
+  touchControls.aimJoystick.dirX = 1;
+  touchControls.aimJoystick.dirY = 0;
+}
+
+function updateJoystickFromPoint(joystick, point) {
   const rawX = point.x - joystick.baseX;
   const rawY = point.y - joystick.baseY;
   const distance = Math.hypot(rawX, rawY);
@@ -297,8 +505,20 @@ function updateTouchMovementFromPoint(point) {
   const angle = distance > 0 ? Math.atan2(rawY, rawX) : 0;
   joystick.knobX = joystick.baseX + Math.cos(angle) * clampedDistance;
   joystick.knobY = joystick.baseY + Math.sin(angle) * clampedDistance;
-  joystick.x = distance > 6 ? (Math.cos(angle) * clampedDistance) / limit : 0;
-  joystick.y = distance > 6 ? (Math.sin(angle) * clampedDistance) / limit : 0;
+  joystick.dirX = distance > 6 ? (Math.cos(angle) * clampedDistance) / limit : 0;
+  joystick.dirY = distance > 6 ? (Math.sin(angle) * clampedDistance) / limit : 0;
+}
+
+function updateTouchMovementFromPoint(point) {
+  updateJoystickFromPoint(touchControls.joystick, point);
+}
+
+function updateTouchAimFromPoint(point) {
+  updateJoystickFromPoint(touchControls.aimJoystick, point);
+}
+
+function isMobileAnalogAim() {
+  return settings.mobileAimMode === "analog";
 }
 
 function deriveTouchControls() {
@@ -308,9 +528,17 @@ function deriveTouchControls() {
     if (movementPoint) updateTouchMovementFromPoint(movementPoint);
     else resetTouchMovement();
   }
+  if (touchControls.aimTouchId !== null) {
+    const aimPoint = touchControls.activeTouches.get(touchControls.aimTouchId);
+    if (aimPoint) updateTouchAimFromPoint(aimPoint);
+    else resetTouchAim();
+  }
 
   touchControls.firing = [...touchControls.activeTouches.values()]
     .some((point) => isPointInsideCircle(point, touchControls.fireButton));
+  if (settings.mobileAimMode === "autofire" && game.phase === "action" && game.menuState === "none") {
+    touchControls.firing = Boolean(encontrarAlvoAutoMira());
+  }
   mouse.down = touchControls.firing;
 }
 
@@ -320,6 +548,10 @@ function handleCanvasTouchStart(event) {
   touchControls.enabled = true;
   for (const touch of event.changedTouches) {
     const point = canvasPointFromTouch(touch);
+    if (touchControls.hudEditor.active) {
+      handleHudEditorTouchStart(point, touch.identifier);
+      continue;
+    }
     touchControls.activeTouches.set(touch.identifier, point);
     const action = findTouchActionButton(point);
     if (action) {
@@ -341,8 +573,20 @@ function handleCanvasTouchStart(event) {
       touchControls.joystick.baseY = point.y;
       touchControls.joystick.knobX = point.x;
       touchControls.joystick.knobY = point.y;
-      touchControls.joystick.x = 0;
-      touchControls.joystick.y = 0;
+      touchControls.joystick.dirX = 0;
+      touchControls.joystick.dirY = 0;
+      continue;
+    }
+    const canAimWithAnalog = isMobileAnalogAim() && touchControls.aimTouchId === null && !isLeftSide && game.phase === "action";
+    if (canAimWithAnalog) {
+      touchControls.aimTouchId = touch.identifier;
+      touchControls.aimJoystick.active = true;
+      touchControls.aimJoystick.baseX = point.x;
+      touchControls.aimJoystick.baseY = point.y;
+      touchControls.aimJoystick.knobX = point.x;
+      touchControls.aimJoystick.knobY = point.y;
+      touchControls.aimJoystick.dirX = 1;
+      touchControls.aimJoystick.dirY = 0;
     }
   }
   deriveTouchControls();
@@ -351,7 +595,12 @@ function handleCanvasTouchStart(event) {
 function handleCanvasTouchMove(event) {
   event.preventDefault();
   for (const touch of event.changedTouches) {
-    touchControls.activeTouches.set(touch.identifier, canvasPointFromTouch(touch));
+    const point = canvasPointFromTouch(touch);
+    if (touchControls.hudEditor.active) {
+      handleHudEditorTouchMove(point, touch.identifier);
+      continue;
+    }
+    touchControls.activeTouches.set(touch.identifier, point);
   }
   deriveTouchControls();
 }
@@ -359,6 +608,10 @@ function handleCanvasTouchMove(event) {
 function handleCanvasTouchEnd(event) {
   event.preventDefault();
   for (const touch of event.changedTouches) {
+    if (touchControls.hudEditor.active) {
+      if (touch.identifier === touchControls.hudEditor.dragTouchId) touchControls.hudEditor.dragTouchId = null;
+      continue;
+    }
     const actionKey = touchControls.buttonTouches.get(touch.identifier);
     if (actionKey) {
       releaseTouchKey(actionKey);
@@ -366,6 +619,7 @@ function handleCanvasTouchEnd(event) {
     }
     touchControls.activeTouches.delete(touch.identifier);
     if (touch.identifier === touchControls.movementTouchId) resetTouchMovement();
+    if (touch.identifier === touchControls.aimTouchId) resetTouchAim();
   }
   deriveTouchControls();
 }
@@ -387,13 +641,32 @@ function encontrarAlvoAutoMira() {
 }
 
 function aplicarAutoMiraTouch() {
-  if (!touchControls.enabled || game.phase !== "action") return null;
+  if (!touchControls.enabled || game.phase !== "action" || settings.mobileAimMode !== "autofire") return null;
   const target = encontrarAlvoAutoMira();
-  if (!target) return null;
+  if (!target) {
+    touchControls.firing = false;
+    mouse.down = false;
+    return null;
+  }
   mouse.x = target.x;
   mouse.y = target.y;
   if (game.player) game.player.angle = Math.atan2(target.y - game.player.y, target.x - game.player.x);
+  touchControls.firing = true;
+  mouse.down = true;
   return target;
+}
+
+function aplicarMiraAnalogicaTouch() {
+  if (!touchControls.enabled || game.phase !== "action" || !isMobileAnalogAim()) return false;
+  const aim = touchControls.aimJoystick;
+  const dirX = aim.dirX ?? 1;
+  const dirY = aim.dirY ?? 0;
+  if (!aim.active || Math.hypot(dirX, dirY) <= 0.12 || !game.player) return false;
+  const distance = Math.max(180, Math.min(canvas.width, canvas.height) * 0.52);
+  mouse.x = game.player.x + dirX * distance;
+  mouse.y = game.player.y + dirY * distance;
+  game.player.angle = Math.atan2(dirY, dirX);
+  return true;
 }
 
 const SPIKE_DETONATE_TIME = 38;
@@ -3695,9 +3968,11 @@ function updatePlayer(dt) {
    const keyboardDx = (right ? 1 : 0) - (left ? 1 : 0);
    const keyboardDy = (down ? 1 : 0) - (up ? 1 : 0);
    const joystick = touchControls.joystick;
-   const joystickActive = joystick.active && Math.hypot(joystick.x, joystick.y) > 0.08;
-   const dx = joystickActive ? joystick.x : keyboardDx;
-   const dy = joystickActive ? joystick.y : keyboardDy;
+   const joystickDirX = joystick.dirX ?? 0;
+   const joystickDirY = joystick.dirY ?? 0;
+   const joystickActive = joystick.active && Math.hypot(joystickDirX, joystickDirY) > 0.08;
+   const dx = joystickActive ? joystickDirX : keyboardDx;
+   const dy = joystickActive ? joystickDirY : keyboardDy;
    const len = joystickActive ? 1 : (Math.hypot(dx, dy) || 1);
    const movementLocked = (p.detainedTimer || 0) > 0;
    p.moving = !movementLocked && Math.hypot(dx, dy) > 0.08;
@@ -3709,7 +3984,8 @@ function updatePlayer(dt) {
   if (!movementLocked) {
     moveEntity(p, (dx / len) * p.speed * ultimateSpeed * neonSpeed * shadowSlow * dt, (dy / len) * p.speed * ultimateSpeed * neonSpeed * shadowSlow * dt, map.walls);
   }
-  aplicarAutoMiraTouch();
+  const analogAimApplied = aplicarMiraAnalogicaTouch();
+  if (!analogAimApplied) aplicarAutoMiraTouch();
   p.angle = Math.atan2(mouse.y - p.y, mouse.x - p.x);
   if (game.spike.state === "carried" && game.spike.owner === "player") {
     game.spike.x = p.x;
@@ -5619,13 +5895,15 @@ function drawSpike() {
 }
 
 function drawCrosshair() {
+  if (touchControls.enabled && settings.mobileAimMode === "autofire") return;
   const spreadScale = game.crosshairScale * (1 + game.recoilHeat * 0.22);
   const crosshairColor = settings.crosshairColor || "#ffffff";
   const crosshairAlpha = Math.max(0.1, Math.min(1, settings.crosshairOpacity / 100));
   const crosshairThickness = Math.max(1, settings.crosshairThickness || 2);
   const crosshairGap = Math.max(0, settings.crosshairGap || 0) * game.crosshairScale;
   const crosshairLength = 14 * spreadScale;
-  if (game.selectedWeapon.id === "sniper") {
+  const mobileAnalogLaser = touchControls.enabled && isMobileAnalogAim() && settings.mobileAimLine;
+  if (game.selectedWeapon.id === "sniper" || mobileAnalogLaser) {
     const p = game.player;
     const startX = p.x + Math.cos(p.angle) * (p.r + 18);
     const startY = p.y + Math.sin(p.angle) * (p.r + 18);
@@ -6432,7 +6710,7 @@ function drawTouchActionButton(id, button) {
   if (!shouldShowTouchActionButton(id)) return;
   const active = touchKeys.has(button.key) || touchPressed.has(button.key);
   ctx.save();
-  ctx.globalAlpha = active ? 0.98 : 0.82;
+  ctx.globalAlpha = active ? 0.98 : (button.opacity ?? 0.82);
   ctx.fillStyle = active ? "rgba(98, 230, 160, 0.82)" : "rgba(5, 8, 13, 0.62)";
   ctx.strokeStyle = active ? "rgba(98, 230, 160, 0.98)" : "rgba(238, 247, 251, 0.54)";
   ctx.lineWidth = 3;
@@ -6450,35 +6728,102 @@ function drawTouchActionButton(id, button) {
   ctx.restore();
 }
 
+function drawTouchJoystickCircle(joystick, label, active = false) {
+  ctx.save();
+  ctx.globalAlpha = joystick.opacity ?? 0.82;
+  ctx.fillStyle = active ? "rgba(98, 230, 160, 0.24)" : "rgba(5, 8, 13, 0.48)";
+  ctx.strokeStyle = active ? "rgba(98, 230, 160, 0.72)" : "rgba(238, 247, 251, 0.58)";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(joystick.baseX ?? joystick.x, joystick.baseY ?? joystick.y, joystick.r || joystick.radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = active ? "rgba(98, 230, 160, 0.82)" : "rgba(238, 247, 251, 0.28)";
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.74)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(joystick.knobX ?? joystick.x, joystick.knobY ?? joystick.y, joystick.knobRadius || 22, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.font = "800 10px Rajdhani, Arial";
+  ctx.fillStyle = "rgba(238, 247, 251, 0.74)";
+  ctx.textAlign = "center";
+  ctx.fillText(label, joystick.x, joystick.y + (joystick.r || joystick.radius) + 18);
+  ctx.restore();
+}
+
+function drawMobileHudEditor() {
+  if (!touchControls.hudEditor.active) return;
+  ctx.save();
+  ctx.fillStyle = "#091018";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "rgba(70, 168, 255, 0.08)";
+  for (let x = 0; x < canvas.width; x += 40) ctx.fillRect(x, 0, 1, canvas.height);
+  for (let y = 0; y < canvas.height; y += 40) ctx.fillRect(0, y, canvas.width, 1);
+  ctx.fillStyle = "rgba(238, 247, 251, 0.92)";
+  ctx.font = "800 24px Rajdhani, Arial";
+  ctx.textAlign = "center";
+  ctx.fillText("PERSONALIZAR HUD", canvas.width / 2, 42);
+  ctx.font = "600 13px Rajdhani, Arial";
+  ctx.fillStyle = "rgba(238, 247, 251, 0.62)";
+  ctx.fillText("Arraste os controles. Selecione um item para ajustar tamanho e opacidade.", canvas.width / 2, 66);
+
+  drawTouchJoystickCircle({ ...touchControls.joystick, baseX: touchControls.joystick.x, baseY: touchControls.joystick.y, knobX: touchControls.joystick.x, knobY: touchControls.joystick.y }, "MOV", touchControls.hudEditor.selectedId === "joystick");
+  drawTouchJoystickCircle({ ...touchControls.aimJoystick, baseX: touchControls.aimJoystick.x, baseY: touchControls.aimJoystick.y, knobX: touchControls.aimJoystick.x, knobY: touchControls.aimJoystick.y }, "MIRA", touchControls.hudEditor.selectedId === "aim");
+  drawTouchActionButton("fire", { ...touchControls.fireButton, key: "fire", label: "ATIRAR", sublabel: "FIRE" });
+  for (const [id, button] of Object.entries(touchControls.actionButtons)) drawTouchActionButton(id, button);
+
+  const selected = mobileHudElementById(touchControls.hudEditor.selectedId);
+  if (selected) {
+    ctx.strokeStyle = "rgba(255, 70, 85, 0.98)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(selected.x, selected.y, selected.r + 8, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  layoutEditorControls();
+  for (const control of Object.values(touchControls.hudEditor.controls)) {
+    ctx.fillStyle = "rgba(5, 8, 13, 0.84)";
+    ctx.strokeStyle = "rgba(238, 247, 251, 0.42)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(control.x, control.y, control.w, control.h, 10);
+    else ctx.rect(control.x, control.y, control.w, control.h);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#eef7fb";
+    ctx.font = "800 13px Rajdhani, Arial";
+    ctx.fillText(control.label, control.x + control.w / 2, control.y + control.h / 2 + 1);
+  }
+  ctx.restore();
+}
+
 function drawTouchControls() {
+  if (touchControls.hudEditor.active) {
+    drawMobileHudEditor();
+    return;
+  }
   if (game.menuState !== "none" || !["buy", "action", "ended"].includes(game.phase)) return;
   const joystick = touchControls.joystick;
 
   if (joystick.active) {
-    ctx.save();
-    ctx.globalAlpha = 0.88;
-    ctx.fillStyle = "rgba(5, 8, 13, 0.48)";
-    ctx.strokeStyle = "rgba(238, 247, 251, 0.58)";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(joystick.baseX, joystick.baseY, joystick.radius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
+    drawTouchJoystickCircle(joystick, "MOV", true);
+  } else {
+    const base = { ...joystick, baseX: joystick.x, baseY: joystick.y, knobX: joystick.x, knobY: joystick.y };
+    drawTouchJoystickCircle(base, "MOV", false);
+  }
 
-    ctx.fillStyle = "rgba(98, 230, 160, 0.82)";
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.74)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(joystick.knobX, joystick.knobY, joystick.knobRadius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
+  if (isMobileAnalogAim()) {
+    const aim = touchControls.aimJoystick;
+    const base = aim.active ? aim : { ...aim, baseX: aim.x, baseY: aim.y, knobX: aim.x, knobY: aim.y };
+    drawTouchJoystickCircle(base, "MIRA", aim.active);
   }
 
   if (game.phase === "action") {
     const fire = touchControls.fireButton;
     ctx.save();
-    ctx.globalAlpha = touchControls.firing ? 0.98 : 0.84;
+    ctx.globalAlpha = touchControls.firing ? 0.98 : (fire.opacity ?? 0.84);
     ctx.fillStyle = touchControls.firing ? "rgba(255, 70, 85, 0.88)" : "rgba(255, 70, 85, 0.62)";
     ctx.strokeStyle = "rgba(255, 255, 255, 0.78)";
     ctx.lineWidth = 4;
@@ -6889,7 +7234,7 @@ function updateUi() {
   toggleClass(ui.killFeed, "hidden", shopOpen || !settings.showKillFeed);
   setStyle(ui.killFeed, "transform", `scale(${Math.max(0.5, Math.min(2, (settings.killFeedScale || 100) / 100))})`);
   toggleClass(ui.scoreboard, "hidden", shopOpen || !game.scoreboardVisible);
-  if (canvas?.style) canvas.style.cursor = game.omenUlt?.state === "select" ? "crosshair" : "";
+  if (canvas?.style) canvas.style.cursor = "none";
   const metricsVisible = gameplayHudVisible && !shopOpen && (game.showFps || game.showPing);
   toggleClass(ui.fpsCounter, "hidden", !metricsVisible);
   if (ui.fpsCounter && metricsVisible) {
@@ -7724,7 +8069,6 @@ function startSelectedDifficulty() {
 const OPTIONS_TABS = [
   { id: "general", label: "GERAL" },
   { id: "controls", label: "CONTROLES" },
-  { id: "crosshair", label: "MIRA" },
   { id: "audio", label: "ÁUDIO" },
   { id: "video", label: "VÍDEO" },
 ];
@@ -7745,6 +8089,8 @@ const OPTIONS_DEFAULTS = {
   mouseSensitivity: 50,
   adsSensitivity: 50,
   invertY: false,
+  mobileAimMode: "autofire",
+  mobileAimLine: true,
   keys: { fire: "Mouse1", reload: "R", ability1: "E", ability2: "Q", interact: "F" },
   crosshairType: "default",
   crosshairColor: "#ffffff",
@@ -8008,12 +8354,24 @@ function renderGeneralOptions() {
 }
 
 function renderControlOptions() {
+  const customizeButton = createOptionElement("button", "option-keybind", "PERSONALIZAR HUD");
+  customizeButton.type = "button";
+  customizeButton.addEventListener("click", enterMobileHudEditor);
+  attachButtonFeedback(customizeButton);
   return [
     optionSection("MOVIMENTO", [
       ToggleGroup("Esquema", "movementScheme", [{ value: "wasd", label: "WASD" }, { value: "arrows", label: "SETAS" }]),
       SettingSlider("Sensibilidade do mouse", "mouseSensitivity", 1, 100),
       SettingSlider("Sensibilidade ADS", "adsSensitivity", 1, 100),
       ToggleSwitch("Inverter eixo Y", "invertY"),
+    ]),
+    optionSection("CONTROLES MOBILE", [
+      ToggleGroup("Modo de mira", "mobileAimMode", [
+        { value: "analog", label: "ANALÓGICO DIREITO" },
+        { value: "autofire", label: "AUTOFIRE" },
+      ]),
+      ToggleSwitch("Linha de mira no analógico", "mobileAimLine", "SIM", "NÃO"),
+      optionRow("Layout dos botões virtuais", customizeButton, "Arraste, redimensione e ajuste opacidade dos controles touch."),
     ]),
     optionSection("TECLAS", [
       KeyBind("Atirar", "fire"),
@@ -8104,7 +8462,6 @@ function renderVideoOptions() {
 
 function renderOptionsContent() {
   if (activeOptionsTab === "controls") return renderControlOptions();
-  if (activeOptionsTab === "crosshair") return renderCrosshairOptions();
   if (activeOptionsTab === "audio") return renderAudioOptions();
   if (activeOptionsTab === "video") return renderVideoOptions();
   return renderGeneralOptions();
@@ -8148,7 +8505,7 @@ function applyOptionsSettings() {
 function resetOptionsSettings() {
   const tabDefaults = {
     general: ["language", "playerName", "showFps", "showPing", "showTips"],
-    controls: ["movementScheme", "mouseSensitivity", "adsSensitivity", "invertY", "keys"],
+    controls: ["movementScheme", "mouseSensitivity", "adsSensitivity", "invertY", "mobileAimMode", "mobileAimLine", "keys"],
     crosshair: ["crosshairType", "crosshairColor", "crosshairCustomColor", "crosshairSize", "crosshairThickness", "crosshairOpacity", "crosshairGap"],
     audio: ["masterVolume", "musicVolume", "sfxVolume", "voiceVolume", "muted", "highlightSteps", "impactEffects"],
     video: ["displayMode", "resolution", "fpsLimit", "vsync", "quality", "brightness", "particles", "bloodEffects", "shadows"],
@@ -8242,6 +8599,7 @@ function applyDifficulty(difficulty) {
 }
 
 function startMode(label, difficulty) {
+  solicitarTelaCheiaImersiva();
   game.mode = label;
   game.training = false;
   game.tutorial = false;
@@ -8255,6 +8613,7 @@ function startMode(label, difficulty) {
 }
 
 function startSandboxMode() {
+  solicitarTelaCheiaImersiva();
   game.mode = "Sandbox";
   game.difficulty = "sandbox";
   game.sandbox = true;
@@ -8276,6 +8635,7 @@ function startSandboxMode() {
 }
 
 function startTrainingMode() {
+  solicitarTelaCheiaImersiva();
   game.mode = "Treino";
   game.difficulty = "training";
   game.sandbox = false;
@@ -8302,6 +8662,7 @@ function startTrainingMode() {
 }
 
 function startTutorialMode() {
+  solicitarTelaCheiaImersiva();
   game.mode = "Tutorial";
   game.difficulty = "tutorial";
   game.sandbox = false;

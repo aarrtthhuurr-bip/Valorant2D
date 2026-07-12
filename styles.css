@@ -133,6 +133,12 @@ canvas {
   max-width: none;
   max-height: none;
   touch-action: none;
+  cursor: none;
+}
+
+body.mobile-hud-editing canvas,
+body.mobile-hud-editing #game-viewport {
+  cursor: none;
 }
 
 .glass {
