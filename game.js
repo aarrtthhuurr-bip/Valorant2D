@@ -13,8 +13,7 @@ const viewportLayout = {
 function defaultMobileHudLayout() {
   return {
     joystick: { x: 0.14, y: 0.74, r: 56, opacity: 0.86 },
-    aim: { x: 0.78, y: 0.66, r: 54, opacity: 0.56 },
-    fire: { x: 0.91, y: 0.82, r: 62, opacity: 0.86 },
+    aim: { x: 0.86, y: 0.76, r: 62, opacity: 0.7 },
     interact: { x: 0.79, y: 0.82, r: 42, opacity: 0.82 },
     ability: { x: 0.85, y: 0.66, r: 40, opacity: 0.82 },
     ultimate: { x: 0.93, y: 0.62, r: 40, opacity: 0.82 },
@@ -205,7 +204,6 @@ const touchControls = {
     knobRadius: 22,
   },
   firing: false,
-  fireButton: { x: BASE_WIDTH - 118, y: BASE_HEIGHT - 112, r: 62 },
   actionButtons: {
     interact: { key: "f", label: "F", sublabel: "USAR", x: BASE_WIDTH - 276, y: BASE_HEIGHT - 112, r: 42, visible: true },
     ability: { key: "e", label: "E", sublabel: "HAB", x: BASE_WIDTH - 198, y: BASE_HEIGHT - 202, r: 40, visible: true },
@@ -272,7 +270,6 @@ function applyMobileHudLayout() {
   touchControls.joystick.knobRadius = Math.max(18, Math.round(touchControls.joystick.r * 0.45));
   positionHudCircle(touchControls.aimJoystick, layout.aim, width, height);
   touchControls.aimJoystick.knobRadius = Math.max(16, Math.round(touchControls.aimJoystick.r * 0.42));
-  positionHudCircle(touchControls.fireButton, layout.fire, width, height);
   for (const [id, button] of Object.entries(touchControls.actionButtons)) {
     positionHudCircle(button, layout[id], width, height);
   }
@@ -290,7 +287,6 @@ function updateHudLayoutFromCircle(id, circle) {
 function mobileHudElementById(id) {
   if (id === "joystick") return touchControls.joystick;
   if (id === "aim") return touchControls.aimJoystick;
-  if (id === "fire") return touchControls.fireButton;
   return touchControls.actionButtons[id] || null;
 }
 
@@ -387,7 +383,7 @@ function triggerTouchAction(id, key) {
 function enterMobileHudEditor() {
   touchControls.enabled = true;
   touchControls.hudEditor.active = true;
-  touchControls.hudEditor.selectedId = "fire";
+  touchControls.hudEditor.selectedId = "aim";
   touchControls.hudEditor.dragTouchId = null;
   game.menuState = "none";
   game.paused = true;
@@ -411,7 +407,6 @@ function hudEditorElementAt(point) {
   const candidates = [
     ["joystick", touchControls.joystick],
     ["aim", touchControls.aimJoystick],
-    ["fire", touchControls.fireButton],
     ...Object.entries(touchControls.actionButtons),
   ];
   for (let i = candidates.length - 1; i >= 0; i--) {
@@ -494,6 +489,8 @@ function resetTouchAim() {
   touchControls.aimJoystick.active = false;
   touchControls.aimJoystick.dirX = 1;
   touchControls.aimJoystick.dirY = 0;
+  touchControls.firing = false;
+  mouse.down = false;
 }
 
 function updateJoystickFromPoint(joystick, point) {
@@ -521,6 +518,11 @@ function isMobileAnalogAim() {
   return settings.mobileAimMode === "analog";
 }
 
+function isTouchAimInputActive() {
+  const aim = touchControls.aimJoystick;
+  return aim.active && Math.hypot(aim.dirX ?? 0, aim.dirY ?? 0) > 0.18;
+}
+
 function deriveTouchControls() {
   const joystick = touchControls.joystick;
   if (touchControls.movementTouchId !== null) {
@@ -534,8 +536,7 @@ function deriveTouchControls() {
     else resetTouchAim();
   }
 
-  touchControls.firing = [...touchControls.activeTouches.values()]
-    .some((point) => isPointInsideCircle(point, touchControls.fireButton));
+  touchControls.firing = isMobileAnalogAim() && isTouchAimInputActive();
   if (settings.mobileAimMode === "autofire" && game.phase === "action" && game.menuState === "none") {
     touchControls.firing = Boolean(encontrarAlvoAutoMira());
   }
@@ -661,11 +662,13 @@ function aplicarMiraAnalogicaTouch() {
   const aim = touchControls.aimJoystick;
   const dirX = aim.dirX ?? 1;
   const dirY = aim.dirY ?? 0;
-  if (!aim.active || Math.hypot(dirX, dirY) <= 0.12 || !game.player) return false;
+  if (!aim.active || Math.hypot(dirX, dirY) <= 0.18 || !game.player) return false;
   const distance = Math.max(180, Math.min(canvas.width, canvas.height) * 0.52);
   mouse.x = game.player.x + dirX * distance;
   mouse.y = game.player.y + dirY * distance;
   game.player.angle = Math.atan2(dirY, dirX);
+  touchControls.firing = true;
+  mouse.down = true;
   return true;
 }
 
@@ -3985,8 +3988,12 @@ function updatePlayer(dt) {
     moveEntity(p, (dx / len) * p.speed * ultimateSpeed * neonSpeed * shadowSlow * dt, (dy / len) * p.speed * ultimateSpeed * neonSpeed * shadowSlow * dt, map.walls);
   }
   const analogAimApplied = aplicarMiraAnalogicaTouch();
-  if (!analogAimApplied) aplicarAutoMiraTouch();
-  p.angle = Math.atan2(mouse.y - p.y, mouse.x - p.x);
+  const autoAimApplied = !analogAimApplied && aplicarAutoMiraTouch();
+  if (touchControls.enabled) {
+    if (!analogAimApplied && !autoAimApplied && p.moving) p.angle = Math.atan2(p.moveY, p.moveX);
+  } else {
+    p.angle = Math.atan2(mouse.y - p.y, mouse.x - p.x);
+  }
   if (game.spike.state === "carried" && game.spike.owner === "player") {
     game.spike.x = p.x;
     game.spike.y = p.y;
@@ -5902,7 +5909,7 @@ function drawCrosshair() {
   const crosshairThickness = Math.max(1, settings.crosshairThickness || 2);
   const crosshairGap = Math.max(0, settings.crosshairGap || 0) * game.crosshairScale;
   const crosshairLength = 14 * spreadScale;
-  const mobileAnalogLaser = touchControls.enabled && isMobileAnalogAim() && settings.mobileAimLine;
+  const mobileAnalogLaser = touchControls.enabled && isMobileAnalogAim() && settings.mobileAimLine && isTouchAimInputActive();
   if (game.selectedWeapon.id === "sniper" || mobileAnalogLaser) {
     const p = game.player;
     const startX = p.x + Math.cos(p.angle) * (p.r + 18);
@@ -5930,6 +5937,10 @@ function drawCrosshair() {
       ctx.fill();
     }
     // mira normal (círculo + cruz)
+    if (mobileAnalogLaser && game.selectedWeapon.id !== "sniper") {
+      ctx.restore();
+      return;
+    }
     ctx.globalAlpha = crosshairAlpha;
     ctx.strokeStyle = crosshairColor;
     ctx.lineWidth = crosshairThickness;
@@ -6769,8 +6780,7 @@ function drawMobileHudEditor() {
   ctx.fillText("Arraste os controles. Selecione um item para ajustar tamanho e opacidade.", canvas.width / 2, 66);
 
   drawTouchJoystickCircle({ ...touchControls.joystick, baseX: touchControls.joystick.x, baseY: touchControls.joystick.y, knobX: touchControls.joystick.x, knobY: touchControls.joystick.y }, "MOV", touchControls.hudEditor.selectedId === "joystick");
-  drawTouchJoystickCircle({ ...touchControls.aimJoystick, baseX: touchControls.aimJoystick.x, baseY: touchControls.aimJoystick.y, knobX: touchControls.aimJoystick.x, knobY: touchControls.aimJoystick.y }, "MIRA", touchControls.hudEditor.selectedId === "aim");
-  drawTouchActionButton("fire", { ...touchControls.fireButton, key: "fire", label: "ATIRAR", sublabel: "FIRE" });
+  drawTouchJoystickCircle({ ...touchControls.aimJoystick, baseX: touchControls.aimJoystick.x, baseY: touchControls.aimJoystick.y, knobX: touchControls.aimJoystick.x, knobY: touchControls.aimJoystick.y }, "TIRO", touchControls.hudEditor.selectedId === "aim");
   for (const [id, button] of Object.entries(touchControls.actionButtons)) drawTouchActionButton(id, button);
 
   const selected = mobileHudElementById(touchControls.hudEditor.selectedId);
@@ -6817,25 +6827,7 @@ function drawTouchControls() {
   if (isMobileAnalogAim()) {
     const aim = touchControls.aimJoystick;
     const base = aim.active ? aim : { ...aim, baseX: aim.x, baseY: aim.y, knobX: aim.x, knobY: aim.y };
-    drawTouchJoystickCircle(base, "MIRA", aim.active);
-  }
-
-  if (game.phase === "action") {
-    const fire = touchControls.fireButton;
-    ctx.save();
-    ctx.globalAlpha = touchControls.firing ? 0.98 : (fire.opacity ?? 0.84);
-    ctx.fillStyle = touchControls.firing ? "rgba(255, 70, 85, 0.88)" : "rgba(255, 70, 85, 0.62)";
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.78)";
-    ctx.lineWidth = 4;
-    ctx.shadowColor = "rgba(255, 70, 85, 0.34)";
-    ctx.shadowBlur = touchControls.firing ? 22 : 12;
-    ctx.beginPath();
-    ctx.arc(fire.x, fire.y, fire.r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    drawTouchButtonLabel("ATIRAR", fire.x, fire.y, 19);
-    ctx.restore();
+    drawTouchJoystickCircle(base, "TIRO", aim.active);
   }
 
   for (const [id, button] of Object.entries(touchControls.actionButtons)) {
@@ -8089,7 +8081,7 @@ const OPTIONS_DEFAULTS = {
   mouseSensitivity: 50,
   adsSensitivity: 50,
   invertY: false,
-  mobileAimMode: "autofire",
+  mobileAimMode: "analog",
   mobileAimLine: true,
   keys: { fire: "Mouse1", reload: "R", ability1: "E", ability2: "Q", interact: "F" },
   crosshairType: "default",
