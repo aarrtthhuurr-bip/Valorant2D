@@ -4457,3 +4457,234 @@ button.click-feedback::after {
     font-size: clamp(13px, 2.8vh, 18px);
   }
 }
+
+/* Rebuilt mobile options panel: readable, touch-safe, and never clipped */
+@media (orientation: landscape) and (max-height: 760px) {
+  .menu-state-options {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: max(10px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+    overflow: hidden;
+  }
+
+  .menu-state-options .menu-card {
+    width: min(92vw, 1080px);
+    height: min(92vh, 620px);
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding: clamp(14px, 2.2vh, 22px) clamp(18px, 2.6vw, 30px);
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+
+  .menu-state-options .menu-copy {
+    margin: 0 0 clamp(10px, 1.8vh, 16px);
+  }
+
+  .menu-state-options .menu-copy .kicker {
+    margin-bottom: 2px;
+    font-size: clamp(10px, 1.9vh, 13px);
+  }
+
+  .menu-state-options .menu-card h2 {
+    font-size: clamp(26px, 5.4vh, 42px);
+    line-height: 0.92;
+  }
+
+  .menu-state-options .options-shell,
+  .menu-state-options .options-panel,
+  .menu-state-options .menu-grid {
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+  }
+
+  .menu-state-options .options-panel.is-ready {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: clamp(10px, 1.8vh, 16px);
+  }
+
+  .menu-state-options .options-tabs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: clamp(8px, 1.2vw, 12px);
+    margin: 0;
+    border-bottom: 1px solid rgba(255, 70, 85, 0.24);
+    overflow: visible;
+  }
+
+  .menu-state-options .options-tabs button {
+    min-width: 0;
+    min-height: clamp(42px, 7vh, 54px);
+    padding: 0 clamp(10px, 1.8vw, 20px);
+    border-radius: 12px 12px 0 0;
+    font-size: clamp(12px, 2.4vh, 17px);
+    white-space: nowrap;
+  }
+
+  .menu-state-options .options-content {
+    min-height: 0;
+    max-height: none;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+    gap: clamp(10px, 1.7vh, 16px);
+    padding: 0 4px 2px 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .menu-state-options .options-content::-webkit-scrollbar {
+    display: block;
+    width: 4px;
+  }
+
+  .menu-state-options .options-content::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: rgba(255, 70, 85, 0.42);
+  }
+
+  .menu-state-options .options-section {
+    min-width: 0;
+    min-height: 0;
+    padding: clamp(10px, 1.8vh, 16px);
+    border-radius: 12px;
+    overflow: visible;
+  }
+
+  .menu-state-options .options-section h3 {
+    margin-bottom: clamp(8px, 1.5vh, 12px);
+    font-size: clamp(14px, 2.7vh, 20px);
+  }
+
+  .menu-state-options .options-section-body {
+    gap: clamp(8px, 1.4vh, 12px);
+  }
+
+  .menu-state-options .option-row {
+    min-height: clamp(38px, 6.4vh, 52px);
+    grid-template-columns: minmax(118px, 0.9fr) minmax(160px, 1.1fr);
+    gap: clamp(8px, 1.4vw, 14px);
+  }
+
+  .menu-state-options .option-row-copy span {
+    font-size: clamp(12px, 2.3vh, 16px);
+    line-height: 1;
+  }
+
+  .menu-state-options .option-row-copy small {
+    margin-top: 3px;
+    font-size: clamp(10px, 1.9vh, 13px);
+    line-height: 1.1;
+  }
+
+  .menu-state-options .option-toggle,
+  .menu-state-options .option-keybind,
+  .menu-state-options .option-toggle-group button,
+  .menu-state-options .options-footer button,
+  .menu-state-options .option-select,
+  .menu-state-options .option-text-input {
+    min-height: clamp(38px, 6.5vh, 50px);
+    border-radius: 11px;
+    font-size: clamp(11px, 2.2vh, 15px);
+  }
+
+  .menu-state-options .option-toggle-group {
+    flex-wrap: nowrap;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .menu-state-options .option-toggle-group button {
+    min-width: 0;
+    padding: 0 clamp(8px, 1.4vw, 14px);
+    white-space: normal;
+    line-height: 1;
+  }
+
+  .menu-state-options .option-slider {
+    grid-template-columns: minmax(90px, 1fr) 48px;
+    gap: 8px;
+  }
+
+  .menu-state-options .option-slider input {
+    min-height: 32px;
+  }
+
+  .menu-state-options .option-slider strong {
+    font-size: clamp(12px, 2.2vh, 15px);
+  }
+
+  .menu-state-options .options-footer {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: center;
+    justify-content: stretch;
+    gap: clamp(10px, 1.8vw, 18px);
+    margin: 0;
+    padding-top: clamp(10px, 1.8vh, 14px);
+    border-top: 1px solid rgba(255, 70, 85, 0.28);
+    background: transparent;
+  }
+
+  .menu-state-options .options-footer button {
+    width: 100%;
+    min-width: 0;
+    padding: 0 clamp(10px, 1.8vw, 18px);
+  }
+
+  .menu-state-options .options-feedback {
+    grid-column: 1 / -1;
+    min-width: 0;
+    text-align: center;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 520px) {
+  .menu-state-options .menu-card {
+    width: min(94vw, 1120px);
+    height: min(94vh, 500px);
+    padding: 10px 16px;
+  }
+
+  .menu-state-options .menu-card h2 {
+    font-size: clamp(22px, 5vh, 34px);
+  }
+
+  .menu-state-options .options-panel.is-ready {
+    gap: 8px;
+  }
+
+  .menu-state-options .options-tabs button {
+    min-height: 38px;
+  }
+
+  .menu-state-options .options-content {
+    gap: 8px;
+  }
+
+  .menu-state-options .options-section {
+    padding: 9px;
+  }
+
+  .menu-state-options .option-row {
+    min-height: 34px;
+  }
+
+  .menu-state-options .option-toggle,
+  .menu-state-options .option-keybind,
+  .menu-state-options .option-toggle-group button,
+  .menu-state-options .options-footer button,
+  .menu-state-options .option-select,
+  .menu-state-options .option-text-input {
+    min-height: 34px;
+  }
+}
