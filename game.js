@@ -469,16 +469,16 @@ const weaponSpriteFiles = {
 };
 
 const weaponSpriteVisuals = {
-  pistol: { width: 32, offsetX: -1, offsetY: 1 },
-  "light-pistol": { width: 30, offsetX: -1, offsetY: 1 },
-  revolver: { width: 34, offsetX: -1, offsetY: 1 },
-  smg: { width: 40, offsetX: -1, offsetY: 1 },
-  shotgun: { width: 45, offsetX: -2, offsetY: 1 },
-  carbine: { width: 45, offsetX: -2, offsetY: 1 },
-  rifle: { width: 47, offsetX: -2, offsetY: 1 },
-  dmr: { width: 47, offsetX: -2, offsetY: 1 },
-  lmg: { width: 50, offsetX: -3, offsetY: 2 },
-  sniper: { width: 54, offsetX: -3, offsetY: 1 },
+  pistol: { width: 32, gripX: -3, gripY: 1 },
+  "light-pistol": { width: 30, gripX: -3, gripY: 1 },
+  revolver: { width: 34, gripX: -3, gripY: 1 },
+  smg: { width: 40, gripX: -4, gripY: 1 },
+  shotgun: { width: 45, gripX: -5, gripY: 1 },
+  carbine: { width: 45, gripX: -5, gripY: 1 },
+  rifle: { width: 47, gripX: -5, gripY: 1 },
+  dmr: { width: 47, gripX: -5, gripY: 1 },
+  lmg: { width: 50, gripX: -6, gripY: 2 },
+  sniper: { width: 54, gripX: -6, gripY: 1 },
 };
 
 const weaponSpriteCache = new Map();
@@ -5352,14 +5352,22 @@ function drawHeldWeapon(entity, weapon, kind) {
     const width = config.width;
     const height = Math.max(8, width * (image.naturalHeight / image.naturalWidth));
     const leftFacing = Math.cos(entity.angle || 0) < 0;
-    const x = entity.r + config.offsetX;
-    const y = config.offsetY - height / 2;
+    const gripX = entity.r + config.gripX;
+    const gripY = config.gripY - height / 2;
+    const drawX = -gripX - width;
+    const drawY = leftFacing ? -gripY - height : gripY;
 
     ctx.save();
-    if (leftFacing) ctx.scale(1, -1);
-    ctx.shadowColor = kind === "player" ? "rgba(255,255,255,0.22)" : "rgba(70,168,255,0.18)";
-    ctx.shadowBlur = kind === "player" ? 4 : 2;
-    ctx.drawImage(image, x, leftFacing ? -y - height : y, width, height);
+    ctx.scale(-1, leftFacing ? -1 : 1);
+    ctx.shadowColor = kind === "player" ? "rgba(225,250,255,0.82)" : "rgba(120,220,255,0.68)";
+    ctx.shadowBlur = kind === "player" ? 7 : 6;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.drawImage(image, drawX, drawY, width, height);
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
     ctx.restore();
     return;
   }
