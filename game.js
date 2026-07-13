@@ -455,6 +455,34 @@ const weaponImageFallbackFiles = {
 
 const weaponImageCache = new Map();
 
+const weaponSpriteFiles = {
+  pistol: "Classic.webp",
+  "light-pistol": "Classic.webp",
+  revolver: "Sheriff.webp",
+  smg: "Spectre.webp",
+  shotgun: "Judge.webp",
+  carbine: "Bulldog.webp",
+  rifle: "Phantom.webp",
+  dmr: "Bulldog.webp",
+  lmg: "Odin.webp",
+  sniper: "Operator.webp",
+};
+
+const weaponSpriteVisuals = {
+  pistol: { width: 32, offsetX: -1, offsetY: 1 },
+  "light-pistol": { width: 30, offsetX: -1, offsetY: 1 },
+  revolver: { width: 34, offsetX: -1, offsetY: 1 },
+  smg: { width: 40, offsetX: -1, offsetY: 1 },
+  shotgun: { width: 45, offsetX: -2, offsetY: 1 },
+  carbine: { width: 45, offsetX: -2, offsetY: 1 },
+  rifle: { width: 47, offsetX: -2, offsetY: 1 },
+  dmr: { width: 47, offsetX: -2, offsetY: 1 },
+  lmg: { width: 50, offsetX: -3, offsetY: 2 },
+  sniper: { width: 54, offsetX: -3, offsetY: 1 },
+};
+
+const weaponSpriteCache = new Map();
+
 function weaponImagePath(weapon) {
   return `assets/weapon-incon/${weaponImageFiles[weapon.id] || `${weapon.name}_icon.webp`}`;
 }
@@ -462,6 +490,28 @@ function weaponImagePath(weapon) {
 function fallbackWeaponImagePath(weapon) {
   const fallbackFile = weaponImageFallbackFiles[weapon.id];
   return fallbackFile ? `assets/weapon-incon/${fallbackFile}` : "";
+}
+
+function weaponSpritePath(weapon) {
+  const file = weaponSpriteFiles[weapon?.id] || weaponSpriteFiles.pistol;
+  return `assets/models/${file}`;
+}
+
+function getWeaponSprite(weapon) {
+  const src = weaponSpritePath(weapon);
+  const cached = weaponSpriteCache.get(src);
+  if (cached) return cached;
+  const image = new Image();
+  const entry = { image, ready: false, failed: false };
+  image.onload = () => { entry.ready = true; };
+  image.onerror = () => { entry.failed = true; };
+  image.src = src;
+  weaponSpriteCache.set(src, entry);
+  return entry;
+}
+
+function preloadWeaponSprites() {
+  for (const weapon of weapons) getWeaponSprite(weapon);
 }
 
 function weaponPlaceholderImage(weapon) {
@@ -5295,6 +5345,24 @@ function drawHeldWeapon(entity, weapon, kind) {
     ctx.fillRect(entity.r + 26, -4, 10, 8);
     return;
   }
+  const sprite = getWeaponSprite(weapon);
+  if (sprite?.ready && !sprite.failed) {
+    const config = weaponSpriteVisuals[weapon?.id] || weaponSpriteVisuals.pistol;
+    const image = sprite.image;
+    const width = config.width;
+    const height = Math.max(8, width * (image.naturalHeight / image.naturalWidth));
+    const leftFacing = Math.cos(entity.angle || 0) < 0;
+    const x = entity.r + config.offsetX;
+    const y = config.offsetY - height / 2;
+
+    ctx.save();
+    if (leftFacing) ctx.scale(1, -1);
+    ctx.shadowColor = kind === "player" ? "rgba(255,255,255,0.22)" : "rgba(70,168,255,0.18)";
+    ctx.shadowBlur = kind === "player" ? 4 : 2;
+    ctx.drawImage(image, x, leftFacing ? -y - height : y, width, height);
+    ctx.restore();
+    return;
+  }
   const visual = weaponVisual(weapon);
   const scale = 0.72;
   const length = visual.length * scale;
@@ -7095,6 +7163,7 @@ function preloadAllAgentArtworks() {
 function preloadInitialVisualAssets() {
   preloadAllAgentArtworks();
   preloadAllWeaponImages();
+  preloadWeaponSprites();
 }
 
 if ("requestIdleCallback" in window) {
