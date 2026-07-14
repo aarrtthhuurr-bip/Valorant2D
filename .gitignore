@@ -26,8 +26,11 @@ Abrir Valorant2D.cmd
 .env
 auto.py
 
-# Dependências, variáveis locais e banco de dados do back-end.
-server/node_modules/
+# Dependências Node nunca devem ser versionadas, em qualquer pasta.
+node_modules/
+**/node_modules/
+
+# Variáveis locais e banco de dados do back-end.
 server/.env
 server/database.sqlite
 server/database.sqlite-shm
