@@ -98,7 +98,7 @@ async function register(request, response, next) {
     }
 
     if (await User.findByUsername(username)) {
-      response.status(409).json({ error: 'Usuário já cadastrado.', code: 'USERNAME_IN_USE' });
+      response.status(409).json({ error: 'Este nome de usuário já está em uso.', code: 'USERNAME_IN_USE' });
       return;
     }
 
@@ -111,7 +111,7 @@ async function register(request, response, next) {
     } catch (error) {
       // Protege também contra cadastros simultâneos com o mesmo nome.
       if (error.code === 'SQLITE_CONSTRAINT') {
-        response.status(409).json({ error: 'Usuário já cadastrado.', code: 'USERNAME_IN_USE' });
+        response.status(409).json({ error: 'Este nome de usuário já está em uso.', code: 'USERNAME_IN_USE' });
         return;
       }
       throw error;

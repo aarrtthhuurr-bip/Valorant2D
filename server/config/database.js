@@ -38,6 +38,7 @@ function resolveDatabasePath(databaseUrl) {
 }
 
 const databasePath = resolveDatabasePath(process.env.DATABASE_URL);
+const databaseExistedBeforeStartup = fs.existsSync(databasePath);
 
 // O diretório do disco persistente precisa existir antes da conexão.
 fs.mkdirSync(path.dirname(databasePath), { recursive: true });
@@ -48,7 +49,12 @@ const database = new sqlite3.Database(databasePath, (error) => {
     return;
   }
 
-  console.log(`Banco de dados SQLite conectado em: ${databasePath}`);
+  console.log(`[SQLite] Arquivo: ${databasePath}`);
+  console.log(`[SQLite] Estado na inicialização: ${databaseExistedBeforeStartup ? 'existente, preservado' : 'novo arquivo criado'}.`);
+  console.log(`[SQLite] DATABASE_URL: ${process.env.DATABASE_URL ? 'configurada' : 'não configurada; usando fallback local'}.`);
+  if (process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL) {
+    console.warn('[SQLite] Aviso: sem DATABASE_URL em produção, o banco pode estar em disco efêmero.');
+  }
 });
 
 function run(sql, params = []) {
@@ -105,6 +111,10 @@ async function initializeDatabase() {
       senha_hash TEXT NOT NULL,
       pergunta_seguranca TEXT,
       resposta_seguranca TEXT,
+      partidas_jogadas INTEGER NOT NULL DEFAULT 0,
+      vitorias INTEGER NOT NULL DEFAULT 0,
+      abates_totais INTEGER NOT NULL DEFAULT 0,
+      pontuacao_maxima INTEGER NOT NULL DEFAULT 0,
       data_criacao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
   `);
@@ -117,6 +127,17 @@ async function initializeDatabase() {
   }
   if (!userColumnNames.has('resposta_seguranca')) {
     await run('ALTER TABLE users ADD COLUMN resposta_seguranca TEXT');
+  }
+  const statisticColumns = [
+    ['partidas_jogadas', 'INTEGER NOT NULL DEFAULT 0'],
+    ['vitorias', 'INTEGER NOT NULL DEFAULT 0'],
+    ['abates_totais', 'INTEGER NOT NULL DEFAULT 0'],
+    ['pontuacao_maxima', 'INTEGER NOT NULL DEFAULT 0'],
+  ];
+  for (const [columnName, columnDefinition] of statisticColumns) {
+    if (!userColumnNames.has(columnName)) {
+      await run(`ALTER TABLE users ADD COLUMN ${columnName} ${columnDefinition}`);
+    }
   }
 
   await run(`

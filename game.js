@@ -2178,6 +2178,7 @@ function startNewMatch() {
   game.roundMoneyDelta = 0;
   game.playerUltPoints = 0;
   game.roundNumber = 1;
+  game.statisticsRecorded = false;
   game.startingSide = Math.random() < 0.5 ? "attackers" : "defenders";
   game.playerSide = game.startingSide;
   map = game.training ? TRAINING_MAP : MAPS[Math.floor(Math.random() * MAPS.length)];
@@ -2206,6 +2207,29 @@ function showMatchResult() {
   ui.overlayTitle.textContent = won ? "Vitória" : "Derrota";
   ui.overlayText.textContent = `${game.playerScore} - ${game.enemyScore}`;
   ui.newGameButton.style.display = "";
+  recordCompletedMatch();
+}
+
+async function recordCompletedMatch() {
+  if (game.statisticsRecorded || game.sandbox || game.training || game.tutorial || currentProfile?.isGuest) return;
+  const session = readStoredSession();
+  if (!session?.token) return;
+  game.statisticsRecorded = true;
+  const score = Math.max(0, Math.round((game.stats?.kills || 0) * 100 + game.playerScore * 500));
+  try {
+    await requestApi("/api/statistics/match", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.token}` },
+      body: JSON.stringify({
+        victory: game.playerScore > game.enemyScore,
+        kills: Math.max(0, Math.round(game.stats?.kills || 0)),
+        score,
+      }),
+    });
+  } catch (error) {
+    // A partida permanece jogável mesmo se a sincronização estiver indisponível.
+    console.warn("Não foi possível sincronizar as estatísticas:", error.message);
+  }
 }
 
 function endRound(winner, reason, outcome = "standard") {
@@ -7387,6 +7411,10 @@ function mainMenuIconSvg(icon) {
       lucide: "lightbulb",
       fallback: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 14c.2-1 .7-1.7 1.5-2.5A4.8 4.8 0 0 0 18 8 6 6 0 0 0 6 8c0 1.2.5 2.5 1.5 3.5.7.7 1.2 1.5 1.5 2.5"></path><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M10 14h4"></path></svg>',
     },
+    stats: {
+      lucide: "chart-no-axes-column-increasing",
+      fallback: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 20V10"></path><path d="M10 20V4"></path><path d="M16 20v-7"></path><path d="M22 20V7"></path></svg>',
+    },
   };
   const selected = icons[icon] || icons.star;
   return `<span class="menu-icon" data-lucide="${selected.lucide}" aria-hidden="true">${selected.fallback}</span>`;
@@ -7769,10 +7797,59 @@ function showMainMenu() {
   setMenu("Valorant 2D", "", [
     { label: "JOGAR", icon: "gamepad", action: showDifficultyMenu },
     { label: "OPÇÕES", icon: "tools", action: showOptionsMenu },
+    { label: "ESTATÍSTICAS", icon: "stats", action: showStatisticsMenu },
     { label: "SANDBOX", icon: "money", action: startSandboxMode },
     { label: "TREINO", icon: "star", action: startTrainingMode },
     { label: "TUTORIAL", icon: "link", action: startTutorialMode },
   ], "MENU", "main");
+}
+
+function statisticValue(value) {
+  return Math.max(0, Number(value) || 0).toLocaleString("pt-BR");
+}
+
+function renderStatisticsPanel(statistics, message = "") {
+  if (!ui.menuButtons) return;
+  const games = Math.max(0, Number(statistics?.partidas_jogadas) || 0);
+  const wins = Math.max(0, Number(statistics?.vitorias) || 0);
+  const winRate = games ? Math.round((wins / games) * 100) : 0;
+  ui.menuButtons.className = "statistics-shell";
+  ui.menuButtons.innerHTML = `
+    <div class="statistics-grid">
+      <article><span>Partidas</span><strong>${statisticValue(games)}</strong></article>
+      <article><span>Vitórias</span><strong>${statisticValue(wins)}</strong></article>
+      <article><span>Taxa de vitória</span><strong>${winRate}%</strong></article>
+      <article><span>Abates totais</span><strong>${statisticValue(statistics?.abates_totais)}</strong></article>
+      <article class="statistics-highlight"><span>Pontuação máxima</span><strong>${statisticValue(statistics?.pontuacao_maxima)}</strong></article>
+    </div>
+    ${message ? `<p class="statistics-message">${message}</p>` : ""}
+    <button type="button" class="statistics-back">Voltar</button>
+  `;
+  ui.menuButtons.querySelector(".statistics-back")?.addEventListener("click", showMainMenu);
+}
+
+async function showStatisticsMenu() {
+  setMenu("Estatísticas", "", [], "PERFIL", "statistics");
+  if (currentProfile?.isGuest) {
+    renderStatisticsPanel({}, "Entre com uma conta para sincronizar suas estatísticas globais.");
+    return;
+  }
+  const session = readStoredSession();
+  if (!session?.token) {
+    renderStatisticsPanel({}, "Sessão indisponível. Entre novamente.");
+    return;
+  }
+  ui.menuButtons.className = "statistics-shell";
+  ui.menuButtons.innerHTML = '<div class="statistics-loading"><span class="auth-loader"></span><strong>Carregando estatísticas</strong></div>';
+  try {
+    const payload = await requestApi("/api/statistics", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${session.token}` },
+    });
+    renderStatisticsPanel(payload.statistics);
+  } catch (error) {
+    renderStatisticsPanel({}, error.message);
+  }
 }
 
 function showDifficultyMenu(immediate = false) {
@@ -7914,6 +7991,7 @@ const OPTIONS_TABS = [
   { id: "crosshair", label: "MIRA" },
   { id: "audio", label: "ÁUDIO" },
   { id: "video", label: "VÍDEO" },
+  { id: "statistics", label: "ESTATÍSTICAS" },
 ];
 
 const OPTIONS_STORAGE_KEY = "valorant2d-options";
@@ -7982,6 +8060,7 @@ let pendingKeyBind = null;
 let optionsFeedback = "";
 let optionsFeedbackTimer = null;
 let optionsFeedbackId = 0;
+let optionsStatisticsState = { status: "idle", data: null, message: "" };
 
 function cloneOptions(source) {
   if (source == null || typeof source !== "object") return source;
@@ -8298,11 +8377,59 @@ function renderVideoOptions() {
   ];
 }
 
+function renderOptionsStatistics() {
+  const section = optionSection("DESEMPENHO DO AGENTE", []);
+  section.classList.add("options-statistics-section");
+  const body = section.querySelector(".options-section-body");
+  if (optionsStatisticsState.status === "loading") {
+    body.innerHTML = '<div class="statistics-loading"><span class="auth-loader"></span><strong>Sincronizando dados</strong></div>';
+    return [section];
+  }
+  const stats = optionsStatisticsState.data || {};
+  const games = Math.max(0, Number(stats.partidas_jogadas) || 0);
+  const wins = Math.max(0, Number(stats.vitorias) || 0);
+  body.innerHTML = `
+    <div class="statistics-grid options-statistics-grid">
+      <article><span>Partidas</span><strong>${statisticValue(games)}</strong></article>
+      <article><span>Vitórias</span><strong>${statisticValue(wins)}</strong></article>
+      <article><span>Taxa de vitória</span><strong>${games ? Math.round((wins / games) * 100) : 0}%</strong></article>
+      <article><span>Abates totais</span><strong>${statisticValue(stats.abates_totais)}</strong></article>
+      <article class="statistics-highlight"><span>Pontuação máxima</span><strong>${statisticValue(stats.pontuacao_maxima)}</strong></article>
+    </div>
+    ${optionsStatisticsState.message ? `<p class="statistics-message">${optionsStatisticsState.message}</p>` : ""}
+  `;
+  return [section];
+}
+
+async function loadOptionsStatistics() {
+  if (currentProfile?.isGuest) {
+    optionsStatisticsState = { status: "ready", data: {}, message: "Entre com uma conta para sincronizar seu desempenho." };
+    renderOptionsMenu(true);
+    return;
+  }
+  const session = readStoredSession();
+  if (!session?.token) {
+    optionsStatisticsState = { status: "error", data: {}, message: "Sessão indisponível. Entre novamente." };
+    renderOptionsMenu(true);
+    return;
+  }
+  optionsStatisticsState = { status: "loading", data: null, message: "" };
+  renderOptionsMenu(true);
+  try {
+    const payload = await requestApi("/api/statistics", { method: "GET", headers: { Authorization: `Bearer ${session.token}` } });
+    optionsStatisticsState = { status: "ready", data: payload.statistics, message: "" };
+  } catch (error) {
+    optionsStatisticsState = { status: "error", data: {}, message: error.message };
+  }
+  if (game.menuState === "options" && activeOptionsTab === "statistics") renderOptionsMenu(true);
+}
+
 function renderOptionsContent() {
   if (activeOptionsTab === "controls") return renderControlOptions();
   if (activeOptionsTab === "crosshair") return renderCrosshairOptions();
   if (activeOptionsTab === "audio") return renderAudioOptions();
   if (activeOptionsTab === "video") return renderVideoOptions();
+  if (activeOptionsTab === "statistics") return renderOptionsStatistics();
   return renderGeneralOptions();
 }
 
@@ -8373,6 +8500,7 @@ function renderOptionsMenu(skipFade = false) {
         activeOptionsTab = tab.id;
         pendingKeyBind = null;
         renderOptionsMenu(true);
+        if (tab.id === "statistics") void loadOptionsStatistics();
       }, 150);
     });
     attachButtonFeedback(button);
@@ -8381,11 +8509,15 @@ function renderOptionsMenu(skipFade = false) {
   const content = createOptionElement("div", "options-content");
   renderOptionsContent().forEach((section) => content.appendChild(section));
   const footer = createOptionElement("footer", "options-footer");
-  [
+  const footerItems = activeOptionsTab === "statistics" ? [
+    { label: "ATUALIZAR", action: loadOptionsStatistics, primary: true },
+    { label: "VOLTAR", action: backFromOptions },
+  ] : [
     { label: "REPOR PADRÕES", action: resetOptionsSettings },
     { label: "APLICAR", action: applyOptionsSettings, primary: true },
     { label: "VOLTAR", action: backFromOptions },
-  ].forEach((item) => {
+  ];
+  footerItems.forEach((item) => {
     const button = createOptionElement("button", item.primary ? "is-primary" : "", item.label);
     button.type = "button";
     button.addEventListener("click", item.action);
@@ -8401,8 +8533,9 @@ function renderOptionsMenu(skipFade = false) {
 
 function openOptionsMenu(returnState) {
   game.optionsReturnState = returnState;
-  setMenu("OPÇÕES", "", [], "OPÇÕES", "options");
+  setMenu("OPÇÕES", "", [], "", "options");
   renderOptionsMenu(true);
+  if (activeOptionsTab === "statistics") void loadOptionsStatistics();
 }
 
 function showOptionsMenu() {
@@ -9096,6 +9229,16 @@ ui.recoveryBackButton?.addEventListener("click", () => showPasswordRecovery(fals
 ui.recoveryForm?.addEventListener("submit", (event) => {
   event.preventDefault();
   submitPasswordRecovery();
+});
+document.querySelectorAll("[data-password-toggle]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const input = document.getElementById(button.dataset.passwordToggle);
+    if (!input) return;
+    const willShow = input.type === "password";
+    input.type = willShow ? "text" : "password";
+    button.textContent = willShow ? "Ocultar" : "Mostrar";
+    button.setAttribute("aria-label", willShow ? "Ocultar senha" : "Mostrar senha");
+  });
 });
 ui.guestButton?.addEventListener("click", enterAsGuest);
 ui.logoutButton?.addEventListener("click", logoutCurrentProfile);

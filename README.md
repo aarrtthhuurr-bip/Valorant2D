@@ -142,6 +142,18 @@ Projeto experimental e independente, sem afiliação com a Riot Games.
 
 ## Disponibilidade do Back-End no Render
 
+### Persistência do SQLite
+
+O servidor nunca apaga nem recria deliberadamente um banco existente: ele abre
+o caminho definido em `DATABASE_URL` e cria somente tabelas ou colunas ausentes.
+Os logs de inicialização informam o caminho absoluto e se o arquivo já existia.
+
+Um arquivo SQLite armazenado no filesystem efêmero do Render gratuito será
+perdido em reinícios, suspensões ou novos deploys. Para contas permanentes, use
+um disco persistente compatível com o serviço ou migre os dados para um banco
+gerenciado, como PostgreSQL. O código da aplicação não consegue transformar
+um disco efêmero em armazenamento persistente.
+
 O Front-End envia uma requisição silenciosa ao health check do Render assim
 que a página é aberta. Isso inicia o processo de ativação antes de o jogador
 enviar o formulário de login.

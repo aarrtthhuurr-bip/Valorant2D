@@ -5,6 +5,7 @@ const express = require('express');
 const { initializeDatabase } = require('./config/database');
 const authRoutes = require('./routes/authRoutes');
 const healthRoutes = require('./routes/healthRoutes');
+const statisticsRoutes = require('./routes/statisticsRoutes');
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -40,6 +41,7 @@ app.use(cors({
 
 app.use('/', healthRoutes);
 app.use('/api', authRoutes);
+app.use('/api/statistics', statisticsRoutes);
 
 app.use((request, response) => {
   response.status(404).json({ erro: 'Rota não encontrada.' });

@@ -273,8 +273,8 @@
         <div class="auth-background" aria-hidden="true"></div>
         <div class="auth-panel">
           <div class="auth-brand" aria-hidden="true">
-            <span class="auth-brand-mark">V2D</span>
-            <span>Protocolo de acesso</span>
+            <img class="auth-brand-logo" src="./assets/Favicon/V2D_transparent.png" alt="">
+            <span>Login do agente</span>
           </div>
 
           <div class="auth-heading">
@@ -303,16 +303,10 @@
 
             <label for="authPassword">
               <span>Senha</span>
-              <input
-                id="authPassword"
-                name="password"
-                type="password"
-                minlength="8"
-                maxlength="72"
-                autocomplete="current-password"
-                placeholder="Mínimo de 8 caracteres"
-                required
-              >
+              <span class="password-field">
+                <input id="authPassword" name="password" type="password" minlength="8" maxlength="72" autocomplete="current-password" placeholder="Mínimo de 8 caracteres" required>
+                <button type="button" class="password-toggle" data-password-toggle="authPassword" aria-label="Mostrar senha">Mostrar</button>
+              </span>
             </label>
 
             <div class="auth-registration-fields hidden" id="authRegistrationFields">
@@ -347,7 +341,7 @@
             <div class="recovery-challenge hidden" id="recoveryChallenge">
               <p class="recovery-question" id="recoveryQuestion"></p>
               <label for="recoveryAnswer"><span>Resposta</span><input id="recoveryAnswer" type="text" maxlength="100" autocomplete="off"></label>
-              <label for="recoveryNewPassword"><span>Nova senha</span><input id="recoveryNewPassword" type="password" minlength="8" maxlength="72" autocomplete="new-password"></label>
+              <label for="recoveryNewPassword"><span>Nova senha</span><span class="password-field"><input id="recoveryNewPassword" type="password" minlength="8" maxlength="72" autocomplete="new-password"><button type="button" class="password-toggle" data-password-toggle="recoveryNewPassword" aria-label="Mostrar nova senha">Mostrar</button></span></label>
             </div>
             <div class="auth-feedback" id="recoveryFeedback" role="status" aria-live="polite"></div>
             <button class="auth-primary" id="recoverySubmitButton" type="submit">Ver pergunta</button>
@@ -374,7 +368,7 @@
     </div>
   </main>
 
-  <script src="./game.js?v=20260714-account-recovery"></script>
+  <script src="./game.js?v=20260714-interface-refinements"></script>
   <script>window.lucide?.createIcons();</script>
 </body>
 </html>
