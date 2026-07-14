@@ -35,8 +35,8 @@ html,
 body {
   width: 100vw;
   height: 100vh;
-  min-width: 100vw;
   min-height: 100vh;
+  min-height: 100dvh;
   margin: 0;
   overflow: hidden;
   position: relative;
@@ -45,6 +45,12 @@ body {
   font-family: "Rajdhani", "Segoe UI", Arial, sans-serif;
   font-weight: 500;
   letter-spacing: 0.02em;
+}
+
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 button {
@@ -74,8 +80,10 @@ input {
   position: absolute;
   inset: 0;
   z-index: 300;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(0.75rem, 3vw, 2rem);
   overflow: hidden;
   background: #050a11;
   animation: authFadeIn 420ms ease both;
@@ -129,10 +137,14 @@ input {
 
 .auth-panel {
   position: relative;
-  width: min(430px, calc(100% - 48px));
-  max-height: min(94vh, 690px);
-  padding: 20px 30px 18px;
-  overflow: hidden;
+  width: 90%;
+  max-width: 27rem;
+  max-height: 92vh;
+  max-height: 92dvh;
+  padding: clamp(0.875rem, 2.8vh, 1.25rem) clamp(1rem, 5vw, 1.875rem);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid rgba(143, 221, 246, 0.2);
   border-top: 2px solid rgba(59, 211, 255, 0.82);
   background: linear-gradient(155deg, rgba(12, 24, 37, 0.97), rgba(7, 14, 24, 0.98));
@@ -1987,12 +1999,12 @@ canvas {
 }
 
 .menu-card {
-  width: min(420px, 34vw);
-  min-width: 340px;
+  width: min(90%, 26.25rem);
+  min-width: 0;
   min-height: 0;
-  max-height: 85vh;
-  max-height: 85dvh;
-  padding: clamp(28px, 5vh, 56px) 28px;
+  max-height: 90vh;
+  max-height: 90dvh;
+  padding: clamp(1.25rem, 5vh, 3.5rem) clamp(1rem, 4vw, 1.75rem);
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
@@ -3583,6 +3595,16 @@ button.click-feedback::after {
 }
 
 @media (max-width: 520px) {
+  .auth-overlay { padding: 0.625rem; }
+
+  .auth-panel {
+    width: 96%;
+    max-height: 96dvh;
+    padding-inline: 1rem;
+  }
+
+  .auth-heading h1 { font-size: clamp(1.6rem, 8vw, 2rem); }
+
   .agent-select-grid {
     grid-template-columns: repeat(2, 92px);
   }
@@ -3594,6 +3616,26 @@ button.click-feedback::after {
   .weapon-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+@media (max-width: 760px) {
+  .menu-card {
+    width: 94%;
+    max-height: 94dvh;
+  }
+
+  .menu-state-options .menu-card { width: 96%; }
+
+  .options-content,
+  .crosshair-options-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .option-row { grid-template-columns: minmax(0, 1fr); }
+
+  .options-statistics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  .options-statistics-grid .statistics-highlight { grid-column: 1 / -1; }
 }
 
 @media (max-width: 0px) {
@@ -3991,11 +4033,15 @@ button.click-feedback::after {
 }
 
 .menu-state-options .menu-card {
-  width: min(1080px, calc(100% - 32px));
+  width: 92%;
+  max-width: 67.5rem;
   min-width: 0;
-  max-height: min(92vh, 820px);
+  max-height: 94vh;
+  max-height: 94dvh;
   margin: auto;
-  padding: 24px;
+  padding: clamp(0.875rem, 2.5vw, 1.5rem);
+  overflow-x: hidden;
+  overflow-y: auto;
   border: 1px solid rgba(255, 70, 85, 0.32);
   border-radius: var(--border-radius);
   background: rgba(15, 25, 35, 0.78);
