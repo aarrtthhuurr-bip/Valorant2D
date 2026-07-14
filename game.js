@@ -132,7 +132,6 @@ const ui = {
 };
 
 const AUTH_STORAGE_KEY = "valorant2d-auth-session";
-const API_REQUEST_TIMEOUT = 8000;
 const configuredApiUrl = document
   .querySelector('meta[name="valorant2d-api-url"]')
   ?.getAttribute("content")
@@ -143,6 +142,8 @@ const cloudApiUrl = configuredApiUrl || "https://valorant2d.onrender.com";
 
 // Em desenvolvimento, a detecção local sempre prevalece sobre a URL da nuvem.
 const API_BASE_URL = (isLocalEnvironment ? localApiUrl : cloudApiUrl).replace(/\/$/, "");
+// O Render pode precisar de alguns segundos extras para sair do estado de suspensão.
+const API_REQUEST_TIMEOUT = isLocalEnvironment ? 8000 : 45000;
 
 let currentProfile = null;
 
