@@ -19,6 +19,10 @@ function resolveDatabasePath(databaseUrl) {
   const configuredValue = databaseUrl.trim();
   if (!configuredValue) return defaultPath;
 
+  if (configuredValue === ':memory:') {
+    throw new Error('DATABASE_URL não pode usar :memory:; configure um arquivo persistente.');
+  }
+
   if (configuredValue.startsWith('file:')) {
     return fileURLToPath(configuredValue);
   }
@@ -37,8 +41,27 @@ function resolveDatabasePath(databaseUrl) {
   return path.resolve(configuredValue);
 }
 
-const databasePath = resolveDatabasePath(process.env.DATABASE_URL);
+const isProduction = process.env.NODE_ENV === 'production';
+const configuredDatabaseUrl = process.env.DATABASE_URL?.trim();
+
+// Em produção, um fallback relativo criaria um banco dentro do deploy efêmero.
+if (isProduction && !configuredDatabaseUrl) {
+  throw new Error('DATABASE_URL é obrigatória em produção e deve apontar para armazenamento persistente.');
+}
+if (isProduction
+  && configuredDatabaseUrl
+  && !configuredDatabaseUrl.startsWith('file:')
+  && !configuredDatabaseUrl.startsWith('sqlite://')
+  && !path.isAbsolute(configuredDatabaseUrl)) {
+  throw new Error('DATABASE_URL deve ser um caminho absoluto em produção, por exemplo /var/data/database.sqlite.');
+}
+
+const databasePath = resolveDatabasePath(configuredDatabaseUrl);
 const databaseExistedBeforeStartup = fs.existsSync(databasePath);
+const applicationDirectory = path.resolve(__dirname, '..');
+const relativeToApplication = path.relative(applicationDirectory, databasePath);
+const databaseInsideApplication = relativeToApplication === ''
+  || (!relativeToApplication.startsWith('..') && !path.isAbsolute(relativeToApplication));
 
 // O diretório do disco persistente precisa existir antes da conexão.
 fs.mkdirSync(path.dirname(databasePath), { recursive: true });
@@ -52,8 +75,9 @@ const database = new sqlite3.Database(databasePath, (error) => {
   console.log(`[SQLite] Arquivo: ${databasePath}`);
   console.log(`[SQLite] Estado na inicialização: ${databaseExistedBeforeStartup ? 'existente, preservado' : 'novo arquivo criado'}.`);
   console.log(`[SQLite] DATABASE_URL: ${process.env.DATABASE_URL ? 'configurada' : 'não configurada; usando fallback local'}.`);
-  if (process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL) {
-    console.warn('[SQLite] Aviso: sem DATABASE_URL em produção, o banco pode estar em disco efêmero.');
+  console.log(`[SQLite] Diretório da aplicação: ${applicationDirectory}`);
+  if (isProduction && databaseInsideApplication) {
+    console.warn('[SQLite] ALERTA: o banco está dentro do diretório da aplicação e será perdido em redeploys do Render.');
   }
 });
 
@@ -191,6 +215,10 @@ async function initializeDatabase() {
     ON sessions (data_expiracao)
   `);
 }
+
+// SQLite exige um disco persistente no Render. Em planos sem esse recurso,
+// migre para PostgreSQL externo (por exemplo, Supabase ou Neon); trocar apenas
+// o caminho do arquivo não torna o filesystem efêmero persistente.
 
 module.exports = {
   all,

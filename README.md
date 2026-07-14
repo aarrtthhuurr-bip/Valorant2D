@@ -154,6 +154,20 @@ um disco persistente compatível com o serviço ou migre os dados para um banco
 gerenciado, como PostgreSQL. O código da aplicação não consegue transformar
 um disco efêmero em armazenamento persistente.
 
+Configuração recomendada para um serviço com disco persistente:
+
+1. Monte o disco do Render em `/var/data`.
+2. Defina `NODE_ENV=production`.
+3. Defina `DATABASE_URL=/var/data/database.sqlite`.
+4. Reinicie o serviço e confirme no log a linha `[SQLite] Arquivo`.
+5. Confirme que o log informa `existente, preservado` nos reinícios seguintes.
+
+Em produção, o servidor agora rejeita `DATABASE_URL` ausente ou relativa para
+evitar criar silenciosamente contas em um arquivo descartável. Se o plano não
+oferecer disco persistente, a solução durável é migrar para PostgreSQL externo,
+como Supabase ou Neon; isso requer substituir a camada SQLite por um driver SQL
+compatível com PostgreSQL.
+
 O Front-End envia uma requisição silenciosa ao health check do Render assim
 que a página é aberta. Isso inicia o processo de ativação antes de o jogador
 enviar o formulário de login.
