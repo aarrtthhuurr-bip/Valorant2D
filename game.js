@@ -116,7 +116,262 @@ const ui = {
   tutorialAgentGrid: document.getElementById("tutorialAgentGrid"),
   fpsCounter: document.getElementById("fpsCounter"),
   audioDebugLabel: document.getElementById("audioDebugLabel"),
+  authOverlay: document.getElementById("authOverlay"),
+  authSessionCheck: document.getElementById("authSessionCheck"),
+  authForm: document.getElementById("authForm"),
+  authUsername: document.getElementById("authUsername"),
+  authPassword: document.getElementById("authPassword"),
+  authFeedback: document.getElementById("authFeedback"),
+  loginButton: document.getElementById("loginButton"),
+  registerButton: document.getElementById("registerButton"),
+  guestButton: document.getElementById("guestButton"),
+  accountSummary: document.getElementById("accountSummary"),
+  accountType: document.getElementById("accountType"),
+  accountUsername: document.getElementById("accountUsername"),
+  logoutButton: document.getElementById("logoutButton"),
 };
+
+const AUTH_STORAGE_KEY = "valorant2d-auth-session";
+const API_REQUEST_TIMEOUT = 8000;
+const configuredApiUrl = document
+  .querySelector('meta[name="valorant2d-api-url"]')
+  ?.getAttribute("content")
+  ?.trim();
+const isLocalEnvironment = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+const localApiUrl = "http://localhost:3000";
+const cloudApiUrl = configuredApiUrl || "https://valorant2d.onrender.com";
+
+// Em desenvolvimento, a detecção local sempre prevalece sobre a URL da nuvem.
+const API_BASE_URL = (isLocalEnvironment ? localApiUrl : cloudApiUrl).replace(/\/$/, "");
+
+let currentProfile = null;
+
+function readStoredSession() {
+  try {
+    const session = JSON.parse(localStorage.getItem(AUTH_STORAGE_KEY) || "null");
+    if (!session || typeof session.token !== "string") return null;
+    return session;
+  } catch (error) {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    return null;
+  }
+}
+
+function saveSession(payload) {
+  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({
+    token: payload.token,
+    expiresAt: payload.expiresAt,
+    user: payload.user,
+  }));
+}
+
+function clearStoredSession() {
+  localStorage.removeItem(AUTH_STORAGE_KEY);
+}
+
+async function requestApi(path, options = {}) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+      signal: controller.signal,
+    });
+
+    let payload = {};
+    try {
+      payload = await response.json();
+    } catch (error) {
+      payload = {};
+    }
+
+    if (!response.ok) {
+      const requestError = new Error(payload.error || "Não foi possível concluir a solicitação.");
+      requestError.status = response.status;
+      requestError.code = payload.code;
+      throw requestError;
+    }
+
+    return payload;
+  } catch (error) {
+    if (error.name === "AbortError" || error instanceof TypeError) {
+      const offlineError = new Error("Servidor offline. Tente novamente em alguns instantes.");
+      offlineError.code = "SERVER_OFFLINE";
+      throw offlineError;
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+function setAuthFeedback(message = "", type = "") {
+  if (!ui.authFeedback) return;
+  ui.authFeedback.textContent = message;
+  ui.authFeedback.className = `auth-feedback${type ? ` is-${type}` : ""}`;
+}
+
+function setAuthBusy(isBusy, action = "login") {
+  [ui.loginButton, ui.registerButton, ui.guestButton].forEach((button) => {
+    if (button) button.disabled = isBusy;
+  });
+
+  if (ui.loginButton) {
+    ui.loginButton.textContent = isBusy && action === "login" ? "Entrando..." : "Entrar";
+  }
+  if (ui.registerButton) {
+    ui.registerButton.textContent = isBusy && action === "register"
+      ? "Criando conta..."
+      : "Cadastrar nova conta";
+  }
+}
+
+function validateAuthForm() {
+  const username = ui.authUsername?.value.trim() || "";
+  const password = ui.authPassword?.value || "";
+  const usernameIsValid = /^[A-Za-z0-9_]{3,24}$/.test(username);
+  const passwordIsValid = password.length >= 8 && password.length <= 72;
+
+  ui.authUsername?.setAttribute("aria-invalid", String(!usernameIsValid));
+  ui.authPassword?.setAttribute("aria-invalid", String(!passwordIsValid));
+
+  if (!usernameIsValid) {
+    setAuthFeedback("Use de 3 a 24 letras, números ou sublinhados no nome de usuário.", "error");
+    ui.authUsername?.focus();
+    return null;
+  }
+
+  if (!passwordIsValid) {
+    setAuthFeedback("A senha deve ter entre 8 e 72 caracteres.", "error");
+    ui.authPassword?.focus();
+    return null;
+  }
+
+  return { username, password };
+}
+
+function updateAccountSummary(profile) {
+  if (!ui.accountSummary || !profile) return;
+  ui.accountSummary.classList.remove("hidden");
+  ui.accountSummary.classList.toggle("is-guest", profile.isGuest);
+  if (ui.accountType) {
+    ui.accountType.textContent = profile.isGuest
+      ? "Convidado, recordes apenas locais"
+      : "Conta conectada";
+  }
+  if (ui.accountUsername) ui.accountUsername.textContent = profile.username;
+  if (ui.logoutButton) ui.logoutButton.textContent = profile.isGuest ? "Entrar" : "Sair";
+}
+
+function enterGameWithProfile(profile) {
+  currentProfile = profile;
+  game.playerName = profile.username;
+  updateAccountSummary(profile);
+  showMainMenu();
+
+  if (!ui.authOverlay) return;
+  ui.authOverlay.classList.add("is-leaving");
+  window.setTimeout(() => {
+    ui.authOverlay.classList.add("hidden");
+    ui.authOverlay.classList.remove("is-leaving");
+    ui.authSessionCheck?.classList.add("hidden");
+  }, 300);
+}
+
+async function submitAuthentication(action) {
+  const credentials = validateAuthForm();
+  if (!credentials) return;
+
+  setAuthBusy(true, action);
+  setAuthFeedback(action === "register" ? "Criando sua conta segura..." : "Validando credenciais...");
+
+  try {
+    const payload = await requestApi(`/api/${action}`, {
+      method: "POST",
+      body: JSON.stringify(credentials),
+    });
+    saveSession(payload);
+    setAuthFeedback(payload.message || "Acesso autorizado.", "success");
+    enterGameWithProfile({ ...payload.user, isGuest: false, token: payload.token });
+  } catch (error) {
+    setAuthFeedback(error.message, "error");
+  } finally {
+    setAuthBusy(false);
+  }
+}
+
+function enterAsGuest() {
+  clearStoredSession();
+  const suffix = cryptoRandomGuestSuffix();
+  enterGameWithProfile({ username: `Convidado_${suffix}`, isGuest: true });
+  setMessage("Modo convidado: recordes globais não serão salvos.");
+}
+
+function cryptoRandomGuestSuffix() {
+  if (window.crypto?.getRandomValues) {
+    const value = new Uint16Array(1);
+    window.crypto.getRandomValues(value);
+    return String(1000 + (value[0] % 9000));
+  }
+  return String(1000 + Math.floor(Math.random() * 9000));
+}
+
+async function bootstrapAuthentication() {
+  const storedSession = readStoredSession();
+  if (!storedSession) {
+    ui.authSessionCheck?.classList.add("hidden");
+    ui.authUsername?.focus();
+    return;
+  }
+
+  ui.authSessionCheck?.classList.remove("hidden");
+  try {
+    const payload = await requestApi("/api/verify", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${storedSession.token}` },
+    });
+    saveSession({ ...storedSession, ...payload });
+    enterGameWithProfile({ ...payload.user, isGuest: false, token: storedSession.token });
+  } catch (error) {
+    clearStoredSession();
+    ui.authSessionCheck?.classList.add("hidden");
+    setAuthFeedback(
+      error.code === "SERVER_OFFLINE"
+        ? error.message
+        : "Sua sessão expirou. Entre novamente.",
+      "error",
+    );
+    ui.authUsername?.focus();
+  }
+}
+
+async function logoutCurrentProfile() {
+  const storedSession = readStoredSession();
+  if (storedSession?.token) {
+    try {
+      await requestApi("/api/logout", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${storedSession.token}` },
+      });
+    } catch (error) {
+      // A sessão local deve ser removida mesmo se o servidor estiver indisponível.
+    }
+  }
+
+  clearStoredSession();
+  currentProfile = null;
+  ui.accountSummary?.classList.add("hidden");
+  ui.menuOverlay?.classList.add("hidden");
+  ui.authPassword.value = "";
+  setAuthFeedback("");
+  ui.authOverlay?.classList.remove("hidden", "is-leaving");
+  ui.authUsername?.focus();
+}
 
 const keys = new Set();
 const pressed = new Set();
@@ -8712,9 +8967,25 @@ if (ui.pauseOptionsButton) ui.pauseOptionsButton.addEventListener("click", openP
 if (ui.pauseRestartButton) ui.pauseRestartButton.addEventListener("click", restartCurrentMatch);
 if (ui.pauseQuitButton) ui.pauseQuitButton.addEventListener("click", quitToMainMenu);
 
+ui.authForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  submitAuthentication("login");
+});
+ui.registerButton?.addEventListener("click", () => submitAuthentication("register"));
+ui.guestButton?.addEventListener("click", enterAsGuest);
+ui.logoutButton?.addEventListener("click", logoutCurrentProfile);
+ui.authUsername?.addEventListener("input", () => {
+  ui.authUsername.removeAttribute("aria-invalid");
+  setAuthFeedback("");
+});
+ui.authPassword?.addEventListener("input", () => {
+  ui.authPassword.removeAttribute("aria-invalid");
+  setAuthFeedback("");
+});
+
 buildShop();
 setShopTab(game.shopTab);
 game.menuMapTimer = 0;
 startNewMatch();
-showMainMenu();
+bootstrapAuthentication();
 requestAnimationFrame(loop);

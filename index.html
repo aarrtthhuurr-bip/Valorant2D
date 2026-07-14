@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Cache-Control" content="no-store">
+  <!-- Altere apenas este valor caso o endereço definitivo do Render mude. -->
+  <meta name="valorant2d-api-url" content="https://valorant2d.onrender.com">
   <title>Valorant2D</title>
   <link rel="stylesheet" href="styles.css?v=20260703-main-menu-art">
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -217,9 +219,17 @@
         </div>
       </div>
 
-      <div class="menu-overlay" id="menuOverlay">
+      <div class="menu-overlay hidden" id="menuOverlay">
         <div class="menu-art" aria-hidden="true"></div>
         <div class="menu-card glass">
+          <div class="account-summary hidden" id="accountSummary">
+            <span class="account-status-dot" aria-hidden="true"></span>
+            <div>
+              <span id="accountType">Conta conectada</span>
+              <strong id="accountUsername">Jogador</strong>
+            </div>
+            <button type="button" id="logoutButton">Sair</button>
+          </div>
           <div class="menu-copy">
             <span class="label" id="menuKicker">Menu</span>
             <h2 id="menuTitle">Valorant 2D</h2>
@@ -258,6 +268,70 @@
           <div class="tutorial-agent-grid" id="tutorialAgentGrid"></div>
         </div>
       </div>
+
+      <section class="auth-overlay" id="authOverlay" aria-labelledby="authTitle">
+        <div class="auth-background" aria-hidden="true"></div>
+        <div class="auth-panel">
+          <div class="auth-brand" aria-hidden="true">
+            <span class="auth-brand-mark">V2D</span>
+            <span>Protocolo de acesso</span>
+          </div>
+
+          <div class="auth-heading">
+            <span class="auth-kicker">Valorant 2D</span>
+            <h1 id="authTitle">Acesse o campo de batalha</h1>
+            <p>Entre para sincronizar seu perfil e seus futuros recordes globais.</p>
+          </div>
+
+          <form class="auth-form" id="authForm" novalidate>
+            <label for="authUsername">
+              <span>Usuário</span>
+              <input
+                id="authUsername"
+                name="username"
+                type="text"
+                minlength="3"
+                maxlength="24"
+                pattern="[A-Za-z0-9_]+"
+                autocomplete="username"
+                autocapitalize="none"
+                spellcheck="false"
+                placeholder="Seu nome de jogador"
+                required
+              >
+            </label>
+
+            <label for="authPassword">
+              <span>Senha</span>
+              <input
+                id="authPassword"
+                name="password"
+                type="password"
+                minlength="8"
+                maxlength="72"
+                autocomplete="current-password"
+                placeholder="Mínimo de 8 caracteres"
+                required
+              >
+            </label>
+
+            <div class="auth-feedback" id="authFeedback" role="status" aria-live="polite"></div>
+
+            <button class="auth-primary" id="loginButton" type="submit">Entrar</button>
+            <button class="auth-secondary" id="registerButton" type="button">Cadastrar nova conta</button>
+          </form>
+
+          <div class="auth-divider"><span>ou continue localmente</span></div>
+
+          <button class="auth-guest" id="guestButton" type="button">Jogar como convidado</button>
+          <p class="auth-guest-note">No modo convidado, seus recordes não serão salvos no leaderboard global.</p>
+        </div>
+
+        <div class="auth-session-check hidden" id="authSessionCheck" role="status" aria-live="polite">
+          <span class="auth-loader" aria-hidden="true"></span>
+          <strong>Validando sessão</strong>
+        </div>
+      </section>
       </section>
 
       <div class="message glass" id="message">
