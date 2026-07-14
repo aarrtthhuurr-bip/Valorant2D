@@ -739,17 +739,17 @@ const weaponSpriteVisuals = {
 const weaponSpriteCache = new Map();
 
 function weaponImagePath(weapon) {
-  return `assets/weapon-incon/${weaponImageFiles[weapon.id] || `${weapon.name}_icon.webp`}`;
+  return `./assets/weapon-incon/${weaponImageFiles[weapon.id] || `${weapon.name}_icon.webp`}`;
 }
 
 function fallbackWeaponImagePath(weapon) {
   const fallbackFile = weaponImageFallbackFiles[weapon.id];
-  return fallbackFile ? `assets/weapon-incon/${fallbackFile}` : "";
+  return fallbackFile ? `./assets/weapon-incon/${fallbackFile}` : "";
 }
 
 function weaponSpritePath(weapon) {
   const file = weaponSpriteFiles[weapon?.id] || weaponSpriteFiles.pistol;
-  return `assets/models/${file}`;
+  return `./assets/models/${file}`;
 }
 
 function getWeaponSprite(weapon) {
@@ -827,84 +827,84 @@ const damageFalloff = {
 const weaponAudio = {
   pistol: {
     sonsTiro: [
-      "assets/Sounds/pistol/pistol_shot_01.mp3",
-      "assets/Sounds/pistol/pistol_shot_02.mp3",
-      "assets/Sounds/pistol/pistol_shot_03.mp3",
-      "assets/Sounds/pistol/pistol_shot_04.mp3",
+      "./assets/Sounds/pistol/pistol_shot_01.mp3",
+      "./assets/Sounds/pistol/pistol_shot_02.mp3",
+      "./assets/Sounds/pistol/pistol_shot_03.mp3",
+      "./assets/Sounds/pistol/pistol_shot_04.mp3",
     ],
     sonsReload: [
-      "assets/Sounds/pistol/pistol_reload_01.mp3",
-      "assets/Sounds/pistol/pistol_reload_02.mp3",
-      "assets/Sounds/pistol/pistol_reload_03.mp3",
+      "./assets/Sounds/pistol/pistol_reload_01.mp3",
+      "./assets/Sounds/pistol/pistol_reload_02.mp3",
+      "./assets/Sounds/pistol/pistol_reload_03.mp3",
     ],
   },
   "light-pistol": {
-    sonsTiro: ["assets/Sounds/light-pistol/light_pistol_shot_01.mp3"],
-    sonsReload: ["assets/Sounds/light-pistol/light_pistol_reload_01.mp3"],
+    sonsTiro: ["./assets/Sounds/light-pistol/light_pistol_shot_01.mp3"],
+    sonsReload: ["./assets/Sounds/light-pistol/light_pistol_reload_01.mp3"],
   },
   revolver: {
-    sonsTiro: ["assets/Sounds/revolver/revolver_shot_01.mp3"],
-    sonsReload: ["assets/Sounds/revolver/revolver_reload_01.mp3"],
+    sonsTiro: ["./assets/Sounds/revolver/revolver_shot_01.mp3"],
+    sonsReload: ["./assets/Sounds/revolver/revolver_reload_01.mp3"],
   },
   smg: {
     sonsTiro: [
-      "assets/Sounds/smg/smg_shot_01.mp3",
-      "assets/Sounds/smg/smg_shot_02.mp3",
-      "assets/Sounds/smg/smg_shot_03.mp3",
+      "./assets/Sounds/smg/smg_shot_01.mp3",
+      "./assets/Sounds/smg/smg_shot_02.mp3",
+      "./assets/Sounds/smg/smg_shot_03.mp3",
     ],
     sonsReload: [
-      "assets/Sounds/smg/smg_reload_01.mp3",
-      "assets/Sounds/smg/smg_reload_02.mp3",
+      "./assets/Sounds/smg/smg_reload_01.mp3",
+      "./assets/Sounds/smg/smg_reload_02.mp3",
     ],
   },
   shotgun: {
-    sonsTiro: ["assets/Sounds/shotgun/shotgun_shot_01.mp3"],
-    sonsReload: ["assets/Sounds/shotgun/shotgun_reload_01.mp3"],
+    sonsTiro: ["./assets/Sounds/shotgun/shotgun_shot_01.mp3"],
+    sonsReload: ["./assets/Sounds/shotgun/shotgun_reload_01.mp3"],
   },
   carbine: {
-    sonsTiro: ["assets/Sounds/carbine/carbine_shot_01.mp3"],
+    sonsTiro: ["./assets/Sounds/carbine/carbine_shot_01.mp3"],
     sonsReload: [
-      "assets/Sounds/carbine/carbine_reload_01.mp3",
-      "assets/Sounds/carbine/carbine_reload_02.mp3",
-      "assets/Sounds/carbine/carbine_reload_03.mp3",
+      "./assets/Sounds/carbine/carbine_reload_01.mp3",
+      "./assets/Sounds/carbine/carbine_reload_02.mp3",
+      "./assets/Sounds/carbine/carbine_reload_03.mp3",
     ],
   },
   rifle: {
-    sonsTiro: ["assets/Sounds/rifle/rifle_shot_01.mp3"],
+    sonsTiro: ["./assets/Sounds/rifle/rifle_shot_01.mp3"],
     sonsReload: [
-      "assets/Sounds/rifle/rifle_reload_01.mp3",
-      "assets/Sounds/rifle/rifle_reload_02.mp3",
+      "./assets/Sounds/rifle/rifle_reload_01.mp3",
+      "./assets/Sounds/rifle/rifle_reload_02.mp3",
     ],
   },
   dmr: {
-    sonsTiro: ["assets/Sounds/dmr/dmr_shot_01.mp3"],
+    sonsTiro: ["./assets/Sounds/dmr/dmr_shot_01.mp3"],
     sonsReload: [
-      "assets/Sounds/dmr/dmr_reload_01.mp3",
-      "assets/Sounds/dmr/dmr_reload_02.mp3",
-      "assets/Sounds/dmr/dmr_reload_03.mp3",
+      "./assets/Sounds/dmr/dmr_reload_01.mp3",
+      "./assets/Sounds/dmr/dmr_reload_02.mp3",
+      "./assets/Sounds/dmr/dmr_reload_03.mp3",
     ],
   },
   lmg: {
     sonsTiro: [
-      "assets/Sounds/lmg/lmg_shot_01.mp3",
-      "assets/Sounds/lmg/lmg_shot_02.mp3",
-      "assets/Sounds/lmg/lmg_shot_03.mp3",
+      "./assets/Sounds/lmg/lmg_shot_01.mp3",
+      "./assets/Sounds/lmg/lmg_shot_02.mp3",
+      "./assets/Sounds/lmg/lmg_shot_03.mp3",
     ],
     sonsReload: [
-      "assets/Sounds/lmg/lmg_reload_01.mp3",
-      "assets/Sounds/lmg/lmg_reload_02.mp3",
+      "./assets/Sounds/lmg/lmg_reload_01.mp3",
+      "./assets/Sounds/lmg/lmg_reload_02.mp3",
     ],
   },
   sniper: {
     sonsTiro: [
-      "assets/Sounds/sniper/sniper_shot_01.mp3",
-      "assets/Sounds/sniper/sniper_shot_02.mp3",
-      "assets/Sounds/sniper/sniper_shot_03.mp3",
+      "./assets/Sounds/sniper/sniper_shot_01.mp3",
+      "./assets/Sounds/sniper/sniper_shot_02.mp3",
+      "./assets/Sounds/sniper/sniper_shot_03.mp3",
     ],
     sonsReload: [
-      "assets/Sounds/sniper/sniper_reload_01.mp3",
-      "assets/Sounds/sniper/sniper_reload_02.mp3",
-      "assets/Sounds/sniper/sniper_reload_03.mp3",
+      "./assets/Sounds/sniper/sniper_reload_01.mp3",
+      "./assets/Sounds/sniper/sniper_reload_02.mp3",
+      "./assets/Sounds/sniper/sniper_reload_03.mp3",
     ],
   },
 };
@@ -7328,57 +7328,57 @@ function agentPresentation(agent) {
       className: "Duelista",
       tagline: "Velocidade e avanço agressivo",
       ultimate: "Sobrecarga Cinética",
-      icon: "assets/images/Neon_icon.webp",
-      artwork: "assets/images/Neon_Artwork_Full.webp",
+      icon: "./assets/images/Neon_icon.webp",
+      artwork: "./assets/images/Neon_Artwork_Full.webp",
     },
     viper: {
       className: "Controladora",
       tagline: "Domínio territorial com toxinas",
       ultimate: "Poço Químico",
-      icon: "assets/images/Viper_icon.webp",
-      artwork: "assets/images/Viper_Artwork_Full.webp",
+      icon: "./assets/images/Viper_icon.webp",
+      artwork: "./assets/images/Viper_Artwork_Full.webp",
     },
     sage: {
       className: "Sentinela",
       tagline: "Sustentação e recuperação da equipe",
       ultimate: "Restauração Total",
-      icon: "assets/images/Sage_icon.webp",
-      artwork: "assets/images/Sage_Artwork_Full.webp",
+      icon: "./assets/images/Sage_icon.webp",
+      artwork: "./assets/images/Sage_Artwork_Full.webp",
     },
     omen: {
       className: "Controlador",
       tagline: "Cegueira e redução de mobilidade",
       ultimate: "Domínio das Sombras",
-      icon: "assets/images/Omen_icon.webp",
-      artwork: "assets/images/Omen_Artwork_Full.webp",
+      icon: "./assets/images/Omen_icon.webp",
+      artwork: "./assets/images/Omen_Artwork_Full.webp",
     },
     jett: {
       className: "Duelista",
       tagline: "Mobilidade explosiva, facas precisas e pressão constante",
       ultimate: "Tormenta de Aço",
-      icon: "assets/images/Jett_icon.webp",
-      artwork: "assets/images/Jett_Artwork_Full.webp",
+      icon: "./assets/images/Jett_icon.webp",
+      artwork: "./assets/images/Jett_Artwork_Full.webp",
     },
     killjoy: {
       className: "Sentinela",
       tagline: "Controle de área com torreta e confinamento tático",
       ultimate: "Confinamento",
-      icon: "assets/images/Killjoy_icon.webp",
-      artwork: "assets/images/Killjoy_Artwork_Full.webp",
+      icon: "./assets/images/Killjoy_icon.webp",
+      artwork: "./assets/images/Killjoy_Artwork_Full.webp",
     },
     raze: {
       className: "Duelista",
       tagline: "Explosivos, dano em área e entrada agressiva",
       ultimate: "Estraga-prazeres",
-      icon: "assets/images/Raze_icon.webp",
-      artwork: "assets/images/Raze_Artwork_Full.webp",
+      icon: "./assets/images/Raze_icon.webp",
+      artwork: "./assets/images/Raze_Artwork_Full.webp",
     },
     yoru: {
       className: "Duelista",
       tagline: "Infiltração, fendas dimensionais e reposicionamento",
       ultimate: "Espionagem Dimensional",
-      icon: "assets/images/Yoru_icon.webp",
-      artwork: "assets/images/Yoru_Artwork_Full.webp",
+      icon: "./assets/images/Yoru_icon.webp",
+      artwork: "./assets/images/Yoru_Artwork_Full.webp",
     },
   };
   return details[agent.id] || {

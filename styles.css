@@ -1875,7 +1875,7 @@ canvas {
   content: "";
   position: absolute;
   inset: 0;
-  background: url("assets/Favicon/V2D_transparent.png") center / min(260px, 30%) no-repeat;
+  background: url("./assets/Favicon/V2D_transparent.png") center / min(260px, 30%) no-repeat;
   opacity: 0.38;
   filter: drop-shadow(0 0 34px rgba(255, 70, 85, 0.22)) drop-shadow(0 0 74px rgba(238, 247, 251, 0.12));
   mix-blend-mode: screen;
@@ -2231,7 +2231,7 @@ button.click-feedback::after {
   border: none !important;
   border-radius: 0;
   background-color: transparent !important;
-  background-image: url("assets/images/seta-voltar.png") !important;
+  background-image: url("./assets/images/seta-voltar.png") !important;
   background-position: center;
   background-repeat: no-repeat;
   background-size: contain;
@@ -2253,7 +2253,7 @@ button.click-feedback::after {
 .menu-button.menu-back:focus-visible {
   border: none !important;
   background-color: transparent !important;
-  background-image: url("assets/images/seta-voltar.png") !important;
+  background-image: url("./assets/images/seta-voltar.png") !important;
   box-shadow: none;
   transform: translateX(-4px);
 }
@@ -2387,15 +2387,15 @@ button.click-feedback::after {
 }
 
 .menu-state-difficulty .difficulty-button-1 .difficulty-glyph {
-  background-image: url("assets/images/uma-estrela-modo-facil.png");
+  background-image: url("./assets/images/uma-estrela-modo-facil.png");
 }
 
 .menu-state-difficulty .difficulty-button-2 .difficulty-glyph {
-  background-image: url("assets/images/duas-estrelas-modo-medio.png");
+  background-image: url("./assets/images/duas-estrelas-modo-medio.png");
 }
 
 .menu-state-difficulty .difficulty-button-3 .difficulty-glyph {
-  background-image: url("assets/images/tres-estrelas-modo-dificil.png");
+  background-image: url("./assets/images/tres-estrelas-modo-dificil.png");
 }
 
 .menu-state-difficulty .difficulty-button:hover,
