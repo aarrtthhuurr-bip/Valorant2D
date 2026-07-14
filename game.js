@@ -131,6 +131,19 @@ const ui = {
   logoutButton: document.getElementById("logoutButton"),
 };
 
+/**
+ * A tela de autenticação precisa acompanhar a viewport do navegador, não a
+ * transformação aplicada ao Canvas de 1280 x 720. Em telas estreitas, mantê-la
+ * dentro de gameViewport reduziria o formulário junto com o jogo.
+ */
+function mountAuthenticationAtViewportRoot() {
+  if (ui.authOverlay && ui.gameRoot && ui.authOverlay.parentElement !== ui.gameRoot) {
+    ui.gameRoot.appendChild(ui.authOverlay);
+  }
+}
+
+mountAuthenticationAtViewportRoot();
+
 const AUTH_STORAGE_KEY = "valorant2d-auth-session";
 const configuredApiUrl = document
   .querySelector('meta[name="valorant2d-api-url"]')
@@ -699,15 +712,14 @@ const weaponImageFiles = {
   smg: "Spectre_icon.webp",
   shotgun: "Judge_icon.webp",
   carbine: "Bulldog_icon.webp",
-  rifle: "Vandal_icon.webp",
+  // O projeto ainda não possui Vandal_icon.webp; usa o ícone disponível sem gerar 404.
+  rifle: "Phantom_icon.webp",
   dmr: "Guardian_icon.webp",
   lmg: "Odin_icon.webp",
   sniper: "Operator_icon.webp",
 };
 
-const weaponImageFallbackFiles = {
-  rifle: "Phantom_icon.webp",
-};
+const weaponImageFallbackFiles = {};
 
 const weaponImageCache = new Map();
 
