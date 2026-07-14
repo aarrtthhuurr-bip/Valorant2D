@@ -70,6 +70,10 @@ class Session {
   static removeExpired() {
     return database.run('DELETE FROM sessions WHERE data_expiracao <= CURRENT_TIMESTAMP');
   }
+
+  static revokeAllForUser(userId) {
+    return database.run('DELETE FROM sessions WHERE user_id = ?', [userId]);
+  }
 }
 
 module.exports = Session;

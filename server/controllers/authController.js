@@ -7,6 +7,12 @@ const scryptAsync = promisify(crypto.scrypt);
 const USERNAME_PATTERN = /^[a-zA-Z0-9_]{3,24}$/;
 const MINIMUM_PASSWORD_LENGTH = 8;
 const MAXIMUM_PASSWORD_LENGTH = 72;
+const SECURITY_QUESTIONS = new Set([
+  'Qual sua cor favorita?',
+  'Qual o nome do seu primeiro animal de estimação?',
+  'Em qual cidade você nasceu?',
+  'Qual era seu apelido de infância?',
+]);
 
 function normalizeUsername(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -37,23 +43,29 @@ function validateCredentials(username, password) {
 /**
  * Produz um hash scrypt com salt individual para cada senha.
  */
-async function hashPassword(password) {
+async function hashSecret(secret) {
   const salt = crypto.randomBytes(16).toString('hex');
-  const derivedKey = await scryptAsync(password, salt, 64);
+  const derivedKey = await scryptAsync(secret, salt, 64);
   return `scrypt:${salt}:${derivedKey.toString('hex')}`;
 }
 
 /**
  * Compara hashes em tempo constante para reduzir vazamentos por temporização.
  */
-async function verifyPassword(password, storedPassword) {
-  const [algorithm, salt, storedKeyHex] = String(storedPassword || '').split(':');
+async function verifySecret(secret, storedSecret) {
+  const [algorithm, salt, storedKeyHex] = String(storedSecret || '').split(':');
   if (algorithm !== 'scrypt' || !salt || !storedKeyHex) return false;
 
   const storedKey = Buffer.from(storedKeyHex, 'hex');
-  const suppliedKey = await scryptAsync(password, salt, storedKey.length);
+  const suppliedKey = await scryptAsync(secret, salt, storedKey.length);
   return storedKey.length === suppliedKey.length
     && crypto.timingSafeEqual(storedKey, suppliedKey);
+}
+
+function normalizeSecurityAnswer(value) {
+  return typeof value === 'string'
+    ? value.normalize('NFKC').trim().toLocaleLowerCase('pt-BR')
+    : '';
 }
 
 function extractToken(request) {
@@ -66,10 +78,22 @@ async function register(request, response, next) {
   try {
     const username = normalizeUsername(request.body?.username);
     const password = request.body?.password;
+    const securityQuestion = typeof request.body?.securityQuestion === 'string'
+      ? request.body.securityQuestion.trim()
+      : '';
+    const securityAnswer = normalizeSecurityAnswer(request.body?.securityAnswer);
     const validationError = validateCredentials(username, password);
 
     if (validationError) {
       response.status(400).json({ error: validationError, code: 'INVALID_CREDENTIALS' });
+      return;
+    }
+
+    if (!SECURITY_QUESTIONS.has(securityQuestion) || securityAnswer.length < 2 || securityAnswer.length > 100) {
+      response.status(400).json({
+        error: 'Selecione uma pergunta e informe uma resposta de segurança válida.',
+        code: 'INVALID_SECURITY_ANSWER',
+      });
       return;
     }
 
@@ -78,11 +102,12 @@ async function register(request, response, next) {
       return;
     }
 
-    const passwordHash = await hashPassword(password);
+    const passwordHash = await hashSecret(password);
+    const securityAnswerHash = await hashSecret(securityAnswer);
     let user;
 
     try {
-      user = await User.create(username, passwordHash);
+      user = await User.create(username, passwordHash, securityQuestion, securityAnswerHash);
     } catch (error) {
       // Protege também contra cadastros simultâneos com o mesmo nome.
       if (error.code === 'SQLITE_CONSTRAINT') {
@@ -115,7 +140,7 @@ async function login(request, response, next) {
     }
 
     const user = await User.findByUsername(username);
-    const passwordMatches = user && await verifyPassword(password, user.senha_hash);
+    const passwordMatches = user && await verifySecret(password, user.senha_hash);
 
     if (!passwordMatches) {
       // A mensagem única evita revelar quais nomes estão cadastrados.
@@ -131,6 +156,56 @@ async function login(request, response, next) {
       expiresAt: session.expirationDate,
       user: publicUser(user),
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function getSecurityQuestion(request, response, next) {
+  try {
+    const username = normalizeUsername(request.body?.username);
+    const user = username ? await User.findByUsername(username) : undefined;
+
+    if (!user?.pergunta_seguranca || !user?.resposta_seguranca) {
+      response.status(404).json({
+        error: 'Conta não encontrada ou sem recuperação configurada.',
+        code: 'RECOVERY_UNAVAILABLE',
+      });
+      return;
+    }
+
+    response.status(200).json({ username: user.username, securityQuestion: user.pergunta_seguranca });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function resetPassword(request, response, next) {
+  try {
+    const username = normalizeUsername(request.body?.username);
+    const securityAnswer = normalizeSecurityAnswer(request.body?.securityAnswer);
+    const newPassword = request.body?.newPassword;
+    const user = username ? await User.findByUsername(username) : undefined;
+
+    if (!user?.resposta_seguranca
+      || !securityAnswer
+      || !await verifySecret(securityAnswer, user.resposta_seguranca)) {
+      response.status(401).json({
+        error: 'Resposta de segurança incorreta.',
+        code: 'INVALID_SECURITY_ANSWER',
+      });
+      return;
+    }
+
+    const passwordError = validateCredentials(user.username, newPassword);
+    if (passwordError) {
+      response.status(400).json({ error: passwordError, code: 'INVALID_PASSWORD' });
+      return;
+    }
+
+    await User.updatePassword(user.id, await hashSecret(newPassword));
+    await Session.revokeAllForUser(user.id);
+    response.status(200).json({ message: 'Senha redefinida. Entre novamente com a nova senha.' });
   } catch (error) {
     next(error);
   }
@@ -165,4 +240,4 @@ async function logout(request, response, next) {
   }
 }
 
-module.exports = { login, logout, register, verify };
+module.exports = { getSecurityQuestion, login, logout, register, resetPassword, verify };

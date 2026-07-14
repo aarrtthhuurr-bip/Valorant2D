@@ -103,9 +103,21 @@ async function initializeDatabase() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT NOT NULL UNIQUE,
       senha_hash TEXT NOT NULL,
+      pergunta_seguranca TEXT,
+      resposta_seguranca TEXT,
       data_criacao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  // Migra bancos existentes sem apagar contas ou recordes já persistidos.
+  const userColumns = await all('PRAGMA table_info(users)');
+  const userColumnNames = new Set(userColumns.map((column) => column.name));
+  if (!userColumnNames.has('pergunta_seguranca')) {
+    await run('ALTER TABLE users ADD COLUMN pergunta_seguranca TEXT');
+  }
+  if (!userColumnNames.has('resposta_seguranca')) {
+    await run('ALTER TABLE users ADD COLUMN resposta_seguranca TEXT');
+  }
 
   await run(`
     CREATE TABLE IF NOT EXISTS leaderboard (

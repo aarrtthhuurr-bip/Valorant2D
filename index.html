@@ -315,10 +315,43 @@
               >
             </label>
 
+            <div class="auth-registration-fields hidden" id="authRegistrationFields">
+              <label for="authSecurityQuestion">
+                <span>Pergunta de segurança</span>
+                <select id="authSecurityQuestion" name="securityQuestion">
+                  <option value="">Selecione uma pergunta</option>
+                  <option>Qual sua cor favorita?</option>
+                  <option>Qual o nome do seu primeiro animal de estimação?</option>
+                  <option>Em qual cidade você nasceu?</option>
+                  <option>Qual era seu apelido de infância?</option>
+                </select>
+              </label>
+              <label for="authSecurityAnswer">
+                <span>Resposta de segurança</span>
+                <input id="authSecurityAnswer" name="securityAnswer" type="text" maxlength="100" autocomplete="off" placeholder="Sua resposta pessoal">
+              </label>
+            </div>
+
             <div class="auth-feedback" id="authFeedback" role="status" aria-live="polite"></div>
 
             <button class="auth-primary" id="loginButton" type="submit">Entrar</button>
             <button class="auth-secondary" id="registerButton" type="button">Cadastrar nova conta</button>
+            <button class="auth-link" id="forgotPasswordButton" type="button">Esqueci minha senha</button>
+          </form>
+
+          <form class="auth-form auth-recovery hidden" id="recoveryForm" novalidate>
+            <label for="recoveryUsername">
+              <span>Usuário</span>
+              <input id="recoveryUsername" type="text" maxlength="24" autocomplete="username" placeholder="Seu nome de jogador">
+            </label>
+            <div class="recovery-challenge hidden" id="recoveryChallenge">
+              <p class="recovery-question" id="recoveryQuestion"></p>
+              <label for="recoveryAnswer"><span>Resposta</span><input id="recoveryAnswer" type="text" maxlength="100" autocomplete="off"></label>
+              <label for="recoveryNewPassword"><span>Nova senha</span><input id="recoveryNewPassword" type="password" minlength="8" maxlength="72" autocomplete="new-password"></label>
+            </div>
+            <div class="auth-feedback" id="recoveryFeedback" role="status" aria-live="polite"></div>
+            <button class="auth-primary" id="recoverySubmitButton" type="submit">Ver pergunta</button>
+            <button class="auth-secondary" id="recoveryBackButton" type="button">Voltar para o login</button>
           </form>
 
           <div class="auth-divider"><span>ou continue localmente</span></div>
@@ -341,7 +374,7 @@
     </div>
   </main>
 
-  <script src="./game.js?v=20260714-pages-responsive-auth"></script>
+  <script src="./game.js?v=20260714-account-recovery"></script>
   <script>window.lucide?.createIcons();</script>
 </body>
 </html>

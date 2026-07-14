@@ -129,6 +129,19 @@ const ui = {
   accountType: document.getElementById("accountType"),
   accountUsername: document.getElementById("accountUsername"),
   logoutButton: document.getElementById("logoutButton"),
+  authRegistrationFields: document.getElementById("authRegistrationFields"),
+  authSecurityQuestion: document.getElementById("authSecurityQuestion"),
+  authSecurityAnswer: document.getElementById("authSecurityAnswer"),
+  forgotPasswordButton: document.getElementById("forgotPasswordButton"),
+  recoveryForm: document.getElementById("recoveryForm"),
+  recoveryUsername: document.getElementById("recoveryUsername"),
+  recoveryChallenge: document.getElementById("recoveryChallenge"),
+  recoveryQuestion: document.getElementById("recoveryQuestion"),
+  recoveryAnswer: document.getElementById("recoveryAnswer"),
+  recoveryNewPassword: document.getElementById("recoveryNewPassword"),
+  recoveryFeedback: document.getElementById("recoveryFeedback"),
+  recoverySubmitButton: document.getElementById("recoverySubmitButton"),
+  recoveryBackButton: document.getElementById("recoveryBackButton"),
 };
 
 /**
@@ -158,7 +171,14 @@ const API_BASE_URL = (isLocalEnvironment ? localApiUrl : cloudApiUrl).replace(/\
 // O Render pode precisar de alguns segundos extras para sair do estado de suspensão.
 const API_REQUEST_TIMEOUT = isLocalEnvironment ? 8000 : 45000;
 
+// Dispara o despertar do Render antes de o jogador enviar o formulário.
+if (!isLocalEnvironment) {
+  fetch(`${cloudApiUrl.replace(/\/$/, "")}/`, { cache: "no-store", mode: "cors" }).catch(() => {});
+}
+
 let currentProfile = null;
+let authMode = "login";
+let recoveryQuestionLoaded = false;
 
 function readStoredSession() {
   try {
@@ -235,17 +255,15 @@ function setAuthBusy(isBusy, action = "login") {
     if (button) button.disabled = isBusy;
   });
 
-  if (ui.loginButton) {
-    ui.loginButton.textContent = isBusy && action === "login" ? "Entrando..." : "Entrar";
-  }
+  if (ui.loginButton) ui.loginButton.textContent = isBusy
+    ? (action === "register" ? "Criando conta..." : "Entrando...")
+    : (authMode === "register" ? "Criar conta" : "Entrar");
   if (ui.registerButton) {
-    ui.registerButton.textContent = isBusy && action === "register"
-      ? "Criando conta..."
-      : "Cadastrar nova conta";
+    ui.registerButton.textContent = authMode === "register" ? "Voltar para entrar" : "Cadastrar nova conta";
   }
 }
 
-function validateAuthForm() {
+function validateAuthForm(action) {
   const username = ui.authUsername?.value.trim() || "";
   const password = ui.authPassword?.value || "";
   const usernameIsValid = /^[A-Za-z0-9_]{3,24}$/.test(username);
@@ -266,7 +284,18 @@ function validateAuthForm() {
     return null;
   }
 
-  return { username, password };
+  const credentials = { username, password };
+  if (action === "register") {
+    const securityQuestion = ui.authSecurityQuestion?.value || "";
+    const securityAnswer = ui.authSecurityAnswer?.value.trim() || "";
+    if (!securityQuestion || securityAnswer.length < 2) {
+      setAuthFeedback("Selecione uma pergunta e informe sua resposta de segurança.", "error");
+      return null;
+    }
+    credentials.securityQuestion = securityQuestion;
+    credentials.securityAnswer = securityAnswer;
+  }
+  return credentials;
 }
 
 function updateAccountSummary(profile) {
@@ -298,7 +327,7 @@ function enterGameWithProfile(profile) {
 }
 
 async function submitAuthentication(action) {
-  const credentials = validateAuthForm();
+  const credentials = validateAuthForm(action);
   if (!credentials) return;
 
   setAuthBusy(true, action);
@@ -316,6 +345,83 @@ async function submitAuthentication(action) {
     setAuthFeedback(error.message, "error");
   } finally {
     setAuthBusy(false);
+  }
+}
+
+function toggleRegistrationMode() {
+  authMode = authMode === "login" ? "register" : "login";
+  ui.authRegistrationFields?.classList.toggle("hidden", authMode !== "register");
+  if (ui.authPassword) ui.authPassword.autocomplete = authMode === "register" ? "new-password" : "current-password";
+  setAuthFeedback("");
+  setAuthBusy(false);
+}
+
+function setRecoveryFeedback(message = "", type = "") {
+  if (!ui.recoveryFeedback) return;
+  ui.recoveryFeedback.textContent = message;
+  ui.recoveryFeedback.className = `auth-feedback${type ? ` is-${type}` : ""}`;
+}
+
+function showPasswordRecovery(show) {
+  ui.authForm?.classList.toggle("hidden", show);
+  ui.recoveryForm?.classList.toggle("hidden", !show);
+  document.querySelector(".auth-divider")?.classList.toggle("hidden", show);
+  ui.guestButton?.classList.toggle("hidden", show);
+  document.querySelector(".auth-guest-note")?.classList.toggle("hidden", show);
+  recoveryQuestionLoaded = false;
+  ui.recoveryChallenge?.classList.add("hidden");
+  if (ui.recoverySubmitButton) ui.recoverySubmitButton.textContent = "Ver pergunta";
+  setRecoveryFeedback("");
+  if (show) {
+    if (ui.recoveryUsername) ui.recoveryUsername.value = ui.authUsername?.value.trim() || "";
+    ui.recoveryUsername?.focus();
+  } else {
+    ui.authUsername?.focus();
+  }
+}
+
+async function submitPasswordRecovery() {
+  const username = ui.recoveryUsername?.value.trim() || "";
+  if (!/^[A-Za-z0-9_]{3,24}$/.test(username)) {
+    setRecoveryFeedback("Informe um nome de usuário válido.", "error");
+    return;
+  }
+
+  if (!recoveryQuestionLoaded) {
+    try {
+      const payload = await requestApi("/api/security-question", {
+        method: "POST",
+        body: JSON.stringify({ username }),
+      });
+      if (ui.recoveryQuestion) ui.recoveryQuestion.textContent = payload.securityQuestion;
+      ui.recoveryChallenge?.classList.remove("hidden");
+      if (ui.recoverySubmitButton) ui.recoverySubmitButton.textContent = "Redefinir senha";
+      recoveryQuestionLoaded = true;
+      ui.recoveryAnswer?.focus();
+    } catch (error) {
+      setRecoveryFeedback(error.message, "error");
+    }
+    return;
+  }
+
+  const securityAnswer = ui.recoveryAnswer?.value.trim() || "";
+  const newPassword = ui.recoveryNewPassword?.value || "";
+  if (securityAnswer.length < 2 || newPassword.length < 8 || newPassword.length > 72) {
+    setRecoveryFeedback("Informe a resposta e uma nova senha de 8 a 72 caracteres.", "error");
+    return;
+  }
+
+  try {
+    const payload = await requestApi("/api/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ username, securityAnswer, newPassword }),
+    });
+    showPasswordRecovery(false);
+    if (ui.authUsername) ui.authUsername.value = username;
+    if (ui.authPassword) ui.authPassword.value = "";
+    setAuthFeedback(payload.message, "success");
+  } catch (error) {
+    setRecoveryFeedback(error.message, "error");
   }
 }
 
@@ -8982,9 +9088,15 @@ if (ui.pauseQuitButton) ui.pauseQuitButton.addEventListener("click", quitToMainM
 
 ui.authForm?.addEventListener("submit", (event) => {
   event.preventDefault();
-  submitAuthentication("login");
+  submitAuthentication(authMode);
 });
-ui.registerButton?.addEventListener("click", () => submitAuthentication("register"));
+ui.registerButton?.addEventListener("click", toggleRegistrationMode);
+ui.forgotPasswordButton?.addEventListener("click", () => showPasswordRecovery(true));
+ui.recoveryBackButton?.addEventListener("click", () => showPasswordRecovery(false));
+ui.recoveryForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  submitPasswordRecovery();
+});
 ui.guestButton?.addEventListener("click", enterAsGuest);
 ui.logoutButton?.addEventListener("click", logoutCurrentProfile);
 ui.authUsername?.addEventListener("input", () => {

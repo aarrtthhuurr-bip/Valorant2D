@@ -140,3 +140,21 @@ Não é necessário instalar ferramentas extras, Node.js ou ligar servidores loc
 
 Projeto experimental e independente, sem afiliação com a Riot Games.
 
+## Disponibilidade do Back-End no Render
+
+O Front-End envia uma requisição silenciosa ao health check do Render assim
+que a página é aberta. Isso inicia o processo de ativação antes de o jogador
+enviar o formulário de login.
+
+Para monitorar a API externamente com o UptimeRobot:
+
+1. Crie um monitor do tipo HTTP(S).
+2. Use a URL `https://valorant2d.onrender.com/`.
+3. Configure o intervalo para 14 minutos, caso esse intervalo esteja disponível no plano utilizado.
+4. Considere o código HTTP 200 como resposta saudável.
+5. Ative notificações para indisponibilidade prolongada.
+
+Serviços gratuitos do Render entram em suspensão depois de um período sem
+tráfego e possuem limites mensais. Monitores externos devem ser usados de
+acordo com os termos e limites atuais do Render e do UptimeRobot. Para garantia
+de disponibilidade contínua, utilize uma instância do Render que não suspenda.
