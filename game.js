@@ -162,19 +162,14 @@ const configuredApiUrl = document
   .querySelector('meta[name="valorant2d-api-url"]')
   ?.getAttribute("content")
   ?.trim();
-const isLocalEnvironment = ["localhost", "127.0.0.1"].includes(window.location.hostname);
-const localApiUrl = "http://localhost:3000";
-const cloudApiUrl = configuredApiUrl || "https://valorant2d.onrender.com";
-
-// Em desenvolvimento, a detecção local sempre prevalece sobre a URL da nuvem.
-const API_BASE_URL = (isLocalEnvironment ? localApiUrl : cloudApiUrl).replace(/\/$/, "");
+// Todas as execuções do cliente, inclusive via Live Server, usam o mesmo
+// back-end no Render. Assim, contas e progresso pertencem a uma única base.
+const API_BASE_URL = (configuredApiUrl || "https://valorant2d.onrender.com").replace(/\/$/, "");
 // O Render pode precisar de alguns segundos extras para sair do estado de suspensão.
-const API_REQUEST_TIMEOUT = isLocalEnvironment ? 8000 : 45000;
+const API_REQUEST_TIMEOUT = 45000;
 
 // Dispara o despertar do Render antes de o jogador enviar o formulário.
-if (!isLocalEnvironment) {
-  fetch(`${cloudApiUrl.replace(/\/$/, "")}/`, { cache: "no-store", mode: "cors" }).catch(() => {});
-}
+fetch(`${API_BASE_URL}/`, { cache: "no-store", mode: "cors" }).catch(() => {});
 
 let currentProfile = null;
 let authMode = "login";
