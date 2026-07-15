@@ -174,7 +174,11 @@ const API_BASE_URL = (configuredApiUrl || "https://valorant2d.onrender.com").rep
 const API_REQUEST_TIMEOUT = 45000;
 
 // Dispara o despertar do Render antes de o jogador enviar o formulário.
-fetch(`${API_BASE_URL}/`, { cache: "no-store", mode: "cors" }).catch(() => {});
+function wakeRenderServer() {
+  return fetch(`${API_BASE_URL}/`, { cache: "no-store", mode: "cors" }).catch(() => null);
+}
+
+void wakeRenderServer();
 
 let currentProfile = null;
 let authMode = "login";

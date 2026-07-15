@@ -5,7 +5,7 @@ class Statistic {
     return database.get(
       `SELECT partidas_jogadas, vitorias, abates_totais, pontuacao_maxima
        FROM users
-       WHERE id = ?`,
+       WHERE id = $1`,
       [userId],
     );
   }
@@ -17,10 +17,10 @@ class Statistic {
     await database.run(
       `UPDATE users
        SET partidas_jogadas = partidas_jogadas + 1,
-           vitorias = vitorias + ?,
-           abates_totais = abates_totais + ?,
-           pontuacao_maxima = MAX(pontuacao_maxima, ?)
-       WHERE id = ?`,
+           vitorias = vitorias + $1,
+           abates_totais = abates_totais + $2,
+           pontuacao_maxima = GREATEST(pontuacao_maxima, $3)
+       WHERE id = $4`,
       [victory ? 1 : 0, kills, score, userId],
     );
 

@@ -1,10 +1,9 @@
 {
   "name": "server",
   "version": "1.0.0",
-  "description": "Back-end do jogo Valorant2D com Express e SQLite.",
+  "description": "Back-end do jogo Valorant2D com Express e PostgreSQL.",
   "main": "index.js",
   "scripts": {
-    "install": "npm rebuild sqlite3 --build-from-source",
     "start": "node index.js",
     "dev": "nodemon index.js"
   },
@@ -18,7 +17,7 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "sqlite3": "^6.0.1"
+    "pg": "^8.16.3"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

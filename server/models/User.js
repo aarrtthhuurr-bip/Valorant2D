@@ -6,39 +6,38 @@ const database = require('../config/database');
  */
 class User {
   static async create(username, senhaHash, perguntaSeguranca, respostaSegurancaHash) {
-    const result = await database.run(
+    return database.get(
       `INSERT INTO users
        (username, senha_hash, pergunta_seguranca, resposta_seguranca)
-       VALUES (?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, username, data_criacao`,
       [username, senhaHash, perguntaSeguranca, respostaSegurancaHash],
     );
-
-    return this.findById(result.lastID);
   }
 
   static findById(id) {
     return database.get(
-      'SELECT id, username, data_criacao FROM users WHERE id = ?',
+      'SELECT id, username, data_criacao FROM users WHERE id = $1',
       [id],
     );
   }
 
   static findByUsername(username) {
     return database.get(
-      'SELECT * FROM users WHERE username = ? COLLATE NOCASE',
+      'SELECT * FROM users WHERE LOWER(username) = LOWER($1)',
       [username],
     );
   }
 
   static findPublicById(id) {
     return database.get(
-      'SELECT id, username, data_criacao FROM users WHERE id = ?',
+      'SELECT id, username, data_criacao FROM users WHERE id = $1',
       [id],
     );
   }
 
   static updatePassword(id, senhaHash) {
-    return database.run('UPDATE users SET senha_hash = ? WHERE id = ?', [senhaHash, id]);
+    return database.run('UPDATE users SET senha_hash = $1 WHERE id = $2', [senhaHash, id]);
   }
 }
 

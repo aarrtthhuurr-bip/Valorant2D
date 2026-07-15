@@ -110,7 +110,7 @@ async function register(request, response, next) {
       user = await User.create(username, passwordHash, securityQuestion, securityAnswerHash);
     } catch (error) {
       // Protege também contra cadastros simultâneos com o mesmo nome.
-      if (error.code === 'SQLITE_CONSTRAINT') {
+      if (error.code === '23505') {
         response.status(409).json({ error: 'Este nome de usuário já está em uso.', code: 'USERNAME_IN_USE' });
         return;
       }

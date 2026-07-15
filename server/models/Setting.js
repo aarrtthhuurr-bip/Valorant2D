@@ -2,7 +2,7 @@ const database = require('../config/database');
 
 class Setting {
   static findByUserId(userId) {
-    return database.get('SELECT * FROM settings WHERE user_id = ?', [userId]);
+    return database.get('SELECT * FROM settings WHERE user_id = $1', [userId]);
   }
 
   static async saveForUser(userId, hudConfig) {
@@ -10,7 +10,7 @@ class Setting {
 
     await database.run(
       `INSERT INTO settings (user_id, hud_config_json)
-       VALUES (?, ?)
+       VALUES ($1, $2::jsonb)
        ON CONFLICT(user_id) DO UPDATE SET hud_config_json = excluded.hud_config_json`,
       [userId, hudConfigJson],
     );

@@ -142,31 +142,25 @@ Projeto experimental e independente, sem afiliação com a Riot Games.
 
 ## Disponibilidade do Back-End no Render
 
-### Persistência do SQLite
+### Persistência com PostgreSQL
 
-O servidor nunca apaga nem recria deliberadamente um banco existente: ele abre
-o caminho definido em `DATABASE_URL` e cria somente tabelas ou colunas ausentes.
-Os logs de inicialização informam o caminho absoluto e se o arquivo já existia.
+O servidor usa PostgreSQL gerenciado por meio do driver `pg`. A conexão é
+obrigatoriamente lida de `DATABASE_URL`; nenhum banco local ou arquivo efêmero
+é criado. O esquema é verificado de forma idempotente em cada inicialização,
+sem remover tabelas, contas, sessões, estatísticas ou preferências.
 
-Um arquivo SQLite armazenado no filesystem efêmero do Render gratuito será
-perdido em reinícios, suspensões ou novos deploys. Para contas permanentes, use
-um disco persistente compatível com o serviço ou migre os dados para um banco
-gerenciado, como PostgreSQL. O código da aplicação não consegue transformar
-um disco efêmero em armazenamento persistente.
+Configuração no Render:
 
-Configuração recomendada para um serviço com disco persistente:
+1. Crie um projeto PostgreSQL no Neon ou Supabase.
+2. Copie a URI completa de conexão, preferencialmente com `sslmode=require`.
+3. No serviço do Render, abra `Environment` e `Add Environment Variable`.
+4. Use a chave `DATABASE_URL` e cole a URI completa no campo de valor.
+5. Defina `NODE_ENV=production`, salve e execute um novo deploy.
+6. Confirme no log a mensagem `[PostgreSQL] Esquema verificado`.
 
-1. Monte o disco do Render em `/var/data`.
-2. Defina `NODE_ENV=production`.
-3. Defina `DATABASE_URL=/var/data/database.sqlite`.
-4. Reinicie o serviço e confirme no log a linha `[SQLite] Arquivo`.
-5. Confirme que o log informa `existente, preservado` nos reinícios seguintes.
-
-Em produção, o servidor agora rejeita `DATABASE_URL` ausente ou relativa para
-evitar criar silenciosamente contas em um arquivo descartável. Se o plano não
-oferecer disco persistente, a solução durável é migrar para PostgreSQL externo,
-como Supabase ou Neon; isso requer substituir a camada SQLite por um driver SQL
-compatível com PostgreSQL.
+Credenciais antigas contidas apenas no arquivo SQLite não são copiadas
+automaticamente. Para preservá-las, exporte os registros do SQLite e importe-os
+no PostgreSQL antes de liberar o novo back-end.
 
 O Front-End envia uma requisição silenciosa ao health check do Render assim
 que a página é aberta. Isso inicia o processo de ativação antes de o jogador

@@ -23,7 +23,7 @@ class Session {
 
     await database.run(
       `INSERT INTO sessions (user_id, token_hash, data_expiracao)
-       VALUES (?, ?, ?)`,
+       VALUES ($1, $2, $3)`,
       [userId, tokenHash, expirationDate],
     );
 
@@ -44,7 +44,7 @@ class Session {
               users.id, users.username, users.data_criacao
        FROM sessions
        INNER JOIN users ON users.id = sessions.user_id
-       WHERE sessions.token_hash = ?
+       WHERE sessions.token_hash = $1
          AND sessions.data_expiracao > CURRENT_TIMESTAMP`,
       [tokenHash],
     );
@@ -52,7 +52,7 @@ class Session {
     if (!session) return undefined;
 
     await database.run(
-      'UPDATE sessions SET ultimo_acesso = CURRENT_TIMESTAMP WHERE id = ?',
+      'UPDATE sessions SET ultimo_acesso = CURRENT_TIMESTAMP WHERE id = $1',
       [session.session_id],
     );
 
@@ -64,7 +64,7 @@ class Session {
       return Promise.resolve({ changes: 0 });
     }
 
-    return database.run('DELETE FROM sessions WHERE token_hash = ?', [hashToken(token)]);
+    return database.run('DELETE FROM sessions WHERE token_hash = $1', [hashToken(token)]);
   }
 
   static removeExpired() {
@@ -72,7 +72,7 @@ class Session {
   }
 
   static revokeAllForUser(userId) {
-    return database.run('DELETE FROM sessions WHERE user_id = ?', [userId]);
+    return database.run('DELETE FROM sessions WHERE user_id = $1', [userId]);
   }
 }
 

@@ -2,12 +2,12 @@ const database = require('../config/database');
 
 class Leaderboard {
   static async create(userId, wavesSobrevivendo) {
-    const result = await database.run(
-      'INSERT INTO leaderboard (user_id, waves_sobrevivendo) VALUES (?, ?)',
+    return database.get(
+      `INSERT INTO leaderboard (user_id, waves_sobrevivendo)
+       VALUES ($1, $2)
+       RETURNING *`,
       [userId, wavesSobrevivendo],
     );
-
-    return database.get('SELECT * FROM leaderboard WHERE id = ?', [result.lastID]);
   }
 
   static list(limit = 100) {
@@ -17,7 +17,7 @@ class Leaderboard {
        FROM leaderboard
        INNER JOIN users ON users.id = leaderboard.user_id
        ORDER BY leaderboard.waves_sobrevivendo DESC, leaderboard.data_recorde ASC
-       LIMIT ?`,
+       LIMIT $1`,
       [limit],
     );
   }
