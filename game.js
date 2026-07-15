@@ -32,6 +32,11 @@ const ui = {
   overlayKicker: document.getElementById("overlayKicker"),
   overlayTitle: document.getElementById("overlayTitle"),
   overlayText: document.getElementById("overlayText"),
+  matchConfetti: document.getElementById("matchConfetti"),
+  matchMvp: document.getElementById("matchMvp"),
+  matchKills: document.getElementById("matchKills"),
+  matchScore: document.getElementById("matchScore"),
+  matchSyncStatus: document.getElementById("matchSyncStatus"),
   newGameButton: document.getElementById("newGameButton"),
   menuOverlay: document.getElementById("menuOverlay"),
   menuKicker: document.getElementById("menuKicker"),
@@ -311,6 +316,7 @@ function enterGameWithProfile(profile) {
   game.playerName = profile.username;
   updateAccountSummary(profile);
   showMainMenu();
+  if (!profile.isGuest) void synchronizePreferencesFromServer();
 
   if (!ui.authOverlay) return;
   ui.authOverlay.classList.add("is-leaving");
@@ -2193,26 +2199,55 @@ function startNewMatch() {
 
 function showMatchResult() {
   const won = game.playerScore > game.enemyScore;
+  const kills = Math.max(0, Math.round(game.stats?.kills || 0));
+  const score = Math.max(0, kills * 100 + game.playerScore * 500);
   game.phase = "matchOver";
   game.phaseTime = 0;
   game.paused = false;
   closeShop();
   ui.matchOverlay.classList.remove("hidden");
-  ui.overlayKicker.textContent = "Partida encerrada";
-  ui.overlayTitle.textContent = won ? "Vitória" : "Derrota";
-  ui.overlayText.textContent = `${game.playerScore} - ${game.enemyScore}`;
+  ui.matchOverlay.classList.toggle("is-defeat", !won);
+  ui.overlayKicker.textContent = won ? "MISSÃO CONCLUÍDA" : "RELATÓRIO DA MISSÃO";
+  ui.overlayTitle.textContent = won ? "VITÓRIA" : "DERROTA";
+  ui.overlayText.innerHTML = `${game.playerScore} <span>:</span> ${game.enemyScore}`;
+  if (ui.matchMvp) ui.matchMvp.textContent = currentProfile?.username || game.playerName || "Agente";
+  if (ui.matchKills) ui.matchKills.textContent = String(kills);
+  if (ui.matchScore) ui.matchScore.textContent = score.toLocaleString("pt-BR");
+  if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = currentProfile?.isGuest ? "Partida local: entre com uma conta para salvar o desempenho." : "Sincronizando desempenho...";
+  renderMatchConfetti(won);
   ui.newGameButton.style.display = "";
   recordCompletedMatch();
+}
+
+function renderMatchConfetti(won) {
+  if (!ui.matchConfetti) return;
+  ui.matchConfetti.replaceChildren();
+  if (!won || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+  const colors = ["#00d9ff", "#7df9ff", "#ff4655", "#ffffff", "#62e6a0"];
+  const fragment = document.createDocumentFragment();
+  for (let index = 0; index < 46; index += 1) {
+    const piece = document.createElement("i");
+    piece.style.left = `${(index * 37 + Math.random() * 18) % 100}%`;
+    piece.style.setProperty("--confetti-color", colors[index % colors.length]);
+    piece.style.setProperty("--fall-time", `${3.8 + (index % 9) * 0.24}s`);
+    piece.style.setProperty("--fall-delay", `${-((index % 13) * 0.31)}s`);
+    piece.style.setProperty("--drift", `${-70 + (index % 11) * 14}px`);
+    fragment.appendChild(piece);
+  }
+  ui.matchConfetti.appendChild(fragment);
 }
 
 async function recordCompletedMatch() {
   if (game.statisticsRecorded || game.sandbox || game.training || game.tutorial || currentProfile?.isGuest) return;
   const session = readStoredSession();
-  if (!session?.token) return;
+  if (!session?.token) {
+    if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = "Sessão indisponível; desempenho salvo apenas nesta partida.";
+    return;
+  }
   game.statisticsRecorded = true;
   const score = Math.max(0, Math.round((game.stats?.kills || 0) * 100 + game.playerScore * 500));
   try {
-    await requestApi("/api/statistics/match", {
+    const payload = await requestApi("/api/statistics/match", {
       method: "POST",
       headers: { Authorization: `Bearer ${session.token}` },
       body: JSON.stringify({
@@ -2221,9 +2256,13 @@ async function recordCompletedMatch() {
         score,
       }),
     });
+    optionsStatisticsState = { status: "ready", data: payload.statistics, message: "Atualizado agora" };
+    window.dispatchEvent(new CustomEvent("valorant2d:statistics-updated", { detail: payload.statistics }));
+    if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = "Desempenho salvo na nuvem.";
   } catch (error) {
     // A partida permanece jogável mesmo se a sincronização estiver indisponível.
     console.warn("Não foi possível sincronizar as estatísticas:", error.message);
+    if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = "A partida foi concluída, mas a sincronização está indisponível.";
   }
 }
 
@@ -2429,7 +2468,7 @@ function updateNeonStamina(dt) {
     game.neonVignette = Math.max(0, game.neonVignette - dt * 3.2);
     return 1;
   }
-  const wantsBoost = keyHeld("ability1") || mouse.rightDown || game.neonSpeedHeld;
+  const wantsBoost = keyHeld("neonRun") || keyHeld("ability1") || mouse.rightDown || game.neonSpeedHeld;
   const canBoost = wantsBoost && game.neonStamina > 0;
   game.neonSpeedActive = canBoost;
   if (canBoost) {
@@ -3668,6 +3707,17 @@ function activateUltimate(entity) {
 
   if (agent.id === "neon") {
     entity.ultimate = { type: "neon", life: 7, maxLife: 7 };
+    game.ultimateEffects.push({
+      type: "neon-overload",
+      entityId: entity.id,
+      x: entity.x,
+      y: entity.y,
+      color: "#00d9ff",
+      life: 7,
+      maxLife: 7,
+      radius: 34,
+    });
+    spawnParticles(entity.x, entity.y, "#7df9ff", 42, 260);
   } else if (agent.id === "jett") {
     entity.ultimate = { type: "jett", life: 14, maxLife: 14, knives: 6, maxKnives: 6, spent: 0 };
   } else if (agent.id === "killjoy") {
@@ -5416,6 +5466,16 @@ function updateTimers(dt) {
     if (entity.ultimate.life <= 0) entity.ultimate = null;
   }
   for (const effect of game.ultimateEffects) {
+    if (effect.type === "neon-overload") {
+      const source = findEntityById(effect.entityId);
+      if (source?.alive && source.ultimate?.type === "neon") {
+        effect.x = source.x;
+        effect.y = source.y;
+        effect.life = Math.max(effect.life, source.ultimate.life);
+      } else {
+        effect.life = 0;
+      }
+    }
     effect.life -= dt;
     if (effect.type === "lockdown") {
       effect.countdown = Math.max(0, (effect.countdown || 0) - dt);
@@ -5432,7 +5492,7 @@ function updateTimers(dt) {
         }
         game.shake = Math.max(game.shake, 0.36);
       }
-    } else {
+    } else if (effect.type !== "neon-overload") {
       effect.radius += dt * (effect.type === "global-pulse" ? 360 : 72);
     }
     const source = [game.player, ...game.allies, ...game.bots].find((entity) => entity?.id === effect.entityId);
@@ -6443,7 +6503,25 @@ function drawUltimateEffects() {
     ctx.strokeStyle = effect.color;
     ctx.shadowColor = effect.color;
     ctx.shadowBlur = 28;
-    if (effect.type === "global-pulse") {
+    if (effect.type === "neon-overload") {
+      const pulse = .82 + Math.sin(performance.now() / 72) * .18;
+      ctx.lineWidth = 3;
+      for (let arc = 0; arc < 4; arc += 1) {
+        const start = performance.now() / 230 + arc * Math.PI / 2;
+        ctx.beginPath();
+        ctx.arc(effect.x, effect.y, (effect.radius + arc * 7) * pulse, start, start + .9);
+        ctx.stroke();
+      }
+      ctx.globalAlpha *= .7;
+      for (let bolt = 0; bolt < 7; bolt += 1) {
+        const angle = performance.now() / 180 + bolt * .9;
+        ctx.beginPath();
+        ctx.moveTo(effect.x + Math.cos(angle) * 18, effect.y + Math.sin(angle) * 18);
+        ctx.lineTo(effect.x + Math.cos(angle + .16) * 35, effect.y + Math.sin(angle + .16) * 35);
+        ctx.lineTo(effect.x + Math.cos(angle - .12) * 52, effect.y + Math.sin(angle - .12) * 52);
+        ctx.stroke();
+      }
+    } else if (effect.type === "global-pulse") {
       ctx.lineWidth = 8;
       ctx.beginPath();
       ctx.arc(effect.x, effect.y, effect.radius, 0, Math.PI * 2);
@@ -6658,6 +6736,18 @@ function drawAgentScreenEffects() {
     gradient.addColorStop(0, "rgba(0,0,0,0)");
     gradient.addColorStop(1, `rgba(0, 217, 255, ${alpha})`);
     ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+  }
+
+  if (game.player?.ultimate?.type === "neon") {
+    ctx.save();
+    const pulse = .12 + (Math.sin(performance.now() / 85) + 1) * .035;
+    const overload = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, canvas.width * .18, canvas.width / 2, canvas.height / 2, canvas.width * .72);
+    overload.addColorStop(0, "rgba(0,0,0,0)");
+    overload.addColorStop(.72, `rgba(0,217,255,${pulse * .45})`);
+    overload.addColorStop(1, `rgba(125,249,255,${pulse})`);
+    ctx.fillStyle = overload;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
   }
@@ -8005,7 +8095,7 @@ const OPTIONS_DEFAULTS = {
   mouseSensitivity: 50,
   adsSensitivity: 50,
   invertY: false,
-  keys: { fire: "Mouse1", reload: "R", ability1: "E", ability2: "Q", interact: "F" },
+  keys: { fire: "Mouse1", reload: "R", ability1: "E", ability2: "Q", interact: "F", neonRun: "Shift" },
   crosshairType: "default",
   crosshairColor: "#ffffff",
   crosshairCustomColor: "#ffffff",
@@ -8056,6 +8146,9 @@ let optionsFeedback = "";
 let optionsFeedbackTimer = null;
 let optionsFeedbackId = 0;
 let optionsStatisticsState = { status: "idle", data: null, message: "" };
+let preferencesSaveTimer = null;
+let preferencesRevision = 0;
+let preferencesSyncedRevision = 0;
 
 function cloneOptions(source) {
   if (source == null || typeof source !== "object") return source;
@@ -8087,7 +8180,80 @@ function optionSection(title, children) {
 
 function setOptionValue(key, value) {
   optionsSettings[key] = value;
+  queuePreferencesSync();
   renderOptionsMenu();
+}
+
+function normalizedOptions(source) {
+  const candidate = source && typeof source === "object" ? source : {};
+  return {
+    ...cloneOptions(OPTIONS_DEFAULTS),
+    ...candidate,
+    keys: { ...OPTIONS_DEFAULTS.keys, ...(candidate.keys || {}) },
+  };
+}
+
+function applyOptionsRuntime(source) {
+  const next = normalizedOptions(source);
+  settings = cloneOptions(next);
+  game.arrowKeys = next.movementScheme === "arrows";
+  game.crosshairStyle = next.crosshairType === "default" ? "default" : "minimal";
+  game.crosshairScale = (Number(next.crosshairSize) || 100) / 100;
+  game.playerName = currentProfile?.username || next.playerName.trim() || OPTIONS_DEFAULTS.playerName;
+  game.showFps = Boolean(next.showFps);
+  game.showPing = Boolean(next.showPing);
+  game.hudOpacity = Math.max(.5, Math.min(1.5, Number(next.brightness) / 100));
+  audio.enabled = !next.muted;
+  setMasterAudioVolume((Number(next.masterVolume) || 0) / 100);
+  document.documentElement.style.setProperty("--kill-feed-scale", String((Number(next.killFeedScale) || 100) / 100));
+  try { localStorage.setItem(OPTIONS_STORAGE_KEY, JSON.stringify(next)); } catch {}
+  updateUi();
+}
+
+async function synchronizePreferencesFromServer() {
+  const session = readStoredSession();
+  if (!session?.token || currentProfile?.isGuest) return;
+  const revisionAtStart = preferencesRevision;
+  try {
+    const payload = await requestApi("/api/preferences", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${session.token}` },
+    });
+    // Não sobrescreve uma alteração feita enquanto a resposta estava em trânsito.
+    if (revisionAtStart !== preferencesRevision) return;
+    optionsSettings = normalizedOptions(payload.preferences);
+    applyOptionsRuntime(optionsSettings);
+    preferencesSyncedRevision = preferencesRevision;
+    window.dispatchEvent(new CustomEvent("valorant2d:preferences-updated", { detail: cloneOptions(optionsSettings) }));
+    if (game.menuState === "options") renderOptionsMenu(true);
+  } catch (error) {
+    console.warn("Não foi possível carregar as configurações globais:", error.message);
+  }
+}
+
+function queuePreferencesSync() {
+  preferencesRevision += 1;
+  applyOptionsRuntime(optionsSettings);
+  clearTimeout(preferencesSaveTimer);
+  preferencesSaveTimer = window.setTimeout(savePreferencesToServer, 350);
+}
+
+async function savePreferencesToServer() {
+  const revision = preferencesRevision;
+  const session = readStoredSession();
+  if (!session?.token || currentProfile?.isGuest || revision <= preferencesSyncedRevision) return;
+  try {
+    const payload = await requestApi("/api/preferences", {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${session.token}` },
+      body: JSON.stringify({ preferences: normalizedOptions(optionsSettings) }),
+    });
+    preferencesSyncedRevision = revision;
+    window.dispatchEvent(new CustomEvent("valorant2d:preferences-updated", { detail: payload.preferences }));
+    if (game.menuState === "options") showOptionsFeedback("Sincronizado na nuvem");
+  } catch (error) {
+    if (game.menuState === "options") showOptionsFeedback("Salvo neste dispositivo; nuvem indisponível");
+  }
 }
 
 function showOptionsFeedback(text) {
@@ -8144,6 +8310,7 @@ function SettingSlider(label, key, min, max, step = 1, unit = "") {
       }
     }
     updateCrosshairPreview();
+    queuePreferencesSync();
   });
   wrap.append(input, value);
   return optionRow(label, wrap);
@@ -8179,6 +8346,7 @@ function handleOptionsKeyCapture(event) {
   event.stopPropagation();
   optionsSettings.keys[pendingKeyBind] = event.key === " " ? "SPACE" : event.key.toUpperCase();
   pendingKeyBind = null;
+  queuePreferencesSync();
   renderOptionsMenu();
   return true;
 }
@@ -8231,6 +8399,7 @@ function crosshairColorPicker() {
     swatch.style.setProperty("--swatch", color);
     swatch.addEventListener("click", () => {
       optionsSettings.crosshairColor = color;
+      queuePreferencesSync();
       renderOptionsMenu();
     });
     wrap.appendChild(swatch);
@@ -8242,6 +8411,7 @@ function crosshairColorPicker() {
     optionsSettings.crosshairCustomColor = custom.value;
     optionsSettings.crosshairColor = custom.value;
     updateCrosshairPreview();
+    queuePreferencesSync();
   });
   custom.addEventListener("change", renderOptionsMenu);
   wrap.appendChild(custom);
@@ -8261,7 +8431,7 @@ function renderGeneralOptions() {
         input.type = "text";
         input.value = optionsSettings.playerName;
         input.maxLength = 18;
-        input.addEventListener("input", () => { optionsSettings.playerName = input.value; });
+        input.addEventListener("input", () => { optionsSettings.playerName = input.value; queuePreferencesSync(); });
         return input;
       })()),
       ToggleSwitch("Mostrar FPS", "showFps"),
@@ -8278,12 +8448,18 @@ function renderGeneralOptions() {
 }
 
 function renderControlOptions() {
+  const movementOptions = [
+    ToggleGroup("Esquema", "movementScheme", [{ value: "wasd", label: "WASD" }, { value: "arrows", label: "SETAS" }]),
+    SettingSlider("Sensibilidade do mouse", "mouseSensitivity", 1, 100),
+    SettingSlider("Sensibilidade ADS", "adsSensitivity", 1, 100),
+    ToggleSwitch("Inverter eixo Y", "invertY"),
+  ];
+  if (game.selectedAgent?.id === "neon") {
+    movementOptions.push(KeyBind("Atalho de corrida da Neon", "neonRun"));
+  }
   return [
     optionSection("MOVIMENTO", [
-      ToggleGroup("Esquema", "movementScheme", [{ value: "wasd", label: "WASD" }, { value: "arrows", label: "SETAS" }]),
-      SettingSlider("Sensibilidade do mouse", "mouseSensitivity", 1, 100),
-      SettingSlider("Sensibilidade ADS", "adsSensitivity", 1, 100),
-      ToggleSwitch("Inverter eixo Y", "invertY"),
+      ...movementOptions,
     ]),
     optionSection("TECLAS", [
       KeyBind("Atirar", "fire"),
@@ -8419,6 +8595,11 @@ async function loadOptionsStatistics() {
   if (game.menuState === "options" && activeOptionsTab === "statistics") renderOptionsMenu(true);
 }
 
+window.addEventListener("valorant2d:statistics-updated", (event) => {
+  optionsStatisticsState = { status: "ready", data: event.detail || {}, message: "Atualizado agora" };
+  if (game.menuState === "options" && activeOptionsTab === "statistics") renderOptionsMenu(true);
+});
+
 function renderOptionsContent() {
   if (activeOptionsTab === "controls") return renderControlOptions();
   if (activeOptionsTab === "crosshair") return renderCrosshairOptions();
@@ -8454,6 +8635,7 @@ function applyOptionsSettings() {
   try {
     localStorage.setItem(OPTIONS_STORAGE_KEY, JSON.stringify(settings));
   } catch {}
+  queuePreferencesSync();
   if (settings.displayMode === "fullscreen" && !document.fullscreenElement) {
     ui.gameRoot?.requestFullscreen?.();
   } else if (settings.displayMode === "window" && document.fullscreenElement) {
@@ -8476,6 +8658,7 @@ function resetOptionsSettings() {
     optionsSettings[key] = cloneOptions(OPTIONS_DEFAULTS[key]);
   }
   pendingKeyBind = null;
+  queuePreferencesSync();
   showOptionsFeedback("Padrões restaurados!");
 }
 

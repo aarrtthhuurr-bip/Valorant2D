@@ -139,6 +139,9 @@ async function initializeDatabase() {
       vitorias INTEGER NOT NULL DEFAULT 0,
       abates_totais INTEGER NOT NULL DEFAULT 0,
       pontuacao_maxima INTEGER NOT NULL DEFAULT 0,
+      mostrar_dicas INTEGER NOT NULL DEFAULT 1 CHECK (mostrar_dicas IN (0, 1)),
+      volume_geral INTEGER NOT NULL DEFAULT 40 CHECK (volume_geral BETWEEN 0 AND 100),
+      preferencias_json TEXT NOT NULL DEFAULT '{}',
       data_criacao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
   `);
@@ -159,6 +162,19 @@ async function initializeDatabase() {
     ['pontuacao_maxima', 'INTEGER NOT NULL DEFAULT 0'],
   ];
   for (const [columnName, columnDefinition] of statisticColumns) {
+    if (!userColumnNames.has(columnName)) {
+      await run(`ALTER TABLE users ADD COLUMN ${columnName} ${columnDefinition}`);
+    }
+  }
+
+  // Preferências globais: as colunas mais consultadas ficam tipadas e o JSON
+  // preserva o restante do painel sem exigir uma migração a cada nova opção.
+  const preferenceColumns = [
+    ['mostrar_dicas', 'INTEGER NOT NULL DEFAULT 1'],
+    ['volume_geral', 'INTEGER NOT NULL DEFAULT 40'],
+    ['preferencias_json', "TEXT NOT NULL DEFAULT '{}'"],
+  ];
+  for (const [columnName, columnDefinition] of preferenceColumns) {
     if (!userColumnNames.has(columnName)) {
       await run(`ALTER TABLE users ADD COLUMN ${columnName} ${columnDefinition}`);
     }

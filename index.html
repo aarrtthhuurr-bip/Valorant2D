@@ -197,11 +197,19 @@
       </aside>
 
       <div class="match-overlay hidden" id="matchOverlay">
-        <div class="match-card glass">
-          <span class="label" id="overlayKicker">Partida encerrada</span>
-          <h2 id="overlayTitle">Vitória</h2>
-          <p id="overlayText">15 - 0</p>
-          <button id="newGameButton" type="button">Novo jogo</button>
+        <div class="match-confetti" id="matchConfetti" aria-hidden="true"></div>
+        <div class="match-card glass" role="dialog" aria-modal="true" aria-labelledby="overlayTitle">
+          <span class="match-eyebrow" id="overlayKicker">RELATÓRIO DA MISSÃO</span>
+          <h2 id="overlayTitle">VITÓRIA</h2>
+          <p class="match-score" id="overlayText">15 <span>:</span> 0</p>
+          <div class="match-result-line" aria-hidden="true"><i></i><b></b><i></i></div>
+          <div class="match-stats" aria-label="Estatísticas finais">
+            <article class="match-mvp"><span>MVP DA PARTIDA</span><strong id="matchMvp">Jogador</strong></article>
+            <article><span>ABATES</span><strong id="matchKills">0</strong></article>
+            <article><span>PONTUAÇÃO</span><strong id="matchScore">0</strong></article>
+          </div>
+          <p class="match-sync-status" id="matchSyncStatus" aria-live="polite"></p>
+          <button id="newGameButton" type="button"><span>CONTINUAR</span></button>
         </div>
       </div>
 
@@ -368,7 +376,7 @@
     </div>
   </main>
 
-  <script src="./game.js?v=20260714-unified-render-api"></script>
+  <script src="./game.js?v=20260714-cloud-preferences-victory"></script>
   <script>window.lucide?.createIcons();</script>
 </body>
 </html>
