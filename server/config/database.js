@@ -11,16 +11,16 @@ if (!/^postgres(?:ql)?:\/\//i.test(databaseUrl)) {
 }
 
 const parsedDatabaseUrl = new URL(databaseUrl);
-const isLocalDatabase = ['localhost', '127.0.0.1', '::1'].includes(parsedDatabaseUrl.hostname);
-const sslDisabled = process.env.PGSSL === 'false' || parsedDatabaseUrl.searchParams.get('sslmode') === 'disable';
 
 /**
- * Pool compartilhado pela aplicação. Neon e Supabase exigem TLS; em um
- * PostgreSQL local ele é desativado automaticamente, salvo configuração da URI.
+ * Pool compartilhado pela aplicação. A configuração SSL é compatível com
+ * certificados autoassinados utilizados por provedores PostgreSQL gerenciados.
  */
 const pool = new Pool({
   connectionString: databaseUrl,
-  ssl: isLocalDatabase || sslDisabled ? false : { rejectUnauthorized: false },
+  ssl: {
+    rejectUnauthorized: false,
+  },
   max: Number(process.env.PG_POOL_MAX) || 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 15000,
