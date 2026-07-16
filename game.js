@@ -19,6 +19,9 @@ const ui = {
   ammo: document.getElementById("ammoText"),
   spike: document.getElementById("spikeText"),
   shop: document.getElementById("shop"),
+  outbreakShopFooter: document.getElementById("outbreakShopFooter"),
+  outbreakShopWaveText: document.getElementById("outbreakShopWaveText"),
+  outbreakShopContinue: document.getElementById("outbreakShopContinue"),
   shopTabs: document.getElementById("shopTabs"),
   weaponCategoryTabs: document.getElementById("weaponCategoryTabs"),
   message: document.getElementById("message"),
@@ -1683,6 +1686,7 @@ const game = {
   outbreakElapsed: 0,
   outbreakLastDamageAt: 0,
   outbreakWaveDelay: 0,
+  outbreakShopPending: false,
   difficulty: "normal",
   sandbox: false,
   godMode: false,
@@ -2490,7 +2494,7 @@ function applyDamage(entity, amount) {
 }
 
 function updateOutbreak(dt) {
-  if (!game.outbreak || game.phase !== "action" || !game.player?.alive) return;
+  if (!game.outbreak || game.outbreakShopPending || game.phase !== "action" || !game.player?.alive) return;
   game.outbreakElapsed += dt;
   const secondsWithoutDamage = game.outbreakElapsed - game.outbreakLastDamageAt;
   if (secondsWithoutDamage >= 5 && game.player.armor < 50) {
@@ -5727,6 +5731,10 @@ function checkWinConditions() {
   if (game.training) return;
   if (game.outbreak) {
     if (game.bots.length > 0 && game.bots.every((bot) => !bot.alive) && game.outbreakWaveDelay <= 0) {
+      if (game.outbreakWave % 10 === 0) {
+        openOutbreakShopBreak();
+        return;
+      }
       game.outbreakWaveDelay = 2.4;
       game.bullets = [];
       showRoundBanner("SETOR LIMPO", "Próxima onda se aproximando", `ONDA ${game.outbreakWave}`, 2.2);
@@ -7435,6 +7443,7 @@ function togglePause() {
 }
 
 function toggleShop() {
+  if (game.outbreakShopPending && !ui.shop?.classList.contains("hidden")) return;
   if (ui.shop?.classList.contains("hidden")) {
     openShop();
   } else {
@@ -8102,6 +8111,8 @@ function showMainMenu() {
   game.outbreak = false;
   game.playMode = "default";
   game.outbreakWaveDelay = 0;
+  game.outbreakShopPending = false;
+  ui.outbreakShopFooter?.classList.add("hidden");
   ui.gameRoot?.classList.remove("outbreak-mode");
   game.tutorialStage = "idle";
   game.phase = "idle";
@@ -9088,6 +9099,9 @@ function createOutbreakWave(wave) {
     bot.hasSpike = false;
     bot.hp = wave <= 10 ? 60 + wave * 4 : 110 + (wave - 10) * 8;
     bot.maxHp = bot.hp;
+    // As ondas introdutórias não possuem escudo. A progressão começa na onda 10.
+    bot.armor = wave < 10 ? 0 : Math.min(50, 15 + (wave - 10) * 3);
+    bot.maxArmor = bot.armor;
     bot.speed = wave <= 10
       ? Math.min(104, 78 + wave * 2 + index)
       : Math.min(184, 112 + (wave - 11) * 4 + index * 2);
@@ -9099,6 +9113,8 @@ function createOutbreakWave(wave) {
 }
 
 function deployOutbreakWave(wave) {
+  game.outbreakShopPending = false;
+  ui.outbreakShopFooter?.classList.add("hidden");
   game.outbreakWave = wave;
   game.roundNumber = wave;
   game.bots = createOutbreakWave(wave);
@@ -9108,6 +9124,37 @@ function deployOutbreakWave(wave) {
   game.outbreakWaveDelay = 0;
   showRoundBanner(`ONDA ${wave}`, `${game.bots.length} ameaças detectadas`, "OUTBREAK", 2.4);
   setMessage(`Outbreak: onda ${wave} iniciada. Elimine todas as ameaças.`);
+}
+
+/**
+ * Suspende o combate a cada dez ondas e abre uma loja sem contagem regressiva.
+ * Somente a ação explícita de continuar libera a próxima onda.
+ */
+function openOutbreakShopBreak() {
+  game.outbreakShopPending = true;
+  game.outbreakWaveDelay = 0;
+  game.bots = [];
+  game.bullets = [];
+  game.phase = "buy";
+  game.phaseTime = Number.POSITIVE_INFINITY;
+  game.clockActive = false;
+  ui.outbreakShopFooter?.classList.remove("hidden");
+  if (ui.outbreakShopWaveText) ui.outbreakShopWaveText.textContent = `Próxima onda: ${game.outbreakWave + 1}`;
+  showRoundBanner("REABASTECIMENTO", "Equipe-se antes de continuar", `ONDA ${game.outbreakWave} CONCLUÍDA`, 3);
+  setMessage("Outbreak: intervalo de compras. A próxima onda só começa ao clicar em Continuar.");
+  openShop();
+}
+
+function continueOutbreakFromShop() {
+  if (!game.outbreak || !game.outbreakShopPending) return;
+  const nextWave = game.outbreakWave + 1;
+  game.outbreakShopPending = false;
+  ui.outbreakShopFooter?.classList.add("hidden");
+  closeShop();
+  game.phase = "action";
+  game.phaseTime = 9999;
+  game.clockActive = true;
+  deployOutbreakWave(nextWave);
 }
 
 function startOutbreakMode() {
@@ -9128,6 +9175,7 @@ function startOutbreakMode() {
   game.outbreakElapsed = 0;
   game.outbreakLastDamageAt = -5;
   game.outbreakWaveDelay = 0;
+  game.outbreakShopPending = false;
   game.playerSide = "attackers";
   game.player.armor = 50;
   game.player.maxArmor = 50;
@@ -9660,7 +9708,12 @@ if (window) window.addEventListener("mouseup", (event) => {
   if (!event || event.button === 2) mouse.rightDown = false;
 });
 
-if (ui.shopBackdrop) ui.shopBackdrop.addEventListener("click", () => { closeShop(); updateUi(); });
+if (ui.shopBackdrop) ui.shopBackdrop.addEventListener("click", () => {
+  if (game.outbreakShopPending) return;
+  closeShop();
+  updateUi();
+});
+if (ui.outbreakShopContinue) ui.outbreakShopContinue.addEventListener("click", continueOutbreakFromShop);
 escalarViewport();
 
 if (ui.shopTabs && typeof ui.shopTabs.querySelectorAll === "function") {
