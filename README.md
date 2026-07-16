@@ -109,7 +109,7 @@ Não é necessário instalar ferramentas extras, Node.js ou ligar servidores loc
 
 * Loja de Compras (Menu B)
 * Compra de armamento (Pistolas, Submetralhadoras e Fuzis)
-* Compra de proteção (Colete leve e Colete pesado)
+* Compra de proteção e consumíveis especiais do Outbreak
 * Compra de cargas para habilidades dos agentes
 * Contratação de bots aliados para o round
 * Coleta de Orbes e Ultimate

@@ -1041,11 +1041,38 @@ const weaponAudio = {
 };
 
 const equipment = [
-  { id: "lightArmor", name: "Colete leve", price: 1200, desc: "25 de armadura consumivel", apply: () => { game.upgrades.armorCapacity = Math.max(game.upgrades.armorCapacity, 25); game.armor = 25; } },
-  { id: "heavyArmor", name: "Colete pesado", price: 2600, desc: "50 de armadura consumivel", apply: () => { game.upgrades.armorCapacity = Math.max(game.upgrades.armorCapacity, 50); game.armor = 50; } },
+  { id: "heavyArmor", name: "Colete pesado", price: 2600, desc: "50 de armadura consumivel", apply: () => { game.upgrades.armorCapacity = Math.max(game.upgrades.armorCapacity, 50); game.armor = 50; if (game.player) game.player.armor = 50; } },
   { id: "boots", name: "Botas taticas", price: 1500, desc: "+10% velocidade", apply: () => { game.upgrades.speed = true; } },
   { id: "magazine", name: "Carregador extra", price: 1800, desc: "+20% munição no pente", apply: () => { game.upgrades.magazine = true; } },
   { id: "reloadKit", name: "Kit de recarga", price: 1700, desc: "Recarga 20% mais rapida", apply: () => { game.upgrades.reload = true; } },
+  {
+    id: "fullRecovery",
+    name: "Recuperação Total",
+    price: 2000,
+    desc: "Restaura 100% da vida e do escudo",
+    outbreakOnly: true,
+    apply: () => {
+      game.player.hp = game.player.maxHp;
+      game.player.armor = game.player.maxArmor;
+      game.armor = game.player.armor;
+    },
+  },
+  {
+    id: "superShield",
+    name: "Super Escudo",
+    price: 4000,
+    desc: "Capacidade regenerativa de 100 por 10 waves",
+    outbreakOnly: true,
+    apply: () => { game.outbreakEffects.superShieldUntilWave = game.outbreakWave + 10; },
+  },
+  {
+    id: "adrenaline",
+    name: "Injeção de Adrenalina",
+    price: 2500,
+    desc: "+15% de velocidade por 10 waves",
+    outbreakOnly: true,
+    apply: () => { game.outbreakEffects.adrenalineUntilWave = game.outbreakWave + 10; },
+  },
 ];
 
 const allyItems = [
@@ -1687,6 +1714,7 @@ const game = {
   outbreakLastDamageAt: 0,
   outbreakWaveDelay: 0,
   outbreakShopPending: false,
+  outbreakEffects: { superShieldUntilWave: 0, adrenalineUntilWave: 0 },
   difficulty: "normal",
   sandbox: false,
   godMode: false,
@@ -1802,6 +1830,30 @@ const game = {
   agentReturnState: "main",
 };
 
+function outbreakEffectActive(untilWave) {
+  return game.outbreak && game.outbreakWave > 0 && game.outbreakWave <= (Number(untilWave) || 0);
+}
+
+function effectivePlayerMaxArmor() {
+  if (!game.outbreak) return game.upgrades.armorCapacity;
+  return outbreakEffectActive(game.outbreakEffects.superShieldUntilWave) ? 100 : 50;
+}
+
+function effectivePlayerSpeed() {
+  const baseSpeed = game.upgrades.speed ? 248 : 225;
+  return outbreakEffectActive(game.outbreakEffects.adrenalineUntilWave) ? baseSpeed * 1.15 : baseSpeed;
+}
+
+function synchronizePlayerEquipment() {
+  if (!game.player) return;
+  game.player.maxHp = 100;
+  game.player.hp = Math.min(game.player.maxHp, game.player.hp);
+  game.player.maxArmor = effectivePlayerMaxArmor();
+  game.player.armor = Math.min(game.player.maxArmor, Math.max(0, game.player.armor ?? game.armor));
+  game.armor = game.player.armor;
+  game.player.speed = effectivePlayerSpeed();
+}
+
 function makePlayer() {
   const spawn = game.playerSide === "attackers" ? map.attackersSpawn : { x: 640, y: 78 };
   return {
@@ -1812,8 +1864,8 @@ function makePlayer() {
     hp: 100,
     maxHp: 100,
     armor: game.outbreak ? 50 : game.armor,
-    maxArmor: game.outbreak ? 50 : game.upgrades.armorCapacity,
-    speed: game.upgrades.speed ? 248 : 225,
+    maxArmor: effectivePlayerMaxArmor(),
+    speed: effectivePlayerSpeed(),
     angle: -Math.PI / 2,
     ammo: currentMagSize(),
     weapon: game.selectedWeapon,
@@ -2497,8 +2549,9 @@ function updateOutbreak(dt) {
   if (!game.outbreak || game.outbreakShopPending || game.phase !== "action" || !game.player?.alive) return;
   game.outbreakElapsed += dt;
   const secondsWithoutDamage = game.outbreakElapsed - game.outbreakLastDamageAt;
-  if (secondsWithoutDamage >= 5 && game.player.armor < 50) {
-    game.player.armor = Math.min(50, game.player.armor + 12 * dt);
+  const shieldCapacity = game.player.maxArmor || 50;
+  if (secondsWithoutDamage >= 5 && game.player.armor < shieldCapacity) {
+    game.player.armor = Math.min(shieldCapacity, game.player.armor + 12 * dt);
     game.armor = game.player.armor;
   }
   for (const bot of game.bots) {
@@ -6155,6 +6208,16 @@ function drawEntity(entity, color, label, kind = "bot") {
   const armorRatio = (entity.maxArmor || 0) > 0 ? Math.max(0, entity.armor || 0) / entity.maxArmor : 0;
   ctx.save();
   ctx.translate(entity.x, entity.y);
+  if (kind === "player") {
+    ctx.strokeStyle = "rgba(98, 230, 160, 0.5)";
+    ctx.shadowColor = "#62e6a0";
+    ctx.shadowBlur = 9;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(0, 8, entity.r + 9, entity.r * 0.7, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
   ctx.rotate(entity.angle);
   ctx.fillStyle = "rgba(0,0,0,0.22)";
   ctx.beginPath();
@@ -6172,9 +6235,12 @@ function drawEntity(entity, color, label, kind = "bot") {
     ctx.stroke();
     ctx.shadowBlur = 0;
   }
-  ctx.strokeStyle = kind === "player" ? "#ffffff" : "rgba(255,255,255,0.45)";
+  ctx.strokeStyle = kind === "player" ? "#ffffff" : kind === "bot" ? "rgba(255, 70, 85, 0.78)" : "rgba(255,255,255,0.45)";
+  ctx.shadowColor = kind === "bot" ? "rgba(255, 70, 85, 0.65)" : "transparent";
+  ctx.shadowBlur = kind === "bot" ? 7 : 0;
   ctx.lineWidth = kind === "player" ? 3 : 2;
   ctx.stroke();
+  ctx.shadowBlur = 0;
   if (armorRatio > 0) {
     ctx.strokeStyle = "#46a8ff";
     ctx.lineWidth = 3;
@@ -6211,7 +6277,7 @@ function drawEntity(entity, color, label, kind = "bot") {
     ctx.fillStyle = "#46a8ff";
     ctx.shadowColor = "#46a8ff";
     ctx.shadowBlur = 9;
-    ctx.fillRect(left, shieldY, width * Math.max(0, Math.min(1, entity.armor / 50)), 3);
+    ctx.fillRect(left, shieldY, width * Math.max(0, Math.min(1, entity.armor / Math.max(1, entity.maxArmor))), 3);
     ctx.fillStyle = "rgba(98, 230, 160, 0.18)";
     ctx.fillRect(left, healthY, width, 4);
     ctx.fillStyle = entity.hp > 35 ? "#62e6a0" : "#ff4655";
@@ -6225,7 +6291,7 @@ function drawEntity(entity, color, label, kind = "bot") {
   } else {
     ctx.fillStyle = "rgba(0,0,0,0.45)";
     ctx.fillRect(entity.x - 20, entity.y - entity.r - 15, 40, 5);
-    ctx.fillStyle = entity.hp > maxHp * 0.4 ? "#66e48f" : "#ff5b5b";
+    ctx.fillStyle = kind === "bot" ? "#ff5b68" : entity.hp > maxHp * 0.4 ? "#66e48f" : "#ff5b5b";
     ctx.fillRect(entity.x - 20, entity.y - entity.r - 15, Math.max(0, entity.hp / maxHp) * 40, 5);
     if ((entity.maxArmor || 0) > 0) {
       ctx.fillStyle = "rgba(0,0,0,0.45)";
@@ -9197,6 +9263,7 @@ function deployOutbreakWave(wave) {
   ui.outbreakShopFooter?.classList.add("hidden");
   game.outbreakWave = wave;
   game.roundNumber = wave;
+  synchronizePlayerEquipment();
   game.bots = createOutbreakWave(wave);
   game.bots.forEach(sanitizeEntityPosition);
   game.bullets = [];
@@ -9256,6 +9323,7 @@ function startOutbreakMode() {
   game.outbreakLastDamageAt = -5;
   game.outbreakWaveDelay = 0;
   game.outbreakShopPending = false;
+  game.outbreakEffects = { superShieldUntilWave: 0, adrenalineUntilWave: 0 };
   game.playerSide = "attackers";
   game.player.armor = 50;
   game.player.maxArmor = 50;
@@ -9268,6 +9336,7 @@ function startOutbreakMode() {
   game.phase = "action";
   game.phaseTime = 9999;
   game.clockActive = false;
+  buildShop();
   deployOutbreakWave(1);
   ui.gameRoot?.classList.add("outbreak-mode");
 }
@@ -9415,11 +9484,13 @@ function updateBuyBar() {
 // Icones inline da aba Equip. mantidos no JS para cada card acompanhar o item renderizado.
 function equipmentIconSvg(itemId) {
   const icons = {
-    lightArmor: `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true"><path d="M18 4L6 9v9c0 7 5.4 13 12 15 6.6-2 12-8 12-15V9z" stroke="#ff4655" stroke-width="1.8" stroke-linejoin="round"/><text x="18" y="22" text-anchor="middle" fill="#ff4655" font-size="9" font-family="Rajdhani,Arial,sans-serif" font-weight="700">25</text></svg>`,
     heavyArmor: `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true"><path d="M18 3L5 8.5v10C5 26 11 32.5 18 34c7-1.5 13-8 13-15.5V8.5z" stroke="#ff4655" stroke-width="2" fill="rgba(255,70,85,0.08)" stroke-linejoin="round"/><text x="18" y="22" text-anchor="middle" fill="#ff4655" font-size="9" font-family="Rajdhani,Arial,sans-serif" font-weight="700">50</text></svg>`,
     boots: `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true"><path d="M10 8v14l-2 4h18v-4h-8V8z" stroke="#ff4655" stroke-width="1.8" stroke-linejoin="round"/><line x1="8" y1="26" x2="26" y2="26" stroke="#ff4655" stroke-width="1.8" stroke-linecap="round"/></svg>`,
     magazine: `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true"><rect x="11" y="6" width="14" height="22" rx="3" stroke="#ff4655" stroke-width="1.8"/><line x1="15" y1="11" x2="21" y2="11" stroke="#ff4655" stroke-width="1.5" stroke-linecap="round"/><line x1="15" y1="15" x2="21" y2="15" stroke="#ff4655" stroke-width="1.5" stroke-linecap="round"/><line x1="15" y1="19" x2="21" y2="19" stroke="#ff4655" stroke-width="1.5" stroke-linecap="round"/><rect x="14" y="28" width="8" height="4" rx="1" stroke="#ff4655" stroke-width="1.5"/></svg>`,
     reloadKit: `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true"><path d="M26 10a10 10 0 1 1-14 0" stroke="#ff4655" stroke-width="1.8" stroke-linecap="round"/><polyline points="22,6 26,10 22,14" stroke="#ff4655" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    fullRecovery: `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true"><path d="M18 31S7 24.5 7 15.5C7 9 14.5 6.5 18 12c3.5-5.5 11-3 11 3.5C29 24.5 18 31 18 31z" stroke="#62e6a0" stroke-width="1.8"/><path d="M12 19h4l2-4 2 8 2-4h3" stroke="#62e6a0" stroke-width="1.5" stroke-linejoin="round"/></svg>`,
+    superShield: `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true"><path d="M18 3L5 8.5v10C5 26 11 32.5 18 34c7-1.5 13-8 13-15.5V8.5z" stroke="#46a8ff" stroke-width="2" fill="rgba(70,168,255,.1)"/><text x="18" y="22" text-anchor="middle" fill="#7ec4ff" font-size="9" font-weight="800">100</text></svg>`,
+    adrenaline: `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true"><path d="M8 27L25 10m-11 1l11-1-1 11" stroke="#ffd166" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 31h14" stroke="#ffd166" stroke-width="2" stroke-linecap="round"/></svg>`,
   };
   return icons[itemId] || icons.reloadKit;
 }
@@ -9429,10 +9500,10 @@ function buildShop() {
   renderWeaponCards();
 
   ui.equipmentButtons.innerHTML = "";
-  for (const item of equipment) {
+  for (const item of availableEquipment()) {
     const button = document.createElement("button");
     button.className = "equip-card";
-    const kind = item.id.includes("Armor") ? "Consumivel por round" : "Upgrade permanente";
+    const kind = item.outbreakOnly ? "Consumível Outbreak" : item.id.includes("Armor") ? "Consumível por round" : "Upgrade permanente";
     button.innerHTML = `
       <span class="equip-owned-badge">Obtido</span>
       <span class="equip-icon">${equipmentIconSvg(item.id)}</span>
@@ -9454,11 +9525,7 @@ function buildShop() {
       }
       game.money -= item.price;
       item.apply();
-      game.player.maxHp = 100;
-      game.player.hp = Math.min(100, game.player.hp);
-      game.player.maxArmor = game.upgrades.armorCapacity;
-      game.player.armor = game.armor;
-      game.player.speed = game.upgrades.speed ? 248 : 225;
+      synchronizePlayerEquipment();
       game.player.ammo = Math.min(currentMagSize(), Math.max(game.player.ammo, currentMagSize()));
       setMessage(`${item.name} comprado.`);
       updateShopState();
@@ -9634,12 +9701,18 @@ function allyItemOwned(item) {
 
 function equipmentOwned(item) {
   if (!item) return false;
-  if (item.id === "lightArmor") return (game.player?.armor || 0) >= 25;
   if (item.id === "heavyArmor") return (game.player?.armor || 0) >= 50;
   if (item.id === "boots") return game.upgrades.speed;
   if (item.id === "magazine") return game.upgrades.magazine;
   if (item.id === "reloadKit") return game.upgrades.reload;
+  if (item.id === "fullRecovery") return game.player?.hp >= game.player?.maxHp && game.player?.armor >= game.player?.maxArmor;
+  if (item.id === "superShield") return outbreakEffectActive(game.outbreakEffects.superShieldUntilWave);
+  if (item.id === "adrenaline") return outbreakEffectActive(game.outbreakEffects.adrenalineUntilWave);
   return false;
+}
+
+function availableEquipment() {
+  return equipment.filter((item) => !item.outbreakOnly || game.outbreak);
 }
 
 function updateShopState() {
@@ -9656,7 +9729,7 @@ function updateShopState() {
     if (weapon) updateWeaponCardState(button, weapon);
   });
   [...(ui.equipmentButtons?.children || [])].forEach((button, i) => {
-    const item = equipment[i];
+    const item = availableEquipment()[i];
     if (item) updateEquipmentCardState(button, item);
   });
   [...(ui.allyButtons?.children || [])].forEach((button, i) => {
