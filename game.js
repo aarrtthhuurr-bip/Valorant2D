@@ -1717,6 +1717,9 @@ const game = {
   outbreakLastDamageAt: 0,
   outbreakWaveDelay: 0,
   outbreakShopPending: false,
+  // Indica que a loja foi aberta pelo painel de desenvolvimento e deve
+  // retomar a mesma onda, preservando os inimigos que estavam ativos.
+  outbreakAdminShopResume: false,
   outbreakEffects: { superShieldUntilWave: 0, adrenalineUntilWave: 0 },
   difficulty: "normal",
   sandbox: false,
@@ -8286,6 +8289,7 @@ function showMainMenu() {
   game.playMode = "default";
   game.outbreakWaveDelay = 0;
   game.outbreakShopPending = false;
+  game.outbreakAdminShopResume = false;
   ui.outbreakShopFooter?.classList.add("hidden");
   ui.gameRoot?.classList.remove("outbreak-mode");
   game.tutorialStage = "idle";
@@ -8563,6 +8567,7 @@ const OPTIONS_TABS = [
   { id: "audio", label: "ÁUDIO" },
   { id: "video", label: "VÍDEO" },
   { id: "statistics", label: "ESTATÍSTICAS" },
+  { id: "developer", label: "DESENVOLVEDOR", adminOnly: true },
 ];
 
 const OPTIONS_STORAGE_KEY = "valorant2d-options";
@@ -8635,6 +8640,19 @@ let optionsStatisticsState = { status: "idle", data: null, message: "" };
 let preferencesSaveTimer = null;
 let preferencesRevision = 0;
 let preferencesSyncedRevision = 0;
+
+/**
+ * O painel é uma ferramenta local de testes, não um mecanismo de autorização
+ * do servidor. A comparação é propositalmente exata e diferencia maiúsculas de
+ * minúsculas: apenas a conta autenticada com username "Admin" recebe a aba.
+ */
+function isAdminProfile() {
+  return Boolean(currentProfile && !currentProfile.isGuest && currentProfile.username === "Admin");
+}
+
+function availableOptionsTabs() {
+  return OPTIONS_TABS.filter((tab) => !tab.adminOnly || isAdminProfile());
+}
 
 function cloneOptions(source) {
   if (source == null || typeof source !== "object") return source;
@@ -9058,6 +9076,126 @@ function renderOptionsStatistics() {
   return [section];
 }
 
+function adminToolGuard() {
+  if (!isAdminProfile()) return "Acesso restrito à conta Admin.";
+  if (!game.outbreak || !game.player?.alive) return "Inicie uma partida Outbreak para usar esta ferramenta.";
+  return "";
+}
+
+function leaveOptionsForAdminAction() {
+  game.optionsReturnState = null;
+  game.pauseReturnState = null;
+  game.paused = false;
+  hidePauseOverlay();
+  hideMenuOverlay();
+}
+
+function adminJumpToOutbreakWave(input) {
+  const denied = adminToolGuard();
+  if (denied) {
+    showOptionsFeedback(denied);
+    return;
+  }
+  const wave = Number.parseInt(input.value, 10);
+  if (!Number.isInteger(wave) || wave < 1 || wave > 999) {
+    showOptionsFeedback("Informe uma wave entre 1 e 999.");
+    input.focus();
+    return;
+  }
+
+  closeShop();
+  game.outbreakShopPending = false;
+  game.outbreakAdminShopResume = false;
+  game.bots = [];
+  game.bullets = [];
+  game.phase = "action";
+  game.phaseTime = 9999;
+  game.clockActive = true;
+  leaveOptionsForAdminAction();
+  deployOutbreakWave(wave);
+  setMessage(`Admin: início da onda ${wave} carregado.`);
+  updateUi();
+}
+
+function adminForceOutbreakShop() {
+  const denied = adminToolGuard();
+  if (denied) {
+    showOptionsFeedback(denied);
+    return;
+  }
+  leaveOptionsForAdminAction();
+  openOutbreakShopBreak({ resumeCurrentWave: true });
+  updateUi();
+}
+
+function adminGrantCredits() {
+  const denied = adminToolGuard();
+  if (denied) {
+    showOptionsFeedback(denied);
+    return;
+  }
+  game.money = Math.min(999999, Math.max(0, Number(game.money) || 0) + 10000);
+  updateShopState();
+  updateUi();
+  showOptionsFeedback(`10.000 créditos adicionados. Saldo: $${game.money}.`);
+}
+
+function renderDeveloperOptions() {
+  // Defesa em profundidade: mesmo uma chamada manual ao renderizador não deve
+  // expor controles funcionais para perfis comuns ou convidados.
+  if (!isAdminProfile()) return [];
+
+  const outbreakReady = Boolean(game.outbreak && game.player?.alive);
+  const status = createOptionElement("div", "admin-status-card");
+  status.innerHTML = `
+    <span>SESSÃO DE TESTE</span>
+    <strong>${outbreakReady ? `Outbreak · Wave ${game.outbreakWave}` : "Outbreak inativo"}</strong>
+    <small>${outbreakReady ? "Ferramentas liberadas para esta partida." : "Inicie o modo Outbreak para liberar os comandos."}</small>
+  `;
+
+  const waveControls = createOptionElement("div", "admin-wave-controls");
+  const waveInput = createOptionElement("input", "option-text-input admin-wave-input");
+  waveInput.type = "number";
+  waveInput.min = "1";
+  waveInput.max = "999";
+  waveInput.step = "1";
+  waveInput.value = String(Math.max(1, game.outbreakWave || 1));
+  waveInput.setAttribute("aria-label", "Wave de destino");
+  const jumpButton = createOptionElement("button", "admin-tool-button", "IR PARA WAVE");
+  jumpButton.type = "button";
+  jumpButton.disabled = !outbreakReady;
+  jumpButton.addEventListener("click", () => adminJumpToOutbreakWave(waveInput));
+  waveInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      adminJumpToOutbreakWave(waveInput);
+    }
+  });
+  attachButtonFeedback(jumpButton);
+  waveControls.append(waveInput, jumpButton);
+
+  const shopButton = createOptionElement("button", "admin-tool-button", "FORÇAR ABERTURA DA LOJA");
+  shopButton.type = "button";
+  shopButton.disabled = !outbreakReady;
+  shopButton.addEventListener("click", adminForceOutbreakShop);
+  attachButtonFeedback(shopButton);
+
+  const creditsButton = createOptionElement("button", "admin-tool-button", "+10.000 CRÉDITOS");
+  creditsButton.type = "button";
+  creditsButton.disabled = !outbreakReady;
+  creditsButton.addEventListener("click", adminGrantCredits);
+  attachButtonFeedback(creditsButton);
+
+  const section = optionSection("ADMIN TOOLS", [
+    status,
+    optionRow("Selecionar wave", waveControls, "Remove os inimigos atuais e inicia a wave informada."),
+    optionRow("Loja Outbreak", shopButton, "Pausa o combate e preserva a wave atual até continuar."),
+    optionRow("Créditos de teste", creditsButton, "Adiciona créditos somente à partida local em andamento."),
+  ]);
+  section.classList.add("options-developer-section");
+  return [section];
+}
+
 async function loadOptionsStatistics() {
   if (currentProfile?.isGuest) {
     optionsStatisticsState = { status: "ready", data: {}, message: "Entre com uma conta para sincronizar seu desempenho." };
@@ -9092,6 +9230,7 @@ function renderOptionsContent() {
   if (activeOptionsTab === "audio") return renderAudioOptions();
   if (activeOptionsTab === "video") return renderVideoOptions();
   if (activeOptionsTab === "statistics") return renderOptionsStatistics();
+  if (activeOptionsTab === "developer") return renderDeveloperOptions();
   return renderGeneralOptions();
 }
 
@@ -9150,11 +9289,13 @@ function resetOptionsSettings() {
 
 function renderOptionsMenu(skipFade = false) {
   if (!ui.menuButtons) return;
+  const visibleTabs = availableOptionsTabs();
+  if (!visibleTabs.some((tab) => tab.id === activeOptionsTab)) activeOptionsTab = "general";
   ui.menuButtons.innerHTML = "";
   ui.menuButtons.className = "options-shell";
   const panel = createOptionElement("div", `options-panel ${skipFade ? "" : "is-ready"}`);
   const tabs = createOptionElement("div", "options-tabs");
-  OPTIONS_TABS.forEach((tab) => {
+  visibleTabs.forEach((tab) => {
     const button = createOptionElement("button", activeOptionsTab === tab.id ? "is-active" : "", tab.label);
     button.type = "button";
     button.addEventListener("click", () => {
@@ -9173,7 +9314,9 @@ function renderOptionsMenu(skipFade = false) {
   const content = createOptionElement("div", "options-content");
   renderOptionsContent().forEach((section) => content.appendChild(section));
   const footer = createOptionElement("footer", "options-footer");
-  const footerItems = activeOptionsTab === "statistics" ? [
+  const footerItems = activeOptionsTab === "developer" ? [
+    { label: "VOLTAR", action: backFromOptions },
+  ] : activeOptionsTab === "statistics" ? [
     { label: "ATUALIZAR", action: loadOptionsStatistics, primary: true },
     { label: "VOLTAR", action: backFromOptions },
   ] : [
@@ -9287,6 +9430,7 @@ function createOutbreakWave(wave) {
 
 function deployOutbreakWave(wave) {
   game.outbreakShopPending = false;
+  game.outbreakAdminShopResume = false;
   ui.outbreakShopFooter?.classList.add("hidden");
   game.outbreakWave = wave;
   game.roundNumber = wave;
@@ -9304,30 +9448,49 @@ function deployOutbreakWave(wave) {
  * Suspende o combate a cada dez ondas e abre uma loja sem contagem regressiva.
  * Somente a ação explícita de continuar libera a próxima onda.
  */
-function openOutbreakShopBreak() {
+function openOutbreakShopBreak({ resumeCurrentWave = false } = {}) {
   game.outbreakShopPending = true;
+  game.outbreakAdminShopResume = Boolean(resumeCurrentWave);
   game.outbreakWaveDelay = 0;
-  game.bots = [];
+  if (!resumeCurrentWave) game.bots = [];
   game.bullets = [];
   game.phase = "buy";
   game.phaseTime = Number.POSITIVE_INFINITY;
   game.clockActive = false;
   ui.outbreakShopFooter?.classList.remove("hidden");
-  if (ui.outbreakShopWaveText) ui.outbreakShopWaveText.textContent = `Próxima onda: ${game.outbreakWave + 1}`;
-  showRoundBanner("REABASTECIMENTO", "Equipe-se antes de continuar", `ONDA ${game.outbreakWave} CONCLUÍDA`, 3);
-  setMessage("Outbreak: intervalo de compras. A próxima onda só começa ao clicar em Continuar.");
+  if (ui.outbreakShopWaveText) {
+    ui.outbreakShopWaveText.textContent = resumeCurrentWave
+      ? `Retomar onda: ${game.outbreakWave}`
+      : `Próxima onda: ${game.outbreakWave + 1}`;
+  }
+  showRoundBanner(
+    "REABASTECIMENTO",
+    "Equipe-se antes de continuar",
+    resumeCurrentWave ? `ONDA ${game.outbreakWave} PAUSADA` : `ONDA ${game.outbreakWave} CONCLUÍDA`,
+    3,
+  );
+  setMessage(resumeCurrentWave
+    ? "Admin: combate pausado. Clique em Continuar para retomar a wave atual."
+    : "Outbreak: intervalo de compras. A próxima onda só começa ao clicar em Continuar.");
   openShop();
 }
 
 function continueOutbreakFromShop() {
   if (!game.outbreak || !game.outbreakShopPending) return;
+  const resumeCurrentWave = game.outbreakAdminShopResume;
   const nextWave = game.outbreakWave + 1;
   game.outbreakShopPending = false;
+  game.outbreakAdminShopResume = false;
   ui.outbreakShopFooter?.classList.add("hidden");
   closeShop();
   game.phase = "action";
   game.phaseTime = 9999;
   game.clockActive = true;
+  if (resumeCurrentWave) {
+    setMessage(`Admin: onda ${game.outbreakWave} retomada.`);
+    updateUi();
+    return;
+  }
   deployOutbreakWave(nextWave);
 }
 
@@ -9350,6 +9513,7 @@ function startOutbreakMode() {
   game.outbreakLastDamageAt = -5;
   game.outbreakWaveDelay = 0;
   game.outbreakShopPending = false;
+  game.outbreakAdminShopResume = false;
   game.outbreakEffects = { superShieldUntilWave: 0, adrenalineUntilWave: 0 };
   game.playerSide = "attackers";
   game.player.armor = 50;
