@@ -7,7 +7,7 @@
   <!-- Altere apenas este valor caso o endereço definitivo do Render mude. -->
   <meta name="valorant2d-api-url" content="https://valorant2d.onrender.com">
   <title>Valorant2D</title>
-  <link rel="stylesheet" href="./styles.css?v=20260714-universal-responsive">
+  <link rel="stylesheet" href="./styles.css?v=20260715-outbreak-part1">
   <script src="https://unpkg.com/lucide@latest"></script>
   <link rel="shortcut icon" href="./assets/Favicon/favicon.ico" type="image/x-icon">
 </head>
@@ -204,12 +204,15 @@
           <p class="match-score" id="overlayText">15 <span>:</span> 0</p>
           <div class="match-result-line" aria-hidden="true"><i></i><b></b><i></i></div>
           <div class="match-stats" aria-label="Estatísticas finais">
-            <article class="match-mvp"><span>MVP DA PARTIDA</span><strong id="matchMvp">Jogador</strong></article>
+            <article class="match-mvp"><span id="matchPrimaryLabel">MVP DA PARTIDA</span><strong id="matchMvp">Jogador</strong></article>
             <article><span>ABATES</span><strong id="matchKills">0</strong></article>
-            <article><span>PONTUAÇÃO</span><strong id="matchScore">0</strong></article>
+            <article><span id="matchSecondaryLabel">PONTUAÇÃO</span><strong id="matchScore">0</strong></article>
           </div>
           <p class="match-sync-status" id="matchSyncStatus" aria-live="polite"></p>
-          <button id="newGameButton" type="button"><span>CONTINUAR</span></button>
+          <div class="match-actions">
+            <button id="newGameButton" type="button"><span>CONTINUAR</span></button>
+            <button id="outbreakMenuButton" class="outbreak-only hidden" type="button"><span>MENU PRINCIPAL</span></button>
+          </div>
         </div>
       </div>
 
@@ -376,7 +379,7 @@
     </div>
   </main>
 
-  <script src="./game.js?v=20260714-postgresql-migration"></script>
+  <script src="./game.js?v=20260715-outbreak-part1"></script>
   <script>window.lucide?.createIcons();</script>
 </body>
 </html>

@@ -34,10 +34,14 @@ const ui = {
   overlayText: document.getElementById("overlayText"),
   matchConfetti: document.getElementById("matchConfetti"),
   matchMvp: document.getElementById("matchMvp"),
+  matchPrimaryLabel: document.getElementById("matchPrimaryLabel"),
   matchKills: document.getElementById("matchKills"),
   matchScore: document.getElementById("matchScore"),
+  matchSecondaryLabel: document.getElementById("matchSecondaryLabel"),
   matchSyncStatus: document.getElementById("matchSyncStatus"),
   newGameButton: document.getElementById("newGameButton"),
+  outbreakMenuButton: document.getElementById("outbreakMenuButton"),
+  vitalsPanel: document.getElementById("hud-player-info"),
   menuOverlay: document.getElementById("menuOverlay"),
   menuKicker: document.getElementById("menuKicker"),
   menuTitle: document.getElementById("menuTitle"),
@@ -1611,6 +1615,12 @@ const game = {
   startingSide: "attackers",
   mapName: "Splitline",
   mode: "Normal",
+  playMode: "default",
+  outbreak: false,
+  outbreakWave: 1,
+  outbreakElapsed: 0,
+  outbreakLastDamageAt: 0,
+  outbreakWaveDelay: 0,
   difficulty: "normal",
   sandbox: false,
   godMode: false,
@@ -1735,8 +1745,8 @@ function makePlayer() {
     r: 18,
     hp: 100,
     maxHp: 100,
-    armor: game.armor,
-    maxArmor: game.upgrades.armorCapacity,
+    armor: game.outbreak ? 50 : game.armor,
+    maxArmor: game.outbreak ? 50 : game.upgrades.armorCapacity,
     speed: game.upgrades.speed ? 248 : 225,
     angle: -Math.PI / 2,
     ammo: currentMagSize(),
@@ -2184,7 +2194,7 @@ function startNewMatch() {
   game.playerUltPoints = 0;
   game.roundNumber = 1;
   game.statisticsRecorded = false;
-  game.startingSide = Math.random() < 0.5 ? "attackers" : "defenders";
+  game.startingSide = game.outbreak ? "attackers" : Math.random() < 0.5 ? "attackers" : "defenders";
   game.playerSide = game.startingSide;
   map = game.training ? TRAINING_MAP : MAPS[Math.floor(Math.random() * MAPS.length)];
   map.botRoutes = randomizedBotRoutes(map);
@@ -2210,17 +2220,55 @@ function showMatchResult() {
   game.paused = false;
   closeShop();
   ui.matchOverlay.classList.remove("hidden");
+  ui.matchOverlay.classList.remove("is-outbreak");
   ui.matchOverlay.classList.toggle("is-defeat", !won);
   ui.overlayKicker.textContent = won ? "MISSÃO CONCLUÍDA" : "RELATÓRIO DA MISSÃO";
   ui.overlayTitle.textContent = won ? "VITÓRIA" : "DERROTA";
   ui.overlayText.innerHTML = `${game.playerScore} <span>:</span> ${game.enemyScore}`;
   if (ui.matchMvp) ui.matchMvp.textContent = currentProfile?.username || game.playerName || "Agente";
+  if (ui.matchPrimaryLabel) ui.matchPrimaryLabel.textContent = "MVP DA PARTIDA";
   if (ui.matchKills) ui.matchKills.textContent = String(kills);
   if (ui.matchScore) ui.matchScore.textContent = score.toLocaleString("pt-BR");
+  if (ui.matchSecondaryLabel) ui.matchSecondaryLabel.textContent = "PONTUAÇÃO";
   if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = currentProfile?.isGuest ? "Partida local: entre com uma conta para salvar o desempenho." : "Sincronizando desempenho...";
   renderMatchConfetti(won);
   ui.newGameButton.style.display = "";
+  ui.newGameButton.querySelector("span").textContent = "CONTINUAR";
+  ui.outbreakMenuButton?.classList.add("hidden");
   recordCompletedMatch();
+}
+
+function formatSurvivalTime(totalSeconds) {
+  const seconds = Math.max(0, Math.floor(totalSeconds));
+  const minutes = Math.floor(seconds / 60);
+  return `${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+function showOutbreakGameOver(reason = "Sinal vital perdido") {
+  if (!game.outbreak || game.phase === "matchOver") return;
+  game.phase = "matchOver";
+  game.phaseTime = 0;
+  game.clockActive = false;
+  game.paused = false;
+  closeShop();
+  ui.matchOverlay.classList.remove("hidden");
+  ui.matchOverlay.classList.add("is-defeat", "is-outbreak");
+  ui.overlayKicker.textContent = "PROTOCOLO OUTBREAK ENCERRADO";
+  ui.overlayTitle.textContent = "FIM DE JOGO";
+  ui.overlayText.innerHTML = `<span>${reason}</span>`;
+  if (ui.matchPrimaryLabel) ui.matchPrimaryLabel.textContent = "ONDA ALCANÇADA";
+  if (ui.matchMvp) ui.matchMvp.textContent = String(game.outbreakWave);
+  if (ui.matchKills) ui.matchKills.textContent = String(Math.max(0, game.stats?.kills || 0));
+  if (ui.matchSecondaryLabel) ui.matchSecondaryLabel.textContent = "SOBREVIVÊNCIA";
+  if (ui.matchScore) ui.matchScore.textContent = formatSurvivalTime(game.outbreakElapsed);
+  if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = "Dados da incursão preparados para sincronização futura.";
+  ui.matchConfetti?.replaceChildren();
+  if (ui.newGameButton) {
+    ui.newGameButton.style.display = "";
+    ui.newGameButton.querySelector("span").textContent = "TENTAR DE NOVO";
+  }
+  ui.outbreakMenuButton?.classList.remove("hidden");
+  playSound("round_lose");
 }
 
 function renderMatchConfetti(won) {
@@ -2346,13 +2394,35 @@ function applyDamage(entity, amount) {
   if (amount > 0 && entity.orbChannel) entity.orbChannel = null;
   let remaining = amount;
   if (entity.armor > 0) {
-    const absorbed = Math.min(entity.armor, remaining * 0.7);
+    const absorbed = Math.min(entity.armor, game.outbreak && entity.id === "player" ? remaining : remaining * 0.7);
     entity.armor -= absorbed;
     remaining -= absorbed;
   }
   entity.hp -= remaining;
-  if (entity.id === "player") game.armor = Math.max(0, entity.armor || 0);
+  if (entity.id === "player") {
+    game.armor = Math.max(0, entity.armor || 0);
+    if (game.outbreak && amount > 0) game.outbreakLastDamageAt = game.outbreakElapsed;
+  }
   return remaining;
+}
+
+function updateOutbreak(dt) {
+  if (!game.outbreak || game.phase !== "action" || !game.player?.alive) return;
+  game.outbreakElapsed += dt;
+  const secondsWithoutDamage = game.outbreakElapsed - game.outbreakLastDamageAt;
+  if (secondsWithoutDamage >= 5 && game.player.armor < 50) {
+    game.player.armor = Math.min(50, game.player.armor + 12 * dt);
+    game.armor = game.player.armor;
+  }
+  for (const bot of game.bots) {
+    if (!bot.alive) continue;
+    bot.lastKnownPlayer = { x: game.player.x, y: game.player.y };
+    bot.memoryTimer = 10;
+  }
+  if (game.outbreakWaveDelay > 0) {
+    game.outbreakWaveDelay = Math.max(0, game.outbreakWaveDelay - dt);
+    if (game.outbreakWaveDelay === 0) deployOutbreakWave(game.outbreakWave + 1);
+  }
 }
 
 function solidWalls() {
@@ -5214,10 +5284,14 @@ function updateBullets(dt) {
               game.player.y = map.attackersSpawn.y;
               break;
             }
-            const winner = game.playerSide === "attackers" ? "defenders" : "attackers";
-            endRound(winner, game.playerSide === "attackers"
-              ? "Voce foi eliminado. Defensores venceram."
-              : "Voce foi eliminado. Atacantes venceram.");
+            if (game.outbreak) {
+              showOutbreakGameOver("AGENTE ELIMINADO");
+            } else {
+              const winner = game.playerSide === "attackers" ? "defenders" : "attackers";
+              endRound(winner, game.playerSide === "attackers"
+                ? "Voce foi eliminado. Defensores venceram."
+                : "Voce foi eliminado. Atacantes venceram.");
+            }
           }
         }
         if (!bullet.ultimateTrail) break;
@@ -5386,7 +5460,7 @@ function updateTimers(dt) {
       if (game.phase === "buy" && !game.sandbox && !game.training) openShop();
     }
   }
-  if (game.clockActive && !game.sandbox && !game.training) game.phaseTime -= dt;
+  if (game.clockActive && !game.sandbox && !game.training && !game.outbreak) game.phaseTime -= dt;
   if (game.sandbox || game.training) game.money = 99999;
   game.recoilHeat = Math.max(0, game.recoilHeat - dt * (game.player?.moving ? 0.9 : 1.8));
   if (game.recoilHeat === 0) game.shotChain = 0;
@@ -5447,7 +5521,8 @@ function updateTimers(dt) {
           target.alive = false;
           if (target.id === "player") {
             game.stats.deaths += 1;
-            endRound(opposingSide(game.playerSide), "A névoa química eliminou você.");
+            if (game.outbreak) showOutbreakGameOver("CONTAMINAÇÃO CRÍTICA");
+            else endRound(opposingSide(game.playerSide), "A névoa química eliminou você.");
           }
         }
       }
@@ -5549,6 +5624,15 @@ function checkWinConditions() {
   if (game.phase !== "action") return;
   if (game.tutorial) return;
   if (game.training) return;
+  if (game.outbreak) {
+    if (game.bots.length > 0 && game.bots.every((bot) => !bot.alive) && game.outbreakWaveDelay <= 0) {
+      game.outbreakWaveDelay = 2.4;
+      game.bullets = [];
+      showRoundBanner("SETOR LIMPO", "Próxima onda se aproximando", `ONDA ${game.outbreakWave}`, 2.2);
+      setMessage("Outbreak: leitura sísmica detectada. Prepare-se para a próxima onda.");
+    }
+    return;
+  }
   if (game.sandbox) {
     game.bots = game.bots.filter((bot) => bot.alive);
     game.allies = game.allies.filter((ally) => ally.alive);
@@ -5633,6 +5717,7 @@ function update(dt) {
     closeShop();
   }
   updateTutorial(dt);
+  updateOutbreak(dt);
   if (game.phase === "action") {
     updatePlayer(dt);
     if (game.sandbox) {
@@ -5901,21 +5986,48 @@ function drawEntity(entity, color, label, kind = "bot") {
   ctx.fillRect(-entity.r * 0.45, -entity.r * 0.55, entity.r * 0.9, 3);
   ctx.restore();
 
-  ctx.fillStyle = "rgba(0,0,0,0.45)";
-  ctx.fillRect(entity.x - 20, entity.y - entity.r - 15, 40, 5);
   const maxHp = entity.maxHp || 100;
-  ctx.fillStyle = entity.hp > maxHp * 0.4 ? "#66e48f" : "#ff5b5b";
-  ctx.fillRect(entity.x - 20, entity.y - entity.r - 15, Math.max(0, entity.hp / maxHp) * 40, 5);
-  if ((entity.maxArmor || 0) > 0) {
-    ctx.fillStyle = "rgba(0,0,0,0.45)";
-    ctx.fillRect(entity.x - 20, entity.y - entity.r - 8, 40, 4);
+  if (kind === "player" && game.outbreak) {
+    const width = 76;
+    const left = entity.x - width / 2;
+    const shieldY = entity.y + entity.r + 8;
+    const healthY = shieldY + 8;
+    ctx.save();
+    ctx.fillStyle = "rgba(1, 8, 13, 0.82)";
+    ctx.fillRect(left - 2, shieldY - 2, width + 4, 7);
+    ctx.fillRect(left - 2, healthY - 2, width + 4, 8);
+    ctx.fillStyle = "rgba(70, 168, 255, 0.2)";
+    ctx.fillRect(left, shieldY, width, 3);
     ctx.fillStyle = "#46a8ff";
-    ctx.fillRect(entity.x - 20, entity.y - entity.r - 8, armorRatio * 40, 4);
+    ctx.shadowColor = "#46a8ff";
+    ctx.shadowBlur = 9;
+    ctx.fillRect(left, shieldY, width * Math.max(0, Math.min(1, entity.armor / 50)), 3);
+    ctx.fillStyle = "rgba(98, 230, 160, 0.18)";
+    ctx.fillRect(left, healthY, width, 4);
+    ctx.fillStyle = entity.hp > 35 ? "#62e6a0" : "#ff4655";
+    ctx.shadowColor = ctx.fillStyle;
+    ctx.fillRect(left, healthY, width * Math.max(0, Math.min(1, entity.hp / 100)), 4);
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "rgba(220, 247, 255, 0.32)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(left - 2, shieldY - 2, width + 4, 16);
+    ctx.restore();
+  } else {
+    ctx.fillStyle = "rgba(0,0,0,0.45)";
+    ctx.fillRect(entity.x - 20, entity.y - entity.r - 15, 40, 5);
+    ctx.fillStyle = entity.hp > maxHp * 0.4 ? "#66e48f" : "#ff5b5b";
+    ctx.fillRect(entity.x - 20, entity.y - entity.r - 15, Math.max(0, entity.hp / maxHp) * 40, 5);
+    if ((entity.maxArmor || 0) > 0) {
+      ctx.fillStyle = "rgba(0,0,0,0.45)";
+      ctx.fillRect(entity.x - 20, entity.y - entity.r - 8, 40, 4);
+      ctx.fillStyle = "#46a8ff";
+      ctx.fillRect(entity.x - 20, entity.y - entity.r - 8, armorRatio * 40, 4);
+    }
   }
 
   if (kind === "player" && game.reloadTimer > 0) {
     const reloadRatio = 1 - game.reloadTimer / currentReloadTime();
-    const barY = entity.y + entity.r + 8;
+    const barY = entity.y + entity.r + (game.outbreak ? 31 : 8);
     ctx.fillStyle = "rgba(0,0,0,0.62)";
     ctx.fillRect(entity.x - 24, barY, 48, 6);
     ctx.fillStyle = "#ffd166";
@@ -5928,7 +6040,8 @@ function drawEntity(entity, color, label, kind = "bot") {
     ctx.fillStyle = "#eef7fb";
     ctx.font = "12px Segoe UI";
     ctx.textAlign = "center";
-    ctx.fillText(label, entity.x, entity.y + entity.r + (kind === "player" && game.reloadTimer > 0 ? 26 : 18));
+    const outbreakOffset = kind === "player" && game.outbreak ? 24 : 0;
+    ctx.fillText(label, entity.x, entity.y + entity.r + outbreakOffset + (kind === "player" && game.reloadTimer > 0 ? 26 : 18));
     ctx.textAlign = "left";
   }
 }
@@ -7084,8 +7197,8 @@ function updateUi() {
 
   // Side pill
   const atk = game.playerSide === "attackers";
-  setText(ui.sidePill, atk ? "ATK" : "DEF");
-  setClassName(ui.sidePill, "hud-pill side-pill " + (atk ? "atk" : "def"));
+  setText(ui.sidePill, game.outbreak ? "OB" : atk ? "ATK" : "DEF");
+  setClassName(ui.sidePill, "hud-pill side-pill " + (game.outbreak ? "outbreak" : atk ? "atk" : "def"));
 
   // Timer com urgência
   const t = Math.max(0, Math.ceil(game.phaseTime));
@@ -7131,18 +7244,20 @@ function updateUi() {
           : game.phase === "matchOver"
             ? "Partida"
             : "Fim");
-  const timerLabel = game.spike.state === "planted"
+  const timerLabel = game.outbreak
+    ? formatSurvivalTime(game.outbreakElapsed)
+    : game.spike.state === "planted"
     ? `Spike ${Math.max(0, Math.ceil(game.spike.timer))}`
     : game.sandbox || game.training ? "∞" : t.toString();
   setText(ui.timer, timerLabel);
-  setText(ui.score, `${game.playerScore} - ${game.enemyScore}`);
+  setText(ui.score, game.outbreak ? `ONDA ${game.outbreakWave}` : `${game.playerScore} - ${game.enemyScore}`);
 
   // Money com delta
   const newMoney = game.money;
   if (newMoney !== lastMoney) flashMoneyDelta(newMoney);
   setText(ui.money, `${newMoney}`);
 
-  setText(ui.agent, `${game.playerName} · ${game.selectedAgent.name} ${atk ? "ATK" : "DEF"} · ${game.sandbox ? "E livre" : game.abilityCooldown > 0 ? `${Math.ceil(game.abilityCooldown)}s` : "E"}`);
+  setText(ui.agent, `${game.playerName} · ${game.selectedAgent.name} ${game.outbreak ? "OUTBREAK" : atk ? "ATK" : "DEF"} · ${game.sandbox ? "E livre" : game.abilityCooldown > 0 ? `${Math.ceil(game.abilityCooldown)}s` : "E"}`);
   setText(ui.weapon, game.selectedWeapon.name);
   setText(ui.hp, `${Math.max(0, Math.ceil(game.player.hp))}`);
   const ultCost = getUltCost(game.player);
@@ -7157,7 +7272,7 @@ function updateUi() {
       ? (game.player.ultimate.fired ? "Foguete usado" : "Foguete pronto")
       : null;
   setText(ui.ammo, ultimateAmmo || (game.reloadTimer > 0 ? "Recarregando" : `${game.player.ammo}`));
-  setText(ui.spike, game.spike.state === "carried"
+  setText(ui.spike, game.outbreak ? `Onda ${game.outbreakWave}` : game.spike.state === "carried"
     ? game.spike.owner === "player" ? "Com você" : "Em transporte"
     : game.spike.state === "dropped"
       ? "Derrubada"
@@ -7165,6 +7280,7 @@ function updateUi() {
       ? (game.spike.defuseProgress > 0 ? `Defuse ${Math.round(game.spike.defuseProgress * 100)}%` : `${Math.ceil(game.spike.timer)}s`)
       : "Plantando");
   toggleClass(ui.spike, "planted", spikePlanted);
+  toggleClass(ui.vitalsPanel, "hidden", game.outbreak);
   setStyle(ui.hpBar, "transform", `scaleX(${Math.max(0, game.player.hp) / game.player.maxHp})`);
   setStyle(ui.ammoBar, "transform", `scaleX(${game.reloadTimer > 0 ? 1 - game.reloadTimer / currentReloadTime() : game.player.ammo / currentMagSize()})`);
   setText(ui.message?.querySelector?.("strong"), game.message);
@@ -7411,6 +7527,10 @@ function handleEscape() {
     return;
   }
   if (game.menuState === "difficulty") {
+    showModeSelect(true);
+    return;
+  }
+  if (game.menuState === "mode-select") {
     showMainMenu();
     return;
   }
@@ -7817,7 +7937,9 @@ function restartCurrentMatch() {
   game.pauseReturnState = null;
   game.paused = false;
   game.menuState = "none";
-  if (game.training) {
+  if (game.outbreak) {
+    startOutbreakMode();
+  } else if (game.training) {
     startTrainingMode();
   } else if (game.sandbox) {
     startSandboxMode();
@@ -7876,6 +7998,10 @@ function showMainMenu() {
   ui.tutorialOverlay?.classList.add("hidden");
   closeShop();
   game.tutorial = false;
+  game.outbreak = false;
+  game.playMode = "default";
+  game.outbreakWaveDelay = 0;
+  ui.gameRoot?.classList.remove("outbreak-mode");
   game.tutorialStage = "idle";
   game.phase = "idle";
   game.clockActive = false;
@@ -7884,13 +8010,92 @@ function showMainMenu() {
   game.pauseReturnState = null;
   fullReset();
   setMenu("Valorant 2D", "", [
-    { label: "JOGAR", icon: "gamepad", action: showDifficultyMenu },
+    { label: "JOGAR", icon: "gamepad", action: showModeSelect },
     { label: "OPÇÕES", icon: "tools", action: showOptionsMenu },
     { label: "ESTATÍSTICAS", icon: "stats", action: showStatisticsMenu },
     { label: "SANDBOX", icon: "money", action: startSandboxMode },
     { label: "TREINO", icon: "star", action: startTrainingMode },
     { label: "TUTORIAL", icon: "link", action: startTutorialMode },
   ], "MENU", "main");
+}
+
+const PLAY_MODE_OPTIONS = [
+  {
+    id: "default",
+    number: "01",
+    name: "Default",
+    status: "OPERAÇÃO PADRÃO",
+    description: "Combate tático por rounds, arsenal completo e objetivos de Spike.",
+  },
+  {
+    id: "blackout",
+    number: "02",
+    name: "Blackout",
+    status: "VISIBILIDADE CRÍTICA",
+    description: "Protocolos de campo restrito com linha de visão e leitura tática.",
+  },
+  {
+    id: "outbreak",
+    number: "03",
+    name: "Outbreak",
+    status: "AMEAÇA BIOLÓGICA",
+    description: "Sobreviva a ondas infinitas. Sem extração. Sem segunda chance.",
+  },
+];
+
+function showModeSelect(immediate = false) {
+  if (!immediate && game.menuState === "main") {
+    ui.menuOverlay?.classList.add("menu-carousel-out");
+    window.setTimeout(() => {
+      ui.menuOverlay?.classList.remove("menu-carousel-out");
+      showModeSelect(true);
+    }, 220);
+    return;
+  }
+  setMenu("", "", [], "", "mode-select");
+  renderModeSelect();
+}
+
+function renderModeSelect() {
+  if (!ui.menuButtons) return;
+  ui.menuButtons.className = "mode-select-shell";
+  ui.menuButtons.innerHTML = `
+    <header class="mode-select-header">
+      <span><i></i> CENTRAL DE OPERAÇÕES</span>
+      <h2>SELECIONE O PROTOCOLO</h2>
+      <p>Escolha o cenário de combate para iniciar a mobilização.</p>
+    </header>
+    <div class="mode-select-grid"></div>
+    <footer class="mode-select-footer">
+      <button type="button" class="mode-select-back">VOLTAR AO MENU</button>
+      <span>SISTEMA ONLINE <b></b></span>
+    </footer>`;
+  const grid = ui.menuButtons.querySelector(".mode-select-grid");
+  for (const option of PLAY_MODE_OPTIONS) {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = `mode-card mode-card-${option.id}`;
+    card.innerHTML = `
+      <span class="mode-card-number">${option.number}</span>
+      <span class="mode-card-radar" aria-hidden="true"><i></i><b></b></span>
+      <span class="mode-card-status">${option.status}</span>
+      <strong>${option.name}</strong>
+      <small>${option.description}</small>
+      <span class="mode-card-action">INICIAR PROTOCOLO <b>→</b></span>`;
+    card.addEventListener("click", () => selectPlayMode(option.id));
+    grid.appendChild(card);
+  }
+  ui.menuButtons.querySelector(".mode-select-back")?.addEventListener("click", showMainMenu);
+}
+
+function selectPlayMode(modeId) {
+  game.playMode = modeId;
+  if (modeId === "outbreak") {
+    startOutbreakMode();
+    return;
+  }
+  setFovMode(modeId === "blackout");
+  showDifficultyMenu(true);
 }
 
 function statisticValue(value) {
@@ -8028,7 +8233,7 @@ function renderDifficultyMenu() {
       <path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
     Voltar`;
-  backButton.addEventListener("click", showMainMenu);
+  backButton.addEventListener("click", () => showModeSelect(true));
 
   const startButton = document.createElement("button");
   startButton.type = "button";
@@ -8755,6 +8960,7 @@ function applyDifficulty(difficulty) {
 
 function startMode(label, difficulty) {
   game.mode = label;
+  game.outbreak = false;
   game.training = false;
   game.tutorial = false;
   applyDifficulty(difficulty);
@@ -8764,6 +8970,72 @@ function startMode(label, difficulty) {
     hideMenuOverlay();
     showAgentSelect(startNewMatch, "difficulty");
   }, 220);
+}
+
+function createOutbreakWave(wave) {
+  const count = Math.min(3 + Math.floor((wave - 1) * 0.75), 14);
+  const baseSpawns = [...map.defendersSpawn, ...map.attackerBotSpawns];
+  return Array.from({ length: count }, (_, index) => {
+    const base = baseSpawns[index % baseSpawns.length];
+    const ring = Math.floor(index / baseSpawns.length) + 1;
+    const angle = index * 2.19;
+    const spawn = nearestWalkablePoint({
+      x: base.x + Math.cos(angle) * ring * 34,
+      y: base.y + Math.sin(angle) * ring * 34,
+    }, base);
+    const bot = makeBot(spawn, index);
+    bot.id = `bot-outbreak-${wave}-${index}`;
+    bot.hasSpike = false;
+    bot.hp = 78 + wave * 7;
+    bot.maxHp = bot.hp;
+    bot.speed = Math.min(176, 112 + wave * 3 + index * 2);
+    return bot;
+  });
+}
+
+function deployOutbreakWave(wave) {
+  game.outbreakWave = wave;
+  game.roundNumber = wave;
+  game.bots = createOutbreakWave(wave);
+  game.bots.forEach(sanitizeEntityPosition);
+  game.bullets = [];
+  game.outbreakWaveDelay = 0;
+  showRoundBanner(`ONDA ${wave}`, `${game.bots.length} ameaças detectadas`, "OUTBREAK", 2.4);
+  setMessage(`Outbreak: onda ${wave} iniciada. Elimine todas as ameaças.`);
+}
+
+function startOutbreakMode() {
+  game.mode = "Outbreak";
+  game.playMode = "outbreak";
+  game.outbreak = true;
+  game.sandbox = false;
+  game.training = false;
+  game.tutorial = false;
+  game.godMode = false;
+  game.allyCount = 0;
+  game.enemyFireMultiplier = 1.5;
+  game.selectedAgent = agents[0];
+  setFovMode(false);
+  hideMenuOverlay();
+  startNewMatch();
+  game.outbreakWave = 1;
+  game.outbreakElapsed = 0;
+  game.outbreakLastDamageAt = -5;
+  game.outbreakWaveDelay = 0;
+  game.playerSide = "attackers";
+  game.player.armor = 50;
+  game.player.maxArmor = 50;
+  game.armor = 50;
+  game.allies = [];
+  game.medkits = [];
+  game.ultOrbs = [];
+  game.spike.state = "disabled";
+  game.spike.owner = null;
+  game.phase = "action";
+  game.phaseTime = 9999;
+  game.clockActive = false;
+  deployOutbreakWave(1);
+  ui.gameRoot?.classList.add("outbreak-mode");
 }
 
 function startSandboxMode() {
@@ -9392,6 +9664,11 @@ ui.sandboxSaveButton?.addEventListener("click", saveSandboxConfig);
 ui.sandboxLoadButton?.addEventListener("click", loadSandboxConfig);
 
 if (ui.newGameButton) ui.newGameButton.addEventListener("click", () => {
+  ui.matchOverlay?.classList.add("hidden");
+  if (game.outbreak) startOutbreakMode();
+  else showMainMenu();
+});
+ui.outbreakMenuButton?.addEventListener("click", () => {
   ui.matchOverlay?.classList.add("hidden");
   showMainMenu();
 });
