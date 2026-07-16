@@ -872,6 +872,65 @@ const weaponSpriteVisuals = {
 
 const weaponSpriteCache = new Map();
 
+// Sprites experimentais do Yoru. Cada frame possui um recorte diferente; por
+// isso o corpo é normalizado pelo ponto dos pés e a mão é calibrada por frame.
+const yoruSpriteFrames = {
+  east: {
+    idle: { file: "parado_oeste.png", crop: [12, 15, 110, 250], hand: [91, 103] },
+    walk: [
+      { file: "pe_direito_frente_leste.png", crop: [0, 13, 130, 232], hand: [101, 91] },
+      { file: "pe_esquerdo_frente_leste.png", crop: [0, 11, 136, 230], hand: [105, 91] },
+    ],
+  },
+  west: {
+    idle: { file: "parado_leste.png", crop: [0, 15, 109, 249], hand: [20, 105] },
+    walk: [
+      { file: "pe_direito_frente_oeste.png", crop: [0, 14, 132, 236], hand: [31, 92] },
+      { file: "pe_esquerdo_frente_oeste.png", crop: [0, 11, 136, 229], hand: [31, 91] },
+    ],
+  },
+  north: {
+    idle: { file: "parado_norte_costas.png", crop: [1, 11, 112, 255], hand: [56, 101] },
+    walk: [
+      { file: "pe_direito_frente_norte_costas.png", crop: [1, 12, 110, 259], hand: [55, 101] },
+      { file: "pe_esquerdo_frente_norte_costas.png", crop: [2, 5, 109, 260], hand: [54, 99] },
+    ],
+  },
+  south: {
+    idle: { file: "parado_norte_frente.png", crop: [12, 10, 111, 258], hand: [55, 111] },
+    walk: [
+      { file: "pe_direito_frente_norte_frente.png", crop: [12, 10, 109, 262], hand: [54, 111] },
+      { file: "pe_esquerdo_frente_norte_frente.png", crop: [13, 4, 107, 262], hand: [53, 109] },
+    ],
+  },
+};
+
+const yoruSpriteCache = new Map();
+
+function yoruSpritePath(file) {
+  return `./assets/Agents/${file}`;
+}
+
+function getYoruSprite(frame) {
+  const src = yoruSpritePath(frame.file);
+  const cached = yoruSpriteCache.get(src);
+  if (cached) return cached;
+  const image = new Image();
+  const entry = { image, ready: false, failed: false };
+  image.onload = () => { entry.ready = true; };
+  image.onerror = () => { entry.failed = true; };
+  image.src = src;
+  yoruSpriteCache.set(src, entry);
+  return entry;
+}
+
+function preloadYoruSprites() {
+  for (const direction of Object.values(yoruSpriteFrames)) {
+    getYoruSprite(direction.idle);
+    direction.walk.forEach(getYoruSprite);
+  }
+}
+
 function weaponImagePath(weapon) {
   return `./assets/weapon-incon/${weaponImageFiles[weapon.id] || `${weapon.name}_icon.webp`}`;
 }
@@ -901,6 +960,7 @@ function getWeaponSprite(weapon) {
 
 function preloadWeaponSprites() {
   for (const weapon of weapons) getWeaponSprite(weapon);
+  preloadYoruSprites();
 }
 
 function weaponPlaceholderImage(weapon) {
@@ -6170,7 +6230,7 @@ function weaponVisual(weapon) {
   return { length: 17, width: 5, barrel: 5, stock: 2, color: "#eef7fb" };
 }
 
-function drawHeldWeapon(entity, weapon, kind) {
+function drawHeldWeapon(entity, weapon, kind, visualScale = 1) {
   if (entity.ultimate?.type === "raze") {
     ctx.fillStyle = "rgba(0,0,0,0.46)";
     ctx.fillRect(entity.r - 2, -7, 38, 14);
@@ -6184,11 +6244,11 @@ function drawHeldWeapon(entity, weapon, kind) {
   if (sprite?.ready && !sprite.failed) {
     const config = weaponSpriteVisuals[weapon?.id] || weaponSpriteVisuals.pistol;
     const image = sprite.image;
-    const width = config.width;
+    const width = config.width * visualScale;
     const height = Math.max(8, width * (image.naturalHeight / image.naturalWidth));
     const leftFacing = Math.cos(entity.angle || 0) < 0;
-    const gripX = entity.r + config.gripX;
-    const gripY = config.gripY - height / 2;
+    const gripX = entity.r + config.gripX * visualScale;
+    const gripY = config.gripY * visualScale - height / 2;
     const drawX = -gripX - width;
     const drawY = leftFacing ? -gripY - height : gripY;
 
@@ -6207,7 +6267,7 @@ function drawHeldWeapon(entity, weapon, kind) {
     return;
   }
   const visual = weaponVisual(weapon);
-  const scale = 0.72;
+  const scale = 0.72 * visualScale;
   const length = visual.length * scale;
   const width = visual.width * scale;
   const barrel = visual.barrel * scale;
@@ -6232,6 +6292,61 @@ function drawHeldWeapon(entity, weapon, kind) {
   }
 }
 
+function yoruAimDirection(angle) {
+  const x = Math.cos(angle || 0);
+  const y = Math.sin(angle || 0);
+  if (Math.abs(x) >= Math.abs(y)) return x >= 0 ? "east" : "west";
+  return y >= 0 ? "south" : "north";
+}
+
+/**
+ * Desenha o Yoru sem girar o corpo inteiro. A direção corporal usa quatro
+ * poses, enquanto a arma conserva o ângulo contínuo da mira. Assim, a leitura
+ * do personagem permanece natural e o cano nunca perde o cursor do jogador.
+ */
+function drawYoruPlayerSprite(entity, weapon) {
+  const direction = yoruSpriteFrames[yoruAimDirection(entity.angle)];
+  const walkIndex = Math.floor(performance.now() / 155) % direction.walk.length;
+  const frame = entity.moving ? direction.walk[walkIndex] : direction.idle;
+  const sprite = getYoruSprite(frame);
+  if (!sprite.ready || sprite.failed) return false;
+
+  const [sourceX, sourceY, sourceWidth, sourceHeight] = frame.crop;
+  const targetHeight = entity.moving ? 70 : 68;
+  const scale = targetHeight / sourceHeight;
+  const targetWidth = sourceWidth * scale;
+  const feetY = entity.r + 2;
+  const drawX = -targetWidth / 2;
+  const drawY = feetY - targetHeight;
+
+  ctx.save();
+  ctx.shadowColor = "rgba(24, 56, 140, 0.46)";
+  ctx.shadowBlur = 6;
+  ctx.drawImage(
+    sprite.image,
+    sourceX,
+    sourceY,
+    sourceWidth,
+    sourceHeight,
+    drawX,
+    drawY,
+    targetWidth,
+    targetHeight,
+  );
+  ctx.restore();
+
+  // Converte a posição da mão no recorte para coordenadas locais do mundo.
+  const handX = drawX + frame.hand[0] * scale;
+  const handY = drawY + frame.hand[1] * scale;
+  ctx.save();
+  ctx.translate(handX, handY);
+  ctx.rotate(entity.angle);
+  // r=0 faz o grip da textura coincidir com a origem calibrada da mão.
+  drawHeldWeapon({ ...entity, r: 0 }, weapon, "player", 0.72);
+  ctx.restore();
+  return true;
+}
+
 function drawEntity(entity, color, label, kind = "bot") {
   if (!entity.alive) return;
   const weapon = kind === "player" ? game.selectedWeapon : entity.weapon;
@@ -6248,6 +6363,10 @@ function drawEntity(entity, color, label, kind = "bot") {
     ctx.stroke();
     ctx.shadowBlur = 0;
   }
+  const renderedYoruSprite = kind === "player"
+    && game.selectedAgent?.id === "yoru"
+    && drawYoruPlayerSprite(entity, weapon);
+  if (!renderedYoruSprite) {
   ctx.rotate(entity.angle);
   ctx.fillStyle = "rgba(0,0,0,0.22)";
   ctx.beginPath();
@@ -6290,6 +6409,7 @@ function drawEntity(entity, color, label, kind = "bot") {
   ctx.fillRect(-8, -entity.r - 2, 16, 5);
   ctx.fillStyle = "rgba(255,255,255,0.28)";
   ctx.fillRect(-entity.r * 0.45, -entity.r * 0.55, entity.r * 0.9, 3);
+  }
   ctx.restore();
 
   const maxHp = entity.maxHp || 100;
@@ -6319,15 +6439,16 @@ function drawEntity(entity, color, label, kind = "bot") {
     ctx.strokeRect(left - 2, shieldY - 2, width + 4, 16);
     ctx.restore();
   } else {
+    const statusY = renderedYoruSprite ? entity.y - 56 : entity.y - entity.r - 15;
     ctx.fillStyle = "rgba(0,0,0,0.45)";
-    ctx.fillRect(entity.x - 20, entity.y - entity.r - 15, 40, 5);
+    ctx.fillRect(entity.x - 20, statusY, 40, 5);
     ctx.fillStyle = kind === "bot" ? "#ff5b68" : entity.hp > maxHp * 0.4 ? "#66e48f" : "#ff5b5b";
-    ctx.fillRect(entity.x - 20, entity.y - entity.r - 15, Math.max(0, entity.hp / maxHp) * 40, 5);
+    ctx.fillRect(entity.x - 20, statusY, Math.max(0, entity.hp / maxHp) * 40, 5);
     if ((entity.maxArmor || 0) > 0) {
       ctx.fillStyle = "rgba(0,0,0,0.45)";
-      ctx.fillRect(entity.x - 20, entity.y - entity.r - 8, 40, 4);
+      ctx.fillRect(entity.x - 20, statusY + 7, 40, 4);
       ctx.fillStyle = "#46a8ff";
-      ctx.fillRect(entity.x - 20, entity.y - entity.r - 8, armorRatio * 40, 4);
+      ctx.fillRect(entity.x - 20, statusY + 7, armorRatio * 40, 4);
     }
   }
 
