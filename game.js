@@ -8074,28 +8074,6 @@ function setFovMode(enabled) {
   resetFogRenderState();
   localStorage.setItem(FOV_STORAGE_KEY, game.fovMode ? "on" : "off");
   setMessage(game.fovMode ? "Modo Blackout ativado." : "Modo Blackout desativado.");
-  // Atualiza o visual do switch onde quer que ele esteja renderizado
-  document.querySelectorAll(".fov-mode-switch button").forEach((button) => {
-    const active = button.dataset.fovMode === (game.fovMode ? "fog" : "normal");
-    button.classList.toggle("active", active);
-  });
-}
-
-function renderBlackoutSwitch(container) {
-  container.querySelector(".fov-mode-switch")?.remove();
-  const switcher = document.createElement("div");
-  switcher.className = "fov-mode-switch";
-  switcher.innerHTML = `
-    <span>🌑 MODO BLACKOUT</span>
-    <button type="button" data-fov-mode="normal">OFF</button>
-    <button type="button" data-fov-mode="fog">ON</button>
-  `;
-  switcher.querySelectorAll("button").forEach((button) => {
-    const active = button.dataset.fovMode === (game.fovMode ? "fog" : "normal");
-    button.classList.toggle("active", active);
-    button.addEventListener("click", () => setFovMode(button.dataset.fovMode === "fog"));
-  });
-  container.prepend(switcher);
 }
 
 function showMainMenu() {
@@ -8348,7 +8326,6 @@ function renderDifficultyMenu() {
   attachButtonFeedback(backButton);
   attachButtonFeedback(startButton);
   footer.append(backButton, startButton);
-  renderBlackoutSwitch(footer);
   ui.menuButtons.append(header, cards, footer);
 }
 
