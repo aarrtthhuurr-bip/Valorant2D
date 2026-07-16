@@ -12,12 +12,24 @@ if (!/^postgres(?:ql)?:\/\//i.test(databaseUrl)) {
 
 const parsedDatabaseUrl = new URL(databaseUrl);
 
+// O pg interpreta opções SSL presentes na connection string depois de ler a
+// configuração do Pool. Removê-las evita que `sslmode=verify-full` ou
+// parâmetros equivalentes reativem a validação do certificado do Supabase.
+[
+  'ssl',
+  'sslmode',
+  'sslcert',
+  'sslkey',
+  'sslrootcert',
+].forEach((parameter) => parsedDatabaseUrl.searchParams.delete(parameter));
+const postgresConnectionString = parsedDatabaseUrl.toString();
+
 /**
  * Pool compartilhado pela aplicação. A configuração SSL é compatível com
  * certificados autoassinados utilizados por provedores PostgreSQL gerenciados.
  */
 const pool = new Pool({
-  connectionString: databaseUrl,
+  connectionString: postgresConnectionString,
   ssl: {
     rejectUnauthorized: false,
   },
