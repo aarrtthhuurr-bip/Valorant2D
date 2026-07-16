@@ -4,11 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta http-equiv="Cache-Control" content="no-store">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self'; connect-src 'self' https://valorant2d.onrender.com; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
   <!-- Altere apenas este valor caso o endereço definitivo do Render mude. -->
   <meta name="valorant2d-api-url" content="https://valorant2d.onrender.com">
   <title>Valorant2D</title>
   <link rel="stylesheet" href="./styles.css?v=20260716-difficulty-cleanup">
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/lucide@1.24.0" integrity="sha384-mooE85Luwgx+AyykX7e90VcN8/QCFTSIwPuHLmvcsLVoA0en7lKYb9XlOzn5G2co" crossorigin="anonymous"></script>
   <link rel="shortcut icon" href="./assets/Favicon/favicon.ico" type="image/x-icon">
 </head>
 <body>
@@ -386,7 +387,6 @@
     </div>
   </main>
 
-  <script src="./game.js?v=20260716-outbreak-consumables"></script>
-  <script>window.lucide?.createIcons();</script>
+  <script src="./game.js?v=20260716-security-hardening"></script>
 </body>
 </html>

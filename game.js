@@ -190,6 +190,7 @@ void wakeRenderServer();
 let currentProfile = null;
 let authMode = "login";
 let recoveryQuestionLoaded = false;
+let passwordRecoveryToken = "";
 
 function readStoredSession() {
   try {
@@ -381,6 +382,7 @@ function showPasswordRecovery(show) {
   ui.guestButton?.classList.toggle("hidden", show);
   document.querySelector(".auth-guest-note")?.classList.toggle("hidden", show);
   recoveryQuestionLoaded = false;
+  passwordRecoveryToken = "";
   ui.recoveryChallenge?.classList.add("hidden");
   if (ui.recoverySubmitButton) ui.recoverySubmitButton.textContent = "Ver pergunta";
   setRecoveryFeedback("");
@@ -406,6 +408,7 @@ async function submitPasswordRecovery() {
         body: JSON.stringify({ username }),
       });
       if (ui.recoveryQuestion) ui.recoveryQuestion.textContent = payload.securityQuestion;
+      passwordRecoveryToken = payload.recoveryToken || "";
       ui.recoveryChallenge?.classList.remove("hidden");
       if (ui.recoverySubmitButton) ui.recoverySubmitButton.textContent = "Redefinir senha";
       recoveryQuestionLoaded = true;
@@ -426,7 +429,7 @@ async function submitPasswordRecovery() {
   try {
     const payload = await requestApi("/api/reset-password", {
       method: "POST",
-      body: JSON.stringify({ username, securityAnswer, newPassword }),
+      body: JSON.stringify({ recoveryToken: passwordRecoveryToken, securityAnswer, newPassword }),
     });
     showPasswordRecovery(false);
     if (ui.authUsername) ui.authUsername.value = username;
@@ -1758,6 +1761,7 @@ const game = {
   shopTransactionLocked: false,
   damageIndicator: null,
   scoreboardVisible: false,
+  matchSubmissionToken: "",
   roundBannerTimer: 0,
   training: false,
   tutorial: false,
@@ -2333,6 +2337,7 @@ function startNewMatch() {
   game.playerUltPoints = 0;
   game.roundNumber = 1;
   game.statisticsRecorded = false;
+  game.matchSubmissionToken = "";
   game.startingSide = game.outbreak ? "attackers" : Math.random() < 0.5 ? "attackers" : "defenders";
   game.playerSide = game.startingSide;
   map = game.training ? TRAINING_MAP : game.outbreak ? generateOutbreakMap() : MAPS[Math.floor(Math.random() * MAPS.length)];
@@ -2348,6 +2353,23 @@ function startNewMatch() {
   setMessage(game.playerSide === "attackers"
     ? `Mapa ${game.mapName} (${map.vibe}). Seu time: Ataque. Plante a spike.`
     : `Mapa ${game.mapName} (${map.vibe}). Seu time: Defesa. Impeca o plant ou desarme.`);
+  void beginTrackedMatch();
+}
+
+async function beginTrackedMatch() {
+  if (currentProfile?.isGuest || game.sandbox || game.training || game.tutorial) return;
+  const session = readStoredSession();
+  if (!session?.token) return;
+  try {
+    const payload = await requestApi("/api/statistics/match/start", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.token}` },
+      body: JSON.stringify({ mode: game.playMode || "default" }),
+    });
+    game.matchSubmissionToken = payload.matchToken || "";
+  } catch (error) {
+    console.warn("Não foi possível iniciar a validação da partida:", error.message);
+  }
 }
 
 function showMatchResult() {
@@ -2435,6 +2457,10 @@ async function recordCompletedMatch() {
     if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = "Sessão indisponível; desempenho salvo apenas nesta partida.";
     return;
   }
+  if (!game.matchSubmissionToken) {
+    if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = "Partida sem comprovante de integridade; estatísticas não enviadas.";
+    return;
+  }
   game.statisticsRecorded = true;
   const score = Math.max(0, Math.round((game.stats?.kills || 0) * 100 + game.playerScore * 500));
   try {
@@ -2445,6 +2471,7 @@ async function recordCompletedMatch() {
         victory: game.playerScore > game.enemyScore,
         kills: Math.max(0, Math.round(game.stats?.kills || 0)),
         score,
+        matchToken: game.matchSubmissionToken,
       }),
     });
     optionsStatisticsState = { status: "ready", data: payload.statistics, message: "Atualizado agora" };

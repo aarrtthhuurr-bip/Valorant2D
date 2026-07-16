@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const database = require('../config/database');
 
 const SESSION_DURATION_DAYS = 30;
+const MAX_ACTIVE_SESSIONS = 5;
 
 /**
  * Gera o hash persistido no banco. O token original nunca é armazenado.
@@ -21,6 +22,15 @@ class Session {
       Date.now() + SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000,
     ).toISOString();
 
+    await database.run('DELETE FROM sessions WHERE data_expiracao <= CURRENT_TIMESTAMP');
+    await database.run(
+      `DELETE FROM sessions
+       WHERE user_id = $1 AND id NOT IN (
+         SELECT id FROM sessions WHERE user_id = $1
+         ORDER BY ultimo_acesso DESC LIMIT $2
+       )`,
+      [userId, MAX_ACTIVE_SESSIONS - 1],
+    );
     await database.run(
       `INSERT INTO sessions (user_id, token_hash, data_expiracao)
        VALUES ($1, $2, $3)`,
@@ -52,7 +62,8 @@ class Session {
     if (!session) return undefined;
 
     await database.run(
-      'UPDATE sessions SET ultimo_acesso = CURRENT_TIMESTAMP WHERE id = $1',
+      `UPDATE sessions SET ultimo_acesso = CURRENT_TIMESTAMP
+       WHERE id = $1 AND ultimo_acesso < CURRENT_TIMESTAMP - INTERVAL '5 minutes'`,
       [session.session_id],
     );
 

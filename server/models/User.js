@@ -39,6 +39,29 @@ class User {
   static updatePassword(id, senhaHash) {
     return database.run('UPDATE users SET senha_hash = $1 WHERE id = $2', [senhaHash, id]);
   }
+
+  static registerFailedLogin(id) {
+    return database.run(
+      `UPDATE users
+       SET tentativas_login = tentativas_login + 1,
+           bloqueado_ate = CASE
+             WHEN tentativas_login + 1 >= 8 THEN CURRENT_TIMESTAMP + INTERVAL '60 minutes'
+             WHEN tentativas_login + 1 >= 5 THEN CURRENT_TIMESTAMP + INTERVAL '15 minutes'
+             ELSE bloqueado_ate
+           END
+       WHERE id = $1`,
+      [id],
+    );
+  }
+
+  static clearFailedLogins(id) {
+    return database.run(
+      `UPDATE users
+       SET tentativas_login = 0, bloqueado_ate = NULL, ultimo_login = CURRENT_TIMESTAMP
+       WHERE id = $1`,
+      [id],
+    );
+  }
 }
 
 module.exports = User;

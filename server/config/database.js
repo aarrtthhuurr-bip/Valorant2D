@@ -23,6 +23,12 @@ const parsedDatabaseUrl = new URL(databaseUrl);
   'sslrootcert',
 ].forEach((parameter) => parsedDatabaseUrl.searchParams.delete(parameter));
 const postgresConnectionString = parsedDatabaseUrl.toString();
+const sslCa = process.env.PG_SSL_CA_BASE64
+  ? Buffer.from(process.env.PG_SSL_CA_BASE64, 'base64').toString('utf8')
+  : undefined;
+// Mantém compatibilidade com o pooler atual do Supabase. Ative a validação no
+// Render assim que PG_SSL_CA_BASE64 contiver a CA fornecida pelo projeto.
+const rejectUnauthorized = process.env.PG_SSL_REJECT_UNAUTHORIZED === 'true';
 
 /**
  * Pool compartilhado pela aplicação. A configuração SSL é compatível com
@@ -31,7 +37,8 @@ const postgresConnectionString = parsedDatabaseUrl.toString();
 const pool = new Pool({
   connectionString: postgresConnectionString,
   ssl: {
-    rejectUnauthorized: false,
+    rejectUnauthorized,
+    ...(sslCa ? { ca: sslCa } : {}),
   },
   max: Number(process.env.PG_POOL_MAX) || 10,
   idleTimeoutMillis: 30000,
@@ -42,6 +49,10 @@ const pool = new Pool({
 pool.on('error', (error) => {
   console.error('[PostgreSQL] Erro inesperado em conexão ociosa:', error.message);
 });
+
+if (!rejectUnauthorized) {
+  console.warn('[PostgreSQL] AVISO: validação do certificado SSL desativada por configuração explícita.');
+}
 
 async function query(sql, params = []) {
   return pool.query(sql, params);
@@ -98,6 +109,9 @@ async function initializeDatabase() {
       'ADD COLUMN IF NOT EXISTS mostrar_dicas BOOLEAN NOT NULL DEFAULT TRUE',
       'ADD COLUMN IF NOT EXISTS volume_geral INTEGER NOT NULL DEFAULT 40',
       "ADD COLUMN IF NOT EXISTS preferencias_json JSONB NOT NULL DEFAULT '{}'::jsonb",
+      'ADD COLUMN IF NOT EXISTS tentativas_login INTEGER NOT NULL DEFAULT 0',
+      'ADD COLUMN IF NOT EXISTS bloqueado_ate TIMESTAMPTZ',
+      'ADD COLUMN IF NOT EXISTS ultimo_login TIMESTAMPTZ',
     ];
     for (const migration of userMigrations) {
       await client.query(`ALTER TABLE users ${migration}`);
@@ -128,11 +142,35 @@ async function initializeDatabase() {
         ultimo_acesso TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS password_reset_challenges (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token_hash TEXT NOT NULL UNIQUE,
+        tentativas INTEGER NOT NULL DEFAULT 0,
+        data_expiracao TIMESTAMPTZ NOT NULL,
+        utilizado_em TIMESTAMPTZ,
+        data_criacao TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS match_submissions (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token_hash TEXT NOT NULL UNIQUE,
+        modo VARCHAR(24) NOT NULL,
+        iniciado_em TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        data_expiracao TIMESTAMPTZ NOT NULL,
+        utilizado_em TIMESTAMPTZ
+      )
+    `);
 
     await client.query('CREATE INDEX IF NOT EXISTS idx_leaderboard_waves ON leaderboard (waves_sobrevivendo DESC, data_recorde ASC)');
     await client.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower ON users (LOWER(username))');
     await client.query('CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions (user_id)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_sessions_expiration ON sessions (data_expiracao)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_password_reset_expiration ON password_reset_challenges (data_expiracao)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_match_submissions_user ON match_submissions (user_id, iniciado_em DESC)');
     await client.query('COMMIT');
 
     console.log(`[PostgreSQL] Conectado a ${parsedDatabaseUrl.hostname}.`);

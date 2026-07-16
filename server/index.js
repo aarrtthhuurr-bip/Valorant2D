@@ -7,9 +7,18 @@ const authRoutes = require('./routes/authRoutes');
 const healthRoutes = require('./routes/healthRoutes');
 const statisticsRoutes = require('./routes/statisticsRoutes');
 const preferencesRoutes = require('./routes/preferencesRoutes');
+const {
+  globalLimiter,
+  requestId,
+  requireJson,
+  securityHeaders,
+} = require('./middleware/security');
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
+const trustProxy = Number(process.env.TRUST_PROXY_HOPS ?? (process.env.NODE_ENV === 'production' ? 1 : 0));
+
+if (Number.isInteger(trustProxy) && trustProxy > 0) app.set('trust proxy', trustProxy);
 
 // Aceita o GitHub Pages oficial e origens adicionais separadas por vírgula.
 const defaultOrigins = [
@@ -24,8 +33,8 @@ const configuredOrigins = (process.env.CORS_ORIGINS || '')
 const allowedOrigins = new Set([...defaultOrigins, ...configuredOrigins]);
 
 app.disable('x-powered-by');
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+app.use(requestId);
+app.use(securityHeaders());
 app.use(cors({
   origin(origin, callback) {
     // Requisições sem Origin incluem health checks e clientes não navegadores.
@@ -38,7 +47,16 @@ app.use(cors({
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
+  maxAge: 86400,
 }));
+app.use('/api', (_request, response, next) => {
+  response.setHeader('Cache-Control', 'no-store, max-age=0');
+  response.setHeader('Pragma', 'no-cache');
+  next();
+});
+app.use('/api', globalLimiter);
+app.use(express.json({ limit: '32kb', strict: true }));
+app.use(requireJson);
 
 app.use('/', healthRoutes);
 app.use('/api', authRoutes);
@@ -57,9 +75,20 @@ app.use((error, request, response, next) => {
   }
 
   const isCorsError = error.message === 'Origem não permitida pela política de CORS.';
-  if (!isCorsError) console.error('Erro não tratado:', error);
-  response.status(isCorsError ? 403 : 500).json({
-    erro: isCorsError ? error.message : 'Erro interno do servidor.',
+  const isBodyTooLarge = error.type === 'entity.too.large';
+  const isInvalidJson = error instanceof SyntaxError && error.status === 400 && 'body' in error;
+  if (!isCorsError && !isBodyTooLarge && !isInvalidJson) {
+    console.error(`[${request.id || 'sem-request-id'}] Erro não tratado:`, error);
+  }
+  const status = isCorsError ? 403 : isBodyTooLarge ? 413 : isInvalidJson ? 400 : 500;
+  response.status(status).json({
+    erro: isCorsError
+      ? error.message
+      : isBodyTooLarge
+        ? 'Corpo da requisição excede o limite permitido.'
+        : isInvalidJson
+          ? 'JSON inválido.'
+          : 'Erro interno do servidor.',
   });
 });
 

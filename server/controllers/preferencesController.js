@@ -30,7 +30,7 @@ function sanitizePreferences(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
   const preferences = {};
   for (const [key, value] of Object.entries(input)) {
-    if (ALLOWED_KEYS.has(key)) preferences[key] = value;
+    if (ALLOWED_KEYS.has(key) && isSafeJsonValue(value)) preferences[key] = value;
   }
 
   if (typeof preferences.showTips !== 'boolean') return null;
@@ -41,6 +41,21 @@ function sanitizePreferences(input) {
   const serialized = JSON.stringify(preferences);
   if (serialized.length > 20000) return null;
   return preferences;
+}
+
+function isSafeJsonValue(value, depth = 0) {
+  if (depth > 4) return false;
+  if (value === null || typeof value === 'boolean') return true;
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (typeof value === 'string') return value.length <= 500;
+  if (Array.isArray(value)) return value.length <= 100 && value.every((item) => isSafeJsonValue(item, depth + 1));
+  if (typeof value !== 'object') return false;
+  const entries = Object.entries(value);
+  return entries.length <= 100 && entries.every(([key, nested]) => (
+    !['__proto__', 'prototype', 'constructor'].includes(key)
+    && key.length <= 80
+    && isSafeJsonValue(nested, depth + 1)
+  ));
 }
 
 async function getPreferences(request, response, next) {

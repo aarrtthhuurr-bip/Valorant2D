@@ -125,6 +125,18 @@ Não é necessário instalar ferramentas extras, Node.js ou ligar servidores loc
 * Sistema de prioridade de dano no escudo
 * Animação de fadiga e eliminação do agente
 
+## Segurança do Back-End
+
+O servidor utiliza queries parametrizadas, hash `scrypt`, tokens aleatórios
+armazenados somente como hash, Helmet, CORS por lista de origens e rate limits
+específicos para autenticação. Recuperações de senha e submissões de partida
+usam desafios temporários de uso único.
+
+No Render, configure `TRUST_PROXY_HOPS=1`. O pooler atual do Supabase exige
+temporariamente `PG_SSL_REJECT_UNAUTHORIZED=false`. Para eliminar essa exceção,
+adicione a CA fornecida pelo projeto em `PG_SSL_CA_BASE64` e altere
+`PG_SSL_REJECT_UNAUTHORIZED=true`. Nunca desative o próprio TLS.
+
 ## 7 CONTROLES
 
 - `WASD`: movimentação
