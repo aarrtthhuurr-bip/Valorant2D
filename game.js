@@ -1461,6 +1461,68 @@ const MAPS = [
   ]),
 ];
 
+/**
+ * Gera a arena exclusiva do Outbreak.
+ *
+ * A área central fica deliberadamente livre para que o jogador nunca nasça
+ * preso. As coberturas são distribuídas em dois anéis laterais, com pequenas
+ * variações a cada partida, preservando corredores largos entre elas.
+ */
+function generateOutbreakMap() {
+  const width = 1280;
+  const height = 720;
+  const jitter = (amount) => (Math.random() - 0.5) * amount;
+  const coverSlots = [
+    { x: 150, y: 135, w: 150, h: 34 }, { x: 480, y: 105, w: 105, h: 34 },
+    { x: 695, y: 105, w: 105, h: 34 }, { x: 980, y: 135, w: 150, h: 34 },
+    { x: 105, y: 300, w: 42, h: 120 }, { x: 1133, y: 300, w: 42, h: 120 },
+    { x: 180, y: 540, w: 150, h: 34 }, { x: 470, y: 580, w: 110, h: 34 },
+    { x: 700, y: 580, w: 110, h: 34 }, { x: 950, y: 540, w: 150, h: 34 },
+  ];
+  const walls = [
+    { x: 0, y: 0, w: width, h: 28 }, { x: 0, y: height - 28, w: width, h: 28 },
+    { x: 0, y: 0, w: 28, h: height }, { x: width - 28, y: 0, w: 28, h: height },
+    ...coverSlots.map((slot) => ({
+      ...slot,
+      x: Math.round(slot.x + jitter(24)),
+      y: Math.round(slot.y + jitter(18)),
+    })),
+  ];
+  const destructibles = [
+    { x: 245 + jitter(20), y: 300 + jitter(24), w: 54, h: 54, hp: 90, maxHp: 90 },
+    { x: 981 + jitter(20), y: 300 + jitter(24), w: 54, h: 54, hp: 90, maxHp: 90 },
+    { x: 365 + jitter(20), y: 465 + jitter(18), w: 58, h: 58, hp: 90, maxHp: 90 },
+    { x: 857 + jitter(20), y: 465 + jitter(18), w: 58, h: 58, hp: 90, maxHp: 90 },
+  ];
+  const spawnPoints = [
+    { x: 82, y: 82 }, { x: width / 2, y: 72 }, { x: width - 82, y: 82 },
+    { x: 82, y: height - 82 }, { x: width / 2, y: height - 72 }, { x: width - 82, y: height - 82 },
+  ];
+
+  return {
+    name: "Zona de Contenção",
+    vibe: "Sobrevivência procedural",
+    width,
+    height,
+    theme: {
+      ...DEFAULT_MAP.theme,
+      floor: "#151719",
+      grid: "rgba(255, 70, 85, 0.045)",
+      wall: "#30343a",
+      wallStroke: "#555b63",
+    },
+    // Outbreak não possui objetivos de Spike.
+    sites: [],
+    walls,
+    destructibles,
+    botRoutes: spawnPoints.map((spawn) => [spawn, { x: width / 2, y: height / 2 }]),
+    attackersSpawn: { x: width / 2, y: height / 2 },
+    playerDefenderSpawn: { x: width / 2, y: height / 2 },
+    defendersSpawn: spawnPoints.slice(0, 3),
+    attackerBotSpawns: spawnPoints.slice(3),
+  };
+}
+
 MAPS.splice(0, MAPS.length,
   makeMap("Splitline", "Padrao", {}, [], null, [
     { x: 585, y: 340, w: 46, h: 46, hp: 70 },
@@ -2003,10 +2065,31 @@ function randomAccessiblePickupPoint(occupied = []) {
   return nearestWalkablePoint({ x: map.width / 2, y: map.height / 2 }, map.attackersSpawn);
 }
 
+/** Cria exatamente dois kits em solo acessível e afastados entre si. */
+function spawnOutbreakMedkits() {
+  const occupied = [];
+  const center = { x: map.width / 2, y: map.height / 2 };
+  for (let index = 0; index < 2; index++) {
+    let point = null;
+    for (let attempt = 0; attempt < 100 && !point; attempt++) {
+      const candidate = randomAccessiblePickupPoint(occupied);
+      const fromCenter = Math.hypot(candidate.x - center.x, candidate.y - center.y);
+      if (fromCenter >= 150 && fromCenter <= 560) point = candidate;
+    }
+    point ||= nearestWalkablePoint({ x: center.x + (index ? 330 : -330), y: center.y + 120 }, center);
+    occupied.push(point);
+  }
+  game.medkits = occupied.map((point, index) => ({
+    ...point,
+    id: `outbreak-medkit-${game.outbreakWave}-${index}`,
+    phase: index * Math.PI,
+  }));
+}
+
 function resetRound() {
   game.roundNumber += game.phase === "ended" ? 1 : 0;
-  map.botRoutes = randomizedBotRoutes(map);
-  game.botPlanSiteIndex = Math.floor(Math.random() * map.sites.length);
+  if (!game.outbreak) map.botRoutes = randomizedBotRoutes(map);
+  game.botPlanSiteIndex = game.outbreak ? 0 : Math.floor(Math.random() * map.sites.length);
   const sideFlipped = Math.floor((game.roundNumber - 1) / 3) % 2 === 1;
   const nextSide = sideFlipped ? opposingSide(game.startingSide) : game.startingSide;
   const changedSide = game.playerSide !== nextSide;
@@ -2196,8 +2279,8 @@ function startNewMatch() {
   game.statisticsRecorded = false;
   game.startingSide = game.outbreak ? "attackers" : Math.random() < 0.5 ? "attackers" : "defenders";
   game.playerSide = game.startingSide;
-  map = game.training ? TRAINING_MAP : MAPS[Math.floor(Math.random() * MAPS.length)];
-  map.botRoutes = randomizedBotRoutes(map);
+  map = game.training ? TRAINING_MAP : game.outbreak ? generateOutbreakMap() : MAPS[Math.floor(Math.random() * MAPS.length)];
+  if (!game.outbreak) map.botRoutes = randomizedBotRoutes(map);
   game.map = map;
   game.mapName = map.name;
   resetRound();
@@ -3988,10 +4071,11 @@ function collectPickups(entity, dt) {
    if (!entity?.alive) return;
    const medkit = game.medkits.find((item) => Math.hypot(entity.x - item.x, entity.y - item.y) < entity.r + 22);
    if (medkit && entity.hp < entity.maxHp) {
-     entity.hp = Math.min(entity.maxHp, entity.hp + MEDKIT_HEAL);
+     const heal = game.outbreak ? Math.round(entity.maxHp * 0.5) : MEDKIT_HEAL;
+     entity.hp = Math.min(entity.maxHp, entity.hp + heal);
      game.medkits = game.medkits.filter((item) => item !== medkit);
      spawnParticles(medkit.x, medkit.y, "#62e6a0", 30, 190);
-     setMessage(`${entity.id === "player" ? "Med-Kit coletado" : "Bot coletou Med-Kit"}: +${MEDKIT_HEAL} HP.`);
+     setMessage(`${entity.id === "player" ? "Med-Kit coletado" : "Bot coletou Med-Kit"}: +${heal} HP.`);
    }
    const orb = game.ultOrbs.find((item) => Math.hypot(entity.x - item.x, entity.y - item.y) < entity.r + 21);
    if (orb && entity.id !== "player" && entity.orbAssignment !== orb.id) {
@@ -4005,8 +4089,9 @@ function updatePickups(dt) {
    updateOrbReservations();
    collectPickups(game.player, dt);
    game.allies.forEach((ally) => collectPickups(ally, dt));
-   game.bots.forEach((bot) => collectPickups(bot, dt));
- }
+   // No Outbreak os dois recursos de cura pertencem exclusivamente ao jogador.
+   if (!game.outbreak) game.bots.forEach((bot) => collectPickups(bot, dt));
+}
 
 function plantOrDefuse(dt) {
   if (game.training) return;
@@ -4490,7 +4575,7 @@ function closestVisibleEnemy(bot) {
 
 function botShootAt(bot, target, dt, team, firePenalty = 1, options = {}) {
   const weapon = bot.weapon || weapons[0];
-  const scatter = options.scatter || 0;
+  const scatter = Math.max(options.scatter || 0, bot.outbreakScatter || 0);
   const aimX = target.x + (Math.random() - 0.5) * scatter;
   const aimY = target.y + (Math.random() - 0.5) * scatter;
   const angle = Math.atan2(aimY - bot.y, aimX - bot.x);
@@ -4511,7 +4596,7 @@ function botShootAt(bot, target, dt, team, firePenalty = 1, options = {}) {
       });
     }
     const multiplier = team === "bot" ? game.enemyFireMultiplier : 1;
-    bot.fireTimer = (weapon.fireRate + 0.18 + Math.random() * 0.22) * multiplier * firePenalty;
+    bot.fireTimer = (weapon.fireRate + 0.18 + Math.random() * 0.22) * multiplier * firePenalty * (bot.outbreakFirePenalty || 1);
     bot.strafe *= -1;
   }
 }
@@ -4931,6 +5016,22 @@ function updateAllies(dt) {
 
 function updateBots(dt) {
   const p = game.player;
+  if (game.outbreak) {
+    for (const bot of game.bots) {
+      if (!bot.alive) continue;
+      const target = botCanSeePlayer(bot) ? p : null;
+      updateBotAwareness(bot, target, dt);
+      const fighting = botFightPlayer(bot, dt, {
+        state: "hunt",
+        preferCover: bot.hp < bot.maxHp * 0.35,
+        firePenalty: 1,
+      });
+      const distance = Math.hypot(p.x - bot.x, p.y - bot.y);
+      if (distance > 150) moveBotToward(bot, p, dt, fighting ? 0.58 : 1);
+      keepBotSpacing(bot, dt);
+    }
+    return;
+  }
   const carrier = ensureBotSpikeCarrier();
   const botDefuser = game.playerSide === "attackers" && game.spike.state === "planted"
     ? closestAliveBotTo(game.spike.x, game.spike.y)
@@ -8022,24 +8123,21 @@ function showMainMenu() {
 const PLAY_MODE_OPTIONS = [
   {
     id: "default",
-    number: "01",
     name: "Default",
-    status: "OPERAÇÃO PADRÃO",
-    description: "Combate tático por rounds, arsenal completo e objetivos de Spike.",
+    icon: "D",
+    description: "Combate tático e objetivo de Spike.",
   },
   {
     id: "blackout",
-    number: "02",
     name: "Blackout",
-    status: "VISIBILIDADE CRÍTICA",
-    description: "Protocolos de campo restrito com linha de visão e leitura tática.",
+    icon: "B",
+    description: "Visão restrita e leitura de campo.",
   },
   {
     id: "outbreak",
-    number: "03",
     name: "Outbreak",
-    status: "AMEAÇA BIOLÓGICA",
-    description: "Sobreviva a ondas infinitas. Sem extração. Sem segunda chance.",
+    icon: "O",
+    description: "Sobrevivência em ondas infinitas.",
   },
 ];
 
@@ -8061,14 +8159,12 @@ function renderModeSelect() {
   ui.menuButtons.className = "mode-select-shell";
   ui.menuButtons.innerHTML = `
     <header class="mode-select-header">
-      <span><i></i> CENTRAL DE OPERAÇÕES</span>
+      <span><i></i> MODOS DE JOGO</span>
       <h2>SELECIONE O PROTOCOLO</h2>
-      <p>Escolha o cenário de combate para iniciar a mobilização.</p>
     </header>
     <div class="mode-select-grid"></div>
     <footer class="mode-select-footer">
       <button type="button" class="mode-select-back">VOLTAR AO MENU</button>
-      <span>SISTEMA ONLINE <b></b></span>
     </footer>`;
   const grid = ui.menuButtons.querySelector(".mode-select-grid");
   for (const option of PLAY_MODE_OPTIONS) {
@@ -8076,12 +8172,9 @@ function renderModeSelect() {
     card.type = "button";
     card.className = `mode-card mode-card-${option.id}`;
     card.innerHTML = `
-      <span class="mode-card-number">${option.number}</span>
-      <span class="mode-card-radar" aria-hidden="true"><i></i><b></b></span>
-      <span class="mode-card-status">${option.status}</span>
+      <span class="mode-card-icon" aria-hidden="true">${option.icon}</span>
       <strong>${option.name}</strong>
-      <small>${option.description}</small>
-      <span class="mode-card-action">INICIAR PROTOCOLO <b>→</b></span>`;
+      <small>${option.description}</small>`;
     card.addEventListener("click", () => selectPlayMode(option.id));
     grid.appendChild(card);
   }
@@ -8973,7 +9066,14 @@ function startMode(label, difficulty) {
 }
 
 function createOutbreakWave(wave) {
-  const count = Math.min(3 + Math.floor((wave - 1) * 0.75), 14);
+  // As dez primeiras ondas funcionam como uma introdução gradual.
+  const count = wave <= 3
+    ? 3
+    : wave <= 6
+      ? 4
+      : wave <= 10
+        ? 5
+        : Math.min(6 + Math.floor((wave - 11) * 0.7), 14);
   const baseSpawns = [...map.defendersSpawn, ...map.attackerBotSpawns];
   return Array.from({ length: count }, (_, index) => {
     const base = baseSpawns[index % baseSpawns.length];
@@ -8986,9 +9086,14 @@ function createOutbreakWave(wave) {
     const bot = makeBot(spawn, index);
     bot.id = `bot-outbreak-${wave}-${index}`;
     bot.hasSpike = false;
-    bot.hp = 78 + wave * 7;
+    bot.hp = wave <= 10 ? 60 + wave * 4 : 110 + (wave - 10) * 8;
     bot.maxHp = bot.hp;
-    bot.speed = Math.min(176, 112 + wave * 3 + index * 2);
+    bot.speed = wave <= 10
+      ? Math.min(104, 78 + wave * 2 + index)
+      : Math.min(184, 112 + (wave - 11) * 4 + index * 2);
+    if (wave <= 10) bot.weapon = weapons[0];
+    bot.outbreakScatter = wave <= 10 ? Math.max(18, 58 - wave * 4) : Math.max(0, 16 - (wave - 11));
+    bot.outbreakFirePenalty = wave <= 10 ? Math.max(1.25, 2.25 - wave * 0.08) : 1;
     return bot;
   });
 }
@@ -8999,6 +9104,7 @@ function deployOutbreakWave(wave) {
   game.bots = createOutbreakWave(wave);
   game.bots.forEach(sanitizeEntityPosition);
   game.bullets = [];
+  spawnOutbreakMedkits();
   game.outbreakWaveDelay = 0;
   showRoundBanner(`ONDA ${wave}`, `${game.bots.length} ameaças detectadas`, "OUTBREAK", 2.4);
   setMessage(`Outbreak: onda ${wave} iniciada. Elimine todas as ameaças.`);
