@@ -2516,6 +2516,11 @@ function solidWalls() {
   return [...map.walls, ...game.destructibles];
 }
 
+function collidesSolidWall(entity) {
+  return map.walls.some((wall) => circleRectCollides(entity, wall))
+    || game.destructibles.some((wall) => circleRectCollides(entity, wall));
+}
+
 function rectContains(rect, x, y) {
   return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
 }
@@ -2533,17 +2538,16 @@ function circleRectCollides(entity, rect) {
 }
 
 function moveEntity(entity, dx, dy, walls) {
-  const colliders = walls === map.walls ? solidWalls() : walls;
+  const staticColliders = walls || [];
+  const includeDestructibles = walls === map.walls;
+  const collidesWithScenario = () => staticColliders.some((wall) => circleRectCollides(entity, wall))
+    || (includeDestructibles && game.destructibles.some((wall) => circleRectCollides(entity, wall)));
   const startX = entity.x;
   const startY = entity.y;
   entity.x += dx;
-  for (const wall of colliders) {
-    if (circleRectCollides(entity, wall)) entity.x -= dx;
-  }
+  if (collidesWithScenario()) entity.x -= dx;
   entity.y += dy;
-  for (const wall of colliders) {
-    if (circleRectCollides(entity, wall)) entity.y -= dy;
-  }
+  if (collidesWithScenario()) entity.y -= dy;
   entity.x = Math.max(entity.r, Math.min(map.width - entity.r, entity.x));
   entity.y = Math.max(entity.r, Math.min(map.height - entity.r, entity.y));
   return Math.hypot(entity.x - startX, entity.y - startY);
@@ -4296,7 +4300,7 @@ function isGridCellWalkable(cell) {
   const point = gridPoint(cell);
   const probe = { x: point.x, y: point.y, r: 14 };
   if (point.x < 24 || point.x > map.width - 24 || point.y < 24 || point.y > map.height - 24) return false;
-  return !solidWalls().some((wall) => circleRectCollides(probe, wall));
+  return !collidesSolidWall(probe);
 }
 
 function nearestWalkableCell(cell) {
@@ -4321,7 +4325,7 @@ function nearestWalkablePoint(point, fallback = point) {
 }
 
 function isEntityBlocked(entity) {
-  return solidWalls().some((wall) => circleRectCollides(entity, wall))
+  return collidesSolidWall(entity)
     || entity.x < entity.r
     || entity.x > map.width - entity.r
     || entity.y < entity.r
@@ -4388,7 +4392,7 @@ function botPathBlocked(bot, target) {
       y: bot.y + (target.y - bot.y) * t,
       r: bot.r * 0.75,
     };
-    if (solidWalls().some((wall) => circleRectCollides(probe, wall))) return true;
+    if (collidesSolidWall(probe)) return true;
   }
   return false;
 }
@@ -4435,6 +4439,36 @@ function resolveBotTarget(bot, target) {
   return target;
 }
 
+const BOT_NAVIGATION_INTERVAL = 140;
+const DISTANT_BOT_NAVIGATION_INTERVAL = 320;
+
+function isOutsideViewport(entity, margin = 80) {
+  return entity.x + margin < 0
+    || entity.y + margin < 0
+    || entity.x - margin > canvas.width
+    || entity.y - margin > canvas.height;
+}
+
+/**
+ * Mantém o deslocamento suave em todos os frames, mas reutiliza a decisão de
+ * navegação. O pequeno deslocamento por índice evita que todos os bots façam
+ * pathfinding no mesmo milissegundo.
+ */
+function cachedBotNavigationTarget(bot, target) {
+  const now = performance.now();
+  const distanceFromPlayer = game.player ? Math.hypot(bot.x - game.player.x, bot.y - game.player.y) : 0;
+  const distant = distanceFromPlayer > 720 || isOutsideViewport(bot);
+  const interval = distant ? DISTANT_BOT_NAVIGATION_INTERVAL : BOT_NAVIGATION_INTERVAL;
+  const targetMoved = !bot.cachedNavDestination
+    || Math.hypot(target.x - bot.cachedNavDestination.x, target.y - bot.cachedNavDestination.y) > 96;
+  if (!bot.cachedNavTarget || targetMoved || now >= (bot.nextNavigationUpdate || 0)) {
+    bot.cachedNavTarget = resolveBotTarget(bot, target);
+    bot.cachedNavDestination = { x: target.x, y: target.y };
+    bot.nextNavigationUpdate = now + interval + (bot.patrol % 5) * 11;
+  }
+  return bot.cachedNavTarget;
+}
+
 function rescueBotFromStuck(bot, target, dt) {
   const step = findGridStep(bot, target);
   if (!step) return false;
@@ -4446,7 +4480,7 @@ function rescueBotFromStuck(bot, target, dt) {
   }
   if (bot.stuck > 1.15) {
     const probe = { x: step.x, y: step.y, r: bot.r };
-    if (!solidWalls().some((wall) => circleRectCollides(probe, wall))) {
+    if (!collidesSolidWall(probe)) {
       bot.x = step.x;
       bot.y = step.y;
       bot.stuck = 0;
@@ -4528,7 +4562,7 @@ function poisonAvoidanceTarget(entity, target) {
 function moveBotToward(bot, target, dt, speedScale = 1) {
   const poisonSafeTarget = poisonAvoidanceTarget(bot, target);
   if (attackBlockingDestructible(bot, poisonSafeTarget, dt)) return 0;
-  const safeTarget = resolveBotTarget(bot, poisonSafeTarget);
+  const safeTarget = cachedBotNavigationTarget(bot, poisonSafeTarget);
   const angle = Math.atan2(safeTarget.y - bot.y, safeTarget.x - bot.x);
   bot.angle = angle;
   const ultimateSpeed = bot.ultimate?.type === "neon" ? 1.22 : 1;
@@ -4575,6 +4609,19 @@ function closestVisibleEnemy(bot) {
   return game.bots
     .filter((enemy) => canSeeTarget(bot, enemy, 560))
     .sort((a, b) => Math.hypot(a.x - bot.x, a.y - bot.y) - Math.hypot(b.x - bot.x, b.y - bot.y))[0] || null;
+}
+
+function cachedBotPerception(bot, key, resolver) {
+  const now = performance.now();
+  const cacheKey = `cachedSense_${key}`;
+  const updateKey = `nextSense_${key}`;
+  const distance = game.player ? Math.hypot(bot.x - game.player.x, bot.y - game.player.y) : 0;
+  const interval = distance > 720 || isOutsideViewport(bot) ? 340 : 130;
+  if (!(updateKey in bot) || now >= bot[updateKey]) {
+    bot[cacheKey] = resolver();
+    bot[updateKey] = now + interval + (bot.patrol % 6) * 9;
+  }
+  return bot[cacheKey] || null;
 }
 
 function botShootAt(bot, target, dt, team, firePenalty = 1, options = {}) {
@@ -4667,7 +4714,7 @@ function findCoverPoint(bot, threat) {
 }
 
 function botFightPlayer(bot, dt, options = {}) {
-  const target = closestVisibleSquadTarget(bot);
+  const target = cachedBotPerception(bot, "squad", () => closestVisibleSquadTarget(bot));
   const memTarget = !target && bot.lastKnownPlayer && bot.memoryTimer > 0 ? bot.lastKnownPlayer : null;
   const smokeTarget = !target && !memTarget ? botSmokeProbeTarget(bot, game.player) : null;
   const shootTarget = target || memTarget || smokeTarget;
@@ -4836,10 +4883,58 @@ function defenderHoldPoint(bot) {
   return nearestWalkablePoint(points[bot.patrol % points.length], bot);
 }
 
-function keepBotSpacing(bot, dt) {
+const ENTITY_SPATIAL_CELL = 96;
+
+function spatialCellKey(x, y) {
+  return `${Math.floor(x / ENTITY_SPATIAL_CELL)},${Math.floor(y / ENTITY_SPATIAL_CELL)}`;
+}
+
+function buildEntitySpatialIndex(entities) {
+  const index = new Map();
+  for (const entity of entities) {
+    if (!entity?.alive) continue;
+    const key = spatialCellKey(entity.x, entity.y);
+    if (!index.has(key)) index.set(key, []);
+    index.get(key).push(entity);
+  }
+  return index;
+}
+
+function nearbyEntities(index, entity, radius = ENTITY_SPATIAL_CELL) {
+  if (!index) return [];
+  const cellRadius = Math.max(1, Math.ceil(radius / ENTITY_SPATIAL_CELL));
+  const centerX = Math.floor(entity.x / ENTITY_SPATIAL_CELL);
+  const centerY = Math.floor(entity.y / ENTITY_SPATIAL_CELL);
+  const result = [];
+  for (let y = centerY - cellRadius; y <= centerY + cellRadius; y++) {
+    for (let x = centerX - cellRadius; x <= centerX + cellRadius; x++) {
+      const bucket = index.get(`${x},${y}`);
+      if (bucket) result.push(...bucket);
+    }
+  }
+  return result;
+}
+
+function entitiesAlongSegment(index, x1, y1, x2, y2, padding = 28) {
+  const minCellX = Math.floor((Math.min(x1, x2) - padding) / ENTITY_SPATIAL_CELL);
+  const maxCellX = Math.floor((Math.max(x1, x2) + padding) / ENTITY_SPATIAL_CELL);
+  const minCellY = Math.floor((Math.min(y1, y2) - padding) / ENTITY_SPATIAL_CELL);
+  const maxCellY = Math.floor((Math.max(y1, y2) + padding) / ENTITY_SPATIAL_CELL);
+  const result = [];
+  for (let y = minCellY; y <= maxCellY; y++) {
+    for (let x = minCellX; x <= maxCellX; x++) {
+      const bucket = index.get(`${x},${y}`);
+      if (bucket) result.push(...bucket);
+    }
+  }
+  return result;
+}
+
+function keepBotSpacing(bot, dt, spatialIndex = game.botSpatialIndex) {
   let pushX = 0;
   let pushY = 0;
-  for (const other of game.bots) {
+  const neighbors = spatialIndex ? nearbyEntities(spatialIndex, bot, 72) : game.bots;
+  for (const other of neighbors) {
     if (other === bot || !other.alive) continue;
     const dx = bot.x - other.x;
     const dy = bot.y - other.y;
@@ -4856,10 +4951,11 @@ function keepBotSpacing(bot, dt) {
   }
 }
 
-function keepSquadSpacing(entity, squad, dt) {
+function keepSquadSpacing(entity, squad, dt, spatialIndex = game.allySpatialIndex) {
   let pushX = 0;
   let pushY = 0;
-  for (const other of squad) {
+  const neighbors = spatialIndex ? nearbyEntities(spatialIndex, entity, 64) : squad;
+  for (const other of neighbors) {
     if (other === entity || !other.alive) continue;
     const dx = entity.x - other.x;
     const dy = entity.y - other.y;
@@ -4955,6 +5051,7 @@ function maybeUseBotUltimate(bot, visibleTarget) {
 
 function updateAllies(dt) {
   const squad = [game.player, ...game.allies];
+  game.allySpatialIndex = buildEntitySpatialIndex(squad);
   const playerNearSpike = game.player?.alive && Math.hypot(game.player.x - game.spike.x, game.player.y - game.spike.y) < 46;
   const playerActivelyDefusing = game.spike.defuserId === "player" || (playerNearSpike && keyHeld("interact"));
   const allyDefuser = game.playerSide === "defenders" && game.spike.state === "planted" && !playerActivelyDefusing
@@ -4962,7 +5059,7 @@ function updateAllies(dt) {
     : null;
   game.allies.forEach((ally, index) => {
     if (!ally.alive) return;
-    const enemy = closestVisibleEnemy(ally);
+    const enemy = cachedBotPerception(ally, "enemy", () => closestVisibleEnemy(ally));
     if (game.sandbox && ally.sandboxControl) {
       if (ally.sandboxCanShoot !== false && enemy) botShootAt(ally, enemy, dt, "ally");
       if (ally.sandboxCanMove !== false && ally.sandboxBehavior === "patrol") {
@@ -5020,10 +5117,11 @@ function updateAllies(dt) {
 
 function updateBots(dt) {
   const p = game.player;
+  game.botSpatialIndex = buildEntitySpatialIndex(game.bots);
   if (game.outbreak) {
     for (const bot of game.bots) {
       if (!bot.alive) continue;
-      const target = botCanSeePlayer(bot) ? p : null;
+      const target = cachedBotPerception(bot, "player", () => botCanSeePlayer(bot) ? p : null);
       updateBotAwareness(bot, target, dt);
       const fighting = botFightPlayer(bot, dt, {
         state: "hunt",
@@ -5053,7 +5151,7 @@ function updateBots(dt) {
       continue;
     }
     if (game.sandbox && bot.sandboxControl) {
-      const visibleTarget = closestVisibleSquadTarget(bot);
+      const visibleTarget = cachedBotPerception(bot, "squad", () => closestVisibleSquadTarget(bot));
       updateBotAwareness(bot, visibleTarget, dt);
       if (bot.sandboxCanShoot !== false && (visibleTarget || bot.memoryTimer > 0 || botSmokeProbeTarget(bot, game.player))) {
         botFightPlayer(bot, dt, { strafe: bot.sandboxCanMove !== false, state: "sandbox", firePenalty: 0.9 });
@@ -5067,8 +5165,8 @@ function updateBots(dt) {
       keepBotSpacing(bot, dt);
       continue;
     }
-    const seesPlayer = botCanSeePlayer(bot);
-    const visibleTarget = closestVisibleSquadTarget(bot);
+    const seesPlayer = Boolean(cachedBotPerception(bot, "player", () => botCanSeePlayer(bot) ? p : null));
+    const visibleTarget = cachedBotPerception(bot, "squad", () => closestVisibleSquadTarget(bot));
     updateBotAwareness(bot, visibleTarget, dt);
 
     // Hierarquia absoluta: sobreviver > objetivo da Spike > recursos opcionais.
@@ -5278,6 +5376,8 @@ function updateTrainingArena(dt) {
 }
 
 function updateBullets(dt) {
+  const needsBotHitIndex = game.bullets.some((bullet) => bullet.team === "player" || bullet.team === "ally");
+  const botHitIndex = needsBotHitIndex ? buildEntitySpatialIndex(game.bots) : null;
   for (const bullet of game.bullets) {
     const oldX = bullet.x;
     const oldY = bullet.y;
@@ -5316,7 +5416,8 @@ function updateBullets(dt) {
     }
 
     if (bullet.team === "player" || bullet.team === "ally") {
-      for (const bot of game.bots) {
+      const potentialTargets = entitiesAlongSegment(botHitIndex, oldX, oldY, bullet.x, bullet.y);
+      for (const bot of potentialTargets) {
         if (bullet.hitIds?.includes(bot.id)) continue;
         const region = bot.alive ? hitRegion(oldX, oldY, bullet.x, bullet.y, bot, 6) : null;
         if (region) {
@@ -7169,6 +7270,7 @@ function draw() {
   ctx.globalAlpha = 1;
 
   for (const bot of game.bots) {
+    if (isOutsideViewport(bot, bot.r + 24)) continue;
     if (!isBotVisible(bot)) continue;
     const visible = game.revealTimer > 0 || hasLineOfSight(game.player, bot);
     const label = `${bot.side === "attackers" ? "ATK" : "DEF"} ${bot.weapon?.name || "Pistol"}`;
@@ -7177,6 +7279,7 @@ function draw() {
   }
   for (const ally of game.allies) {
     if (!ally.alive) continue;
+    if (isOutsideViewport(ally, ally.r + 24)) continue;
     const inFov = estaNoCampoDeVisao(ally, ally.r || 0);
     if (inFov) {
       // Aliado visível normalmente dentro do FOV
