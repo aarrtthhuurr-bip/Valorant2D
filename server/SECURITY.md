@@ -12,6 +12,8 @@
 - Headers Helmet, CORS por allowlist, limite de 32 KB e respostas sensíveis sem cache.
 - Submissões de estatísticas exigem comprovante temporário de partida e passam por
   verificações de duração, reutilização, abates e pontuação plausível.
+- Pontuações da leaderboard usam o nome da sessão autenticada, consomem o mesmo
+  comprovante descartável e são gravadas junto das estatísticas em uma transação.
 - Logs de auditoria não incluem senha, resposta de segurança ou token.
 
 ## Configuração obrigatória no Render

@@ -5,6 +5,7 @@ const express = require('express');
 const { initializeDatabase } = require('./config/database');
 const authRoutes = require('./routes/authRoutes');
 const healthRoutes = require('./routes/healthRoutes');
+const leaderboardRoutes = require('./routes/leaderboardRoutes');
 const statisticsRoutes = require('./routes/statisticsRoutes');
 const preferencesRoutes = require('./routes/preferencesRoutes');
 const {
@@ -61,6 +62,7 @@ app.use(requireJson);
 app.use('/', healthRoutes);
 app.use('/api', authRoutes);
 app.use('/api/statistics', statisticsRoutes);
+app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/preferences', preferencesRoutes);
 
 app.use((request, response) => {

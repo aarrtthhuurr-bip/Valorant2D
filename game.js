@@ -2425,7 +2425,9 @@ function showOutbreakGameOver(reason = "Sinal vital perdido") {
   if (ui.matchKills) ui.matchKills.textContent = String(Math.max(0, game.stats?.kills || 0));
   if (ui.matchSecondaryLabel) ui.matchSecondaryLabel.textContent = "SOBREVIVÊNCIA";
   if (ui.matchScore) ui.matchScore.textContent = formatSurvivalTime(game.outbreakElapsed);
-  if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = "Dados da incursão preparados para sincronização futura.";
+  if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = currentProfile?.isGuest
+    ? "Partida local: entre com uma conta para salvar sua pontuação global."
+    : "Sincronizando pontuação global...";
   ui.matchConfetti?.replaceChildren();
   if (ui.newGameButton) {
     ui.newGameButton.style.display = "";
@@ -2433,6 +2435,7 @@ function showOutbreakGameOver(reason = "Sinal vital perdido") {
   }
   ui.outbreakMenuButton?.classList.remove("hidden");
   playSound("round_lose");
+  recordCompletedMatch();
 }
 
 function renderMatchConfetti(won) {
@@ -2465,21 +2468,28 @@ async function recordCompletedMatch() {
     return;
   }
   game.statisticsRecorded = true;
-  const score = Math.max(0, Math.round((game.stats?.kills || 0) * 100 + game.playerScore * 500));
+  const gameMode = game.outbreak ? "outbreak" : game.playMode === "blackout" ? "blackout" : "default";
+  const kills = Math.max(0, Math.round(game.stats?.kills || 0));
+  const wave = game.outbreak ? Math.max(1, Math.round(game.outbreakWave || 1)) : 0;
+  const survivalSeconds = game.outbreak ? Math.max(0, Math.floor(game.outbreakElapsed || 0)) : 0;
+  const score = game.outbreak
+    ? wave * 1000 + kills * 100 + survivalSeconds
+    : Math.max(0, Math.round(kills * 100 + game.playerScore * 500));
   try {
-    const payload = await requestApi("/api/statistics/match", {
+    const payload = await requestApi("/api/leaderboard/save", {
       method: "POST",
       headers: { Authorization: `Bearer ${session.token}` },
       body: JSON.stringify({
         victory: game.playerScore > game.enemyScore,
-        kills: Math.max(0, Math.round(game.stats?.kills || 0)),
+        kills,
         score,
+        game_mode: gameMode,
+        wave,
+        survival_seconds: survivalSeconds,
         matchToken: game.matchSubmissionToken,
       }),
     });
-    optionsStatisticsState = { status: "ready", data: payload.statistics, message: "Atualizado agora" };
-    window.dispatchEvent(new CustomEvent("valorant2d:statistics-updated", { detail: payload.statistics }));
-    if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = "Desempenho salvo na nuvem.";
+    if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = "Pontuação salva na leaderboard global.";
   } catch (error) {
     // A partida permanece jogável mesmo se a sincronização estiver indisponível.
     console.warn("Não foi possível sincronizar as estatísticas:", error.message);
@@ -8380,51 +8390,75 @@ function selectPlayMode(modeId) {
   showDifficultyMenu(true);
 }
 
-function statisticValue(value) {
-  return Math.max(0, Number(value) || 0).toLocaleString("pt-BR");
-}
+const LEADERBOARD_MODES = [
+  { id: "default", label: "PADRÃO" },
+  { id: "blackout", label: "BLACKOUT" },
+  { id: "outbreak", label: "OUTBREAK" },
+];
+let activeLeaderboardMode = "default";
 
-function renderStatisticsPanel(statistics, message = "") {
+function renderLeaderboardPanel(entries = [], message = "") {
   if (!ui.menuButtons) return;
-  const games = Math.max(0, Number(statistics?.partidas_jogadas) || 0);
-  const wins = Math.max(0, Number(statistics?.vitorias) || 0);
-  const winRate = games ? Math.round((wins / games) * 100) : 0;
-  ui.menuButtons.className = "statistics-shell";
+  ui.menuButtons.className = "leaderboard-shell";
   ui.menuButtons.innerHTML = `
-    <div class="statistics-grid">
-      <article><span>Partidas</span><strong>${statisticValue(games)}</strong></article>
-      <article><span>Vitórias</span><strong>${statisticValue(wins)}</strong></article>
-      <article><span>Taxa de vitória</span><strong>${winRate}%</strong></article>
-      <article><span>Abates totais</span><strong>${statisticValue(statistics?.abates_totais)}</strong></article>
-      <article class="statistics-highlight"><span>Pontuação máxima</span><strong>${statisticValue(statistics?.pontuacao_maxima)}</strong></article>
+    <nav class="leaderboard-tabs" aria-label="Filtrar ranking por modo"></nav>
+    <section class="leaderboard-board" aria-live="polite">
+      <header><span>POSIÇÃO</span><span>JOGADOR</span><span>PONTUAÇÃO</span></header>
+      <div class="leaderboard-rows"></div>
+      <p class="leaderboard-empty hidden"></p>
+    </section>
+    <div class="leaderboard-actions">
+      <button type="button" class="leaderboard-refresh">ATUALIZAR</button>
+      <button type="button" class="statistics-back">VOLTAR</button>
     </div>
-    ${message ? `<p class="statistics-message">${message}</p>` : ""}
-    <button type="button" class="statistics-back">Voltar</button>
   `;
+  const tabs = ui.menuButtons.querySelector(".leaderboard-tabs");
+  for (const mode of LEADERBOARD_MODES) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = mode.id === activeLeaderboardMode ? "is-active" : "";
+    button.textContent = mode.label;
+    button.addEventListener("click", () => loadLeaderboardMode(mode.id));
+    attachButtonFeedback(button);
+    tabs.appendChild(button);
+  }
+  const rows = ui.menuButtons.querySelector(".leaderboard-rows");
+  entries.forEach((entry, index) => {
+    const row = document.createElement("article");
+    if (index < 3) row.classList.add(`is-podium-${index + 1}`);
+    const position = document.createElement("strong");
+    position.textContent = `${index + 1}º`;
+    const playerName = document.createElement("span");
+    playerName.textContent = entry.player_name || "Jogador";
+    const score = document.createElement("b");
+    score.textContent = Math.max(0, Number(entry.score) || 0).toLocaleString("pt-BR");
+    row.append(position, playerName, score);
+    rows.appendChild(row);
+  });
+  const empty = ui.menuButtons.querySelector(".leaderboard-empty");
+  if (message || entries.length === 0) {
+    empty.classList.remove("hidden");
+    empty.textContent = message || "Ainda não há pontuações registradas neste modo.";
+  }
+  ui.menuButtons.querySelector(".leaderboard-refresh")?.addEventListener("click", () => loadLeaderboardMode(activeLeaderboardMode));
   ui.menuButtons.querySelector(".statistics-back")?.addEventListener("click", showMainMenu);
 }
 
 async function showStatisticsMenu() {
-  setMenu("Estatísticas", "", [], "PERFIL", "statistics");
-  if (currentProfile?.isGuest) {
-    renderStatisticsPanel({}, "Entre com uma conta para sincronizar suas estatísticas globais.");
-    return;
-  }
-  const session = readStoredSession();
-  if (!session?.token) {
-    renderStatisticsPanel({}, "Sessão indisponível. Entre novamente.");
-    return;
-  }
-  ui.menuButtons.className = "statistics-shell";
-  ui.menuButtons.innerHTML = '<div class="statistics-loading"><span class="auth-loader"></span><strong>Carregando estatísticas</strong></div>';
+  setMenu("Leaderboard", "", [], "RANKING GLOBAL", "statistics");
+  await loadLeaderboardMode(activeLeaderboardMode);
+}
+
+async function loadLeaderboardMode(mode) {
+  if (!LEADERBOARD_MODES.some((item) => item.id === mode)) return;
+  activeLeaderboardMode = mode;
+  ui.menuButtons.className = "leaderboard-shell";
+  ui.menuButtons.innerHTML = '<div class="statistics-loading"><span class="auth-loader"></span><strong>Atualizando ranking global</strong></div>';
   try {
-    const payload = await requestApi("/api/statistics", {
-      method: "GET",
-      headers: { Authorization: `Bearer ${session.token}` },
-    });
-    renderStatisticsPanel(payload.statistics);
+    const payload = await requestApi(`/api/leaderboard/${encodeURIComponent(mode)}`, { method: "GET" });
+    if (game.menuState === "statistics") renderLeaderboardPanel(payload.leaderboard || []);
   } catch (error) {
-    renderStatisticsPanel({}, error.message);
+    if (game.menuState === "statistics") renderLeaderboardPanel([], error.message);
   }
 }
 
@@ -8566,7 +8600,6 @@ const OPTIONS_TABS = [
   { id: "crosshair", label: "MIRA" },
   { id: "audio", label: "ÁUDIO" },
   { id: "video", label: "VÍDEO" },
-  { id: "statistics", label: "ESTATÍSTICAS" },
   { id: "developer", label: "DESENVOLVEDOR", adminOnly: true },
 ];
 
@@ -8636,7 +8669,6 @@ let pendingKeyBind = null;
 let optionsFeedback = "";
 let optionsFeedbackTimer = null;
 let optionsFeedbackId = 0;
-let optionsStatisticsState = { status: "idle", data: null, message: "" };
 let preferencesSaveTimer = null;
 let preferencesRevision = 0;
 let preferencesSyncedRevision = 0;
@@ -9052,30 +9084,6 @@ function renderVideoOptions() {
   ];
 }
 
-function renderOptionsStatistics() {
-  const section = optionSection("DESEMPENHO DO AGENTE", []);
-  section.classList.add("options-statistics-section");
-  const body = section.querySelector(".options-section-body");
-  if (optionsStatisticsState.status === "loading") {
-    body.innerHTML = '<div class="statistics-loading"><span class="auth-loader"></span><strong>Sincronizando dados</strong></div>';
-    return [section];
-  }
-  const stats = optionsStatisticsState.data || {};
-  const games = Math.max(0, Number(stats.partidas_jogadas) || 0);
-  const wins = Math.max(0, Number(stats.vitorias) || 0);
-  body.innerHTML = `
-    <div class="statistics-grid options-statistics-grid">
-      <article><span>Partidas</span><strong>${statisticValue(games)}</strong></article>
-      <article><span>Vitórias</span><strong>${statisticValue(wins)}</strong></article>
-      <article><span>Taxa de vitória</span><strong>${games ? Math.round((wins / games) * 100) : 0}%</strong></article>
-      <article><span>Abates totais</span><strong>${statisticValue(stats.abates_totais)}</strong></article>
-      <article class="statistics-highlight"><span>Pontuação máxima</span><strong>${statisticValue(stats.pontuacao_maxima)}</strong></article>
-    </div>
-    ${optionsStatisticsState.message ? `<p class="statistics-message">${optionsStatisticsState.message}</p>` : ""}
-  `;
-  return [section];
-}
-
 function adminToolGuard() {
   if (!isAdminProfile()) return "Acesso restrito à conta Admin.";
   if (!game.outbreak || !game.player?.alive) return "Inicie uma partida Outbreak para usar esta ferramenta.";
@@ -9196,40 +9204,11 @@ function renderDeveloperOptions() {
   return [section];
 }
 
-async function loadOptionsStatistics() {
-  if (currentProfile?.isGuest) {
-    optionsStatisticsState = { status: "ready", data: {}, message: "Entre com uma conta para sincronizar seu desempenho." };
-    renderOptionsMenu(true);
-    return;
-  }
-  const session = readStoredSession();
-  if (!session?.token) {
-    optionsStatisticsState = { status: "error", data: {}, message: "Sessão indisponível. Entre novamente." };
-    renderOptionsMenu(true);
-    return;
-  }
-  optionsStatisticsState = { status: "loading", data: null, message: "" };
-  renderOptionsMenu(true);
-  try {
-    const payload = await requestApi("/api/statistics", { method: "GET", headers: { Authorization: `Bearer ${session.token}` } });
-    optionsStatisticsState = { status: "ready", data: payload.statistics, message: "" };
-  } catch (error) {
-    optionsStatisticsState = { status: "error", data: {}, message: error.message };
-  }
-  if (game.menuState === "options" && activeOptionsTab === "statistics") renderOptionsMenu(true);
-}
-
-window.addEventListener("valorant2d:statistics-updated", (event) => {
-  optionsStatisticsState = { status: "ready", data: event.detail || {}, message: "Atualizado agora" };
-  if (game.menuState === "options" && activeOptionsTab === "statistics") renderOptionsMenu(true);
-});
-
 function renderOptionsContent() {
   if (activeOptionsTab === "controls") return renderControlOptions();
   if (activeOptionsTab === "crosshair") return renderCrosshairOptions();
   if (activeOptionsTab === "audio") return renderAudioOptions();
   if (activeOptionsTab === "video") return renderVideoOptions();
-  if (activeOptionsTab === "statistics") return renderOptionsStatistics();
   if (activeOptionsTab === "developer") return renderDeveloperOptions();
   return renderGeneralOptions();
 }
@@ -9305,7 +9284,6 @@ function renderOptionsMenu(skipFade = false) {
         activeOptionsTab = tab.id;
         pendingKeyBind = null;
         renderOptionsMenu(true);
-        if (tab.id === "statistics") void loadOptionsStatistics();
       }, 150);
     });
     attachButtonFeedback(button);
@@ -9315,9 +9293,6 @@ function renderOptionsMenu(skipFade = false) {
   renderOptionsContent().forEach((section) => content.appendChild(section));
   const footer = createOptionElement("footer", "options-footer");
   const footerItems = activeOptionsTab === "developer" ? [
-    { label: "VOLTAR", action: backFromOptions },
-  ] : activeOptionsTab === "statistics" ? [
-    { label: "ATUALIZAR", action: loadOptionsStatistics, primary: true },
     { label: "VOLTAR", action: backFromOptions },
   ] : [
     { label: "REPOR PADRÕES", action: resetOptionsSettings },
@@ -9342,7 +9317,6 @@ function openOptionsMenu(returnState) {
   game.optionsReturnState = returnState;
   setMenu("OPÇÕES", "", [], "", "options");
   renderOptionsMenu(true);
-  if (activeOptionsTab === "statistics") void loadOptionsStatistics();
 }
 
 function showOptionsMenu() {

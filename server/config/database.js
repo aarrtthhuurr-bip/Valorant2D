@@ -121,9 +121,63 @@ async function initializeDatabase() {
       CREATE TABLE IF NOT EXISTS leaderboard (
         id SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        waves_sobrevivendo INTEGER NOT NULL DEFAULT 0 CHECK (waves_sobrevivendo >= 0),
-        data_recorde TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        player_name VARCHAR(24) NOT NULL,
+        score INTEGER NOT NULL CHECK (score >= 0),
+        game_mode VARCHAR(24) NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
+    `);
+    // Migração não destrutiva da leaderboard antiga, baseada apenas em waves.
+    await client.query('ALTER TABLE leaderboard ADD COLUMN IF NOT EXISTS player_name VARCHAR(24)');
+    await client.query('ALTER TABLE leaderboard ADD COLUMN IF NOT EXISTS score INTEGER');
+    await client.query('ALTER TABLE leaderboard ADD COLUMN IF NOT EXISTS game_mode VARCHAR(24)');
+    await client.query('ALTER TABLE leaderboard ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ');
+    await client.query(`
+      UPDATE leaderboard AS ranking
+      SET player_name = COALESCE(ranking.player_name, users.username)
+      FROM users
+      WHERE ranking.user_id = users.id AND ranking.player_name IS NULL
+    `);
+    await client.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'leaderboard'
+            AND column_name = 'waves_sobrevivendo'
+        ) THEN
+          EXECUTE 'UPDATE leaderboard SET score = COALESCE(score, waves_sobrevivendo * 1000) WHERE score IS NULL';
+        END IF;
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'leaderboard'
+            AND column_name = 'data_recorde'
+        ) THEN
+          EXECUTE 'UPDATE leaderboard SET created_at = COALESCE(created_at, data_recorde) WHERE created_at IS NULL';
+        END IF;
+      END $$
+    `);
+    await client.query("UPDATE leaderboard SET player_name = 'Jogador' WHERE player_name IS NULL");
+    await client.query('UPDATE leaderboard SET score = 0 WHERE score IS NULL');
+    await client.query("UPDATE leaderboard SET game_mode = 'outbreak' WHERE game_mode IS NULL");
+    await client.query('UPDATE leaderboard SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL');
+    await client.query('ALTER TABLE leaderboard ALTER COLUMN player_name SET NOT NULL');
+    await client.query('ALTER TABLE leaderboard ALTER COLUMN score SET NOT NULL');
+    await client.query('ALTER TABLE leaderboard ALTER COLUMN game_mode SET NOT NULL');
+    await client.query('ALTER TABLE leaderboard ALTER COLUMN created_at SET NOT NULL');
+    await client.query('ALTER TABLE leaderboard ALTER COLUMN created_at SET DEFAULT CURRENT_TIMESTAMP');
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'leaderboard_score_nonnegative') THEN
+          ALTER TABLE leaderboard
+          ADD CONSTRAINT leaderboard_score_nonnegative CHECK (score >= 0);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'leaderboard_game_mode_valid') THEN
+          ALTER TABLE leaderboard
+          ADD CONSTRAINT leaderboard_game_mode_valid CHECK (game_mode IN ('default', 'blackout', 'outbreak'));
+        END IF;
+      END $$
     `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS settings (
@@ -165,7 +219,9 @@ async function initializeDatabase() {
       )
     `);
 
-    await client.query('CREATE INDEX IF NOT EXISTS idx_leaderboard_waves ON leaderboard (waves_sobrevivendo DESC, data_recorde ASC)');
+    await client.query('DROP INDEX IF EXISTS idx_leaderboard_waves');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_leaderboard_mode_score ON leaderboard (game_mode, score DESC, created_at ASC)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_leaderboard_user_mode ON leaderboard (user_id, game_mode, score DESC)');
     await client.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower ON users (LOWER(username))');
     await client.query('CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions (user_id)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_sessions_expiration ON sessions (data_expiracao)');

@@ -14,6 +14,7 @@ const Session = require('../models/Session');
 const User = require('../models/User');
 const MatchSubmission = require('../models/MatchSubmission');
 const Statistic = require('../models/Statistic');
+const Leaderboard = require('../models/Leaderboard');
 
 test('health check aplica headers de segurança e identificador', async () => {
   const response = await request(app).get('/').expect(200);
@@ -206,5 +207,76 @@ test('estatísticas exigem comprovante plausível e de uso único', async () => 
     MatchSubmission.findValid = originals.match;
     MatchSubmission.consume = originals.consume;
     Statistic.recordMatch = originals.record;
+  }
+});
+
+test('leaderboard lista modo válido e rejeita filtros desconhecidos', async () => {
+  const originalList = Leaderboard.listByMode;
+  Leaderboard.listByMode = async (mode, limit) => [{
+    id: 1,
+    player_name: 'usuario_teste',
+    score: 2500,
+    game_mode: mode,
+    created_at: new Date().toISOString(),
+    limit,
+  }];
+  try {
+    const response = await request(app).get('/api/leaderboard/default').expect(200);
+    assert.equal(response.body.gameMode, 'default');
+    assert.equal(response.body.leaderboard.length, 1);
+    assert.equal(response.body.leaderboard[0].player_name, 'usuario_teste');
+
+    const invalid = await request(app).get('/api/leaderboard/modo-inexistente').expect(400);
+    assert.equal(invalid.body.code, 'INVALID_GAME_MODE');
+  } finally {
+    Leaderboard.listByMode = originalList;
+  }
+});
+
+test('leaderboard salva pontuação autenticada com comprovante e nome da sessão', async () => {
+  const originals = {
+    session: Session.findValid,
+    match: MatchSubmission.findValid,
+    record: Leaderboard.recordCompletedMatch,
+  };
+  let recordedPayload;
+  Session.findValid = async () => ({ id: 3, username: 'usuario_teste' });
+  MatchSubmission.findValid = async () => ({ id: 17, duracao_segundos: 90, modo: 'default' });
+  Leaderboard.recordCompletedMatch = async (payload) => {
+    recordedPayload = payload;
+    return {
+      entry: { id: 8, player_name: payload.playerName, score: payload.score, game_mode: payload.gameMode },
+      statistics: { partidas_jogadas: 1, vitorias: 1, abates_totais: 8, pontuacao_maxima: 1800 },
+    };
+  };
+  try {
+    const accepted = await request(app)
+      .post('/api/leaderboard/save')
+      .set('Authorization', `Bearer ${'a'.repeat(64)}`)
+      .set('Content-Type', 'application/json')
+      .send({
+        player_name: 'nome_falsificado',
+        matchToken: 'b'.repeat(64),
+        game_mode: 'default',
+        victory: true,
+        kills: 8,
+        score: 1800,
+      })
+      .expect(201);
+    assert.equal(recordedPayload.playerName, 'usuario_teste');
+    assert.equal(accepted.body.entry.player_name, 'usuario_teste');
+
+    MatchSubmission.findValid = async () => ({ id: 18, duracao_segundos: 90, modo: 'blackout' });
+    const mismatchedMode = await request(app)
+      .post('/api/leaderboard/save')
+      .set('Authorization', `Bearer ${'a'.repeat(64)}`)
+      .set('Content-Type', 'application/json')
+      .send({ matchToken: 'c'.repeat(64), game_mode: 'default', victory: true, kills: 8, score: 1800 })
+      .expect(400);
+    assert.equal(mismatchedMode.body.code, 'INVALID_LEADERBOARD_SCORE');
+  } finally {
+    Session.findValid = originals.session;
+    MatchSubmission.findValid = originals.match;
+    Leaderboard.recordCompletedMatch = originals.record;
   }
 });
