@@ -912,49 +912,23 @@ function yoruSpritePath(file) {
 }
 
 /**
- * Remove somente o fundo conectado às bordas. O interior escuro contido pelo
- * aro permanece, preservando o efeito de esfera sem exibir o retângulo RGB.
+ * Recorta o mosaico RGB com uma máscara elíptica. Esta abordagem não lê os
+ * pixels do arquivo e, portanto, também funciona quando index.html é aberto
+ * diretamente por file://, onde getImageData seria bloqueado pelo navegador.
  */
 function prepareYoruBallSprite(image, frame) {
   const [sourceX, sourceY, width, height] = frame.crop;
   const surface = document.createElement("canvas");
   surface.width = width;
   surface.height = height;
-  const surfaceContext = surface.getContext("2d", { willReadFrequently: true });
+  const surfaceContext = surface.getContext("2d");
   surfaceContext.drawImage(image, sourceX, sourceY, width, height, 0, 0, width, height);
-  const imageData = surfaceContext.getImageData(0, 0, width, height);
-  const { data } = imageData;
-  const visited = new Uint8Array(width * height);
-  const queue = [];
-  const isOuterBackground = (pixel) => {
-    const offset = pixel * 4;
-    return data[offset] < 48 && data[offset + 1] < 60 && data[offset + 2] < 92;
-  };
-  const enqueue = (x, y) => {
-    const pixel = y * width + x;
-    if (visited[pixel] || !isOuterBackground(pixel)) return;
-    visited[pixel] = 1;
-    queue.push(pixel);
-  };
-  for (let x = 0; x < width; x += 1) {
-    enqueue(x, 0);
-    enqueue(x, height - 1);
-  }
-  for (let y = 0; y < height; y += 1) {
-    enqueue(0, y);
-    enqueue(width - 1, y);
-  }
-  for (let cursor = 0; cursor < queue.length; cursor += 1) {
-    const pixel = queue[cursor];
-    const x = pixel % width;
-    const y = Math.floor(pixel / width);
-    data[pixel * 4 + 3] = 0;
-    if (x > 0) enqueue(x - 1, y);
-    if (x + 1 < width) enqueue(x + 1, y);
-    if (y > 0) enqueue(x, y - 1);
-    if (y + 1 < height) enqueue(x, y + 1);
-  }
-  surfaceContext.putImageData(imageData, 0, 0);
+  surfaceContext.globalCompositeOperation = "destination-in";
+  surfaceContext.fillStyle = "#fff";
+  surfaceContext.beginPath();
+  surfaceContext.ellipse(width / 2, height * 0.43, width * 0.47, height * 0.47, 0, 0, Math.PI * 2);
+  surfaceContext.fill();
+  surfaceContext.globalCompositeOperation = "source-over";
   return surface;
 }
 
