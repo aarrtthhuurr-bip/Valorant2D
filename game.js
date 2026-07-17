@@ -2209,12 +2209,14 @@ const AIRDROP_MODIFIERS = [
 
 function spawnOutbreakAirdrop() {
   const point = randomAccessiblePickupPoint(game.medkits);
+  const modifier = AIRDROP_MODIFIERS[Math.floor(Math.random() * AIRDROP_MODIFIERS.length)];
   game.airdrops.push({
     ...point,
     id: `airdrop-${game.outbreakWave}-${Date.now()}`,
     altitude: 260,
     landed: false,
     phase: Math.random() * Math.PI * 2,
+    modifierId: modifier.id,
   });
 }
 
@@ -2267,7 +2269,9 @@ function updateOutbreakAirdrops(dt) {
       continue;
     }
     if (Math.hypot(game.player.x - drop.x, game.player.y - drop.y) > game.player.r + 26) continue;
-    const modifier = AIRDROP_MODIFIERS[Math.floor(Math.random() * AIRDROP_MODIFIERS.length)];
+    const modifier = AIRDROP_MODIFIERS.find((item) => item.id === drop.modifierId)
+      || AIRDROP_MODIFIERS[Math.floor(Math.random() * AIRDROP_MODIFIERS.length)];
+    drop.modifierId = modifier.id;
     activateAirdropModifier(modifier);
     drop.collected = true;
   }
@@ -7053,6 +7057,7 @@ function drawMedkitsAndOrbs() {
     ctx.textAlign = "center";
     ctx.fillText(drop.landed ? "AIRDROP" : "ENTRADA", 0, 4);
     ctx.restore();
+    drawAirdropModifierBadge(drop, y, now);
   }
   for (const kit of game.medkits) {
     if (!estaNoCampoDeVisao(kit, 28)) continue;
@@ -7107,6 +7112,51 @@ function drawMedkitsAndOrbs() {
     ctx.stroke();
     ctx.restore();
   }
+}
+
+function drawAirdropModifierBadge(drop, crateY, now) {
+  const modifier = AIRDROP_MODIFIERS.find((item) => item.id === drop.modifierId);
+  if (!modifier) return;
+  const floatingY = crateY - 48 + Math.sin(now * 2.4 + drop.phase) * 3;
+  const pulse = 0.82 + Math.sin(now * 3.2 + drop.phase) * 0.18;
+  ctx.save();
+  ctx.translate(drop.x, floatingY);
+  ctx.shadowColor = modifier.color;
+  ctx.shadowBlur = 16 + pulse * 10;
+  ctx.fillStyle = "rgba(4, 12, 18, 0.9)";
+  ctx.strokeStyle = modifier.color;
+  ctx.lineWidth = 1.8;
+  ctx.beginPath();
+  for (let index = 0; index < 6; index++) {
+    const angle = -Math.PI / 2 + index * Math.PI / 3;
+    const x = Math.cos(angle) * 19;
+    const y = Math.sin(angle) * 19;
+    if (index === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 8 * pulse;
+  ctx.fillStyle = modifier.color;
+  ctx.font = "bold 19px Rajdhani, Segoe UI, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(modifier.icon, 0, 1);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = "rgba(4, 12, 18, 0.88)";
+  ctx.fillRect(-36, 24, 72, 13);
+  ctx.fillStyle = modifier.color;
+  ctx.font = "bold 7px Rajdhani, Segoe UI, sans-serif";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText(modifier.name.toUpperCase(), 0, 33);
+  ctx.strokeStyle = `${modifier.color}88`;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, 38);
+  ctx.lineTo(0, 45);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawOrbChannelBars() {
