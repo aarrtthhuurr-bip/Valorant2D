@@ -8397,16 +8397,28 @@ const LEADERBOARD_MODES = [
 ];
 let activeLeaderboardMode = "default";
 
-function renderLeaderboardPanel(entries = [], message = "") {
+function renderLeaderboardPanel(entries = [], playerStats = null, message = "") {
   if (!ui.menuButtons) return;
   ui.menuButtons.className = "leaderboard-shell";
   ui.menuButtons.innerHTML = `
     <nav class="leaderboard-tabs" aria-label="Filtrar ranking por modo"></nav>
-    <section class="leaderboard-board" aria-live="polite">
-      <header><span>POSIÇÃO</span><span>JOGADOR</span><span>PONTUAÇÃO</span></header>
-      <div class="leaderboard-rows"></div>
-      <p class="leaderboard-empty hidden"></p>
-    </section>
+    <div class="leaderboard-columns">
+      <aside class="player-statistics-panel">
+        <header><span>DESEMPENHO PESSOAL</span><strong class="player-statistics-name"></strong></header>
+        <div class="player-statistics-grid">
+          <article><span>RECORDE PESSOAL</span><strong data-player-stat="personal_best">0</strong></article>
+          <article><span>PARTIDAS</span><strong data-player-stat="total_matches">0</strong></article>
+          <article><span>MÉDIA DE PONTOS</span><strong data-player-stat="average_score">0</strong></article>
+          <article><span>POSIÇÃO GLOBAL</span><strong data-player-stat="global_position">—</strong></article>
+        </div>
+        <p class="player-statistics-note"></p>
+      </aside>
+      <section class="leaderboard-board" aria-live="polite">
+        <header><span>POSIÇÃO</span><span>JOGADOR</span><span>PONTUAÇÃO</span></header>
+        <div class="leaderboard-rows"></div>
+        <p class="leaderboard-empty hidden"></p>
+      </section>
+    </div>
     <div class="leaderboard-actions">
       <button type="button" class="leaderboard-refresh">ATUALIZAR</button>
       <button type="button" class="statistics-back">VOLTAR</button>
@@ -8421,6 +8433,23 @@ function renderLeaderboardPanel(entries = [], message = "") {
     button.addEventListener("click", () => loadLeaderboardMode(mode.id));
     attachButtonFeedback(button);
     tabs.appendChild(button);
+  }
+  const personalName = ui.menuButtons.querySelector(".player-statistics-name");
+  const personalNote = ui.menuButtons.querySelector(".player-statistics-note");
+  if (playerStats) {
+    personalName.textContent = playerStats.player_name || currentProfile?.username || "Agente";
+    for (const field of ["personal_best", "total_matches", "average_score"]) {
+      const value = Math.max(0, Number(playerStats[field]) || 0);
+      ui.menuButtons.querySelector(`[data-player-stat="${field}"]`).textContent = value.toLocaleString("pt-BR");
+    }
+    const globalPosition = Number(playerStats.global_position);
+    ui.menuButtons.querySelector('[data-player-stat="global_position"]').textContent = globalPosition > 0 ? `${globalPosition}º` : "—";
+    personalNote.textContent = playerStats.total_matches > 0
+      ? "Dados sincronizados para o modo selecionado."
+      : "Conclua uma partida neste modo para registrar seu primeiro resultado.";
+  } else {
+    personalName.textContent = currentProfile?.isGuest ? "CONVIDADO" : "SEM SESSÃO";
+    personalNote.textContent = "Entre com uma conta para acompanhar seu desempenho por modo.";
   }
   const rows = ui.menuButtons.querySelector(".leaderboard-rows");
   entries.forEach((entry, index) => {
@@ -8455,10 +8484,14 @@ async function loadLeaderboardMode(mode) {
   ui.menuButtons.className = "leaderboard-shell";
   ui.menuButtons.innerHTML = '<div class="statistics-loading"><span class="auth-loader"></span><strong>Atualizando ranking global</strong></div>';
   try {
-    const payload = await requestApi(`/api/leaderboard/${encodeURIComponent(mode)}`, { method: "GET" });
-    if (game.menuState === "statistics") renderLeaderboardPanel(payload.leaderboard || []);
+    const session = readStoredSession();
+    const headers = session?.token && !currentProfile?.isGuest
+      ? { Authorization: `Bearer ${session.token}` }
+      : undefined;
+    const payload = await requestApi(`/api/leaderboard/${encodeURIComponent(mode)}`, { method: "GET", headers });
+    if (game.menuState === "statistics") renderLeaderboardPanel(payload.leaderboard || [], payload.playerStats || null);
   } catch (error) {
-    if (game.menuState === "statistics") renderLeaderboardPanel([], error.message);
+    if (game.menuState === "statistics") renderLeaderboardPanel([], null, error.message);
   }
 }
 

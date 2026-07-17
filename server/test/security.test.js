@@ -233,6 +233,45 @@ test('leaderboard lista modo válido e rejeita filtros desconhecidos', async () 
   }
 });
 
+test('leaderboard autenticada retorna estatísticas pessoais do modo selecionado', async () => {
+  const originals = {
+    session: Session.findValid,
+    list: Leaderboard.listByMode,
+    personal: Leaderboard.personalStats,
+  };
+  let requestedUserId;
+  let requestedMode;
+  Session.findValid = async () => ({ id: 7, username: 'agente_teste' });
+  Leaderboard.listByMode = async () => [];
+  Leaderboard.personalStats = async (userId, mode) => {
+    requestedUserId = userId;
+    requestedMode = mode;
+    return {
+      total_matches: 4,
+      personal_best: 9200,
+      average_score: 6100,
+      global_position: 3,
+      last_played_at: new Date().toISOString(),
+    };
+  };
+  try {
+    const response = await request(app)
+      .get('/api/leaderboard/outbreak')
+      .set('Authorization', `Bearer ${'a'.repeat(64)}`)
+      .expect(200);
+
+    assert.equal(requestedUserId, 7);
+    assert.equal(requestedMode, 'outbreak');
+    assert.equal(response.body.playerStats.player_name, 'agente_teste');
+    assert.equal(response.body.playerStats.personal_best, 9200);
+    assert.equal(response.body.playerStats.global_position, 3);
+  } finally {
+    Session.findValid = originals.session;
+    Leaderboard.listByMode = originals.list;
+    Leaderboard.personalStats = originals.personal;
+  }
+});
+
 test('leaderboard salva pontuação autenticada com comprovante e nome da sessão', async () => {
   const originals = {
     session: Session.findValid,

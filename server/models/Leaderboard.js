@@ -21,6 +21,42 @@ class Leaderboard {
     );
   }
 
+  /** Resume o histórico individual do jogador somente no modo selecionado. */
+  static async personalStats(userId, gameMode) {
+    const statistics = await database.get(
+      `WITH mode_entries AS (
+         SELECT user_id, score, created_at
+         FROM leaderboard
+         WHERE game_mode = $2
+       ),
+       best_by_player AS (
+         SELECT user_id, MAX(score) AS best_score
+         FROM mode_entries
+         GROUP BY user_id
+       ),
+       ranked_players AS (
+         SELECT user_id,
+                RANK() OVER (ORDER BY best_score DESC) AS global_position
+         FROM best_by_player
+       )
+       SELECT COUNT(*) AS total_matches,
+              COALESCE(MAX(score), 0) AS personal_best,
+              COALESCE(ROUND(AVG(score)), 0) AS average_score,
+              MAX(created_at) AS last_played_at,
+              (SELECT global_position FROM ranked_players WHERE user_id = $1) AS global_position
+       FROM mode_entries
+       WHERE user_id = $1`,
+      [userId, gameMode],
+    );
+    return {
+      total_matches: Number(statistics?.total_matches) || 0,
+      personal_best: Number(statistics?.personal_best) || 0,
+      average_score: Number(statistics?.average_score) || 0,
+      global_position: statistics?.global_position ? Number(statistics.global_position) : null,
+      last_played_at: statistics?.last_played_at || null,
+    };
+  }
+
   /**
    * Consome o comprovante, atualiza estatísticas e grava o ranking na mesma
    * transação. Uma falha não deixa a partida parcialmente registrada.

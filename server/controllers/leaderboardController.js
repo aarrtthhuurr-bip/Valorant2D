@@ -80,8 +80,24 @@ async function listScores(request, response, next) {
       response.status(400).json({ error: 'Modo de jogo inválido.', code: 'INVALID_GAME_MODE' });
       return;
     }
-    const leaderboard = await Leaderboard.listByMode(gameMode, 10);
-    response.status(200).json({ gameMode, leaderboard });
+    const token = extractToken(request);
+    let user = null;
+    if (token) {
+      user = await Session.findValid(token);
+      if (!user) {
+        response.status(401).json({ error: 'Sessão inválida ou expirada.', code: 'INVALID_SESSION' });
+        return;
+      }
+    }
+    const [leaderboard, playerStats] = await Promise.all([
+      Leaderboard.listByMode(gameMode, 10),
+      user ? Leaderboard.personalStats(user.id, gameMode) : Promise.resolve(null),
+    ]);
+    response.status(200).json({
+      gameMode,
+      leaderboard,
+      playerStats: playerStats ? { ...playerStats, player_name: user.username } : null,
+    });
   } catch (error) {
     next(error);
   }

@@ -488,8 +488,8 @@ input {
 }
 
 .menu-state-statistics .menu-card {
-  width: min(760px, calc(100% - 28px));
-  max-width: 760px;
+  width: min(980px, calc(100% - 28px));
+  max-width: 980px;
 }
 
 .leaderboard-shell {
@@ -521,6 +521,87 @@ input {
   border-color: rgba(255, 70, 85, 0.72);
   background: rgba(255, 70, 85, 0.13);
   color: #f5f8fa;
+}
+
+.leaderboard-columns {
+  display: grid;
+  grid-template-columns: minmax(230px, 0.7fr) minmax(430px, 1.45fr);
+  align-items: stretch;
+  gap: 12px;
+}
+
+.player-statistics-panel {
+  display: flex;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgba(112, 139, 158, 0.18);
+  background:
+    linear-gradient(145deg, rgba(255, 70, 85, 0.06), transparent 48%),
+    rgba(5, 12, 18, 0.68);
+  flex-direction: column;
+  gap: 14px;
+}
+
+.player-statistics-panel > header {
+  display: flex;
+  min-width: 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(112, 139, 158, 0.16);
+  flex-direction: column;
+  gap: 4px;
+}
+
+.player-statistics-panel > header span {
+  color: #718797;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.player-statistics-panel > header strong {
+  overflow: hidden;
+  color: #edf5f8;
+  font-size: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-statistics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.player-statistics-grid article {
+  display: flex;
+  min-height: 82px;
+  padding: 11px;
+  border: 1px solid rgba(112, 139, 158, 0.14);
+  background: rgba(17, 29, 40, 0.56);
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.player-statistics-grid span {
+  color: #718797;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.35;
+}
+
+.player-statistics-grid strong {
+  color: #ff5a68;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.player-statistics-note {
+  margin: auto 0 0;
+  color: #8296a5;
+  font-size: 10px;
+  line-height: 1.5;
 }
 
 .leaderboard-board {
@@ -3844,8 +3925,18 @@ button.click-feedback::after {
 
   .option-row { grid-template-columns: minmax(0, 1fr); }
 
+  .leaderboard-columns { grid-template-columns: 1fr; }
+
+  .player-statistics-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+  .player-statistics-grid article { min-height: 72px; }
+
   .leaderboard-board > header,
   .leaderboard-rows article { grid-template-columns: 66px minmax(0, 1fr) 112px; }
+}
+
+@media (max-width: 520px) {
+  .player-statistics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 0px) {
