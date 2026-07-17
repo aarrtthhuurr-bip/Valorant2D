@@ -1232,6 +1232,11 @@ canvas {
   display: none;
 }
 
+.shop.shop-allies-active {
+  height: min(500px, calc(100% - 32px));
+  max-height: 500px;
+}
+
 .shop-backdrop {
   position: absolute;
   inset: 0;
@@ -1648,6 +1653,244 @@ canvas {
 .equip-card.cant-afford {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.ally-shop-layout {
+  display: grid;
+  gap: 14px;
+  padding-bottom: 4px;
+}
+
+.ally-store-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(111, 145, 163, 0.22);
+  border-radius: 7px;
+  background: linear-gradient(145deg, rgba(16, 28, 38, 0.96), rgba(8, 15, 22, 0.98));
+  color: #edf5f8;
+  text-align: left;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, opacity 160ms ease;
+}
+
+.ally-store-card::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(71, 214, 226, 0.7), transparent);
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.ally-store-card:hover:not(:disabled) {
+  z-index: 2;
+  border-color: rgba(75, 211, 223, 0.55);
+  background: linear-gradient(145deg, rgba(20, 43, 52, 0.98), rgba(9, 18, 26, 0.98));
+  transform: translateY(-3px);
+}
+
+.ally-store-card:hover::after,
+.ally-store-card.active::after { opacity: 1; }
+
+.ally-store-card.active {
+  border-color: rgba(91, 232, 190, 0.62);
+  box-shadow: inset 0 0 26px rgba(50, 196, 157, 0.07);
+}
+
+.ally-store-card.locked { opacity: 0.38; }
+.ally-store-card.cant-afford:not(.owned) { filter: saturate(0.5); }
+
+.ally-store-card-unit {
+  display: grid;
+  min-height: 112px;
+  padding: 12px 16px 12px 12px;
+  grid-template-columns: 94px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  border-color: rgba(73, 205, 218, 0.32);
+  background:
+    linear-gradient(90deg, rgba(23, 94, 105, 0.2), transparent 52%),
+    linear-gradient(145deg, rgba(15, 30, 40, 0.98), rgba(6, 13, 20, 0.99));
+}
+
+.ally-unit-visual {
+  position: relative;
+  display: grid;
+  width: 82px;
+  height: 82px;
+  place-items: center;
+  border: 1px solid rgba(81, 220, 230, 0.28);
+  border-radius: 4px;
+  background: radial-gradient(circle, rgba(67, 213, 222, 0.16), rgba(7, 17, 24, 0.9) 68%);
+  clip-path: polygon(10% 0, 100% 0, 100% 90%, 90% 100%, 0 100%, 0 10%);
+}
+
+.ally-unit-visual i {
+  position: absolute;
+  inset: 7px;
+  border: 1px dashed rgba(89, 225, 232, 0.22);
+  border-radius: 50%;
+}
+
+.ally-unit-visual img {
+  position: relative;
+  width: 68px;
+  height: 68px;
+  object-fit: cover;
+  filter: saturate(0.78) contrast(1.12);
+}
+
+.ally-unit-copy,
+.ally-card-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.ally-unit-copy { gap: 5px; }
+
+.ally-unit-copy small,
+.ally-store-section > header span {
+  color: #56cbd4;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+}
+
+.ally-unit-copy b {
+  font-size: 19px;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.ally-unit-copy em {
+  max-width: 480px;
+  color: #8fa4b0;
+  font-size: 11px;
+  font-style: normal;
+  line-height: 1.4;
+}
+
+.ally-store-section {
+  display: grid;
+  gap: 8px;
+}
+
+.ally-store-section > header {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.ally-store-section > header strong {
+  color: #d9e5ea;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.ally-store-section > header i {
+  height: 1px;
+  background: linear-gradient(90deg, rgba(106, 137, 153, 0.24), transparent);
+}
+
+.ally-store-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.ally-weapons-section .ally-store-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.ally-systems-section .ally-store-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ally-store-card-weapon {
+  display: grid;
+  min-height: 138px;
+  padding: 10px;
+  grid-template-rows: 58px 1fr auto;
+  gap: 7px;
+}
+
+.ally-weapon-art {
+  display: grid;
+  min-width: 0;
+  place-items: center;
+  border-bottom: 1px solid rgba(111, 145, 163, 0.12);
+  background: radial-gradient(ellipse, rgba(77, 137, 151, 0.11), transparent 68%);
+}
+
+.ally-weapon-art img {
+  width: 100%;
+  height: 52px;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.5));
+}
+
+.ally-card-copy { gap: 3px; }
+.ally-card-copy b { font-size: 12px; text-transform: uppercase; }
+.ally-card-copy small { color: #718794; font-size: 8px; line-height: 1.35; }
+
+.ally-card-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ally-card-action strong {
+  color: #65cbd3;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+}
+
+.ally-card-action b {
+  color: #d0a84f;
+  font-size: 11px;
+}
+
+.ally-store-card.active .ally-card-action strong,
+.ally-store-card.owned .ally-card-price { color: #63e6b4; }
+
+.ally-store-card-system {
+  display: grid;
+  min-height: 88px;
+  padding: 11px 12px;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.ally-system-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid rgba(219, 89, 101, 0.28);
+  border-radius: 4px;
+  background: rgba(255, 70, 85, 0.06);
+}
+
+.ally-system-icon svg {
+  width: 27px;
+  height: 27px;
+  fill: none;
+  stroke: #c9636d;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@media (max-width: 760px) {
+  .ally-store-card-unit { grid-template-columns: 72px minmax(0, 1fr); }
+  .ally-store-card-unit .ally-card-action { grid-column: 1 / -1; }
+  .ally-unit-visual { width: 64px; height: 64px; }
+  .ally-unit-visual img { width: 54px; height: 54px; }
+  .ally-weapons-section .ally-store-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ally-systems-section .ally-store-grid { grid-template-columns: 1fr; }
 }
 
 .outbreak-ult-stock,

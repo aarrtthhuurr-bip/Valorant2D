@@ -1076,10 +1076,10 @@ const equipment = [
 
 const allyItems = [
   { id: "allyUnit", name: "Recrutar Aliado", price: 3000, desc: "Operador imortal que acompanha o jogador.", apply: recruitOutbreakAlly },
-  { id: "allySheriff", name: "Sheriff", price: 1050, desc: "Precisão de alto impacto.", weaponId: "revolver", apply: () => { game.allyLoadout.weaponId = "revolver"; } },
-  { id: "allyBulldog", name: "Bulldog", price: 3200, desc: "Rajadas controladas para média distância.", weaponId: "carbine", apply: () => { game.allyLoadout.weaponId = "carbine"; } },
-  { id: "allyVandal", name: "Vandal", price: 3900, desc: "Poder de parada em qualquer distância.", weaponId: "rifle", apply: () => { game.allyLoadout.weaponId = "rifle"; } },
-  { id: "allyOperator", name: "Operator", price: 6900, desc: "Cobertura pesada de longa distância.", weaponId: "sniper", apply: () => { game.allyLoadout.weaponId = "sniper"; } },
+  { id: "allySheriff", name: "Sheriff", price: 1050, desc: "Precisão de alto impacto.", weaponId: "revolver", apply: () => { game.allyLoadout.weaponId = "revolver"; game.allyLoadout.ownedWeapons.add("revolver"); } },
+  { id: "allyBulldog", name: "Bulldog", price: 3200, desc: "Rajadas controladas para média distância.", weaponId: "carbine", apply: () => { game.allyLoadout.weaponId = "carbine"; game.allyLoadout.ownedWeapons.add("carbine"); } },
+  { id: "allyVandal", name: "Vandal", price: 3900, desc: "Poder de parada em qualquer distância.", weaponId: "rifle", apply: () => { game.allyLoadout.weaponId = "rifle"; game.allyLoadout.ownedWeapons.add("rifle"); } },
+  { id: "allyOperator", name: "Operator", price: 6900, desc: "Cobertura pesada de longa distância.", weaponId: "sniper", apply: () => { game.allyLoadout.weaponId = "sniper"; game.allyLoadout.ownedWeapons.add("sniper"); } },
   { id: "allyCaliber", name: "Balas de Alto Calibre", price: 3200, desc: "Aumenta em 20% o dano do aliado.", apply: () => { game.allyLoadout.damageMultiplier = 1.2; } },
   { id: "allyLastResort", name: "Último Recurso", price: 2100, desc: "Entrega um med-kit quando seu escudo chega a zero.", apply: () => { game.allyLoadout.lastResort = true; } },
 ];
@@ -1829,7 +1829,7 @@ const game = {
   ownedWeapons: new Set(["pistol"]),
   upgrades: { armorCapacity: 0, speed: false, magazine: false, reload: false },
   armor: 0,
-  allyLoadout: { weaponId: "pistol", recruited: false, damageMultiplier: 1, lastResort: false, lastResortWave: 0 },
+  allyLoadout: { weaponId: "pistol", ownedWeapons: new Set(["pistol"]), recruited: false, damageMultiplier: 1, lastResort: false, lastResortWave: 0 },
   roundMoneyDelta: 0,
   player: null,
   bots: [],
@@ -2440,7 +2440,7 @@ function fullReset() {
   game.ownedWeapons = new Set(["pistol"]);
   game.upgrades = { armorCapacity: 0, speed: false, magazine: false, reload: false };
   game.armor = 0;
-  game.allyLoadout = { weaponId: "pistol", recruited: false, damageMultiplier: 1, lastResort: false, lastResortWave: 0 };
+  game.allyLoadout = { weaponId: "pistol", ownedWeapons: new Set(["pistol"]), recruited: false, damageMultiplier: 1, lastResort: false, lastResortWave: 0 };
   game.outbreakUltInventory = { agentId: null, charges: 0 };
   game.airdrops = [];
   game.selectedAgent = agents[0];
@@ -2461,7 +2461,7 @@ function startNewMatch() {
   game.ownedWeapons = new Set(["pistol"]);
   game.upgrades = { armorCapacity: 0, speed: false, magazine: false, reload: false };
   game.armor = 0;
-  game.allyLoadout = { weaponId: "pistol", armor: 0 };
+  game.allyLoadout = { weaponId: "pistol", ownedWeapons: new Set(["pistol"]), recruited: false, damageMultiplier: 1, lastResort: false, lastResortWave: 0 };
   game.selectedWeapon = weapons[0];
   game.roundMoneyDelta = 0;
   game.playerUltPoints = 0;
@@ -7896,6 +7896,7 @@ function setShopTab(tab) {
   alliesTab?.classList.toggle("hidden", !hasAllies);
   ultsTab?.classList.toggle("hidden", !hasUlts);
   game.shopTab = tab;
+  ui.shop?.classList.toggle("shop-allies-active", nextTab === "allies");
   document.querySelectorAll("[data-shop-panel]").forEach((panel) => {
     panel.classList.toggle("hidden", panel.dataset.shopPanel !== nextTab);
   });
@@ -9761,7 +9762,7 @@ function startOutbreakMode() {
     lastModifierId: null, lastModifierUntil: 0,
   };
   game.outbreakUltInventory = { agentId: null, charges: 0 };
-  game.allyLoadout = { weaponId: "pistol", recruited: false, damageMultiplier: 1, lastResort: false, lastResortWave: 0 };
+  game.allyLoadout = { weaponId: "pistol", ownedWeapons: new Set(["pistol"]), recruited: false, damageMultiplier: 1, lastResort: false, lastResortWave: 0 };
   game.airdrops = [];
   game.playerSide = "attackers";
   game.player.armor = 50;
@@ -9976,41 +9977,7 @@ function buildShop() {
     ui.equipmentButtons.appendChild(button);
   }
 
-  ui.allyButtons.innerHTML = "";
-  for (const item of allyItems) {
-    const button = document.createElement("button");
-    button.className = "choice";
-    button.innerHTML = `<b>${item.name} <em>$${item.price}</em></b><span>Upgrade de equipe. ${item.desc}</span>`;
-    button.addEventListener("click", () => {
-      if (game.phase !== "buy" && !game.sandbox) return;
-      if (game.outbreak && item.id !== "allyUnit" && !game.allyLoadout.recruited) {
-        setMessage("Recrute o aliado antes de adquirir armas ou acessórios.");
-        updateUi();
-        return;
-      }
-      if (allyItemOwned(item)) {
-        setMessage("Esse upgrade aliado ja esta ativo.");
-        updateUi();
-        return;
-      }
-      if (game.money < item.price) {
-        setMessage("Creditos insuficientes.");
-        updateUi();
-        return;
-      }
-      game.money -= item.price;
-      item.apply();
-      const allyWeapon = weapons.find((weapon) => weapon.id === game.allyLoadout.weaponId) || weapons[0];
-      for (const ally of game.allies) {
-        ally.weapon = allyWeapon;
-        ally.immortal = game.outbreak;
-      }
-      setMessage(`${item.name} comprado para aliados.`);
-      updateShopState();
-      updateUi();
-    });
-    ui.allyButtons.appendChild(button);
-  }
+  renderAllyShop();
 
   if (ui.ultButtons) {
     ui.ultButtons.innerHTML = "";
@@ -10033,6 +10000,96 @@ function buildShop() {
     }
   }
   updateShopState();
+}
+
+function allySystemIcon(itemId) {
+  if (itemId === "allyCaliber") {
+    return '<svg viewBox="0 0 36 36" aria-hidden="true"><path d="M18 4l5 8-5 20-5-20 5-8Z"/><path d="M10 27h16M12 31h12"/></svg>';
+  }
+  return '<svg viewBox="0 0 36 36" aria-hidden="true"><path d="M18 31S7 25 7 16c0-7 8-9 11-3 3-6 11-4 11 3 0 9-11 15-11 15Z"/><path d="M11 20h5l2-5 3 9 2-4h3"/></svg>';
+}
+
+function allyCard(item, kind) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.dataset.allyItem = item.id;
+  button.className = `ally-store-card ally-store-card-${kind}`;
+  if (kind === "unit") {
+    const portrait = agentPresentation(agents[1] || agents[0]).icon;
+    button.innerHTML = `
+      <span class="ally-unit-visual"><i></i><img src="${portrait}" alt=""></span>
+      <span class="ally-unit-copy"><small>UNIDADE DE SUPORTE</small><b>${item.name}</b><em>${item.desc}</em></span>
+      <span class="ally-card-action"><strong class="ally-card-state">RECRUTAR</strong><b class="ally-card-price">$${item.price}</b></span>`;
+  } else if (kind === "weapon") {
+    const weapon = weapons.find((entry) => entry.id === item.weaponId) || weapons[0];
+    button.innerHTML = `
+      <span class="ally-weapon-art"><img src="${weaponImagePath(weapon)}" alt="${weapon.name}"></span>
+      <span class="ally-card-copy"><b>${item.name}</b><small>${weapon.damage} DANO · ${weapon.mag} MUNIÇÕES</small></span>
+      <span class="ally-card-action"><strong class="ally-card-state">ADQUIRIR</strong><b class="ally-card-price">$${item.price}</b></span>`;
+  } else {
+    button.innerHTML = `
+      <span class="ally-system-icon">${allySystemIcon(item.id)}</span>
+      <span class="ally-card-copy"><b>${item.name}</b><small>${item.desc}</small></span>
+      <span class="ally-card-action"><strong class="ally-card-state">INSTALAR</strong><b class="ally-card-price">$${item.price}</b></span>`;
+  }
+  button.addEventListener("click", () => buyAllyItem(item));
+  return button;
+}
+
+function allyShopSection(kicker, title, className, items, kind) {
+  const section = document.createElement("section");
+  section.className = `ally-store-section ${className}`;
+  section.innerHTML = `<header><span>${kicker}</span><strong>${title}</strong><i></i></header>`;
+  const grid = document.createElement("div");
+  grid.className = "ally-store-grid";
+  items.forEach((item) => grid.appendChild(allyCard(item, kind)));
+  section.appendChild(grid);
+  return section;
+}
+
+function renderAllyShop() {
+  if (!ui.allyButtons) return;
+  ui.allyButtons.className = "ally-shop-layout";
+  ui.allyButtons.innerHTML = "";
+  ui.allyButtons.append(
+    allyCard(allyItems[0], "unit"),
+    allyShopSection("ARSENAL VINCULADO", "Armamento do operador", "ally-weapons-section", allyItems.slice(1, 5), "weapon"),
+    allyShopSection("PROTOCOLOS", "Sistemas de suporte", "ally-systems-section", allyItems.slice(5), "system"),
+  );
+}
+
+function buyAllyItem(item) {
+  if (!item || (game.phase !== "buy" && !game.sandbox)) return;
+  if (game.outbreak && item.id !== "allyUnit" && !game.allyLoadout.recruited) {
+    setMessage("Recrute o aliado antes de adquirir armas ou acessórios.");
+    updateUi();
+    return;
+  }
+  const weaponOwned = item.weaponId && game.allyLoadout.ownedWeapons.has(item.weaponId);
+  if (weaponOwned) {
+    game.allyLoadout.weaponId = item.weaponId;
+  } else {
+    if (allyItemOwned(item)) {
+      setMessage("Esse sistema aliado já está ativo.");
+      updateUi();
+      return;
+    }
+    if (game.money < item.price) {
+      setMessage("Créditos insuficientes.");
+      updateUi();
+      return;
+    }
+    game.money -= item.price;
+    item.apply();
+  }
+  const allyWeapon = weapons.find((weapon) => weapon.id === game.allyLoadout.weaponId) || weapons[0];
+  for (const ally of game.allies) {
+    ally.weapon = allyWeapon;
+    ally.immortal = game.outbreak;
+  }
+  setMessage(weaponOwned ? `${item.name} equipado no aliado.` : `${item.name} adquirido para o aliado.`);
+  updateShopState();
+  updateUi();
 }
 
 function buyOutbreakUlt(item) {
@@ -10182,7 +10239,7 @@ function allyItemOwned(item) {
   if (item.id === "allyUnit") return game.allyLoadout.recruited;
   if (item.id === "allyCaliber") return game.allyLoadout.damageMultiplier >= 1.2;
   if (item.id === "allyLastResort") return game.allyLoadout.lastResort;
-  if (item.weaponId) return game.allyLoadout.weaponId === item.weaponId;
+  if (item.weaponId) return game.allyLoadout.ownedWeapons.has(item.weaponId);
   return false;
 }
 
@@ -10220,14 +10277,20 @@ function updateShopState() {
     const item = availableEquipment()[i];
     if (item) updateEquipmentCardState(button, item);
   });
-  [...(ui.allyButtons?.children || [])].forEach((button, i) => {
-    const item = allyItems[i];
+  ui.allyButtons?.querySelectorAll("[data-ally-item]").forEach((button) => {
+    const item = allyItems.find((entry) => entry.id === button.dataset.allyItem);
     if (!item) return;
     const owned = allyItemOwned(item);
-    button.classList.toggle("active", owned);
+    const active = item.weaponId ? game.allyLoadout.weaponId === item.weaponId : owned;
+    const locked = game.outbreak && item.id !== "allyUnit" && !game.allyLoadout.recruited;
+    button.classList.toggle("active", active);
     button.classList.toggle("owned", owned);
-    const status = button.querySelector("em");
-    if (status) status.textContent = owned ? "Ativo" : `$${item.price}`;
+    button.classList.toggle("locked", locked);
+    button.classList.toggle("cant-afford", !owned && game.money < item.price);
+    const status = button.querySelector(".ally-card-state");
+    const price = button.querySelector(".ally-card-price");
+    if (status) status.textContent = active ? "ATIVO" : owned ? "EQUIPAR" : locked ? "BLOQUEADO" : item.id === "allyUnit" ? "RECRUTAR" : "ADQUIRIR";
+    if (price) price.textContent = owned ? "OBTIDO" : `$${item.price}`;
   });
   [...(ui.ultButtons?.children || [])].forEach((card, i) => {
     const item = purchasableUlts[i];
