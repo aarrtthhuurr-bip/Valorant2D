@@ -8658,7 +8658,7 @@ function showModeSelect(immediate = false) {
     }, 220);
     return;
   }
-  setMenu("", "", [], "", "mode-select");
+  setMenu("ESCOLHA O MODO", "", [], "JOGAR", "mode-select");
   renderModeSelect();
 }
 
@@ -8666,13 +8666,9 @@ function renderModeSelect() {
   if (!ui.menuButtons) return;
   ui.menuButtons.className = "mode-select-shell";
   ui.menuButtons.innerHTML = `
-    <header class="mode-select-header">
-      <span><i></i> MODOS DE JOGO</span>
-      <h2>SELECIONE O PROTOCOLO</h2>
-    </header>
     <div class="mode-select-grid"></div>
     <footer class="mode-select-footer">
-      <button type="button" class="mode-select-back">VOLTAR AO MENU</button>
+      <button type="button" class="mode-select-back menu-button menu-back icon-only" aria-label="Voltar ao menu" title="Voltar ao menu"></button>
     </footer>`;
   const grid = ui.menuButtons.querySelector(".mode-select-grid");
   for (const option of PLAY_MODE_OPTIONS) {
@@ -8684,6 +8680,7 @@ function renderModeSelect() {
       <strong>${option.name}</strong>
       <small>${option.description}</small>`;
     card.addEventListener("click", () => selectPlayMode(option.id));
+    attachButtonFeedback(card);
     grid.appendChild(card);
   }
   ui.menuButtons.querySelector(".mode-select-back")?.addEventListener("click", showMainMenu);
