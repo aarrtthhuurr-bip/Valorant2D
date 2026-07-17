@@ -251,6 +251,9 @@ test('leaderboard autenticada retorna estatísticas pessoais do modo selecionado
       personal_best: 9200,
       average_score: 6100,
       global_position: 3,
+      account_total_matches: 18,
+      account_total_wins: 11,
+      account_total_kills: 147,
       last_played_at: new Date().toISOString(),
     };
   };
@@ -265,6 +268,8 @@ test('leaderboard autenticada retorna estatísticas pessoais do modo selecionado
     assert.equal(response.body.playerStats.player_name, 'agente_teste');
     assert.equal(response.body.playerStats.personal_best, 9200);
     assert.equal(response.body.playerStats.global_position, 3);
+    assert.equal(response.body.playerStats.account_total_matches, 18);
+    assert.equal(response.body.playerStats.account_total_wins, 11);
   } finally {
     Session.findValid = originals.session;
     Leaderboard.listByMode = originals.list;

@@ -8406,10 +8406,12 @@ function renderLeaderboardPanel(entries = [], playerStats = null, message = "") 
       <aside class="player-statistics-panel">
         <header><span>DESEMPENHO PESSOAL</span><strong class="player-statistics-name"></strong></header>
         <div class="player-statistics-grid">
-          <article><span>RECORDE PESSOAL</span><strong data-player-stat="personal_best">0</strong></article>
-          <article><span>PARTIDAS</span><strong data-player-stat="total_matches">0</strong></article>
-          <article><span>MÉDIA DE PONTOS</span><strong data-player-stat="average_score">0</strong></article>
-          <article><span>POSIÇÃO GLOBAL</span><strong data-player-stat="global_position">—</strong></article>
+          <article><span>PARTIDAS</span><strong data-player-stat="account_total_matches">0</strong></article>
+          <article><span>VITÓRIAS</span><strong data-player-stat="account_total_wins">0</strong></article>
+          <article><span>RECORDE</span><strong data-player-stat="personal_best">0</strong></article>
+          <article><span>MÉDIA</span><strong data-player-stat="average_score">0</strong></article>
+          <article><span>ABATES</span><strong data-player-stat="account_total_kills">0</strong></article>
+          <article><span>POSIÇÃO</span><strong data-player-stat="global_position">—</strong></article>
         </div>
         <p class="player-statistics-note"></p>
       </aside>
@@ -8438,7 +8440,7 @@ function renderLeaderboardPanel(entries = [], playerStats = null, message = "") 
   const personalNote = ui.menuButtons.querySelector(".player-statistics-note");
   if (playerStats) {
     personalName.textContent = playerStats.player_name || currentProfile?.username || "Agente";
-    for (const field of ["personal_best", "total_matches", "average_score"]) {
+    for (const field of ["account_total_matches", "account_total_wins", "personal_best", "average_score", "account_total_kills"]) {
       const value = Math.max(0, Number(playerStats[field]) || 0);
       ui.menuButtons.querySelector(`[data-player-stat="${field}"]`).textContent = value.toLocaleString("pt-BR");
     }

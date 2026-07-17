@@ -43,7 +43,10 @@ class Leaderboard {
               COALESCE(MAX(score), 0) AS personal_best,
               COALESCE(ROUND(AVG(score)), 0) AS average_score,
               MAX(created_at) AS last_played_at,
-              (SELECT global_position FROM ranked_players WHERE user_id = $1) AS global_position
+              (SELECT global_position FROM ranked_players WHERE user_id = $1) AS global_position,
+              COALESCE((SELECT partidas_jogadas FROM users WHERE id = $1), 0) AS account_total_matches,
+              COALESCE((SELECT vitorias FROM users WHERE id = $1), 0) AS account_total_wins,
+              COALESCE((SELECT abates_totais FROM users WHERE id = $1), 0) AS account_total_kills
        FROM mode_entries
        WHERE user_id = $1`,
       [userId, gameMode],
@@ -53,6 +56,9 @@ class Leaderboard {
       personal_best: Number(statistics?.personal_best) || 0,
       average_score: Number(statistics?.average_score) || 0,
       global_position: statistics?.global_position ? Number(statistics.global_position) : null,
+      account_total_matches: Number(statistics?.account_total_matches) || 0,
+      account_total_wins: Number(statistics?.account_total_wins) || 0,
+      account_total_kills: Number(statistics?.account_total_kills) || 0,
       last_played_at: statistics?.last_played_at || null,
     };
   }
