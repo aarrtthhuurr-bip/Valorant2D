@@ -872,35 +872,35 @@ const weaponSpriteVisuals = {
 
 const weaponSpriteCache = new Map();
 
-// Sprites experimentais do Yoru. Cada frame possui um recorte diferente; por
-// isso o corpo é normalizado pelo ponto dos pés e a mão é calibrada por frame.
+// Sprites experimentais Yoru Ball. Os PNGs são mosaicos RGB sem transparência;
+// cada configuração isola a composição central e calibra o centro das mãos.
 const yoruSpriteFrames = {
   east: {
-    idle: { file: "parado_oeste.png", crop: [12, 15, 110, 250], hand: [91, 103] },
+    idle: { file: "parado_oeste.png", crop: [0, 0, 270, 270], hand: [82, 96], flipX: true },
     walk: [
-      { file: "pe_direito_frente_leste.png", crop: [0, 13, 130, 232], hand: [101, 91] },
-      { file: "pe_esquerdo_frente_leste.png", crop: [0, 11, 136, 230], hand: [105, 91] },
+      { file: "pe_direito_frente_oeste.png", crop: [0, 0, 270, 270], hand: [82, 96], flipX: true },
+      { file: "pe_esquerdo_frente_oeste.png", crop: [0, 0, 270, 270], hand: [82, 96], flipX: true },
     ],
   },
   west: {
-    idle: { file: "parado_leste.png", crop: [0, 15, 109, 249], hand: [20, 105] },
+    idle: { file: "parado_leste.png", crop: [0, 0, 285, 270], hand: [82, 96] },
     walk: [
-      { file: "pe_direito_frente_oeste.png", crop: [0, 14, 132, 236], hand: [31, 92] },
-      { file: "pe_esquerdo_frente_oeste.png", crop: [0, 11, 136, 229], hand: [31, 91] },
+      { file: "pe_direito_frente_leste.png", crop: [0, 0, 285, 270], hand: [82, 96] },
+      { file: "pe_esquerdo_frente_leste.png", crop: [0, 0, 285, 270], hand: [82, 96] },
     ],
   },
   north: {
-    idle: { file: "parado_norte_costas.png", crop: [1, 11, 112, 255], hand: [56, 101] },
+    idle: { file: "parado_sul.png", crop: [35, 0, 280, 270], hand: [140, 101] },
     walk: [
-      { file: "pe_direito_frente_norte_costas.png", crop: [1, 12, 110, 259], hand: [55, 101] },
-      { file: "pe_esquerdo_frente_norte_costas.png", crop: [2, 5, 109, 260], hand: [54, 99] },
+      { file: "pe_direito_frente_sul.png", crop: [35, 0, 280, 270], hand: [140, 101] },
+      { file: "pe_esquerdo_frente_sul.png", crop: [35, 0, 280, 270], hand: [140, 101] },
     ],
   },
   south: {
-    idle: { file: "parado_norte_frente.png", crop: [12, 10, 111, 258], hand: [55, 111] },
+    idle: { file: "parado_norte.png", crop: [0, 0, 285, 270], hand: [143, 105] },
     walk: [
-      { file: "pe_direito_frente_norte_frente.png", crop: [12, 10, 109, 262], hand: [54, 111] },
-      { file: "pe_esquerdo_frente_norte_frente.png", crop: [13, 4, 107, 262], hand: [53, 109] },
+      { file: "pe_direito_frente_norte.png", crop: [0, 0, 285, 270], hand: [143, 105] },
+      { file: "pe_esquerdo_frente_norte.png", crop: [0, 0, 285, 270], hand: [143, 105] },
     ],
   },
 };
@@ -908,7 +908,54 @@ const yoruSpriteFrames = {
 const yoruSpriteCache = new Map();
 
 function yoruSpritePath(file) {
-  return `./assets/Agents/${file}`;
+  return `./assets/Agents/Yoru_ball/${file}`;
+}
+
+/**
+ * Remove somente o fundo conectado às bordas. O interior escuro contido pelo
+ * aro permanece, preservando o efeito de esfera sem exibir o retângulo RGB.
+ */
+function prepareYoruBallSprite(image, frame) {
+  const [sourceX, sourceY, width, height] = frame.crop;
+  const surface = document.createElement("canvas");
+  surface.width = width;
+  surface.height = height;
+  const surfaceContext = surface.getContext("2d", { willReadFrequently: true });
+  surfaceContext.drawImage(image, sourceX, sourceY, width, height, 0, 0, width, height);
+  const imageData = surfaceContext.getImageData(0, 0, width, height);
+  const { data } = imageData;
+  const visited = new Uint8Array(width * height);
+  const queue = [];
+  const isOuterBackground = (pixel) => {
+    const offset = pixel * 4;
+    return data[offset] < 48 && data[offset + 1] < 60 && data[offset + 2] < 92;
+  };
+  const enqueue = (x, y) => {
+    const pixel = y * width + x;
+    if (visited[pixel] || !isOuterBackground(pixel)) return;
+    visited[pixel] = 1;
+    queue.push(pixel);
+  };
+  for (let x = 0; x < width; x += 1) {
+    enqueue(x, 0);
+    enqueue(x, height - 1);
+  }
+  for (let y = 0; y < height; y += 1) {
+    enqueue(0, y);
+    enqueue(width - 1, y);
+  }
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const pixel = queue[cursor];
+    const x = pixel % width;
+    const y = Math.floor(pixel / width);
+    data[pixel * 4 + 3] = 0;
+    if (x > 0) enqueue(x - 1, y);
+    if (x + 1 < width) enqueue(x + 1, y);
+    if (y > 0) enqueue(x, y - 1);
+    if (y + 1 < height) enqueue(x, y + 1);
+  }
+  surfaceContext.putImageData(imageData, 0, 0);
+  return surface;
 }
 
 function getYoruSprite(frame) {
@@ -916,8 +963,15 @@ function getYoruSprite(frame) {
   const cached = yoruSpriteCache.get(src);
   if (cached) return cached;
   const image = new Image();
-  const entry = { image, ready: false, failed: false };
-  image.onload = () => { entry.ready = true; };
+  const entry = { image: null, ready: false, failed: false };
+  image.onload = () => {
+    try {
+      entry.image = prepareYoruBallSprite(image, frame);
+      entry.ready = true;
+    } catch {
+      entry.failed = true;
+    }
+  };
   image.onerror = () => { entry.failed = true; };
   image.src = src;
   yoruSpriteCache.set(src, entry);
@@ -6311,8 +6365,9 @@ function drawYoruPlayerSprite(entity, weapon) {
   const sprite = getYoruSprite(frame);
   if (!sprite.ready || sprite.failed) return false;
 
-  const [sourceX, sourceY, sourceWidth, sourceHeight] = frame.crop;
-  const targetHeight = entity.moving ? 70 : 68;
+  const sourceWidth = sprite.image.width;
+  const sourceHeight = sprite.image.height;
+  const targetHeight = entity.moving ? 84 : 82;
   const scale = targetHeight / sourceHeight;
   const targetWidth = sourceWidth * scale;
   const feetY = entity.r + 2;
@@ -6322,27 +6377,22 @@ function drawYoruPlayerSprite(entity, weapon) {
   ctx.save();
   ctx.shadowColor = "rgba(24, 56, 140, 0.46)";
   ctx.shadowBlur = 6;
-  ctx.drawImage(
-    sprite.image,
-    sourceX,
-    sourceY,
-    sourceWidth,
-    sourceHeight,
-    drawX,
-    drawY,
-    targetWidth,
-    targetHeight,
-  );
+  if (frame.flipX) {
+    ctx.translate(drawX * 2 + targetWidth, 0);
+    ctx.scale(-1, 1);
+  }
+  ctx.drawImage(sprite.image, drawX, drawY, targetWidth, targetHeight);
   ctx.restore();
 
   // Converte a posição da mão no recorte para coordenadas locais do mundo.
-  const handX = drawX + frame.hand[0] * scale;
+  const handSourceX = frame.flipX ? sourceWidth - frame.hand[0] : frame.hand[0];
+  const handX = drawX + handSourceX * scale;
   const handY = drawY + frame.hand[1] * scale;
   ctx.save();
   ctx.translate(handX, handY);
   ctx.rotate(entity.angle);
   // r=0 faz o grip da textura coincidir com a origem calibrada da mão.
-  drawHeldWeapon({ ...entity, r: 0 }, weapon, "player", 0.72);
+  drawHeldWeapon({ ...entity, r: 0 }, weapon, "player", 0.66);
   ctx.restore();
   return true;
 }
@@ -6439,7 +6489,7 @@ function drawEntity(entity, color, label, kind = "bot") {
     ctx.strokeRect(left - 2, shieldY - 2, width + 4, 16);
     ctx.restore();
   } else {
-    const statusY = renderedYoruSprite ? entity.y - 56 : entity.y - entity.r - 15;
+    const statusY = renderedYoruSprite ? entity.y - 70 : entity.y - entity.r - 15;
     ctx.fillStyle = "rgba(0,0,0,0.45)";
     ctx.fillRect(entity.x - 20, statusY, 40, 5);
     ctx.fillStyle = kind === "bot" ? "#ff5b68" : entity.hp > maxHp * 0.4 ? "#66e48f" : "#ff5b5b";
