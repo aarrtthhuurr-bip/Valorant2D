@@ -8632,22 +8632,31 @@ const PLAY_MODE_OPTIONS = [
   {
     id: "default",
     name: "Default",
-    icon: "D",
+    tag: "CLÁSSICO",
     description: "Combate tático e objetivo de Spike.",
   },
   {
     id: "blackout",
     name: "Blackout",
-    icon: "B",
+    tag: "VISÃO LIMITADA",
     description: "Visão restrita e leitura de campo.",
   },
   {
     id: "outbreak",
     name: "Outbreak",
-    icon: "O",
+    tag: "SOBREVIVÊNCIA",
     description: "Sobrevivência em ondas infinitas.",
   },
 ];
+
+function playModeIconSvg(modeId) {
+  const icons = {
+    default: '<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="8"></circle><circle cx="16" cy="16" r="2"></circle><path d="M16 3v6M16 23v6M3 16h6M23 16h6"></path></svg>',
+    blackout: '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 16s5-8 13-8 13 8 13 8-5 8-13 8S3 16 3 16Z"></path><circle cx="16" cy="16" r="4"></circle><path d="M6 5l20 22"></path></svg>',
+    outbreak: '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 17h5l3-8 5 15 3-7h8"></path><path d="M25 7a12 12 0 1 0 2 17"></path></svg>',
+  };
+  return icons[modeId] || icons.default;
+}
 
 function showModeSelect(immediate = false) {
   if (!immediate && game.menuState === "main") {
@@ -8671,18 +8680,19 @@ function renderModeSelect() {
       <button type="button" class="mode-select-back menu-button menu-back icon-only" aria-label="Voltar ao menu" title="Voltar ao menu"></button>
     </footer>`;
   const grid = ui.menuButtons.querySelector(".mode-select-grid");
-  for (const option of PLAY_MODE_OPTIONS) {
+  PLAY_MODE_OPTIONS.forEach((option, index) => {
     const card = document.createElement("button");
     card.type = "button";
     card.className = `mode-card mode-card-${option.id}`;
     card.innerHTML = `
-      <span class="mode-card-icon" aria-hidden="true">${option.icon}</span>
-      <strong>${option.name}</strong>
-      <small>${option.description}</small>`;
+      <span class="mode-card-index" aria-hidden="true">0${index + 1}</span>
+      <span class="mode-card-icon" aria-hidden="true">${playModeIconSvg(option.id)}</span>
+      <span class="mode-card-copy"><small>${option.tag}</small><strong>${option.name}</strong><em>${option.description}</em></span>
+      <span class="mode-card-arrow" aria-hidden="true">›</span>`;
     card.addEventListener("click", () => selectPlayMode(option.id));
     attachButtonFeedback(card);
     grid.appendChild(card);
-  }
+  });
   ui.menuButtons.querySelector(".mode-select-back")?.addEventListener("click", showMainMenu);
 }
 

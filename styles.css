@@ -3506,8 +3506,8 @@ button.click-feedback::after {
 .menu-state-mode-select .menu-art { display: none; }
 
 .menu-state-mode-select .menu-card {
-  width: min(760px, calc(100% - 28px));
-  max-width: 760px;
+  width: min(650px, calc(100% - 28px));
+  max-width: 650px;
   min-width: 0;
   min-height: 0;
   padding: 24px;
@@ -3537,26 +3537,27 @@ button.click-feedback::after {
 }
 
 .mode-select-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .mode-card {
   position: relative;
   display: flex;
   min-width: 0;
-  min-height: 178px;
-  padding: 20px 16px;
+  min-height: 92px;
+  padding: 13px 18px;
   overflow: hidden;
   border: 1px solid rgba(232, 232, 225, 0.14);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.045);
   color: #fff;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  justify-content: center;
-  text-align: center;
+  justify-content: flex-start;
+  gap: 15px;
+  text-align: left;
   transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -3575,7 +3576,7 @@ button.click-feedback::after {
   border-color: rgba(255, 70, 85, 0.72);
   background: rgba(255, 255, 255, 0.072);
   box-shadow: 0 0 24px rgba(255, 70, 85, 0.14);
-  transform: translateY(-4px);
+  transform: translateX(4px);
 }
 
 .mode-card:hover::before,
@@ -3585,32 +3586,87 @@ button.click-feedback::after {
   position: relative;
   z-index: 1;
   display: grid;
-  width: 48px;
-  height: 48px;
-  margin-bottom: 15px;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 0;
+  flex: 0 0 52px;
   place-items: center;
   border: 1px solid rgba(255, 70, 85, 0.42);
   border-radius: 6px;
   background: rgba(255, 70, 85, 0.08);
   color: #ff5a68;
-  font-size: 18px;
-  font-weight: 900;
 }
 
-.mode-card strong,
-.mode-card small { position: relative; z-index: 1; }
+.mode-card-icon svg {
+  width: 27px;
+  height: 27px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mode-card-copy {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
 
 .mode-card strong {
-  font-size: 18px;
+  color: #f0f5f7;
+  font-size: 17px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.mode-card small {
-  margin-top: 7px;
+.mode-card-copy small {
+  margin-bottom: 3px;
+  color: #ff5a68;
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+}
+
+.mode-card-copy em {
+  margin-top: 4px;
   color: #7f929f;
   font-size: 10px;
+  font-style: normal;
   line-height: 1.45;
+}
+
+.mode-card-index {
+  position: relative;
+  z-index: 1;
+  color: #4c5d68;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.mode-card-arrow {
+  position: relative;
+  z-index: 1;
+  color: #536773;
+  font-size: 27px;
+  font-weight: 300;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.mode-card:hover .mode-card-arrow,
+.mode-card:focus-visible .mode-card-arrow {
+  color: #ff5a68;
+  transform: translateX(3px);
+}
+
+.mode-card-outbreak {
+  background:
+    linear-gradient(90deg, rgba(255, 70, 85, 0.055), transparent 48%),
+    rgba(255, 255, 255, 0.045);
 }
 
 .mode-card-outbreak:hover,
@@ -3637,7 +3693,8 @@ button.click-feedback::after {
   }
 
   .mode-select-grid { grid-template-columns: 1fr; }
-  .mode-card { min-height: 132px; }
+  .mode-card { min-height: 88px; }
+  .mode-card-index { display: none; }
 }
 
 .agent-overlay {
