@@ -8,7 +8,7 @@
   <!-- Altere apenas este valor caso o endereço definitivo do Render mude. -->
   <meta name="valorant2d-api-url" content="https://valorant2d.onrender.com">
   <title>Valorant2D</title>
-  <link rel="stylesheet" href="./styles.css?v=20260717-leaderboard-profile">
+  <link rel="stylesheet" href="./styles.css?v=20260717-outbreak-systems">
   <script src="https://unpkg.com/lucide@1.24.0" integrity="sha384-mooE85Luwgx+AyykX7e90VcN8/QCFTSIwPuHLmvcsLVoA0en7lKYb9XlOzn5G2co" crossorigin="anonymous"></script>
   <link rel="shortcut icon" href="./assets/Favicon/favicon.ico" type="image/x-icon">
 </head>
@@ -57,6 +57,8 @@
           </div>
           <div class="bar ammo"><i id="ammoBar"></i></div>
           <span class="spike-status" id="spikeText">Spike</span>
+          <span class="outbreak-ult-stock hidden" id="outbreakUltStock"></span>
+          <span class="outbreak-effect-stock hidden" id="outbreakEffectStock"></span>
         </div>
       </div>
 
@@ -80,6 +82,7 @@
             <button type="button" data-shop-tab="weapons">Armas</button>
             <button type="button" data-shop-tab="equipment">Equip.</button>
             <button type="button" data-shop-tab="allies" id="alliesTab">Aliados</button>
+            <button type="button" data-shop-tab="ults" id="ultsTab">Ults</button>
           </div>
 
           <div class="panel shop-panel" data-shop-panel="weapons">
@@ -94,8 +97,14 @@
           </div>
 
           <div class="panel shop-panel" data-shop-panel="allies">
-            <h2>Melhorias de Aliados</h2>
+            <h2>Aliados e Upgrades</h2>
             <div class="grid" id="allyButtons"></div>
+          </div>
+
+          <div class="panel shop-panel" data-shop-panel="ults">
+            <h2>Unidades de Ultimate</h2>
+            <p class="ult-shop-rule">Acumule uma única tecnologia por vez. Esgote as cargas para trocar de agente.</p>
+            <div class="grid ult-shop-grid" id="ultButtons"></div>
           </div>
 
         </div>
@@ -387,6 +396,6 @@
     </div>
   </main>
 
-  <script src="./game.js?v=20260717-leaderboard-profile"></script>
+  <script src="./game.js?v=20260717-outbreak-systems"></script>
 </body>
 </html>

@@ -28,6 +28,9 @@ const ui = {
   weaponButtons: document.getElementById("weaponButtons"),
   equipmentButtons: document.getElementById("equipmentButtons"),
   allyButtons: document.getElementById("allyButtons"),
+  ultButtons: document.getElementById("ultButtons"),
+  outbreakUltStock: document.getElementById("outbreakUltStock"),
+  outbreakEffectStock: document.getElementById("outbreakEffectStock"),
   hpBar: document.getElementById("hpBar"),
   ammoBar: document.getElementById("ammoBar"),
   shopBackdrop: document.getElementById("shopBackdrop"),
@@ -1044,10 +1047,9 @@ const weaponAudio = {
 };
 
 const equipment = [
-  { id: "heavyArmor", name: "Colete pesado", price: 2600, desc: "50 de armadura consumivel", apply: () => { game.upgrades.armorCapacity = Math.max(game.upgrades.armorCapacity, 50); game.armor = 50; if (game.player) game.player.armor = 50; } },
-  { id: "boots", name: "Botas taticas", price: 1500, desc: "+10% velocidade", apply: () => { game.upgrades.speed = true; } },
-  { id: "magazine", name: "Carregador extra", price: 1800, desc: "+20% munição no pente", apply: () => { game.upgrades.magazine = true; } },
-  { id: "reloadKit", name: "Kit de recarga", price: 1700, desc: "Recarga 20% mais rapida", apply: () => { game.upgrades.reload = true; } },
+  { id: "superShield", name: "Super Escudo", price: 3600, desc: "Núcleo reforçado que eleva permanentemente a regeneração do colete a 100 de armadura.", outbreakOnly: true, apply: () => { game.outbreakEffects.superShieldUntilWave = Number.MAX_SAFE_INTEGER; } },
+  { id: "ultraShield", name: "Ultra Escudo", price: 4200, desc: "Blindagem de assalto com 150 de armadura por 10 ondas.", outbreakOnly: true, apply: () => { game.outbreakEffects.ultraShieldUntilWave = game.outbreakWave + 10; } },
+  { id: "blasterShield", name: "Blaster Escudo", price: 5600, desc: "Plataforma experimental com 200 de armadura por 10 ondas.", outbreakOnly: true, apply: () => { game.outbreakEffects.blasterShieldUntilWave = game.outbreakWave + 10; } },
   {
     id: "fullRecovery",
     name: "Recuperação Total",
@@ -1060,30 +1062,51 @@ const equipment = [
       game.armor = game.player.armor;
     },
   },
-  {
-    id: "superShield",
-    name: "Super Escudo",
-    price: 4000,
-    desc: "Capacidade regenerativa de 100 por 10 waves",
-    outbreakOnly: true,
-    apply: () => { game.outbreakEffects.superShieldUntilWave = game.outbreakWave + 10; },
-  },
+  { id: "magazine", name: "Carregador Extra", price: 1800, desc: "Amplia cada pente em 20% durante as próximas 10 ondas.", outbreakOnly: true, apply: () => { game.outbreakEffects.magazineUntilWave = game.outbreakWave + 10; } },
+  { id: "reloadKit", name: "Kit de Recarga", price: 1700, desc: "Mecanismo calibrado que reduz permanentemente o tempo de recarga em 10%.", outbreakOnly: true, apply: () => { game.upgrades.reload = true; } },
   {
     id: "adrenaline",
     name: "Injeção de Adrenalina",
     price: 2500,
-    desc: "+15% de velocidade por 10 waves",
+    desc: "Composto de combate que aumenta a velocidade em 20% por 10 ondas.",
     outbreakOnly: true,
     apply: () => { game.outbreakEffects.adrenalineUntilWave = game.outbreakWave + 10; },
   },
 ];
 
 const allyItems = [
-  { id: "allyArmor", name: "Coletes aliados", price: 1200, desc: "Equipe aliados com 35 de armadura", apply: () => { game.allyLoadout.armor = 35; } },
-  { id: "allySmg", name: "SMG aliado", price: 1500, desc: "Aliados usam SMG", weaponId: "smg", apply: () => { game.allyLoadout.weaponId = "smg"; } },
-  { id: "allyRifle", name: "Rifle aliado", price: 3200, desc: "Aliados usam Rifle", weaponId: "rifle", apply: () => { game.allyLoadout.weaponId = "rifle"; } },
-  { id: "allySniper", name: "Sniper aliado", price: 5200, desc: "Um tiro forte, cadencia baixa", weaponId: "sniper", apply: () => { game.allyLoadout.weaponId = "sniper"; } },
+  { id: "allyUnit", name: "Recrutar Aliado", price: 3000, desc: "Operador imortal que acompanha o jogador.", apply: recruitOutbreakAlly },
+  { id: "allySheriff", name: "Sheriff", price: 1050, desc: "Precisão de alto impacto.", weaponId: "revolver", apply: () => { game.allyLoadout.weaponId = "revolver"; } },
+  { id: "allyBulldog", name: "Bulldog", price: 3200, desc: "Rajadas controladas para média distância.", weaponId: "carbine", apply: () => { game.allyLoadout.weaponId = "carbine"; } },
+  { id: "allyVandal", name: "Vandal", price: 3900, desc: "Poder de parada em qualquer distância.", weaponId: "rifle", apply: () => { game.allyLoadout.weaponId = "rifle"; } },
+  { id: "allyOperator", name: "Operator", price: 6900, desc: "Cobertura pesada de longa distância.", weaponId: "sniper", apply: () => { game.allyLoadout.weaponId = "sniper"; } },
+  { id: "allyCaliber", name: "Balas de Alto Calibre", price: 3200, desc: "Aumenta em 20% o dano do aliado.", apply: () => { game.allyLoadout.damageMultiplier = 1.2; } },
+  { id: "allyLastResort", name: "Último Recurso", price: 2100, desc: "Entrega um med-kit quando seu escudo chega a zero.", apply: () => { game.allyLoadout.lastResort = true; } },
 ];
+
+const purchasableUlts = [
+  { id: "neon", name: "Neon", price: 1600, desc: "Ativa sua fúria e dispara raios de choque devastadores no lugar da munição." },
+  { id: "viper", name: "Viper", price: 1550, desc: "Libera uma nuvem química que debilita as ameaças no campo." },
+  { id: "sage", name: "Sage", price: 1400, desc: "Canaliza energia restauradora para retomar o controle do combate." },
+  { id: "omen", name: "Omen", price: 1300, desc: "Rasga as sombras para reposicionar-se e cegar o inimigo." },
+  { id: "jett", name: "Jett", price: 1500, desc: "Invoca lâminas voadoras de velocidade e precisão mortais." },
+  { id: "killjoy", name: "Killjoy", price: 1000, desc: "Instala um confinamento tecnológico que paralisa a área." },
+  { id: "raze", name: "Raze", price: 1800, desc: "Equipa um lança-foguetes para impacto massivo em área." },
+  { id: "yoru", name: "Yoru", price: 1200, desc: "Entra na dimensão para ficar invisível e invulnerável." },
+];
+
+function recruitOutbreakAlly(respawnOnly = false) {
+  if (!game.player) return;
+  game.allyLoadout.recruited = true;
+  game.allyCount = Math.max(1, game.allyCount);
+  const spawn = nearestWalkablePoint({ x: game.player.x + 64, y: game.player.y + 42 }, game.player);
+  const ally = makeAlly(spawn, 0);
+  ally.id = "ally-outbreak-0";
+  ally.weapon = weapons.find((weapon) => weapon.id === game.allyLoadout.weaponId) || weapons[0];
+  ally.immortal = true;
+  game.allies = [ally];
+  if (!respawnOnly) setMessage("Aliado recrutado para a operação Outbreak.");
+}
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, Number.isFinite(Number(value)) ? Number(value) : 0));
@@ -1720,7 +1743,22 @@ const game = {
   // Indica que a loja foi aberta pelo painel de desenvolvimento e deve
   // retomar a mesma onda, preservando os inimigos que estavam ativos.
   outbreakAdminShopResume: false,
-  outbreakEffects: { superShieldUntilWave: 0, adrenalineUntilWave: 0 },
+  outbreakEffects: {
+    superShieldUntilWave: 0,
+    ultraShieldUntilWave: 0,
+    blasterShieldUntilWave: 0,
+    magazineUntilWave: 0,
+    adrenalineUntilWave: 0,
+    pulseShieldUntil: 0,
+    phaseShiftUntil: 0,
+    overdriveUntil: 0,
+    chronosUntil: 0,
+    empUntil: 0,
+    lastModifierId: null,
+    lastModifierUntil: 0,
+  },
+  outbreakUltInventory: { agentId: null, charges: 0 },
+  airdrops: [],
   difficulty: "normal",
   sandbox: false,
   godMode: false,
@@ -1791,7 +1829,7 @@ const game = {
   ownedWeapons: new Set(["pistol"]),
   upgrades: { armorCapacity: 0, speed: false, magazine: false, reload: false },
   armor: 0,
-  allyLoadout: { weaponId: "pistol", armor: 0 },
+  allyLoadout: { weaponId: "pistol", recruited: false, damageMultiplier: 1, lastResort: false, lastResortWave: 0 },
   roundMoneyDelta: 0,
   player: null,
   bots: [],
@@ -1843,12 +1881,17 @@ function outbreakEffectActive(untilWave) {
 
 function effectivePlayerMaxArmor() {
   if (!game.outbreak) return game.upgrades.armorCapacity;
-  return outbreakEffectActive(game.outbreakEffects.superShieldUntilWave) ? 100 : 50;
+  if (outbreakEffectActive(game.outbreakEffects.blasterShieldUntilWave)) return 200;
+  if (outbreakEffectActive(game.outbreakEffects.ultraShieldUntilWave)) return 150;
+  if (outbreakEffectActive(game.outbreakEffects.superShieldUntilWave)) return 100;
+  return 50;
 }
 
 function effectivePlayerSpeed() {
   const baseSpeed = game.upgrades.speed ? 248 : 225;
-  return outbreakEffectActive(game.outbreakEffects.adrenalineUntilWave) ? baseSpeed * 1.15 : baseSpeed;
+  const adrenaline = outbreakEffectActive(game.outbreakEffects.adrenalineUntilWave) ? 1.2 : 1;
+  const overdrive = game.outbreak && performance.now() < game.outbreakEffects.overdriveUntil ? 1.28 : 1;
+  return baseSpeed * adrenaline * overdrive;
 }
 
 function synchronizePlayerEquipment() {
@@ -2132,14 +2175,19 @@ function randomAccessiblePickupPoint(occupied = []) {
 function spawnOutbreakMedkits() {
   const occupied = [];
   const center = { x: map.width / 2, y: map.height / 2 };
-  for (let index = 0; index < 2; index++) {
+  const amount = 2 + Math.floor(Math.max(0, game.outbreakWave) / 10);
+  for (let index = 0; index < amount; index++) {
     let point = null;
     for (let attempt = 0; attempt < 100 && !point; attempt++) {
       const candidate = randomAccessiblePickupPoint(occupied);
       const fromCenter = Math.hypot(candidate.x - center.x, candidate.y - center.y);
       if (fromCenter >= 150 && fromCenter <= 560) point = candidate;
     }
-    point ||= nearestWalkablePoint({ x: center.x + (index ? 330 : -330), y: center.y + 120 }, center);
+    const fallbackAngle = (index / amount) * Math.PI * 2;
+    point ||= nearestWalkablePoint({
+      x: center.x + Math.cos(fallbackAngle) * 330,
+      y: center.y + Math.sin(fallbackAngle) * 250,
+    }, center);
     occupied.push(point);
   }
   game.medkits = occupied.map((point, index) => ({
@@ -2147,6 +2195,83 @@ function spawnOutbreakMedkits() {
     id: `outbreak-medkit-${game.outbreakWave}-${index}`,
     phase: index * Math.PI,
   }));
+}
+
+const AIRDROP_MODIFIERS = [
+  { id: "pulseShield", name: "Pulse Shield", color: "#38e8ff", icon: "⬡" },
+  { id: "nanoHeal", name: "Nano-Heal", color: "#5cff8d", icon: "+" },
+  { id: "phaseShift", name: "Phase Shift", color: "#b66cff", icon: "◇" },
+  { id: "overdrive", name: "Overdrive", color: "#ffe047", icon: "↯" },
+  { id: "chronos", name: "Chronos", color: "#159fa8", icon: "⌛" },
+  { id: "empPulse", name: "EMP Pulse", color: "#ff8b38", icon: "◉" },
+  { id: "clearWave", name: "Clear Wave", color: "#f2f5f7", icon: "⇆" },
+];
+
+function spawnOutbreakAirdrop() {
+  const point = randomAccessiblePickupPoint(game.medkits);
+  game.airdrops.push({
+    ...point,
+    id: `airdrop-${game.outbreakWave}-${Date.now()}`,
+    altitude: 260,
+    landed: false,
+    phase: Math.random() * Math.PI * 2,
+  });
+}
+
+function activateAirdropModifier(modifier) {
+  const now = performance.now();
+  const p = game.player;
+  if (!p) return;
+  game.outbreakEffects.lastModifierId = modifier.id;
+  game.outbreakEffects.lastModifierUntil = now + 2200;
+  if (modifier.id === "pulseShield") game.outbreakEffects.pulseShieldUntil = now + 5000;
+  if (modifier.id === "nanoHeal") p.hp = Math.min(p.maxHp, p.hp + Math.ceil(p.maxHp * 0.35));
+  if (modifier.id === "phaseShift") game.outbreakEffects.phaseShiftUntil = now + 3000;
+  if (modifier.id === "overdrive") game.outbreakEffects.overdriveUntil = now + 6000;
+  if (modifier.id === "chronos") game.outbreakEffects.chronosUntil = now + 4000;
+  if (modifier.id === "empPulse") {
+    game.outbreakEffects.empUntil = now + 3000;
+    game.bots.forEach((bot) => { if (bot.alive) bot.detainedTimer = Math.max(bot.detainedTimer || 0, 3); });
+  }
+  if (modifier.id === "clearWave") {
+    for (const bot of game.bots) {
+      if (!bot.alive) continue;
+      const dx = bot.x - p.x;
+      const dy = bot.y - p.y;
+      const length = Math.hypot(dx, dy) || 1;
+      safeDisplaceEntity(bot, (dx / length) * 190, (dy / length) * 190);
+    }
+    for (const wall of game.destructibles) {
+      const centerX = wall.x + wall.w / 2;
+      const centerY = wall.y + wall.h / 2;
+      const dx = centerX - p.x;
+      const dy = centerY - p.y;
+      const length = Math.hypot(dx, dy) || 1;
+      wall.x = Math.max(8, Math.min(map.width - wall.w - 8, wall.x + (dx / length) * 120));
+      wall.y = Math.max(8, Math.min(map.height - wall.h - 8, wall.y + (dy / length) * 120));
+    }
+  }
+  synchronizePlayerEquipment();
+  spawnParticles(p.x, p.y, modifier.color, 42, 250);
+  setMessage(`${modifier.name} ativado.`);
+}
+
+function updateOutbreakAirdrops(dt) {
+  for (const drop of game.airdrops) {
+    if (!drop.landed) {
+      drop.altitude = Math.max(0, drop.altitude - 210 * dt);
+      if (drop.altitude === 0) {
+        drop.landed = true;
+        spawnParticles(drop.x, drop.y, "#c79258", 24, 150);
+      }
+      continue;
+    }
+    if (Math.hypot(game.player.x - drop.x, game.player.y - drop.y) > game.player.r + 26) continue;
+    const modifier = AIRDROP_MODIFIERS[Math.floor(Math.random() * AIRDROP_MODIFIERS.length)];
+    activateAirdropModifier(modifier);
+    drop.collected = true;
+  }
+  game.airdrops = game.airdrops.filter((drop) => !drop.collected);
 }
 
 function resetRound() {
@@ -2315,7 +2440,9 @@ function fullReset() {
   game.ownedWeapons = new Set(["pistol"]);
   game.upgrades = { armorCapacity: 0, speed: false, magazine: false, reload: false };
   game.armor = 0;
-  game.allyLoadout = { weaponId: "pistol", armor: 0 };
+  game.allyLoadout = { weaponId: "pistol", recruited: false, damageMultiplier: 1, lastResort: false, lastResortWave: 0 };
+  game.outbreakUltInventory = { agentId: null, charges: 0 };
+  game.airdrops = [];
   game.selectedAgent = agents[0];
   game.agentLocked = false;
   game.godMode = false;
@@ -2551,11 +2678,12 @@ function opposingSide(side) {
 }
 
 function currentMagSize() {
-  return Math.ceil(game.selectedWeapon.mag * (game.upgrades.magazine ? 1.2 : 1));
+  const boosted = game.upgrades.magazine || outbreakEffectActive(game.outbreakEffects.magazineUntilWave);
+  return Math.ceil(game.selectedWeapon.mag * (boosted ? 1.2 : 1));
 }
 
 function currentReloadTime() {
-  return game.selectedWeapon.reload * (game.upgrades.reload ? 0.8 : 1);
+  return game.selectedWeapon.reload * (game.upgrades.reload ? 0.9 : 1);
 }
 
 function currentPlayerPlantTime() {
@@ -2568,6 +2696,14 @@ function currentPlayerDefuseTime() {
 
 function applyDamage(entity, amount) {
   if (entity.id === "player" && game.godMode) return 0;
+  if (game.outbreak && entity.id?.startsWith("ally-")) return 0;
+  if (entity.id === "player" && game.outbreak && performance.now() < game.outbreakEffects.phaseShiftUntil) return 0;
+  if (entity.id === "player" && game.outbreak && performance.now() < game.outbreakEffects.pulseShieldUntil && amount > 0) {
+    game.outbreakEffects.pulseShieldUntil = 0;
+    spawnParticles(entity.x, entity.y, "#38e8ff", 30, 210);
+    setMessage("Pulse Shield neutralizou o impacto.");
+    return 0;
+  }
   if (entity.invulnerable || entity.untargetable) return 0;
   if (entity.ultimate?.type === "yoru") return 0;
   if (amount > 0 && entity.orbChannel) entity.orbChannel = null;
@@ -2581,6 +2717,15 @@ function applyDamage(entity, amount) {
   if (entity.id === "player") {
     game.armor = Math.max(0, entity.armor || 0);
     if (game.outbreak && amount > 0) game.outbreakLastDamageAt = game.outbreakElapsed;
+    if (game.outbreak && entity.armor <= 0 && game.allyLoadout.lastResort
+      && game.allyLoadout.lastResortWave !== game.outbreakWave && game.allies.length) {
+      game.allyLoadout.lastResortWave = game.outbreakWave;
+      const ally = game.allies[0];
+      ally.x = entity.x + 38;
+      ally.y = entity.y + 38;
+      game.medkits.push({ x: entity.x, y: entity.y, id: `last-resort-${Date.now()}`, phase: 0 });
+      setMessage("Último Recurso: aliado entregou um med-kit.");
+    }
   }
   return remaining;
 }
@@ -2594,6 +2739,8 @@ function updateOutbreak(dt) {
     game.player.armor = Math.min(shieldCapacity, game.player.armor + 12 * dt);
     game.armor = game.player.armor;
   }
+  updateOutbreakAirdrops(dt);
+  synchronizePlayerEquipment();
   for (const bot of game.bots) {
     if (!bot.alive) continue;
     bot.lastKnownPlayer = { x: game.player.x, y: game.player.y };
@@ -2631,6 +2778,11 @@ function circleRectCollides(entity, rect) {
 }
 
 function moveEntity(entity, dx, dy, walls) {
+  if (entity?.id === "player" && game.outbreak && performance.now() < game.outbreakEffects.phaseShiftUntil) {
+    entity.x = Math.max(entity.r, Math.min(map.width - entity.r, entity.x + dx));
+    entity.y = Math.max(entity.r, Math.min(map.height - entity.r, entity.y + dy));
+    return Math.hypot(dx, dy);
+  }
   const staticColliders = walls || [];
   const includeDestructibles = walls === map.walls;
   const collidesWithScenario = () => staticColliders.some((wall) => circleRectCollides(entity, wall))
@@ -3936,10 +4088,13 @@ function getUltCost(entity) {
 function activateUltimate(entity) {
   const infiniteSandboxUlt = game.sandbox && entity?.id === "player";
   const tutorialFreeUlt = game.tutorial && entity?.id === "player" && game.tutorialFreeUlts > 0;
+  const purchasedUlt = game.outbreak && entity?.id === "player" && game.outbreakUltInventory.charges > 0
+    ? game.outbreakUltInventory
+    : null;
   const cost = getUltCost(entity);
-  if (!entity?.alive || (!infiniteSandboxUlt && !tutorialFreeUlt && getUltimatePoints(entity) < cost) || (!infiniteSandboxUlt && entity.ultimate)) {
+  if (!entity?.alive || (!infiniteSandboxUlt && !tutorialFreeUlt && !purchasedUlt && getUltimatePoints(entity) < cost) || (!infiniteSandboxUlt && entity.ultimate)) {
     // Feedback visual quando não há orbs suficientes
-    if (entity?.id === "player" && !entity.ultimate && !infiniteSandboxUlt && !tutorialFreeUlt) {
+    if (entity?.id === "player" && !entity.ultimate && !infiniteSandboxUlt && !tutorialFreeUlt && !purchasedUlt) {
       const current = getUltimatePoints(entity);
       if (current < cost) {
         game.ultFlashTimer = 0.55;
@@ -3949,7 +4104,7 @@ function activateUltimate(entity) {
     }
     return false;
   }
-  const agent = agentById(entity.agentId);
+  const agent = agentById(purchasedUlt?.agentId || entity.agentId);
   const team = entityTeam(entity);
   if (infiniteSandboxUlt) entity.ultimate = null;
   else if (tutorialFreeUlt) {
@@ -3958,7 +4113,10 @@ function activateUltimate(entity) {
     if (game.tutorialFreeUlts > 0) setUltimatePoints(entity, cost);
     else setUltimatePoints(entity, 0);
   }
-  else {
+  else if (purchasedUlt) {
+    purchasedUlt.charges = Math.max(0, purchasedUlt.charges - 1);
+    if (purchasedUlt.charges === 0) purchasedUlt.agentId = null;
+  } else {
     // Consome exatamente o custo de orbs do agente
     setUltimatePoints(entity, getUltimatePoints(entity) - cost);
   }
@@ -4003,7 +4161,8 @@ function activateUltimate(entity) {
     game.screenTint = { color: "rgba(30, 58, 180, 0.34)", life: 8, maxLife: 8 };
     addUltimateEffect("dimensional-mask", entity, "#3e6bff", 8);
   } else if (agent.id === "viper") {
-    entity.ultimate = { type: "viper", life: 999, maxLife: 999, pitId: `viper-pit-${Date.now()}-${Math.random().toString(16).slice(2)}` };
+    const viperDuration = purchasedUlt ? 12 : 999;
+    entity.ultimate = { type: "viper", life: viperDuration, maxLife: viperDuration, pitId: `viper-pit-${Date.now()}-${Math.random().toString(16).slice(2)}` };
     const pitRadius = 230;
     const activationPoint = {
       x: clamp(entity.x, 0, map.width),
@@ -4014,8 +4173,8 @@ function activateUltimate(entity) {
       y: activationPoint.y,
       r: 48,
       targetR: pitRadius,
-      life: 999,
-      maxLife: 999,
+      life: viperDuration,
+      maxLife: viperDuration,
       poison: true,
       damagePerSecond: 35,
       ownerTeam: team,
@@ -4028,7 +4187,7 @@ function activateUltimate(entity) {
       visualPhase: 0,
       anchored: true,
     });
-    addUltimateEffect("chemical-fog", entity, "#35c46a", 999);
+    addUltimateEffect("chemical-fog", entity, "#35c46a", viperDuration);
   } else if (agent.id === "sage") {
     entity.ultimate = { type: "sage", life: 1, maxLife: 1 };
     // Ultimate da Sage: restaura vida e concede escudo total mesmo sem compra previa.
@@ -4171,12 +4330,19 @@ function reserveOrbForEntity(entity, orb) {
 function collectPickups(entity, dt) {
    if (!entity?.alive) return;
    const medkit = game.medkits.find((item) => Math.hypot(entity.x - item.x, entity.y - item.y) < entity.r + 22);
-   if (medkit && entity.hp < entity.maxHp) {
-     const heal = game.outbreak ? Math.round(entity.maxHp * 0.5) : MEDKIT_HEAL;
-     entity.hp = Math.min(entity.maxHp, entity.hp + heal);
+   const needsOutbreakStatus = game.outbreak && entity.id === "player"
+     && (entity.hp < entity.maxHp || entity.armor < entity.maxArmor);
+   if (medkit && (entity.hp < entity.maxHp || needsOutbreakStatus)) {
+     const heal = MEDKIT_HEAL;
+     const missingHp = Math.max(0, entity.maxHp - entity.hp);
+     const hpRecovered = Math.min(heal, missingHp);
+     entity.hp += hpRecovered;
+     const shieldRecovered = game.outbreak ? Math.min(heal - hpRecovered, Math.max(0, entity.maxArmor - entity.armor)) : 0;
+     entity.armor += shieldRecovered;
+     if (entity.id === "player") game.armor = entity.armor;
      game.medkits = game.medkits.filter((item) => item !== medkit);
      spawnParticles(medkit.x, medkit.y, "#62e6a0", 30, 190);
-     setMessage(`${entity.id === "player" ? "Med-Kit coletado" : "Bot coletou Med-Kit"}: +${heal} HP.`);
+     setMessage(`${entity.id === "player" ? "Med-Kit coletado" : "Bot coletou Med-Kit"}: +${hpRecovered} vida${shieldRecovered ? ` e +${shieldRecovered} escudo` : ""}.`);
    }
    const orb = game.ultOrbs.find((item) => Math.hypot(entity.x - item.x, entity.y - item.y) < entity.r + 21);
    if (orb && entity.id !== "player" && entity.orbAssignment !== orb.id) {
@@ -4727,6 +4893,10 @@ function botShootAt(bot, target, dt, team, firePenalty = 1, options = {}) {
   bot.fireTimer -= dt;
   if (bot.fireTimer <= 0) {
     shoot(bot, aimX, aimY, weapon, team);
+    if (team === "ally" && game.allyLoadout.damageMultiplier > 1) {
+      const latest = game.bullets.slice(-Math.max(1, weapon.pellets || 1));
+      latest.forEach((bullet) => { if (bullet.team === "ally") bullet.damage *= game.allyLoadout.damageMultiplier; });
+    }
     if (options.smokeProbe) {
       game.neonTrails.push({
         x1: bot.x,
@@ -5212,18 +5382,19 @@ function updateBots(dt) {
   const p = game.player;
   game.botSpatialIndex = buildEntitySpatialIndex(game.bots);
   if (game.outbreak) {
+    const outbreakBotDt = performance.now() < game.outbreakEffects.chronosUntil ? dt * 0.38 : dt;
     for (const bot of game.bots) {
       if (!bot.alive) continue;
       const target = cachedBotPerception(bot, "player", () => botCanSeePlayer(bot) ? p : null);
-      updateBotAwareness(bot, target, dt);
-      const fighting = botFightPlayer(bot, dt, {
+      updateBotAwareness(bot, target, outbreakBotDt);
+      const fighting = botFightPlayer(bot, outbreakBotDt, {
         state: "hunt",
         preferCover: bot.hp < bot.maxHp * 0.35,
         firePenalty: 1,
       });
       const distance = Math.hypot(p.x - bot.x, p.y - bot.y);
-      if (distance > 150) moveBotToward(bot, p, dt, fighting ? 0.58 : 1);
-      keepBotSpacing(bot, dt);
+      if (distance > 150) moveBotToward(bot, p, outbreakBotDt, fighting ? 0.58 : 1);
+      keepBotSpacing(bot, outbreakBotDt);
     }
     return;
   }
@@ -5472,11 +5643,14 @@ function updateBullets(dt) {
   const needsBotHitIndex = game.bullets.some((bullet) => bullet.team === "player" || bullet.team === "ally");
   const botHitIndex = needsBotHitIndex ? buildEntitySpatialIndex(game.bots) : null;
   for (const bullet of game.bullets) {
+    const bulletDt = game.outbreak && bullet.team === "bot" && performance.now() < game.outbreakEffects.chronosUntil
+      ? dt * 0.38
+      : dt;
     const oldX = bullet.x;
     const oldY = bullet.y;
-    bullet.x += bullet.vx * dt;
-    bullet.y += bullet.vy * dt;
-    bullet.life -= dt;
+    bullet.x += bullet.vx * bulletDt;
+    bullet.y += bullet.vy * bulletDt;
+    bullet.life -= bulletDt;
     if (bullet.ultimateTrail) {
       game.neonTrails.push({
         x1: oldX,
@@ -6823,6 +6997,34 @@ function drawSpikeHint() {
 
 function drawMedkitsAndOrbs() {
   const now = performance.now() / 1000;
+  for (const drop of game.airdrops) {
+    if (!estaNoCampoDeVisao(drop, 40)) continue;
+    const y = drop.y - drop.altitude;
+    ctx.save();
+    ctx.globalAlpha = drop.landed ? 0.36 : 0.18;
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    ctx.ellipse(drop.x, drop.y + 18, 30, 9, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.translate(drop.x, y);
+    ctx.rotate(Math.sin(now * 1.4 + drop.phase) * (drop.landed ? 0 : 0.08));
+    ctx.fillStyle = "#634126";
+    ctx.strokeStyle = "#d29a5e";
+    ctx.lineWidth = 2;
+    ctx.fillRect(-25, -21, 50, 42);
+    ctx.strokeRect(-25, -21, 50, 42);
+    ctx.strokeStyle = "rgba(255,220,170,.7)";
+    ctx.beginPath();
+    ctx.moveTo(-25, -21); ctx.lineTo(25, 21);
+    ctx.moveTo(25, -21); ctx.lineTo(-25, 21);
+    ctx.stroke();
+    ctx.fillStyle = "#f5d08a";
+    ctx.font = "bold 9px Rajdhani, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(drop.landed ? "AIRDROP" : "ENTRADA", 0, 4);
+    ctx.restore();
+  }
   for (const kit of game.medkits) {
     if (!estaNoCampoDeVisao(kit, 28)) continue;
     const floatY = Math.sin(now * 1.8 + kit.phase) * 4;
@@ -7597,6 +7799,29 @@ function updateUi() {
     : game.spike.state === "planted"
       ? (game.spike.defuseProgress > 0 ? `Defuse ${Math.round(game.spike.defuseProgress * 100)}%` : `${Math.ceil(game.spike.timer)}s`)
       : "Plantando");
+  const purchasedUlt = game.outbreakUltInventory;
+  const showPurchasedUlt = game.outbreak && purchasedUlt.charges > 0;
+  toggleClass(ui.outbreakUltStock, "hidden", !showPurchasedUlt);
+  if (showPurchasedUlt) {
+    setText(ui.outbreakUltStock, `ULT ${agentById(purchasedUlt.agentId)?.name || ""} · ${purchasedUlt.charges}`);
+  }
+  const now = performance.now();
+  const activeModifier = game.outbreak && ([
+    ["pulseShield", game.outbreakEffects.pulseShieldUntil],
+    ["phaseShift", game.outbreakEffects.phaseShiftUntil],
+    ["overdrive", game.outbreakEffects.overdriveUntil],
+    ["chronos", game.outbreakEffects.chronosUntil],
+    ["empPulse", game.outbreakEffects.empUntil],
+  ].find(([, until]) => until > now)
+    || (game.outbreakEffects.lastModifierUntil > now
+      ? [game.outbreakEffects.lastModifierId, game.outbreakEffects.lastModifierUntil]
+      : null));
+  toggleClass(ui.outbreakEffectStock, "hidden", !activeModifier);
+  if (activeModifier) {
+    const modifier = AIRDROP_MODIFIERS.find((item) => item.id === activeModifier[0]);
+    setText(ui.outbreakEffectStock, `${modifier.icon} ${modifier.name}`);
+    setStyle(ui.outbreakEffectStock, "color", modifier.color);
+  }
   toggleClass(ui.spike, "planted", spikePlanted);
   toggleClass(ui.vitalsPanel, "hidden", game.outbreak);
   setStyle(ui.hpBar, "transform", `scaleX(${Math.max(0, game.player.hp) / game.player.maxHp})`);
@@ -7662,10 +7887,14 @@ function toggleShop() {
 }
 
 function setShopTab(tab) {
-  const hasAllies = game.allyCount > 0 || game.sandbox || game.training;
-  const nextTab = !hasAllies && tab === "allies" ? "weapons" : tab;
+  const hasAllies = game.outbreak || game.allyCount > 0 || game.sandbox || game.training;
+  const hasUlts = game.outbreak;
+  let nextTab = !hasAllies && tab === "allies" ? "weapons" : tab;
+  if (!hasUlts && nextTab === "ults") nextTab = "weapons";
   const alliesTab = document.getElementById("alliesTab");
+  const ultsTab = document.getElementById("ultsTab");
   alliesTab?.classList.toggle("hidden", !hasAllies);
+  ultsTab?.classList.toggle("hidden", !hasUlts);
   game.shopTab = tab;
   document.querySelectorAll("[data-shop-panel]").forEach((panel) => {
     panel.classList.toggle("hidden", panel.dataset.shopPanel !== nextTab);
@@ -9448,6 +9677,8 @@ function deployOutbreakWave(wave) {
   game.bots.forEach(sanitizeEntityPosition);
   game.bullets = [];
   spawnOutbreakMedkits();
+  spawnOutbreakAirdrop();
+  if (game.allyLoadout.recruited && !game.allies.some((ally) => ally.alive)) recruitOutbreakAlly(true);
   game.outbreakWaveDelay = 0;
   showRoundBanner(`ONDA ${wave}`, `${game.bots.length} ameaças detectadas`, "OUTBREAK", 2.4);
   setMessage(`Outbreak: onda ${wave} iniciada. Elimine todas as ameaças.`);
@@ -9523,7 +9754,15 @@ function startOutbreakMode() {
   game.outbreakWaveDelay = 0;
   game.outbreakShopPending = false;
   game.outbreakAdminShopResume = false;
-  game.outbreakEffects = { superShieldUntilWave: 0, adrenalineUntilWave: 0 };
+  game.outbreakEffects = {
+    superShieldUntilWave: 0, ultraShieldUntilWave: 0, blasterShieldUntilWave: 0,
+    magazineUntilWave: 0, adrenalineUntilWave: 0, pulseShieldUntil: 0,
+    phaseShiftUntil: 0, overdriveUntil: 0, chronosUntil: 0, empUntil: 0,
+    lastModifierId: null, lastModifierUntil: 0,
+  };
+  game.outbreakUltInventory = { agentId: null, charges: 0 };
+  game.allyLoadout = { weaponId: "pistol", recruited: false, damageMultiplier: 1, lastResort: false, lastResortWave: 0 };
+  game.airdrops = [];
   game.playerSide = "attackers";
   game.player.armor = 50;
   game.player.maxArmor = 50;
@@ -9690,6 +9929,8 @@ function equipmentIconSvg(itemId) {
     reloadKit: `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true"><path d="M26 10a10 10 0 1 1-14 0" stroke="#bd4f59" stroke-width="1.8" stroke-linecap="round"/><polyline points="22,6 26,10 22,14" stroke="#bd4f59" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
     fullRecovery: `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true"><path d="M18 31S7 24.5 7 15.5C7 9 14.5 6.5 18 12c3.5-5.5 11-3 11 3.5C29 24.5 18 31 18 31z" stroke="#508a68" stroke-width="1.8"/><path d="M12 19h4l2-4 2 8 2-4h3" stroke="#508a68" stroke-width="1.5" stroke-linejoin="round"/></svg>`,
     superShield: `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true"><path d="M18 3L5 8.5v10C5 26 11 32.5 18 34c7-1.5 13-8 13-15.5V8.5z" stroke="#527ba3" stroke-width="2" fill="rgba(82,123,163,.08)"/><text x="18" y="22" text-anchor="middle" fill="#6f93b7" font-size="9" font-weight="800">100</text></svg>`,
+    ultraShield: `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true"><path d="M18 3L5 8.5v10C5 26 11 32.5 18 34c7-1.5 13-8 13-15.5V8.5z" stroke="#846eb8" stroke-width="2"/><text x="18" y="22" text-anchor="middle" fill="#a58bd9" font-size="8" font-weight="800">150</text></svg>`,
+    blasterShield: `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true"><path d="M18 3L5 8.5v10C5 26 11 32.5 18 34c7-1.5 13-8 13-15.5V8.5z" stroke="#9e5c62" stroke-width="2"/><path d="M12 18h12M18 12v12" stroke="#c87980"/><text x="18" y="30" text-anchor="middle" fill="#c87980" font-size="7">200</text></svg>`,
     adrenaline: `<svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true"><path d="M8 27L25 10m-11 1l11-1-1 11" stroke="#96734e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 31h14" stroke="#96734e" stroke-width="2" stroke-linecap="round"/></svg>`,
   };
   return icons[itemId] || icons.reloadKit;
@@ -9742,6 +9983,11 @@ function buildShop() {
     button.innerHTML = `<b>${item.name} <em>$${item.price}</em></b><span>Upgrade de equipe. ${item.desc}</span>`;
     button.addEventListener("click", () => {
       if (game.phase !== "buy" && !game.sandbox) return;
+      if (game.outbreak && item.id !== "allyUnit" && !game.allyLoadout.recruited) {
+        setMessage("Recrute o aliado antes de adquirir armas ou acessórios.");
+        updateUi();
+        return;
+      }
       if (allyItemOwned(item)) {
         setMessage("Esse upgrade aliado ja esta ativo.");
         updateUi();
@@ -9757,8 +10003,7 @@ function buildShop() {
       const allyWeapon = weapons.find((weapon) => weapon.id === game.allyLoadout.weaponId) || weapons[0];
       for (const ally of game.allies) {
         ally.weapon = allyWeapon;
-        ally.maxArmor = game.allyLoadout.armor;
-        ally.armor = game.allyLoadout.armor;
+        ally.immortal = game.outbreak;
       }
       setMessage(`${item.name} comprado para aliados.`);
       updateShopState();
@@ -9766,7 +10011,47 @@ function buildShop() {
     });
     ui.allyButtons.appendChild(button);
   }
+
+  if (ui.ultButtons) {
+    ui.ultButtons.innerHTML = "";
+    for (const item of purchasableUlts) {
+      const card = document.createElement("article");
+      card.className = "ult-shop-card";
+      const agent = agentById(item.id);
+      const portrait = agentPresentation(agent).icon;
+      card.innerHTML = `
+        <button type="button" class="ult-info-button" aria-label="Informações sobre ${item.name}">&#9432;</button>
+        <span class="ult-agent-mark" style="--ult-color:${agent?.color || "#ff4655"}"><img src="${portrait}" alt=""></span>
+        <b>${item.name}</b>
+        <small class="ult-card-description">${item.desc}</small>
+        <button type="button" class="ult-buy-button">COMPRAR <em>$${item.price}</em></button>`;
+      const infoButton = card.querySelector(".ult-info-button");
+      const description = card.querySelector(".ult-card-description");
+      infoButton.addEventListener("click", () => description.classList.toggle("is-visible"));
+      card.querySelector(".ult-buy-button").addEventListener("click", () => buyOutbreakUlt(item));
+      ui.ultButtons.appendChild(card);
+    }
+  }
   updateShopState();
+}
+
+function buyOutbreakUlt(item) {
+  if (!game.outbreak || !canUseShop()) return;
+  const inventory = game.outbreakUltInventory;
+  if (inventory.charges > 0 && inventory.agentId !== item.id) {
+    setMessage(`Use todas as cargas de ${agentById(inventory.agentId)?.name || "sua Ult"} antes de trocar.`);
+    return;
+  }
+  if (game.money < item.price) {
+    setMessage("Créditos insuficientes.");
+    return;
+  }
+  game.money -= item.price;
+  inventory.agentId = item.id;
+  inventory.charges += 1;
+  setMessage(`Ultimate de ${item.name}: ${inventory.charges} carga(s).`);
+  updateShopState();
+  updateUi();
 }
 
 function updateEquipmentCardState(button, item) {
@@ -9894,19 +10179,21 @@ function setWeaponCategory(categoryId) {
 
 function allyItemOwned(item) {
   if (!item) return false;
-  if (item.id === "allyArmor") return game.allyLoadout.armor >= 35;
+  if (item.id === "allyUnit") return game.allyLoadout.recruited;
+  if (item.id === "allyCaliber") return game.allyLoadout.damageMultiplier >= 1.2;
+  if (item.id === "allyLastResort") return game.allyLoadout.lastResort;
   if (item.weaponId) return game.allyLoadout.weaponId === item.weaponId;
   return false;
 }
 
 function equipmentOwned(item) {
   if (!item) return false;
-  if (item.id === "heavyArmor") return (game.player?.armor || 0) >= 50;
-  if (item.id === "boots") return game.upgrades.speed;
-  if (item.id === "magazine") return game.upgrades.magazine;
+  if (item.id === "magazine") return outbreakEffectActive(game.outbreakEffects.magazineUntilWave);
   if (item.id === "reloadKit") return game.upgrades.reload;
   if (item.id === "fullRecovery") return game.player?.hp >= game.player?.maxHp && game.player?.armor >= game.player?.maxArmor;
   if (item.id === "superShield") return outbreakEffectActive(game.outbreakEffects.superShieldUntilWave);
+  if (item.id === "ultraShield") return outbreakEffectActive(game.outbreakEffects.ultraShieldUntilWave);
+  if (item.id === "blasterShield") return outbreakEffectActive(game.outbreakEffects.blasterShieldUntilWave);
   if (item.id === "adrenaline") return outbreakEffectActive(game.outbreakEffects.adrenalineUntilWave);
   return false;
 }
@@ -9916,12 +10203,13 @@ function availableEquipment() {
 }
 
 function updateShopState() {
-  const hasAllies = game.allyCount > 0 || game.sandbox || game.training;
+  const hasAllies = game.outbreak || game.allyCount > 0 || game.sandbox || game.training;
   const alliesTab = document.getElementById("alliesTab");
   const alliesPanel = document.querySelector('[data-shop-panel="allies"]');
   alliesTab?.classList.toggle("hidden", !hasAllies);
   alliesPanel?.classList.toggle("disabled", !hasAllies);
   if (!hasAllies && game.shopTab === "allies") game.shopTab = "weapons";
+  if (!game.outbreak && game.shopTab === "ults") game.shopTab = "weapons";
   setShopTab(game.shopTab);
   renderWeaponCategoryTabs();
   [...(ui.weaponButtons?.children || [])].forEach((button, i) => {
@@ -9940,6 +10228,15 @@ function updateShopState() {
     button.classList.toggle("owned", owned);
     const status = button.querySelector("em");
     if (status) status.textContent = owned ? "Ativo" : `$${item.price}`;
+  });
+  [...(ui.ultButtons?.children || [])].forEach((card, i) => {
+    const item = purchasableUlts[i];
+    const inventory = game.outbreakUltInventory;
+    const locked = inventory.charges > 0 && inventory.agentId !== item?.id;
+    card.classList.toggle("is-selected", inventory.agentId === item?.id && inventory.charges > 0);
+    card.classList.toggle("is-locked", locked);
+    const buy = card.querySelector(".ult-buy-button");
+    if (buy) buy.disabled = !canUseShop() || locked || game.money < item.price;
   });
 }
 
