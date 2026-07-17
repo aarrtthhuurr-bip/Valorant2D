@@ -2428,11 +2428,18 @@ function openShop() {
   return true;
 }
 
-function closeShop() {
+function closeShop({ force = false } = {}) {
+  if (game.outbreakShopPending && !force) {
+    ui.shop?.classList.remove("hidden");
+    ui.shopBackdrop?.classList.remove("hidden");
+    setMessage("Intervalo Outbreak: use CONTINUAR para iniciar a próxima onda.");
+    return false;
+  }
   ui.shop?.classList.add("hidden");
   ui.shopBackdrop?.classList.add("hidden");
   game.shopTransactionLocked = false;
   detachShopKeyboard();
+  return true;
 }
 
 function fullReset() {
@@ -6179,6 +6186,7 @@ function drawMenuSlideshow() {
 }
 
 function update(dt) {
+  enforceOutbreakRuntimeState();
   if (game.menuState !== "none" && game.phase !== "action") {
     updateMenuSlideshow(dt);
     if (game.roundBannerTimer > 0) {
@@ -6233,6 +6241,27 @@ function update(dt) {
       checkWinConditions();
     }
   }
+}
+
+/**
+ * Impede estados órfãos do intervalo de compras. Antes desta proteção, a
+ * loja obrigatória podia ser fechada pelo Escape/Pause enquanto clockActive
+ * permanecia falso, congelando apenas a simulação do Canvas.
+ */
+function enforceOutbreakRuntimeState() {
+  if (!game.outbreak || game.phase === "matchOver") return;
+  if (game.outbreakShopPending) {
+    game.clockActive = false;
+    game.phase = "buy";
+    game.phaseTime = Number.POSITIVE_INFINITY;
+    if (!game.paused && game.menuState === "none" && ui.shop?.classList.contains("hidden")) openShop();
+    return;
+  }
+  if (game.phase === "action" && game.introTimer <= 0 && !game.clockActive) {
+    game.clockActive = true;
+    game.phaseTime = Math.max(1, Number.isFinite(game.phaseTime) ? game.phaseTime : 9999);
+  }
+  if (!Number.isFinite(game.timeScale) || game.timeScale <= 0) game.timeScale = 1;
 }
 
 function drawSandboxOverlay() {
@@ -9743,6 +9772,8 @@ function startOutbreakMode() {
   game.training = false;
   game.tutorial = false;
   game.godMode = false;
+  game.outbreakShopPending = false;
+  game.outbreakAdminShopResume = false;
   game.allyCount = 0;
   game.enemyFireMultiplier = 1.5;
   game.selectedAgent = agents[0];
@@ -9753,8 +9784,6 @@ function startOutbreakMode() {
   game.outbreakElapsed = 0;
   game.outbreakLastDamageAt = -5;
   game.outbreakWaveDelay = 0;
-  game.outbreakShopPending = false;
-  game.outbreakAdminShopResume = false;
   game.outbreakEffects = {
     superShieldUntilWave: 0, ultraShieldUntilWave: 0, blasterShieldUntilWave: 0,
     magazineUntilWave: 0, adrenalineUntilWave: 0, pulseShieldUntil: 0,
@@ -10306,16 +10335,32 @@ function updateShopState() {
 function loop(now) {
   const dt = Math.min(0.033, (now - loop.last) / 1000 || 0);
   loop.last = now;
-  game.currentFps = Math.round(1 / Math.max(0.001, dt));
-  game.pingMs = 28 + Math.round(Math.sin(now / 900) * 5 + Math.random() * 4);
-  const tutorialSlowMotion = game.tutorial
-    && game.tutorialStage === "defend"
-    && game.tutorialSlowTimer > 0;
-  update(dt * (tutorialSlowMotion ? 0.2 : 1) * (game.timeScale || 1));
-  draw();
-  updateUi();
-  pressed.clear();
-  requestAnimationFrame(loop);
+  try {
+    game.currentFps = Math.round(1 / Math.max(0.001, dt));
+    game.pingMs = 28 + Math.round(Math.sin(now / 900) * 5 + Math.random() * 4);
+    const tutorialSlowMotion = game.tutorial
+      && game.tutorialStage === "defend"
+      && game.tutorialSlowTimer > 0;
+    update(dt * (tutorialSlowMotion ? 0.2 : 1) * (game.timeScale || 1));
+    draw();
+    updateUi();
+  } catch (error) {
+    const currentTime = performance.now();
+    if (!loop.lastErrorAt || currentTime - loop.lastErrorAt > 1500) {
+      console.error("[Valorant2D] Falha recuperada no loop principal:", error);
+      loop.lastErrorAt = currentTime;
+    }
+    if (game.outbreak) {
+      game.bots = game.bots.filter(Boolean);
+      game.allies = game.allies.filter(Boolean);
+      game.bullets = game.bullets.filter(Boolean);
+      enforceOutbreakRuntimeState();
+      setMessage("Outbreak recuperou uma falha temporária da simulação.");
+    }
+  } finally {
+    pressed.clear();
+    requestAnimationFrame(loop);
+  }
 }
 loop.last = performance.now();
 
