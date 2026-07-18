@@ -554,8 +554,8 @@ const VIPER_CAST_RANGE = 330;
 const VIPER_CLOUD_RADIUS = 92;
 const ECONOMY = {
   start: 800,
-  kill: 150,
-  headshot: 200,
+  botKillMin: 40,
+  botKillMax: 200,
   defuseWin: 3800,
   eliminationWin: 3300,
   standardWin: 3000,
@@ -564,6 +564,14 @@ const ECONOMY = {
   objective: 300,
   cap: 12000,
 };
+
+function botEliminationCredits({ headshot = false } = {}) {
+  // Headshots recebem o teto da recompensa; os demais abates variam de forma
+  // inclusiva entre 40 e 200 créditos para cada bot eliminado.
+  if (headshot) return ECONOMY.botKillMax;
+  return ECONOMY.botKillMin
+    + Math.floor(Math.random() * (ECONOMY.botKillMax - ECONOMY.botKillMin + 1));
+}
 const audio = {
   ctx: null,
   enabled: false,
@@ -5686,7 +5694,7 @@ function eliminateBot(bot, { playerCredit = false, weaponName = "Poison Cloud", 
      }
    }
    if (!game.sandbox) {
-     game.money += playerCredit ? (headshot ? ECONOMY.headshot : ECONOMY.kill) : Math.floor(ECONOMY.kill * 0.5);
+     game.money += botEliminationCredits({ headshot: playerCredit && headshot });
      if (!game.training) game.money = Math.min(game.money, ECONOMY.cap);
    }
    if (game.spike.defuserId === bot.id) resetPartialDefuse();
