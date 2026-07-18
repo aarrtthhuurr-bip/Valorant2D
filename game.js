@@ -554,8 +554,8 @@ const VIPER_CAST_RANGE = 330;
 const VIPER_CLOUD_RADIUS = 92;
 const ECONOMY = {
   start: 800,
-  botKillMin: 40,
-  botKillMax: 200,
+  botKillMin: 100,
+  botKillMax: 300,
   defuseWin: 3800,
   eliminationWin: 3300,
   standardWin: 3000,
@@ -566,11 +566,13 @@ const ECONOMY = {
 };
 
 function botEliminationCredits({ headshot = false } = {}) {
-  // Headshots recebem o teto da recompensa; os demais abates variam de forma
-  // inclusiva entre 40 e 200 créditos para cada bot eliminado.
+  // A potência de 1,45 cria uma queda gradual de probabilidade: recompensas
+  // altas são menos comuns, mas a faixa superior ainda aparece regularmente.
+  // Headshots continuam premiando diretamente o teto da recompensa.
   if (headshot) return ECONOMY.botKillMax;
+  const weightedRoll = Math.pow(Math.random(), 1.45);
   return ECONOMY.botKillMin
-    + Math.floor(Math.random() * (ECONOMY.botKillMax - ECONOMY.botKillMin + 1));
+    + Math.floor(weightedRoll * (ECONOMY.botKillMax - ECONOMY.botKillMin + 1));
 }
 const audio = {
   ctx: null,
