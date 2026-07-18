@@ -8736,8 +8736,8 @@ function renderLeaderboardPanel(entries = [], playerStats = null, message = "") 
         </div>
         <p class="player-statistics-note"></p>
       </aside>
-      <section class="leaderboard-board" aria-live="polite">
-        <header><span>POSIÇÃO</span><span>JOGADOR</span><span>PONTUAÇÃO</span></header>
+      <section class="leaderboard-board${activeLeaderboardMode === "outbreak" ? " is-outbreak-ranking" : ""}" aria-live="polite">
+        <header><span>POSIÇÃO</span><span>JOGADOR</span><span>PONTUAÇÃO</span><span class="leaderboard-wave-column">RODADA MÁX.</span></header>
         <div class="leaderboard-rows"></div>
         <p class="leaderboard-empty hidden"></p>
       </section>
@@ -8777,14 +8777,18 @@ function renderLeaderboardPanel(entries = [], playerStats = null, message = "") 
   const rows = ui.menuButtons.querySelector(".leaderboard-rows");
   entries.forEach((entry, index) => {
     const row = document.createElement("article");
-    if (index < 3) row.classList.add(`is-podium-${index + 1}`);
     const position = document.createElement("strong");
-    position.textContent = `${index + 1}º`;
+    const rankPosition = Math.max(1, Number(entry.rank_position) || index + 1);
+    if (rankPosition <= 3) row.classList.add(`is-podium-${rankPosition}`);
+    position.textContent = `${rankPosition}º`;
     const playerName = document.createElement("span");
     playerName.textContent = entry.player_name || "Jogador";
     const score = document.createElement("b");
     score.textContent = Math.max(0, Number(entry.score) || 0).toLocaleString("pt-BR");
-    row.append(position, playerName, score);
+    const maxWave = document.createElement("b");
+    maxWave.className = "leaderboard-wave-column";
+    maxWave.textContent = Math.max(0, Number(entry.max_wave) || 0).toLocaleString("pt-BR");
+    row.append(position, playerName, score, maxWave);
     rows.appendChild(row);
   });
   const empty = ui.menuButtons.querySelector(".leaderboard-empty");

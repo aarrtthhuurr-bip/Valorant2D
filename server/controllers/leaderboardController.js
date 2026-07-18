@@ -43,7 +43,7 @@ function validatedMatchPayload(body, match) {
     if (score > kills * 200 + 10000) return null;
   }
 
-  return { gameMode, score, kills, victory };
+  return { gameMode, score, kills, victory, maxWave: gameMode === 'outbreak' ? wave : 0 };
 }
 
 async function saveScore(request, response, next) {

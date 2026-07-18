@@ -4,18 +4,27 @@ class Leaderboard {
   /** Retorna apenas o melhor resultado de cada conta no modo solicitado. */
   static listByMode(gameMode, limit = 10) {
     return database.all(
-      `SELECT id, player_name, score, game_mode, created_at
+      `SELECT id, player_name, score, max_wave, game_mode, created_at,
+              RANK() OVER (
+                ORDER BY CASE WHEN $1 = 'outbreak' THEN max_wave ELSE score END DESC
+              ) AS rank_position
        FROM (
-         SELECT id, user_id, player_name, score, game_mode, created_at,
+         SELECT id, user_id, player_name, score, max_wave, game_mode, created_at,
                 ROW_NUMBER() OVER (
                   PARTITION BY user_id
-                  ORDER BY score DESC, created_at ASC, id ASC
+                  ORDER BY
+                    CASE WHEN $1 = 'outbreak' THEN max_wave END DESC,
+                    CASE WHEN $1 <> 'outbreak' THEN score END DESC,
+                    created_at ASC, id ASC
                 ) AS player_position
          FROM leaderboard
          WHERE game_mode = $1
        ) AS personal_bests
        WHERE player_position = 1
-       ORDER BY score DESC, created_at ASC, id ASC
+       ORDER BY
+         CASE WHEN $1 = 'outbreak' THEN max_wave END DESC,
+         CASE WHEN $1 <> 'outbreak' THEN score END DESC,
+         created_at ASC, id ASC
        LIMIT $2`,
       [gameMode, limit],
     );
@@ -25,22 +34,24 @@ class Leaderboard {
   static async personalStats(userId, gameMode) {
     const statistics = await database.get(
       `WITH mode_entries AS (
-         SELECT user_id, score, created_at
+         SELECT user_id, score, max_wave, created_at
          FROM leaderboard
          WHERE game_mode = $2
        ),
        best_by_player AS (
-         SELECT user_id, MAX(score) AS best_score
+         SELECT user_id,
+                MAX(CASE WHEN $2 = 'outbreak' THEN max_wave ELSE score END) AS ranking_value
          FROM mode_entries
          GROUP BY user_id
        ),
        ranked_players AS (
          SELECT user_id,
-                RANK() OVER (ORDER BY best_score DESC) AS global_position
+                RANK() OVER (ORDER BY ranking_value DESC) AS global_position
          FROM best_by_player
        )
        SELECT COUNT(*) AS total_matches,
               COALESCE(MAX(score), 0) AS personal_best,
+              COALESCE(MAX(max_wave), 0) AS personal_max_wave,
               COALESCE(ROUND(AVG(score)), 0) AS average_score,
               MAX(created_at) AS last_played_at,
               (SELECT global_position FROM ranked_players WHERE user_id = $1) AS global_position,
@@ -54,6 +65,7 @@ class Leaderboard {
     return {
       total_matches: Number(statistics?.total_matches) || 0,
       personal_best: Number(statistics?.personal_best) || 0,
+      personal_max_wave: Number(statistics?.personal_max_wave) || 0,
       average_score: Number(statistics?.average_score) || 0,
       global_position: statistics?.global_position ? Number(statistics.global_position) : null,
       account_total_matches: Number(statistics?.account_total_matches) || 0,
@@ -67,7 +79,7 @@ class Leaderboard {
    * Consome o comprovante, atualiza estatísticas e grava o ranking na mesma
    * transação. Uma falha não deixa a partida parcialmente registrada.
    */
-  static async recordCompletedMatch({ matchId, userId, playerName, gameMode, score, victory, kills }) {
+  static async recordCompletedMatch({ matchId, userId, playerName, gameMode, score, maxWave = 0, victory, kills }) {
     const client = await database.pool.connect();
     try {
       await client.query('BEGIN');
@@ -94,10 +106,10 @@ class Leaderboard {
         [victory ? 1 : 0, kills, score, userId],
       );
       const entryResult = await client.query(
-        `INSERT INTO leaderboard (user_id, player_name, score, game_mode)
-         VALUES ($1, $2, $3, $4)
-         RETURNING id, player_name, score, game_mode, created_at`,
-        [userId, playerName, score, gameMode],
+        `INSERT INTO leaderboard (user_id, player_name, score, max_wave, game_mode)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, player_name, score, max_wave, game_mode, created_at`,
+        [userId, playerName, score, maxWave, gameMode],
       );
       await client.query('COMMIT');
       return { entry: entryResult.rows[0], statistics: statisticsResult.rows[0] };

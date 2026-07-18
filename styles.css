@@ -642,6 +642,19 @@ input {
 
 .leaderboard-board > header span:last-child { text-align: right; }
 
+.leaderboard-wave-column { display: none; }
+
+.leaderboard-board.is-outbreak-ranking > header,
+.leaderboard-board.is-outbreak-ranking .leaderboard-rows article {
+  grid-template-columns: 72px minmax(0, 1fr) 112px 92px;
+}
+
+.leaderboard-board.is-outbreak-ranking .leaderboard-wave-column {
+  display: block;
+  color: #ff6572;
+  text-align: right;
+}
+
 .leaderboard-rows {
   height: calc(100% - 38px);
   max-height: none;

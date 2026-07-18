@@ -216,6 +216,7 @@ test('leaderboard lista modo válido e rejeita filtros desconhecidos', async () 
     id: 1,
     player_name: 'usuario_teste',
     score: 2500,
+    max_wave: mode === 'outbreak' ? 7 : 0,
     game_mode: mode,
     created_at: new Date().toISOString(),
     limit,
@@ -250,6 +251,7 @@ test('leaderboard autenticada retorna estatísticas pessoais do modo selecionado
       total_matches: 4,
       personal_best: 9200,
       average_score: 6100,
+      personal_max_wave: 12,
       global_position: 3,
       account_total_matches: 18,
       account_total_wins: 11,
@@ -268,6 +270,7 @@ test('leaderboard autenticada retorna estatísticas pessoais do modo selecionado
     assert.equal(response.body.playerStats.player_name, 'agente_teste');
     assert.equal(response.body.playerStats.personal_best, 9200);
     assert.equal(response.body.playerStats.global_position, 3);
+    assert.equal(response.body.playerStats.personal_max_wave, 12);
     assert.equal(response.body.playerStats.account_total_matches, 18);
     assert.equal(response.body.playerStats.account_total_wins, 11);
   } finally {
@@ -318,6 +321,24 @@ test('leaderboard salva pontuação autenticada com comprovante e nome da sessã
       .send({ matchToken: 'c'.repeat(64), game_mode: 'default', victory: true, kills: 8, score: 1800 })
       .expect(400);
     assert.equal(mismatchedMode.body.code, 'INVALID_LEADERBOARD_SCORE');
+
+    MatchSubmission.findValid = async () => ({ id: 19, duracao_segundos: 90, modo: 'outbreak' });
+    const outbreak = await request(app)
+      .post('/api/leaderboard/save')
+      .set('Authorization', `Bearer ${'a'.repeat(64)}`)
+      .set('Content-Type', 'application/json')
+      .send({
+        matchToken: 'd'.repeat(64),
+        game_mode: 'outbreak',
+        victory: false,
+        kills: 3,
+        wave: 12,
+        survival_seconds: 45,
+        score: 12345,
+      })
+      .expect(201);
+    assert.equal(recordedPayload.maxWave, 12);
+    assert.equal(outbreak.body.entry.game_mode, 'outbreak');
   } finally {
     Session.findValid = originals.session;
     MatchSubmission.findValid = originals.match;

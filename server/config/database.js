@@ -123,6 +123,7 @@ async function initializeDatabase() {
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         player_name VARCHAR(24) NOT NULL,
         score INTEGER NOT NULL CHECK (score >= 0),
+        max_wave INTEGER NOT NULL DEFAULT 0 CHECK (max_wave >= 0),
         game_mode VARCHAR(24) NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
@@ -130,6 +131,7 @@ async function initializeDatabase() {
     // Migração não destrutiva da leaderboard antiga, baseada apenas em waves.
     await client.query('ALTER TABLE leaderboard ADD COLUMN IF NOT EXISTS player_name VARCHAR(24)');
     await client.query('ALTER TABLE leaderboard ADD COLUMN IF NOT EXISTS score INTEGER');
+    await client.query('ALTER TABLE leaderboard ADD COLUMN IF NOT EXISTS max_wave INTEGER NOT NULL DEFAULT 0');
     await client.query('ALTER TABLE leaderboard ADD COLUMN IF NOT EXISTS game_mode VARCHAR(24)');
     await client.query('ALTER TABLE leaderboard ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ');
     await client.query(`
@@ -147,6 +149,7 @@ async function initializeDatabase() {
             AND column_name = 'waves_sobrevivendo'
         ) THEN
           EXECUTE 'UPDATE leaderboard SET score = COALESCE(score, waves_sobrevivendo * 1000) WHERE score IS NULL';
+          EXECUTE 'UPDATE leaderboard SET max_wave = GREATEST(max_wave, COALESCE(waves_sobrevivendo, 0))';
         END IF;
         IF EXISTS (
           SELECT 1 FROM information_schema.columns
@@ -160,6 +163,13 @@ async function initializeDatabase() {
     await client.query("UPDATE leaderboard SET player_name = 'Jogador' WHERE player_name IS NULL");
     await client.query('UPDATE leaderboard SET score = 0 WHERE score IS NULL');
     await client.query("UPDATE leaderboard SET game_mode = 'outbreak' WHERE game_mode IS NULL");
+    // Resultados gravados antes da coluna max_wave não possuem a wave isolada.
+    // A aproximação abaixo preserva esses registros até novas partidas exatas.
+    await client.query(`
+      UPDATE leaderboard
+      SET max_wave = FLOOR(score / 1000.0)::INTEGER
+      WHERE game_mode = 'outbreak' AND max_wave = 0 AND score > 0
+    `);
     await client.query('UPDATE leaderboard SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL');
     await client.query('ALTER TABLE leaderboard ALTER COLUMN player_name SET NOT NULL');
     await client.query('ALTER TABLE leaderboard ALTER COLUMN score SET NOT NULL');
@@ -176,6 +186,10 @@ async function initializeDatabase() {
         IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'leaderboard_game_mode_valid') THEN
           ALTER TABLE leaderboard
           ADD CONSTRAINT leaderboard_game_mode_valid CHECK (game_mode IN ('default', 'blackout', 'outbreak'));
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'leaderboard_max_wave_nonnegative') THEN
+          ALTER TABLE leaderboard
+          ADD CONSTRAINT leaderboard_max_wave_nonnegative CHECK (max_wave >= 0);
         END IF;
       END $$
     `);
