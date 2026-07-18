@@ -1047,6 +1047,10 @@ const weaponAudio = {
 };
 
 const equipment = [
+  { id: "heavyArmor", name: "Colete Pesado", price: 2600, desc: "Concede 50 pontos de armadura para a rodada.", standardOnly: true, apply: () => { game.upgrades.armorCapacity = Math.max(game.upgrades.armorCapacity, 50); game.armor = 50; if (game.player) game.player.armor = 50; } },
+  { id: "boots", name: "Botas Táticas", price: 1500, desc: "Aumenta permanentemente a velocidade em 10%.", standardOnly: true, apply: () => { game.upgrades.speed = true; } },
+  { id: "magazine", name: "Carregador Extra", price: 1800, desc: "Amplia o pente em 20%.", apply: () => { if (game.outbreak) game.outbreakEffects.magazineUntilWave = game.outbreakWave + 10; else game.upgrades.magazine = true; } },
+  { id: "reloadKit", name: "Kit de Recarga", price: 1700, desc: "Reduz permanentemente o tempo de recarga.", apply: () => { game.upgrades.reload = true; } },
   { id: "superShield", name: "Super Escudo", price: 3600, desc: "Núcleo reforçado que eleva permanentemente a regeneração do colete a 100 de armadura.", outbreakOnly: true, apply: () => { game.outbreakEffects.superShieldUntilWave = Number.MAX_SAFE_INTEGER; } },
   { id: "ultraShield", name: "Ultra Escudo", price: 4200, desc: "Blindagem de assalto com 150 de armadura por 10 ondas.", outbreakOnly: true, apply: () => { game.outbreakEffects.ultraShieldUntilWave = game.outbreakWave + 10; } },
   { id: "blasterShield", name: "Blaster Escudo", price: 5600, desc: "Plataforma experimental com 200 de armadura por 10 ondas.", outbreakOnly: true, apply: () => { game.outbreakEffects.blasterShieldUntilWave = game.outbreakWave + 10; } },
@@ -1062,8 +1066,6 @@ const equipment = [
       game.armor = game.player.armor;
     },
   },
-  { id: "magazine", name: "Carregador Extra", price: 1800, desc: "Amplia cada pente em 20% durante as próximas 10 ondas.", outbreakOnly: true, apply: () => { game.outbreakEffects.magazineUntilWave = game.outbreakWave + 10; } },
-  { id: "reloadKit", name: "Kit de Recarga", price: 1700, desc: "Mecanismo calibrado que reduz permanentemente o tempo de recarga em 10%.", outbreakOnly: true, apply: () => { game.upgrades.reload = true; } },
   {
     id: "adrenaline",
     name: "Injeção de Adrenalina",
@@ -1074,7 +1076,7 @@ const equipment = [
   },
 ];
 
-const allyItems = [
+const outbreakAllyItems = [
   { id: "allyUnit", name: "Recrutar Aliado", price: 3000, desc: "Operador imortal que acompanha o jogador.", apply: recruitOutbreakAlly },
   { id: "allySheriff", name: "Sheriff", price: 1050, desc: "Precisão de alto impacto.", weaponId: "revolver", apply: () => { game.allyLoadout.weaponId = "revolver"; game.allyLoadout.ownedWeapons.add("revolver"); } },
   { id: "allyBulldog", name: "Bulldog", price: 3200, desc: "Rajadas controladas para média distância.", weaponId: "carbine", apply: () => { game.allyLoadout.weaponId = "carbine"; game.allyLoadout.ownedWeapons.add("carbine"); } },
@@ -1083,6 +1085,19 @@ const allyItems = [
   { id: "allyCaliber", name: "Balas de Alto Calibre", price: 3200, desc: "Aumenta em 20% o dano do aliado.", apply: () => { game.allyLoadout.damageMultiplier = 1.2; } },
   { id: "allyLastResort", name: "Último Recurso", price: 2100, desc: "Entrega um med-kit quando seu escudo chega a zero.", apply: () => { game.allyLoadout.lastResort = true; } },
 ];
+
+// A equipe dos modos tradicionais já nasce com a partida. Esta loja apenas
+// equipa os bots aliados existentes e nunca permite comprar novas unidades.
+const standardAllyItems = [
+  { id: "allyArmor", name: "Coletes Aliados", price: 1200, desc: "Equipe todos os aliados com 35 de armadura.", apply: () => { game.allyLoadout.armor = 35; } },
+  { id: "allySmg", name: "Spectre", price: 1500, desc: "Cadência alta para combate próximo.", weaponId: "smg", apply: () => { game.allyLoadout.weaponId = "smg"; game.allyLoadout.ownedWeapons.add("smg"); } },
+  { id: "allyRifle", name: "Vandal", price: 3200, desc: "Rifle confiável para média e longa distância.", weaponId: "rifle", apply: () => { game.allyLoadout.weaponId = "rifle"; game.allyLoadout.ownedWeapons.add("rifle"); } },
+  { id: "allySniper", name: "Operator", price: 5200, desc: "Precisão pesada e baixa cadência.", weaponId: "sniper", apply: () => { game.allyLoadout.weaponId = "sniper"; game.allyLoadout.ownedWeapons.add("sniper"); } },
+];
+
+function allyItemsForCurrentMode() {
+  return game.outbreak ? outbreakAllyItems : standardAllyItems;
+}
 
 const purchasableUlts = [
   { id: "neon", name: "Neon", price: 1600, desc: "Ativa sua fúria e dispara raios de choque devastadores no lugar da munição." },
@@ -8273,6 +8288,7 @@ function setShopTab(tab) {
   if (!hasUlts && nextTab === "ults") nextTab = "weapons";
   const alliesTab = document.getElementById("alliesTab");
   const ultsTab = document.getElementById("ultsTab");
+  ui.shop?.classList.toggle("shop-outbreak", game.outbreak);
   alliesTab?.classList.toggle("hidden", !hasAllies);
   ultsTab?.classList.toggle("hidden", !hasUlts);
   game.shopTab = tab;
@@ -10016,6 +10032,7 @@ function applyDifficulty(difficulty) {
 function startMode(label, difficulty) {
   game.mode = label;
   game.outbreak = false;
+  buildShop();
   game.training = false;
   game.tutorial = false;
   applyDifficulty(difficulty);
@@ -10050,13 +10067,16 @@ function createOutbreakWave(wave) {
     bot.hasSpike = false;
     bot.hp = wave <= 10 ? 60 + wave * 4 : 110 + (wave - 10) * 8;
     bot.maxHp = bot.hp;
-    // As ondas introdutórias não possuem escudo. A progressão começa na onda 10.
-    bot.armor = wave < 10 ? 0 : Math.min(50, 15 + (wave - 10) * 3);
+    // As dez primeiras ondas não possuem escudo. A progressão começa na onda 11.
+    bot.armor = wave < 11 ? 0 : Math.min(50, 15 + (wave - 11) * 3);
     bot.maxArmor = bot.armor;
     bot.speed = wave <= 10
       ? Math.min(104, 78 + wave * 2 + index)
       : Math.min(184, 112 + (wave - 11) * 4 + index * 2);
     if (wave <= 10) bot.weapon = weapons[0];
+    // O arsenal-base passa a incluir a Operator no fim da progressão, porém o
+    // rifle de precisão fica estritamente bloqueado até a Wave 21.
+    if (wave < 21 && bot.weapon?.id === "sniper") bot.weapon = weapons.find((weapon) => weapon.id === "dmr") || weapons[0];
     bot.outbreakScatter = wave <= 10 ? Math.max(18, 58 - wave * 4) : Math.max(0, 16 - (wave - 11));
     bot.outbreakFirePenalty = wave <= 10 ? Math.max(1.25, 2.25 - wave * 0.08) : 1;
     return bot;
@@ -10403,6 +10423,9 @@ function buildShop() {
 }
 
 function allySystemIcon(itemId) {
+  if (itemId === "allyArmor") {
+    return '<svg viewBox="0 0 36 36" aria-hidden="true"><path d="M18 3 6 8v9c0 7 5 13 12 16 7-3 12-9 12-16V8L18 3Z"/><path d="M12 17h12M18 11v12"/></svg>';
+  }
   if (itemId === "allyCaliber") {
     return '<svg viewBox="0 0 36 36" aria-hidden="true"><path d="M18 4l5 8-5 20-5-20 5-8Z"/><path d="M10 27h16M12 31h12"/></svg>';
   }
@@ -10449,12 +10472,25 @@ function allyShopSection(kicker, title, className, items, kind) {
 
 function renderAllyShop() {
   if (!ui.allyButtons) return;
-  ui.allyButtons.className = "ally-shop-layout";
   ui.allyButtons.innerHTML = "";
+  if (game.outbreak) {
+    ui.allyButtons.className = "ally-shop-layout";
+    ui.allyButtons.append(
+      allyCard(outbreakAllyItems[0], "unit"),
+      allyShopSection("ARSENAL VINCULADO", "Armamento do operador", "ally-weapons-section", outbreakAllyItems.slice(1, 5), "weapon"),
+      allyShopSection("PROTOCOLOS", "Sistemas de suporte", "ally-systems-section", outbreakAllyItems.slice(5), "system"),
+    );
+    return;
+  }
+
+  ui.allyButtons.className = "ally-classic-layout";
+  const briefing = document.createElement("header");
+  briefing.className = "ally-classic-briefing";
+  briefing.innerHTML = '<span>EQUIPE MOBILIZADA</span><strong>Configuração dos bots aliados</strong><small>Os operadores já estão em campo. Personalize apenas seus equipamentos.</small>';
   ui.allyButtons.append(
-    allyCard(allyItems[0], "unit"),
-    allyShopSection("ARSENAL VINCULADO", "Armamento do operador", "ally-weapons-section", allyItems.slice(1, 5), "weapon"),
-    allyShopSection("PROTOCOLOS", "Sistemas de suporte", "ally-systems-section", allyItems.slice(5), "system"),
+    briefing,
+    allyShopSection("PROTEÇÃO", "Equipamento da equipe", "ally-classic-equipment", standardAllyItems.slice(0, 1), "system"),
+    allyShopSection("ARSENAL", "Armas dos aliados", "ally-classic-weapons", standardAllyItems.slice(1), "weapon"),
   );
 }
 
@@ -10486,6 +10522,10 @@ function buyAllyItem(item) {
   for (const ally of game.allies) {
     ally.weapon = allyWeapon;
     ally.immortal = game.outbreak;
+    if (!game.outbreak) {
+      ally.maxArmor = game.allyLoadout.armor || 0;
+      ally.armor = game.allyLoadout.armor || 0;
+    }
   }
   setMessage(weaponOwned ? `${item.name} equipado no aliado.` : `${item.name} adquirido para o aliado.`);
   updateShopState();
@@ -10639,13 +10679,18 @@ function allyItemOwned(item) {
   if (item.id === "allyUnit") return game.allyLoadout.recruited;
   if (item.id === "allyCaliber") return game.allyLoadout.damageMultiplier >= 1.2;
   if (item.id === "allyLastResort") return game.allyLoadout.lastResort;
+  if (item.id === "allyArmor") return (game.allyLoadout.armor || 0) >= 35;
   if (item.weaponId) return game.allyLoadout.ownedWeapons.has(item.weaponId);
   return false;
 }
 
 function equipmentOwned(item) {
   if (!item) return false;
-  if (item.id === "magazine") return outbreakEffectActive(game.outbreakEffects.magazineUntilWave);
+  if (item.id === "heavyArmor") return (game.player?.armor || game.armor || 0) >= 50;
+  if (item.id === "boots") return game.upgrades.speed;
+  if (item.id === "magazine") return game.outbreak
+    ? outbreakEffectActive(game.outbreakEffects.magazineUntilWave)
+    : game.upgrades.magazine;
   if (item.id === "reloadKit") return game.upgrades.reload;
   if (item.id === "fullRecovery") return game.player?.hp >= game.player?.maxHp && game.player?.armor >= game.player?.maxArmor;
   if (item.id === "superShield") return outbreakEffectActive(game.outbreakEffects.superShieldUntilWave);
@@ -10656,7 +10701,7 @@ function equipmentOwned(item) {
 }
 
 function availableEquipment() {
-  return equipment.filter((item) => !item.outbreakOnly || game.outbreak);
+  return equipment.filter((item) => (!item.outbreakOnly || game.outbreak) && (!item.standardOnly || !game.outbreak));
 }
 
 function updateShopState() {
@@ -10678,7 +10723,7 @@ function updateShopState() {
     if (item) updateEquipmentCardState(button, item);
   });
   ui.allyButtons?.querySelectorAll("[data-ally-item]").forEach((button) => {
-    const item = allyItems.find((entry) => entry.id === button.dataset.allyItem);
+    const item = allyItemsForCurrentMode().find((entry) => entry.id === button.dataset.allyItem);
     if (!item) return;
     const owned = allyItemOwned(item);
     const active = item.weaponId ? game.allyLoadout.weaponId === item.weaponId : owned;
