@@ -3677,13 +3677,57 @@ button.click-feedback::after {
 
 .mode-select-footer {
   display: flex;
-  min-height: 42px;
-  padding-top: 10px;
+  min-height: 46px;
+  padding-top: 12px;
   border-top: 1px solid rgba(215, 237, 255, 0.1);
   align-items: center;
 }
 
-.mode-select-back { margin-top: 0 !important; }
+.mode-select-back {
+  position: relative;
+  display: inline-flex;
+  width: auto;
+  min-width: 112px;
+  min-height: 38px;
+  padding: 0 15px 0 11px;
+  overflow: hidden;
+  border: 1px solid rgba(142, 164, 177, 0.2);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.035);
+  color: #8497a3;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.mode-select-back svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.18s ease;
+}
+
+.mode-select-back:hover,
+.mode-select-back:focus-visible {
+  border-color: rgba(255, 70, 85, 0.5);
+  background: rgba(255, 70, 85, 0.08);
+  color: #f1f5f7;
+  transform: translateX(-2px);
+}
+
+.mode-select-back:hover svg,
+.mode-select-back:focus-visible svg {
+  color: #ff5a68;
+  transform: translateX(-2px);
+}
 
 @media (max-width: 760px) {
   .menu-state-mode-select .menu-card {

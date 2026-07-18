@@ -8677,7 +8677,10 @@ function renderModeSelect() {
   ui.menuButtons.innerHTML = `
     <div class="mode-select-grid"></div>
     <footer class="mode-select-footer">
-      <button type="button" class="mode-select-back menu-button menu-back icon-only" aria-label="Voltar ao menu" title="Voltar ao menu"></button>
+      <button type="button" class="mode-select-back" aria-label="Voltar ao menu principal">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 7-5 5 5 5"></path></svg>
+        <span>VOLTAR</span>
+      </button>
     </footer>`;
   const grid = ui.menuButtons.querySelector(".mode-select-grid");
   PLAY_MODE_OPTIONS.forEach((option, index) => {
@@ -8693,7 +8696,9 @@ function renderModeSelect() {
     attachButtonFeedback(card);
     grid.appendChild(card);
   });
-  ui.menuButtons.querySelector(".mode-select-back")?.addEventListener("click", showMainMenu);
+  const backButton = ui.menuButtons.querySelector(".mode-select-back");
+  backButton?.addEventListener("click", showMainMenu);
+  attachButtonFeedback(backButton);
 }
 
 function selectPlayMode(modeId) {
