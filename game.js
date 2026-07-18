@@ -5303,6 +5303,23 @@ function keepSquadSpacing(entity, squad, dt, spatialIndex = game.allySpatialInde
 }
 
 function allyObjectivePoint(ally, index) {
+  // Outbreak não possui áreas de Spike (map.sites é vazio). O aliado usa uma
+  // formação móvel atrás do jogador, em vez de consultar objetivos A/B.
+  // Isso também impede a exceção que fazia a simulação parecer congelada logo
+  // após a compra do operador, enquanto os menus HTML continuavam responsivos.
+  if (game.outbreak) {
+    const leader = game.player;
+    if (!leader) return { x: ally.x, y: ally.y };
+    const facing = Number.isFinite(leader.angle) ? leader.angle : 0;
+    const side = index % 2 === 0 ? -1 : 1;
+    const row = Math.floor(index / 2);
+    const followDistance = 66 + row * 34;
+    const lateralDistance = 46 + row * 12;
+    return nearestWalkablePoint({
+      x: leader.x - Math.cos(facing) * followDistance + Math.cos(facing + Math.PI / 2) * lateralDistance * side,
+      y: leader.y - Math.sin(facing) * followDistance + Math.sin(facing + Math.PI / 2) * lateralDistance * side,
+    }, ally);
+  }
   if (game.spike.state === "planted") {
     const angle = (index / Math.max(1, game.allies.length)) * Math.PI * 2;
     return {
@@ -5316,9 +5333,11 @@ function allyObjectivePoint(ally, index) {
       return nearestWalkablePoint({ x: game.player.x + side * 86, y: game.player.y + 58 }, ally);
     }
     const site = map.sites[game.botPlanSiteIndex % map.sites.length] || map.sites[0];
+    if (!site) return nearestWalkablePoint({ x: game.player.x - 70, y: game.player.y + 48 }, ally);
     return siteEntryPoints(site)[index % siteEntryPoints(site).length];
   }
   const site = map.sites[index % map.sites.length] || map.sites[0];
+  if (!site) return nearestWalkablePoint({ x: game.player.x - 70, y: game.player.y + 48 }, ally);
   const center = siteCenter(site);
   const holds = [
     { x: center.x - 92, y: center.y - 54 },
