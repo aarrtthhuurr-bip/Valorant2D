@@ -1754,11 +1754,15 @@ const game = {
     overdriveUntil: 0,
     chronosUntil: 0,
     empUntil: 0,
+    nanoHealUntil: 0,
     lastModifierId: null,
     lastModifierUntil: 0,
   },
   outbreakUltInventory: { agentId: null, charges: 0 },
   airdrops: [],
+  airdropVisuals: [],
+  outbreakOverdriveTrailTimer: 0,
+  outbreakPhaseTrailTimer: 0,
   difficulty: "normal",
   sandbox: false,
   godMode: false,
@@ -2227,7 +2231,10 @@ function activateAirdropModifier(modifier) {
   game.outbreakEffects.lastModifierId = modifier.id;
   game.outbreakEffects.lastModifierUntil = now + 2200;
   if (modifier.id === "pulseShield") game.outbreakEffects.pulseShieldUntil = now + 5000;
-  if (modifier.id === "nanoHeal") p.hp = Math.min(p.maxHp, p.hp + Math.ceil(p.maxHp * 0.35));
+  if (modifier.id === "nanoHeal") {
+    p.hp = Math.min(p.maxHp, p.hp + Math.ceil(p.maxHp * 0.35));
+    game.outbreakEffects.nanoHealUntil = now + 1800;
+  }
   if (modifier.id === "phaseShift") game.outbreakEffects.phaseShiftUntil = now + 3000;
   if (modifier.id === "overdrive") game.outbreakEffects.overdriveUntil = now + 6000;
   if (modifier.id === "chronos") game.outbreakEffects.chronosUntil = now + 4000;
@@ -2253,9 +2260,54 @@ function activateAirdropModifier(modifier) {
       wall.y = Math.max(8, Math.min(map.height - wall.h - 8, wall.y + (dy / length) * 120));
     }
   }
+  const visualDuration = modifier.id === "clearWave" ? 1.25 : modifier.id === "empPulse" ? 1.05 : 0.9;
+  game.airdropVisuals.push({
+    type: modifier.id,
+    x: p.x,
+    y: p.y,
+    color: modifier.color,
+    life: visualDuration,
+    maxLife: visualDuration,
+    seed: Math.random() * Math.PI * 2,
+  });
   synchronizePlayerEquipment();
   spawnParticles(p.x, p.y, modifier.color, 42, 250);
   setMessage(`${modifier.name} ativado.`);
+}
+
+/**
+ * Mantém somente rastros visuais leves e limitados. As mecânicas continuam
+ * independentes desta camada, evitando que a quantidade de efeitos altere a IA.
+ */
+function updateAirdropModifierVisuals(dt) {
+  game.airdropVisuals = game.airdropVisuals
+    .map((effect) => ({ ...effect, life: effect.life - dt }))
+    .filter((effect) => effect.life > 0);
+
+  const now = performance.now();
+  const player = game.player;
+  if (!player?.alive) return;
+
+  game.outbreakOverdriveTrailTimer -= dt;
+  if (now < game.outbreakEffects.overdriveUntil && player.moving && game.outbreakOverdriveTrailTimer <= 0) {
+    game.outbreakOverdriveTrailTimer = 0.055;
+    game.airdropVisuals.push({
+      type: "overdriveTrail", x: player.x, y: player.y, color: "#ffe047",
+      life: 0.48, maxLife: 0.48, seed: now / 180,
+    });
+  }
+
+  game.outbreakPhaseTrailTimer -= dt;
+  if (now < game.outbreakEffects.phaseShiftUntil && player.moving && game.outbreakPhaseTrailTimer <= 0) {
+    game.outbreakPhaseTrailTimer = 0.09;
+    game.airdropVisuals.push({
+      type: "phaseEcho", x: player.x, y: player.y, color: "#b66cff",
+      life: 0.55, maxLife: 0.55, seed: now / 220,
+    });
+  }
+
+  // Limite rígido para impedir acúmulo em sessões longas.
+  if (game.airdropVisuals.length > 72) game.airdropVisuals.splice(0, game.airdropVisuals.length - 72);
 }
 
 function updateOutbreakAirdrops(dt) {
@@ -2454,6 +2506,9 @@ function fullReset() {
   game.allyLoadout = { weaponId: "pistol", ownedWeapons: new Set(["pistol"]), recruited: false, damageMultiplier: 1, lastResort: false, lastResortWave: 0 };
   game.outbreakUltInventory = { agentId: null, charges: 0 };
   game.airdrops = [];
+  game.airdropVisuals = [];
+  game.outbreakOverdriveTrailTimer = 0;
+  game.outbreakPhaseTrailTimer = 0;
   game.selectedAgent = agents[0];
   game.agentLocked = false;
   game.godMode = false;
@@ -2751,6 +2806,7 @@ function updateOutbreak(dt) {
     game.armor = game.player.armor;
   }
   updateOutbreakAirdrops(dt);
+  updateAirdropModifierVisuals(dt);
   synchronizePlayerEquipment();
   for (const bot of game.bots) {
     if (!bot.alive) continue;
@@ -7526,6 +7582,231 @@ function drawOmenUltimateOverlay() {
   ctx.restore();
 }
 
+function drawModifierHexagon(x, y, radius, rotation = 0) {
+  ctx.beginPath();
+  for (let index = 0; index < 6; index += 1) {
+    const angle = rotation + index * Math.PI / 3;
+    const px = x + Math.cos(angle) * radius;
+    const py = y + Math.sin(angle) * radius;
+    if (index === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+}
+
+function drawOutbreakModifierBursts(now) {
+  for (const effect of game.airdropVisuals) {
+    const progress = Math.max(0, Math.min(1, 1 - effect.life / effect.maxLife));
+    const fade = Math.max(0, 1 - progress);
+    ctx.save();
+    ctx.globalAlpha = fade;
+    ctx.strokeStyle = effect.color;
+    ctx.fillStyle = effect.color;
+    ctx.shadowColor = effect.color;
+    ctx.shadowBlur = 15;
+
+    if (effect.type === "overdriveTrail") {
+      const radius = 12 + progress * 18;
+      ctx.globalAlpha = fade * 0.7;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(effect.x, effect.y, radius, -0.8, 0.8);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(effect.x, effect.y, radius * 0.62, Math.PI - 0.65, Math.PI + 0.65);
+      ctx.stroke();
+    } else if (effect.type === "phaseEcho") {
+      ctx.globalAlpha = fade * 0.34;
+      ctx.setLineDash([7, 5]);
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(effect.x, effect.y, 20 + progress * 5, 24 + progress * 7, effect.seed, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (effect.type === "clearWave") {
+      const radius = 26 + progress * 330;
+      ctx.lineWidth = 5 - progress * 3;
+      ctx.beginPath();
+      ctx.arc(effect.x, effect.y, radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = fade * 0.55;
+      for (let index = 0; index < 12; index += 1) {
+        const angle = index * Math.PI / 6 + effect.seed;
+        const inner = radius * 0.72;
+        ctx.beginPath();
+        ctx.moveTo(effect.x + Math.cos(angle) * inner, effect.y + Math.sin(angle) * inner);
+        ctx.lineTo(effect.x + Math.cos(angle) * radius, effect.y + Math.sin(angle) * radius);
+        ctx.stroke();
+      }
+    } else if (effect.type === "empPulse") {
+      const radius = 20 + progress * 280;
+      ctx.lineWidth = 3;
+      ctx.setLineDash([12, 9]);
+      ctx.lineDashOffset = -now / 28;
+      ctx.beginPath();
+      ctx.arc(effect.x, effect.y, radius, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (effect.type === "nanoHeal") {
+      const radius = 22 + progress * 72;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(effect.x, effect.y, radius, 0, Math.PI * 2);
+      ctx.stroke();
+      for (let index = 0; index < 4; index += 1) {
+        const angle = index * Math.PI / 2 + effect.seed;
+        const x = effect.x + Math.cos(angle) * radius;
+        const y = effect.y + Math.sin(angle) * radius;
+        ctx.fillRect(x - 2, y - 8, 4, 16);
+        ctx.fillRect(x - 8, y - 2, 16, 4);
+      }
+    } else {
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(effect.x, effect.y, 20 + progress * 80, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+/** Desenha uma assinatura visual distinta para cada modificador ativo. */
+function drawAirdropModifierEffects() {
+  if (!game.outbreak || !game.player?.alive) return;
+  const player = game.player;
+  const now = performance.now();
+  const time = now / 1000;
+  drawOutbreakModifierBursts(now);
+  ctx.save();
+
+  if (now < game.outbreakEffects.pulseShieldUntil) {
+    const pulse = 1 + Math.sin(time * 7) * 0.06;
+    ctx.strokeStyle = "#38e8ff";
+    ctx.shadowColor = "#38e8ff";
+    ctx.shadowBlur = 18;
+    ctx.lineWidth = 2.5;
+    drawModifierHexagon(player.x, player.y, 31 * pulse, time * 0.45);
+    ctx.stroke();
+    ctx.globalAlpha = 0.45;
+    drawModifierHexagon(player.x, player.y, 38 * pulse, -time * 0.28);
+    ctx.stroke();
+    for (let index = 0; index < 6; index += 1) {
+      const angle = time * 0.7 + index * Math.PI / 3;
+      ctx.fillStyle = "#c9faff";
+      ctx.beginPath();
+      ctx.arc(player.x + Math.cos(angle) * 38, player.y + Math.sin(angle) * 38, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  if (now < game.outbreakEffects.nanoHealUntil) {
+    ctx.globalAlpha = 1;
+    const remaining = Math.max(0, (game.outbreakEffects.nanoHealUntil - now) / 1800);
+    ctx.strokeStyle = "rgba(92, 255, 141, 0.75)";
+    ctx.fillStyle = "#9dffb8";
+    ctx.shadowColor = "#5cff8d";
+    ctx.shadowBlur = 14;
+    ctx.lineWidth = 2;
+    for (let index = 0; index < 5; index += 1) {
+      const angle = time * 2.2 + index * Math.PI * 0.4;
+      const radius = 23 + index % 2 * 9;
+      const x = player.x + Math.cos(angle) * radius;
+      const y = player.y + Math.sin(angle) * radius - (1 - remaining) * 18;
+      ctx.globalAlpha = remaining * 0.85;
+      ctx.fillRect(x - 1.5, y - 6, 3, 12);
+      ctx.fillRect(x - 6, y - 1.5, 12, 3);
+    }
+  }
+
+  if (now < game.outbreakEffects.phaseShiftUntil) {
+    ctx.globalAlpha = 1;
+    const phase = (Math.sin(time * 9) + 1) / 2;
+    ctx.strokeStyle = "rgba(182, 108, 255, 0.9)";
+    ctx.shadowColor = "#b66cff";
+    ctx.shadowBlur = 18;
+    ctx.lineWidth = 3;
+    ctx.setLineDash([3 + phase * 8, 7]);
+    ctx.lineDashOffset = -time * 35;
+    for (let index = 0; index < 3; index += 1) {
+      ctx.globalAlpha = 0.72 - index * 0.18;
+      ctx.beginPath();
+      ctx.ellipse(player.x, player.y, 25 + index * 8, 19 + index * 5, time * 0.18, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+
+  if (now < game.outbreakEffects.overdriveUntil) {
+    ctx.globalAlpha = 1;
+    const pulse = 0.72 + Math.sin(time * 12) * 0.2;
+    const gradient = ctx.createRadialGradient(player.x, player.y, 8, player.x, player.y, 48);
+    gradient.addColorStop(0, `rgba(255, 224, 71, ${0.24 * pulse})`);
+    gradient.addColorStop(1, "rgba(255, 224, 71, 0)");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(player.x - 50, player.y - 50, 100, 100);
+    ctx.strokeStyle = "#ffe047";
+    ctx.shadowColor = "#ffe047";
+    ctx.shadowBlur = 16;
+    ctx.lineWidth = 2.5;
+    for (let index = 0; index < 5; index += 1) {
+      const angle = time * 3 + index * Math.PI * 0.4;
+      const inner = 25 + (index % 2) * 4;
+      ctx.beginPath();
+      ctx.moveTo(player.x + Math.cos(angle) * inner, player.y + Math.sin(angle) * inner);
+      ctx.lineTo(player.x + Math.cos(angle) * (inner + 14), player.y + Math.sin(angle) * (inner + 14));
+      ctx.stroke();
+    }
+  }
+
+  if (now < game.outbreakEffects.chronosUntil) {
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = "rgba(21, 159, 168, 0.9)";
+    ctx.shadowColor = "#159fa8";
+    ctx.shadowBlur = 12;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, 44, 0, Math.PI * 2);
+    ctx.stroke();
+    for (let index = 0; index < 12; index += 1) {
+      const angle = index * Math.PI / 6;
+      const inner = index % 3 === 0 ? 36 : 39;
+      ctx.beginPath();
+      ctx.moveTo(player.x + Math.cos(angle) * inner, player.y + Math.sin(angle) * inner);
+      ctx.lineTo(player.x + Math.cos(angle) * 44, player.y + Math.sin(angle) * 44);
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.moveTo(player.x, player.y);
+    ctx.lineTo(player.x + Math.cos(-time * 2) * 27, player.y + Math.sin(-time * 2) * 27);
+    ctx.moveTo(player.x, player.y);
+    ctx.lineTo(player.x + Math.cos(time * 0.65) * 18, player.y + Math.sin(time * 0.65) * 18);
+    ctx.stroke();
+  }
+
+  if (now < game.outbreakEffects.empUntil) {
+    ctx.globalAlpha = 1;
+    for (const bot of game.bots) {
+      if (!bot.alive || isOutsideViewport(bot, 50)) continue;
+      ctx.strokeStyle = "rgba(255, 139, 56, 0.88)";
+      ctx.shadowColor = "#ff8b38";
+      ctx.shadowBlur = 12;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let index = 0; index <= 6; index += 1) {
+        const angle = time * 5 + index * Math.PI / 3;
+        const radius = index % 2 === 0 ? bot.r + 5 : bot.r + 14;
+        const x = bot.x + Math.cos(angle) * radius;
+        const y = bot.y + Math.sin(angle) * radius;
+        if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      ctx.globalAlpha = 0.45;
+      ctx.beginPath();
+      ctx.arc(bot.x, bot.y, bot.r + 10 + Math.sin(time * 8) * 3, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  }
+  ctx.restore();
+}
+
 function draw() {
   if (game.menuState !== "none" && game.phase !== "action") {
     drawMenuSlideshow();
@@ -7694,6 +7975,7 @@ function draw() {
   if (!game.player?.untargetable) {
     drawEntity(game.player, game.selectedAgent.color, game.playerSide === "attackers" ? "YOU ATK" : "YOU DEF", "player");
   }
+  drawAirdropModifierEffects();
   drawJettKunaiRing(game.player);
   drawSandboxOverlay();
   drawWorldActionBar();
@@ -9854,11 +10136,15 @@ function startOutbreakMode() {
     superShieldUntilWave: 0, ultraShieldUntilWave: 0, blasterShieldUntilWave: 0,
     magazineUntilWave: 0, adrenalineUntilWave: 0, pulseShieldUntil: 0,
     phaseShiftUntil: 0, overdriveUntil: 0, chronosUntil: 0, empUntil: 0,
+    nanoHealUntil: 0,
     lastModifierId: null, lastModifierUntil: 0,
   };
   game.outbreakUltInventory = { agentId: null, charges: 0 };
   game.allyLoadout = { weaponId: "pistol", ownedWeapons: new Set(["pistol"]), recruited: false, damageMultiplier: 1, lastResort: false, lastResortWave: 0 };
   game.airdrops = [];
+  game.airdropVisuals = [];
+  game.outbreakOverdriveTrailTimer = 0;
+  game.outbreakPhaseTrailTimer = 0;
   game.playerSide = "attackers";
   game.player.armor = 50;
   game.player.maxArmor = 50;
