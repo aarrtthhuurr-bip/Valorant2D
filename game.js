@@ -1133,7 +1133,9 @@ const AUDIO_MIX = {
   pickup: 0.32,
   denied: 0.24,
   purchase: 0.32,
-  menu_click: 0.2,
+  // O clique precisa permanecer perceptível mesmo com a trilha e os efeitos
+  // da partida ativos, mas sem competir com tiros ou confirmações de compra.
+  menu_click: 0.32,
   wave_transition: 0.34,
   wave_start: 0.4,
   game_over: 0.42,
@@ -1942,8 +1944,11 @@ function playSound(name) {
     playTone(988, 0.11, "square", 0.1 * mix, 0.14);
   }
   if (name === "menu_click") {
-    playTone(220, 0.025, "square", 0.055 * mix);
-    playTone(330, 0.035, "square", 0.045 * mix, 0.022);
+    // Pulso curto em duas notas, inspirado nos menus de consoles 8-bit. A
+    // onda quadrada entrega o timbre retrô e a duração reduzida evita que
+    // cliques rápidos produzam uma cauda sonora cansativa.
+    playTone(294, 0.032, "square", 0.09 * mix);
+    playTone(440, 0.042, "square", 0.075 * mix, 0.026);
   }
   if (name === "wave_transition") {
     playTone(196, 0.07, "square", 0.075 * mix);
