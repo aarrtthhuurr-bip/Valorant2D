@@ -886,12 +886,12 @@ const weaponSpriteVisuals = {
 const weaponSpriteCache = new Map();
 
 function weaponImagePath(weapon) {
-  return `./assets/weapon-incon/${weaponImageFiles[weapon.id] || `${weapon.name}_icon.webp`}`;
+  return `./assets/weapon-icon/${weaponImageFiles[weapon.id] || `${weapon.name}_icon.webp`}`;
 }
 
 function fallbackWeaponImagePath(weapon) {
   const fallbackFile = weaponImageFallbackFiles[weapon.id];
-  return fallbackFile ? `./assets/weapon-incon/${fallbackFile}` : "";
+  return fallbackFile ? `./assets/weapon-icon/${fallbackFile}` : "";
 }
 
 function weaponSpritePath(weapon) {
