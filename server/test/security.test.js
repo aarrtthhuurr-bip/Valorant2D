@@ -15,6 +15,7 @@ const User = require('../models/User');
 const MatchSubmission = require('../models/MatchSubmission');
 const Statistic = require('../models/Statistic');
 const Leaderboard = require('../models/Leaderboard');
+const PlayerProfile = require('../models/PlayerProfile');
 
 test('health check aplica headers de segurança e identificador', async () => {
   const response = await request(app).get('/').expect(200);
@@ -99,6 +100,103 @@ test('credenciais e respostas de segurança são normalizadas e limitadas', () =
   });
   assert.equal(newPlayer.onboardingCompleted, false);
   assert.equal(newPlayer.menuTourCompleted, false);
+});
+
+test('login Google valida o ID token e cria conta sem saldo inicial', async () => {
+  const originals = {
+    verifyIdToken: authSecurity.googleClient.verifyIdToken,
+    findByGoogleSub: User.findByGoogleSub,
+    findByEmail: User.findByEmail,
+    findByUsername: User.findByUsername,
+    createGoogle: User.createGoogle,
+    sessionCreate: Session.create,
+  };
+  let created;
+  authSecurity.googleClient.verifyIdToken = async () => ({
+    getPayload: () => ({
+      sub: 'google-sub-123',
+      email: 'agente@example.com',
+      email_verified: true,
+      name: 'Agente Google',
+      picture: 'https://lh3.googleusercontent.com/avatar',
+    }),
+  });
+  User.findByGoogleSub = async () => undefined;
+  User.findByEmail = async () => undefined;
+  User.findByUsername = async () => undefined;
+  User.createGoogle = async (data) => {
+    created = data;
+    return {
+      id: 41,
+      username: data.username,
+      email: data.email,
+      auth_provider: 'google',
+      core_balance: 0,
+      core_earned_total: 0,
+      onboarding_completed: false,
+      menu_tour_completed: false,
+    };
+  };
+  Session.create = async () => ({ token: 'f'.repeat(64), expirationDate: new Date().toISOString() });
+
+  try {
+    const response = await request(app)
+      .post('/api/auth/google')
+      .set('Content-Type', 'application/json')
+      .send({ idToken: 'g'.repeat(200) })
+      .expect(200);
+    assert.equal(created.email, 'agente@example.com');
+    assert.equal(created.googleSub, 'google-sub-123');
+    assert.match(created.passwordSentinel, /^google-only:/);
+    assert.equal(response.body.user.coreBalance, 0);
+    assert.equal(response.body.user.accountProvider, 'google');
+    assert.equal(response.body.token, 'f'.repeat(64));
+  } finally {
+    authSecurity.googleClient.verifyIdToken = originals.verifyIdToken;
+    User.findByGoogleSub = originals.findByGoogleSub;
+    User.findByEmail = originals.findByEmail;
+    User.findByUsername = originals.findByUsername;
+    User.createGoogle = originals.createGoogle;
+    Session.create = originals.sessionCreate;
+  }
+});
+
+test('perfil consolidado exige sessão e mantém estatísticas separadas por modo', async () => {
+  const originals = { session: Session.findValid, profile: PlayerProfile.findByUserId };
+  try {
+    Session.findValid = async () => undefined;
+    await request(app).get('/api/profile').expect(401);
+
+    Session.findValid = async () => ({ id: 9, username: 'agente_perfil' });
+    PlayerProfile.findByUserId = async () => ({
+      id: 9,
+      username: 'agente_perfil',
+      email: 'perfil@example.com',
+      coreEarnedTotal: 180,
+      statistics: {
+        default: { matches: 8, wins: 5, kills: 27, deaths: 9, kd: 3 },
+        blackout: { matches: 3, wins: 1, kills: 8 },
+        outbreak: { highestWave: 14 },
+      },
+    });
+    const response = await request(app)
+      .get('/api/profile')
+      .set('Authorization', `Bearer ${'a'.repeat(64)}`)
+      .expect(200);
+    assert.equal(response.body.profile.statistics.default.wins, 5);
+    assert.equal(response.body.profile.statistics.outbreak.highestWave, 14);
+    assert.equal(response.body.profile.coreEarnedTotal, 180);
+  } finally {
+    Session.findValid = originals.session;
+    PlayerProfile.findByUserId = originals.profile;
+  }
+});
+
+test('ranking usa vitórias no competitivo e maior wave no Outbreak', () => {
+  assert.equal(Leaderboard._test.rankingConfiguration('default').metric, 'wins_default');
+  assert.equal(Leaderboard._test.rankingConfiguration('blackout').metric, 'wins_blackout');
+  assert.equal(Leaderboard._test.rankingConfiguration('outbreak').metric, 'highest_wave_outbreak');
+  assert.equal(Leaderboard._test.rankingConfiguration('desconhecido'), null);
 });
 
 test('nome da conta administrativa não pode ser reivindicado pelo cadastro público', async () => {

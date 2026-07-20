@@ -160,6 +160,8 @@ const ui = {
   registerButton: document.getElementById("registerButton"),
   guestButton: document.getElementById("guestButton"),
   accountSummary: document.getElementById("accountSummary"),
+  profileButton: document.getElementById("profileButton"),
+  accountAvatar: document.getElementById("accountAvatar"),
   accountType: document.getElementById("accountType"),
   accountUsername: document.getElementById("accountUsername"),
   logoutButton: document.getElementById("logoutButton"),
@@ -176,6 +178,18 @@ const ui = {
   recoveryFeedback: document.getElementById("recoveryFeedback"),
   recoverySubmitButton: document.getElementById("recoverySubmitButton"),
   recoveryBackButton: document.getElementById("recoveryBackButton"),
+  googleAuthBlock: document.getElementById("googleAuthBlock"),
+  googleSignInButton: document.getElementById("googleSignInButton"),
+  googleAuthStatus: document.getElementById("googleAuthStatus"),
+  playerProfileOverlay: document.getElementById("playerProfileOverlay"),
+  playerProfileContent: document.getElementById("playerProfileContent"),
+  playerProfileClose: document.getElementById("playerProfileClose"),
+  globalRankingOverlay: document.getElementById("globalRankingOverlay"),
+  globalRankingClose: document.getElementById("globalRankingClose"),
+  globalRankingTabs: document.getElementById("globalRankingTabs"),
+  globalRankingRows: document.getElementById("globalRankingRows"),
+  globalRankingMetricTitle: document.getElementById("globalRankingMetricTitle"),
+  currentPlayerRanking: document.getElementById("currentPlayerRanking"),
   mainCoreWallet: document.getElementById("mainCoreWallet"),
   mainCoreBalance: document.getElementById("mainCoreBalance"),
   menuTutorialButton: document.getElementById("menuTutorialButton"),
@@ -223,7 +237,7 @@ const ui = {
  * aplicada ao Canvas de 1280 x 720. Isso preserva a leitura em telas estreitas.
  */
 function mountViewportOverlays() {
-  for (const overlay of [ui.authOverlay, ui.welcomeOverlay, ui.modeInfoOverlay, ui.menuTourLayer, ui.matchOverlay, ui.pauseOverlay]) {
+  for (const overlay of [ui.authOverlay, ui.welcomeOverlay, ui.modeInfoOverlay, ui.menuTourLayer, ui.matchOverlay, ui.pauseOverlay, ui.playerProfileOverlay, ui.globalRankingOverlay]) {
     if (overlay && ui.gameRoot && overlay.parentElement !== ui.gameRoot) ui.gameRoot.appendChild(overlay);
   }
 }
@@ -231,6 +245,7 @@ function mountViewportOverlays() {
 mountViewportOverlays();
 
 const AUTH_STORAGE_KEY = "valorant2d-auth-session";
+const GOOGLE_CLIENT_ID = "505204049055-coi0pepsfsfeqp20kdq96uel3gt8aqh9.apps.googleusercontent.com";
 const configuredApiUrl = document
   .querySelector('meta[name="valorant2d-api-url"]')
   ?.getAttribute("content")
@@ -252,6 +267,9 @@ let menuTourTimer = 0;
 let modeInfoReturnFocus = null;
 let serverWakePromise = null;
 let serverWakeDelayTimer = 0;
+let googleIdentityInitialized = false;
+let profileReturnFocus = null;
+let rankingReturnFocus = null;
 const shownContextTips = new Set();
 
 function showUxToast(message, { title = "INFORMAÇÃO", tone = "info", duration = 2800 } = {}) {
@@ -696,6 +714,7 @@ function setAuthBusy(isBusy, action = "login") {
   if (ui.registerButton) {
     ui.registerButton.textContent = authMode === "register" ? "Voltar para entrar" : "Cadastrar nova conta";
   }
+  ui.googleAuthBlock?.classList.toggle("is-busy", isBusy);
 }
 
 function validateAuthForm(action) {
@@ -740,9 +759,10 @@ function updateAccountSummary(profile) {
   if (ui.accountType) {
     ui.accountType.textContent = profile.isGuest
       ? "Convidado, recordes apenas locais"
-      : "Conta conectada";
+      : profile.accountProvider?.includes("google") ? "Conta Google conectada" : "Conta conectada";
   }
   if (ui.accountUsername) ui.accountUsername.textContent = profile.username;
+  if (ui.accountAvatar) ui.accountAvatar.textContent = String(profile.username || "A").trim().charAt(0).toUpperCase() || "A";
   if (ui.logoutButton) ui.logoutButton.textContent = profile.isGuest ? "Entrar" : "Sair";
 }
 
@@ -799,6 +819,78 @@ async function submitAuthentication(action) {
   }
 }
 
+function setGoogleAuthStatus(message = "", type = "") {
+  if (!ui.googleAuthStatus) return;
+  ui.googleAuthStatus.textContent = message;
+  ui.googleAuthStatus.className = `google-auth-status${type ? ` is-${type}` : ""}`;
+}
+
+async function handleGoogleCredential(response) {
+  const idToken = typeof response?.credential === "string" ? response.credential : "";
+  if (!idToken) {
+    setGoogleAuthStatus("O Google não retornou uma credencial válida.", "error");
+    return;
+  }
+  setAuthBusy(true, "google");
+  setGoogleAuthStatus("Validando sua identidade com segurança...", "loading");
+  try {
+    const payload = await requestApi("/api/auth/google", {
+      method: "POST",
+      body: JSON.stringify({ idToken }),
+    });
+    saveSession(payload);
+    setGoogleAuthStatus("Conta Google conectada.", "success");
+    enterGameWithProfile({ ...payload.user, isGuest: false, token: payload.token });
+    showUxToast(`Bem-vindo, ${payload.user?.username || "agente"}.`, {
+      title: "GOOGLE CONECTADO",
+      tone: "success",
+    });
+  } catch (error) {
+    setGoogleAuthStatus(error.message, "error");
+    showUxToast(error.message, { title: "LOGIN GOOGLE NÃO CONCLUÍDO", tone: "warning", duration: 4200 });
+  } finally {
+    setAuthBusy(false);
+  }
+}
+
+/** Inicializa o GIS uma única vez, mesmo quando o script termina após o jogo. */
+function initializeGoogleIdentity(attempt = 0) {
+  if (googleIdentityInitialized || !ui.googleSignInButton) return;
+  if (!window.google?.accounts?.id) {
+    const gisScript = document.querySelector('script[src*="accounts.google.com/gsi/client"]');
+    if (gisScript && !gisScript.dataset.valorant2dLoadListener) {
+      gisScript.dataset.valorant2dLoadListener = "true";
+      gisScript.addEventListener("load", () => initializeGoogleIdentity(), { once: true });
+    }
+    if (attempt < 120) {
+      window.setTimeout(() => initializeGoogleIdentity(attempt + 1), 250);
+    } else {
+      setGoogleAuthStatus("Login Google indisponível neste navegador.", "error");
+    }
+    return;
+  }
+
+  window.google.accounts.id.initialize({
+    client_id: GOOGLE_CLIENT_ID,
+    callback: handleGoogleCredential,
+    auto_select: false,
+    cancel_on_tap_outside: true,
+  });
+  ui.googleSignInButton.replaceChildren();
+  window.google.accounts.id.renderButton(ui.googleSignInButton, {
+    type: "standard",
+    theme: "filled_black",
+    size: "large",
+    shape: "rectangular",
+    text: "signin_with",
+    logo_alignment: "left",
+    width: Math.min(380, Math.max(240, ui.googleSignInButton.clientWidth || 340)),
+    locale: "pt-BR",
+  });
+  googleIdentityInitialized = true;
+  setGoogleAuthStatus("");
+}
+
 function toggleRegistrationMode() {
   authMode = authMode === "login" ? "register" : "login";
   ui.authRegistrationFields?.classList.toggle("hidden", authMode !== "register");
@@ -819,6 +911,7 @@ function showPasswordRecovery(show) {
   document.querySelector(".auth-divider")?.classList.toggle("hidden", show);
   ui.guestButton?.classList.toggle("hidden", show);
   document.querySelector(".auth-guest-note")?.classList.toggle("hidden", show);
+  ui.googleAuthBlock?.classList.toggle("hidden", show);
   recoveryQuestionLoaded = false;
   passwordRecoveryToken = "";
   ui.recoveryChallenge?.classList.add("hidden");
@@ -937,6 +1030,7 @@ async function logoutCurrentProfile() {
   }
 
   clearStoredSession();
+  window.google?.accounts?.id?.disableAutoSelect?.();
   currentProfile = null;
   hideWelcomeScreen();
   hideMenuTour();
@@ -3119,6 +3213,7 @@ function updatePersonalBestBadge(mode, value) {
 function showMatchResult() {
   const won = game.playerScore > game.enemyScore;
   const kills = Math.max(0, Math.round(game.stats?.kills || 0));
+  const deaths = Math.max(0, Math.round(game.stats?.deaths || 0));
   const score = Math.max(0, kills * 100 + game.playerScore * 500);
   game.phase = "matchOver";
   game.phaseTime = 0;
@@ -3233,6 +3328,7 @@ async function recordCompletedMatch() {
       body: JSON.stringify({
         victory: game.playerScore > game.enemyScore,
         kills,
+        deaths,
         score,
         game_mode: gameMode,
         wave,
@@ -9056,6 +9152,8 @@ function loadSandboxConfig() {
 }
 
 function activeGuidanceDialog() {
+  if (!ui.playerProfileOverlay?.classList.contains("hidden")) return ui.playerProfileOverlay.querySelector(".player-profile-modal");
+  if (!ui.globalRankingOverlay?.classList.contains("hidden")) return ui.globalRankingOverlay.querySelector(".global-ranking-modal");
   if (!ui.modeInfoOverlay?.classList.contains("hidden")) return ui.modeInfoOverlay.querySelector(".mode-info-panel");
   if (!ui.welcomeOverlay?.classList.contains("hidden")) return ui.welcomeOverlay.querySelector(".welcome-panel");
   if (!ui.menuTourLayer?.classList.contains("hidden")) return ui.menuTourBubble;
@@ -9079,6 +9177,14 @@ function trapGuidanceFocus(event, dialog) {
 }
 
 function handleEscape() {
+  if (!ui.playerProfileOverlay?.classList.contains("hidden")) {
+    closePlayerProfile();
+    return;
+  }
+  if (!ui.globalRankingOverlay?.classList.contains("hidden")) {
+    closeGlobalRanking();
+    return;
+  }
   if (!ui.modeInfoOverlay?.classList.contains("hidden")) {
     closeModeInfo();
     return;
@@ -9213,6 +9319,10 @@ function mainMenuIconSvg(icon) {
     stats: {
       lucide: "chart-no-axes-column-increasing",
       fallback: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 20V10"></path><path d="M10 20V4"></path><path d="M16 20v-7"></path><path d="M22 20V7"></path></svg>',
+    },
+    trophy: {
+      lucide: "trophy",
+      fallback: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 3h8v5a4 4 0 0 1-8 0V3Z"></path><path d="M8 5H4v2a4 4 0 0 0 4 4M16 5h4v2a4 4 0 0 1-4 4M12 12v5M8 21h8M9 17h6"></path></svg>',
     },
     store: {
       lucide: "shopping-bag",
@@ -9684,7 +9794,7 @@ function showMainMenu() {
     { label: "JOGAR", description: lastModeLabel ? `ÚLTIMO: ${lastModeLabel}` : "ESCOLHA SEU MODO", icon: "gamepad", action: showModeSelect, onboardingTarget: "play" },
     { label: "OPÇÕES", icon: "tools", action: showOptionsMenu },
     { label: "LOJA", icon: "store", action: openCommerceStore, onboardingTarget: "store" },
-    { label: "ESTATÍSTICAS", icon: "stats", action: showStatisticsMenu },
+    { label: "RANKING", icon: "trophy", action: openGlobalRanking },
   ], "MENU", "main");
   updateCoreBalances(commerceState.profile?.coreBalance || currentProfile?.coreBalance || 0);
   maybeScheduleMenuTour();
@@ -9846,6 +9956,211 @@ const LEADERBOARD_MODES = [
   { id: "outbreak", label: "OUTBREAK" },
 ];
 let activeLeaderboardMode = "default";
+
+function profileField(selector, value) {
+  const element = ui.playerProfileContent?.querySelector(selector);
+  if (element) element.textContent = value;
+}
+
+function renderGuestProfile() {
+  if (!ui.playerProfileContent) return;
+  ui.playerProfileContent.innerHTML = `
+    <section class="profile-identity-card is-guest">
+      <span class="profile-large-avatar" aria-hidden="true">C</span>
+      <div><span>JOGADOR ATUAL</span><h3 data-profile="username"></h3><p>Tipo de conta: Convidado</p></div>
+    </section>
+    <aside class="profile-guest-banner">
+      <strong>TRANSFORME ESTA PARTIDA EM PROGRESSO</strong>
+      <p>Crie uma conta para salvar rankings, Core, skins e recordes em qualquer dispositivo.</p>
+      <button type="button" data-profile-create-account>ENTRAR OU CRIAR CONTA</button>
+    </aside>
+    <div class="profile-mode-grid is-guest-preview">
+      <article><span>DEFAULT</span><strong>Ranking global</strong><p>Vitórias, partidas, kills e K/D sincronizados.</p></article>
+      <article><span>BLACKOUT</span><strong>Histórico competitivo</strong><p>Vitórias e desempenho preservados.</p></article>
+      <article><span>OUTBREAK</span><strong>Maior wave</strong><p>Seu recorde disponível em qualquer computador.</p></article>
+    </div>`;
+  profileField('[data-profile="username"]', currentProfile?.username || "Convidado");
+  ui.playerProfileContent.querySelector("[data-profile-create-account]")?.addEventListener("click", () => {
+    closePlayerProfile();
+    void logoutCurrentProfile();
+  });
+}
+
+function renderPlayerProfile(profile) {
+  if (!ui.playerProfileContent) return;
+  const accountLabel = profile.accountProvider?.includes("google") ? "Logado com Google" : "Logado";
+  ui.playerProfileContent.innerHTML = `
+    <section class="profile-identity-card">
+      <span class="profile-large-avatar" data-profile="avatar" aria-hidden="true">A</span>
+      <div class="profile-identity-copy"><span>IDENTIDADE ATIVA</span><h3 data-profile="username"></h3><p data-profile="email"></p></div>
+      <dl class="profile-account-facts">
+        <div><dt>TIPO DE CONTA</dt><dd data-profile="type"></dd></div>
+        <div><dt>CORE FATURADO</dt><dd><b data-profile="coreEarned"></b> C</dd></div>
+      </dl>
+    </section>
+    <section class="profile-statistics-block">
+      <header><span>DESEMPENHO CONSOLIDADO</span><h3>ESTATÍSTICAS</h3></header>
+      <div class="profile-mode-grid">
+        <article class="profile-mode-card">
+          <header><span>01</span><strong>DEFAULT</strong></header>
+          <dl><div><dt>PARTIDAS</dt><dd data-profile="defaultMatches">0</dd></div><div><dt>VITÓRIAS</dt><dd data-profile="defaultWins">0</dd></div><div><dt>KILLS</dt><dd data-profile="defaultKills">0</dd></div><div><dt>TAXA K/D</dt><dd data-profile="defaultKd">0.00</dd></div></dl>
+        </article>
+        <article class="profile-mode-card">
+          <header><span>02</span><strong>BLACKOUT</strong></header>
+          <dl><div><dt>PARTIDAS</dt><dd data-profile="blackoutMatches">0</dd></div><div><dt>VITÓRIAS</dt><dd data-profile="blackoutWins">0</dd></div><div><dt>KILLS</dt><dd data-profile="blackoutKills">0</dd></div></dl>
+        </article>
+        <article class="profile-mode-card is-outbreak">
+          <header><span>03</span><strong>OUTBREAK</strong></header>
+          <div class="profile-wave-record"><span>MAIOR WAVE SOBREVIVIDA</span><strong data-profile="outbreakWave">0</strong></div>
+        </article>
+      </div>
+    </section>`;
+
+  const stats = profile.statistics || {};
+  const number = (value) => Math.max(0, Number(value) || 0).toLocaleString("pt-BR");
+  profileField('[data-profile="avatar"]', String(profile.username || "A").charAt(0).toUpperCase());
+  profileField('[data-profile="username"]', profile.username || "Agente");
+  profileField('[data-profile="email"]', profile.email || "E-mail não informado");
+  profileField('[data-profile="type"]', accountLabel);
+  profileField('[data-profile="coreEarned"]', number(profile.coreEarnedTotal));
+  profileField('[data-profile="defaultMatches"]', number(stats.default?.matches));
+  profileField('[data-profile="defaultWins"]', number(stats.default?.wins));
+  profileField('[data-profile="defaultKills"]', number(stats.default?.kills));
+  profileField('[data-profile="defaultKd"]', Number(stats.default?.kd || 0).toFixed(2));
+  profileField('[data-profile="blackoutMatches"]', number(stats.blackout?.matches));
+  profileField('[data-profile="blackoutWins"]', number(stats.blackout?.wins));
+  profileField('[data-profile="blackoutKills"]', number(stats.blackout?.kills));
+  profileField('[data-profile="outbreakWave"]', number(stats.outbreak?.highestWave));
+}
+
+async function openPlayerProfile() {
+  if (!ui.playerProfileOverlay) return;
+  profileReturnFocus = document.activeElement;
+  ui.playerProfileOverlay.classList.remove("hidden");
+  ui.playerProfileOverlay.setAttribute("aria-hidden", "false");
+  if (currentProfile?.isGuest) {
+    renderGuestProfile();
+  } else {
+    ui.playerProfileContent.innerHTML = '<div class="player-modal-loading"><span class="auth-loader"></span><strong>Sincronizando perfil</strong></div>';
+    try {
+      const session = readStoredSession();
+      const payload = await requestApi("/api/profile", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${session?.token || ""}` },
+      });
+      renderPlayerProfile(payload.profile || {});
+      mergeCurrentProfile({
+        email: payload.profile?.email || null,
+        accountProvider: payload.profile?.accountProvider || currentProfile?.accountProvider,
+        coreEarnedTotal: payload.profile?.coreEarnedTotal || 0,
+      });
+    } catch (error) {
+      ui.playerProfileContent.innerHTML = '<div class="player-modal-error"><strong>PERFIL INDISPONÍVEL</strong><p></p><button type="button">TENTAR NOVAMENTE</button></div>';
+      ui.playerProfileContent.querySelector("p").textContent = error.message;
+      ui.playerProfileContent.querySelector("button").addEventListener("click", openPlayerProfile);
+    }
+  }
+  window.setTimeout(() => ui.playerProfileClose?.focus(), 25);
+}
+
+function closePlayerProfile() {
+  if (!ui.playerProfileOverlay || ui.playerProfileOverlay.classList.contains("hidden")) return;
+  ui.playerProfileOverlay.classList.add("hidden");
+  ui.playerProfileOverlay.setAttribute("aria-hidden", "true");
+  const target = profileReturnFocus;
+  profileReturnFocus = null;
+  target?.focus?.();
+}
+
+function renderGlobalRanking(payload = {}) {
+  if (!ui.globalRankingRows || !ui.globalRankingTabs) return;
+  const mode = payload.gameMode || activeLeaderboardMode;
+  const metricIsWave = mode === "outbreak";
+  if (ui.globalRankingMetricTitle) ui.globalRankingMetricTitle.textContent = metricIsWave ? "MAIOR WAVE" : "VITÓRIAS";
+  ui.globalRankingTabs.replaceChildren();
+  for (const item of LEADERBOARD_MODES) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = item.label;
+    button.className = item.id === mode ? "is-active" : "";
+    button.setAttribute("aria-pressed", String(item.id === mode));
+    button.addEventListener("click", () => loadGlobalRanking(item.id));
+    ui.globalRankingTabs.appendChild(button);
+  }
+  ui.globalRankingRows.replaceChildren();
+  const entries = Array.isArray(payload.leaderboard) ? payload.leaderboard : [];
+  if (!entries.length) {
+    ui.globalRankingRows.innerHTML = '<p class="global-ranking-empty">Ainda não há jogadores classificados neste modo.</p>';
+  }
+  entries.forEach((entry, index) => {
+    const rank = Math.max(1, Number(entry.rank_position) || index + 1);
+    const value = Math.max(0, Number(entry.ranking_value ?? (metricIsWave ? entry.max_wave : entry.score)) || 0);
+    const row = document.createElement("article");
+    row.className = rank <= 3 ? `is-top-${rank}` : "";
+    const position = document.createElement("strong");
+    position.textContent = `#${rank}`;
+    const name = document.createElement("span");
+    name.textContent = entry.player_name || "Jogador";
+    const metric = document.createElement("b");
+    metric.textContent = metricIsWave ? `WAVE ${value}` : `${value} ${value === 1 ? "VITÓRIA" : "VITÓRIAS"}`;
+    row.append(position, name, metric);
+    ui.globalRankingRows.appendChild(row);
+  });
+
+  const player = payload.playerStats;
+  ui.currentPlayerRanking.replaceChildren();
+  if (!player) {
+    ui.currentPlayerRanking.innerHTML = '<span>SUA POSIÇÃO</span><strong>Entre com uma conta para aparecer no ranking global.</strong>';
+  } else {
+    const rank = Number(player.global_position);
+    const value = Math.max(0, Number(player.ranking_value) || 0);
+    const label = document.createElement("span");
+    label.textContent = "SUA POSIÇÃO";
+    const position = document.createElement("strong");
+    position.textContent = rank > 0 ? `#${rank}` : "NÃO CLASSIFICADO";
+    const name = document.createElement("em");
+    name.textContent = player.player_name || currentProfile?.username || "Agente";
+    const metric = document.createElement("b");
+    metric.textContent = metricIsWave ? `WAVE ${value}` : `${value} VITÓRIAS`;
+    ui.currentPlayerRanking.append(label, position, name, metric);
+  }
+}
+
+async function loadGlobalRanking(mode) {
+  if (!LEADERBOARD_MODES.some((item) => item.id === mode) || !ui.globalRankingRows) return;
+  activeLeaderboardMode = mode;
+  ui.globalRankingRows.innerHTML = '<div class="player-modal-loading"><span class="auth-loader"></span><strong>Atualizando classificação</strong></div>';
+  try {
+    const session = readStoredSession();
+    const headers = session?.token && !currentProfile?.isGuest
+      ? { Authorization: `Bearer ${session.token}` }
+      : undefined;
+    const payload = await requestApi(`/api/leaderboard/${encodeURIComponent(mode)}`, { method: "GET", headers });
+    renderGlobalRanking(payload);
+  } catch (error) {
+    ui.globalRankingRows.innerHTML = '<div class="player-modal-error compact"><strong>RANKING INDISPONÍVEL</strong><p></p><button type="button">TENTAR NOVAMENTE</button></div>';
+    ui.globalRankingRows.querySelector("p").textContent = error.message;
+    ui.globalRankingRows.querySelector("button").addEventListener("click", () => loadGlobalRanking(mode));
+  }
+}
+
+function openGlobalRanking() {
+  if (!ui.globalRankingOverlay) return;
+  rankingReturnFocus = document.activeElement;
+  ui.globalRankingOverlay.classList.remove("hidden");
+  ui.globalRankingOverlay.setAttribute("aria-hidden", "false");
+  void loadGlobalRanking(activeLeaderboardMode);
+  window.setTimeout(() => ui.globalRankingClose?.focus(), 25);
+}
+
+function closeGlobalRanking() {
+  if (!ui.globalRankingOverlay || ui.globalRankingOverlay.classList.contains("hidden")) return;
+  ui.globalRankingOverlay.classList.add("hidden");
+  ui.globalRankingOverlay.setAttribute("aria-hidden", "true");
+  const target = rankingReturnFocus;
+  rankingReturnFocus = null;
+  target?.focus?.();
+}
 
 function renderLeaderboardPanel(entries = [], playerStats = null, message = "") {
   if (!ui.menuButtons) return;
@@ -11955,6 +12270,15 @@ document.querySelectorAll("[data-password-toggle]").forEach((button) => {
 ui.guestButton?.addEventListener("click", enterAsGuest);
 ui.serverRetryButton?.addEventListener("click", () => void wakeRenderServer({ force: true }));
 ui.logoutButton?.addEventListener("click", logoutCurrentProfile);
+ui.profileButton?.addEventListener("click", openPlayerProfile);
+ui.playerProfileClose?.addEventListener("click", closePlayerProfile);
+ui.globalRankingClose?.addEventListener("click", closeGlobalRanking);
+ui.playerProfileOverlay?.addEventListener("pointerdown", (event) => {
+  if (event.target === ui.playerProfileOverlay) closePlayerProfile();
+});
+ui.globalRankingOverlay?.addEventListener("pointerdown", (event) => {
+  if (event.target === ui.globalRankingOverlay) closeGlobalRanking();
+});
 ui.menuTutorialButton?.addEventListener("click", () => showWelcomeScreen({ firstAccess: false }));
 ui.welcomeTutorialButton?.addEventListener("click", () => void leaveWelcomeScreen("tutorial"));
 ui.welcomeMenuButton?.addEventListener("click", () => void leaveWelcomeScreen("menu"));
@@ -11987,5 +12311,6 @@ buildShop();
 setShopTab(game.shopTab);
 game.menuMapTimer = 0;
 startNewMatch();
+initializeGoogleIdentity();
 bootstrapAuthentication();
 requestAnimationFrame(loop);

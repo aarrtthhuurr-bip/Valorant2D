@@ -143,7 +143,10 @@ class Commerce {
       if (Number(row.progress) < mission.target) { await client.query('ROLLBACK'); return { error: 'MISSION_INCOMPLETE' }; }
       await client.query('UPDATE daily_mission_progress SET claimed_at = CURRENT_TIMESTAMP WHERE id = $1', [row.id]);
       const balance = await client.query(
-        'UPDATE users SET core_balance = core_balance + $1 WHERE id = $2 RETURNING core_balance',
+        `UPDATE users
+         SET core_balance = core_balance + $1,
+             core_earned_total = core_earned_total + $1
+         WHERE id = $2 RETURNING core_balance`,
         [mission.reward, userId],
       );
       await client.query('COMMIT');
@@ -190,7 +193,10 @@ class Commerce {
       );
       if (!inserted.rowCount) { await client.query('ROLLBACK'); return { error: 'CODE_ALREADY_REDEEMED' }; }
       const balance = await client.query(
-        'UPDATE users SET core_balance = core_balance + $1 WHERE id = $2 RETURNING core_balance',
+        `UPDATE users
+         SET core_balance = core_balance + $1,
+             core_earned_total = core_earned_total + $1
+         WHERE id = $2 RETURNING core_balance`,
         [promo.core_amount, userId],
       );
       await client.query('COMMIT');

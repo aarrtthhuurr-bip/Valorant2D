@@ -4,12 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta http-equiv="Cache-Control" content="no-store">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; media-src 'self'; connect-src 'self' https://valorant2d.onrender.com; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'none'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com https://accounts.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://*.googleusercontent.com; media-src 'self'; connect-src 'self' https://valorant2d.onrender.com https://accounts.google.com; frame-src https://accounts.google.com; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'none'; form-action 'self'">
   <!-- Altere apenas este valor caso o endereço definitivo do Render mude. -->
   <meta name="valorant2d-api-url" content="https://valorant2d.onrender.com">
   <title>Valorant2D</title>
-  <link rel="stylesheet" href="./styles.css?v=20260720-ux-pass">
+  <link rel="stylesheet" href="./styles.css?v=20260720-google-profile">
   <script src="https://unpkg.com/lucide@1.24.0" integrity="sha384-mooE85Luwgx+AyykX7e90VcN8/QCFTSIwPuHLmvcsLVoA0en7lKYb9XlOzn5G2co" crossorigin="anonymous"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="shortcut icon" href="./assets/Favicon/favicon.ico" type="image/x-icon">
 </head>
 <body>
@@ -290,11 +291,13 @@
         <button type="button" class="menu-tutorial-shortcut hidden" id="menuTutorialButton" aria-label="Abrir ajuda do jogo">?</button>
         <div class="menu-card glass">
           <div class="account-summary hidden" id="accountSummary">
-            <span class="account-status-dot" aria-hidden="true"></span>
-            <div>
-              <span id="accountType">Conta conectada</span>
-              <strong id="accountUsername">Jogador</strong>
-            </div>
+            <button type="button" class="account-profile-trigger" id="profileButton" aria-label="Abrir perfil do jogador">
+              <span class="account-avatar" id="accountAvatar" aria-hidden="true">A</span>
+              <span class="account-profile-copy">
+                <span id="accountType">Conta conectada</span>
+                <strong id="accountUsername">Jogador</strong>
+              </span>
+            </button>
             <button type="button" id="logoutButton">Sair</button>
           </div>
           <div class="menu-copy">
@@ -424,6 +427,12 @@
             <button class="auth-primary" id="loginButton" type="submit">Entrar</button>
             <button class="auth-secondary" id="registerButton" type="button">Cadastrar nova conta</button>
             <button class="auth-link" id="forgotPasswordButton" type="button">Esqueci minha senha</button>
+
+            <div class="google-auth-block" id="googleAuthBlock">
+              <div class="google-auth-divider"><span>ou acesse com</span></div>
+              <div class="google-signin-button" id="googleSignInButton" aria-label="Entrar com o Google"></div>
+              <p class="google-auth-status" id="googleAuthStatus" role="status" aria-live="polite"></p>
+            </div>
           </form>
 
           <form class="auth-form auth-recovery hidden" id="recoveryForm" novalidate>
@@ -450,6 +459,34 @@
         <div class="auth-session-check hidden" id="authSessionCheck" role="status" aria-live="polite">
           <span class="auth-loader" aria-hidden="true"></span>
           <strong>Validando sessão</strong>
+        </div>
+      </section>
+
+      <section class="player-profile-overlay hidden" id="playerProfileOverlay" aria-hidden="true">
+        <div class="player-profile-modal" role="dialog" aria-modal="true" aria-labelledby="playerProfileTitle">
+          <header class="player-modal-header">
+            <div><span>IDENTIDADE DO JOGADOR</span><h2 id="playerProfileTitle">PERFIL</h2></div>
+            <button type="button" class="player-modal-close" id="playerProfileClose" aria-label="Fechar perfil">×</button>
+          </header>
+          <div class="player-profile-content" id="playerProfileContent" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section class="global-ranking-overlay hidden" id="globalRankingOverlay" aria-hidden="true">
+        <div class="global-ranking-modal" role="dialog" aria-modal="true" aria-labelledby="globalRankingTitle">
+          <header class="player-modal-header ranking-modal-header">
+            <div class="ranking-title-group">
+              <span class="ranking-trophy" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 3h8v5a4 4 0 0 1-8 0V3Z"></path><path d="M8 5H4v2a4 4 0 0 0 4 4M16 5h4v2a4 4 0 0 1-4 4M12 12v5M8 21h8M9 17h6"></path></svg></span>
+              <div><span>CLASSIFICAÇÃO GLOBAL</span><h2 id="globalRankingTitle">RANKING</h2></div>
+            </div>
+            <button type="button" class="player-modal-close" id="globalRankingClose" aria-label="Fechar ranking">×</button>
+          </header>
+          <nav class="global-ranking-tabs" id="globalRankingTabs" aria-label="Modo do ranking"></nav>
+          <div class="global-ranking-table">
+            <header><span>POSIÇÃO</span><span>JOGADOR</span><span id="globalRankingMetricTitle">VITÓRIAS</span></header>
+            <div class="global-ranking-rows" id="globalRankingRows" aria-live="polite"></div>
+          </div>
+          <footer class="current-player-ranking" id="currentPlayerRanking"></footer>
         </div>
       </section>
 
@@ -523,6 +560,6 @@
     </div>
   </main>
 
-  <script src="./game.js?v=20260720-ux-pass"></script>
+  <script src="./game.js?v=20260720-google-profile"></script>
 </body>
 </html>

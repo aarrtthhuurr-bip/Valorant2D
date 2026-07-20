@@ -23,6 +23,7 @@ function validatedMatchPayload(body, match) {
   const gameMode = typeof body?.game_mode === 'string' ? body.game_mode : '';
   const score = Number(body?.score);
   const kills = Number(body?.kills);
+  const deaths = Number(body?.deaths ?? 0);
   const victory = body?.victory;
   const wave = Number(body?.wave ?? 0);
   const survivalSeconds = Number(body?.survival_seconds ?? 0);
@@ -32,6 +33,7 @@ function validatedMatchPayload(body, match) {
     || duration < 15 || duration > 7200
     || typeof victory !== 'boolean'
     || !Number.isInteger(kills) || kills < 0 || kills > Math.ceil(duration * 2) + 10
+    || !Number.isInteger(deaths) || deaths < 0 || deaths > Math.ceil(duration / 5) + 10
     || !Number.isInteger(score) || score < 0 || score > 10000000) return null;
 
   if (gameMode === 'outbreak') {
@@ -43,7 +45,7 @@ function validatedMatchPayload(body, match) {
     if (score > kills * 200 + 10000) return null;
   }
 
-  return { gameMode, score, kills, victory, maxWave: gameMode === 'outbreak' ? wave : 0 };
+  return { gameMode, score, kills, deaths, victory, maxWave: gameMode === 'outbreak' ? wave : 0 };
 }
 
 async function saveScore(request, response, next) {

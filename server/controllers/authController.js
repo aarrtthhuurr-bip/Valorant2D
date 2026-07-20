@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { promisify } = require('util');
+const { OAuth2Client } = require('google-auth-library');
 const Session = require('../models/Session');
 const User = require('../models/User');
 const RecoveryChallenge = require('../models/RecoveryChallenge');
@@ -16,6 +17,9 @@ const SECURITY_QUESTIONS = new Set([
   'Em qual cidade você nasceu?',
   'Qual era seu apelido de infância?',
 ]);
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID?.trim()
+  || '505204049055-coi0pepsfsfeqp20kdq96uel3gt8aqh9.apps.googleusercontent.com';
+const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 function normalizeUsername(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -25,12 +29,50 @@ function publicUser(user) {
   return {
     id: user.id,
     username: user.username,
+    email: user.email || null,
+    accountProvider: user.auth_provider || 'local',
+    avatarUrl: user.avatar_url || null,
     coreBalance: Number(user.core_balance) || 0,
+    coreEarnedTotal: Number(user.core_earned_total) || 0,
     isAdmin: Boolean(user.is_admin),
     onboardingCompleted: Boolean(user.onboarding_completed),
     menuTourCompleted: Boolean(user.menu_tour_completed),
     createdAt: user.data_criacao,
   };
+}
+
+function googleUsernameCandidate(payload) {
+  const source = String(payload?.name || payload?.given_name || payload?.email?.split('@')[0] || 'Agente');
+  let normalized = source
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9_]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 20);
+  if (normalized.length < 3) normalized = `Agente_${normalized || 'Google'}`.slice(0, 20);
+  if (normalized.toLowerCase() === 'admin') normalized = 'Agente_Admin';
+  return normalized;
+}
+
+function trustedGoogleAvatar(value) {
+  if (typeof value !== 'string' || value.length > 2048) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+async function uniqueGoogleUsername(payload) {
+  const base = googleUsernameCandidate(payload);
+  if (!await User.findByUsername(base)) return base;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const suffix = crypto.randomInt(1000, 10000).toString();
+    const candidate = `${base.slice(0, 19)}_${suffix}`.slice(0, 24);
+    if (!await User.findByUsername(candidate)) return candidate;
+  }
+  return `Agente_${crypto.randomBytes(7).toString('hex')}`.slice(0, 24);
 }
 
 function validateCredentials(username, password) {
@@ -187,6 +229,96 @@ async function login(request, response, next) {
   }
 }
 
+/**
+ * Valida o ID token diretamente com o Google e só então cria ou localiza a
+ * conta. O token recebido do navegador nunca é tratado como dado confiável.
+ */
+async function googleLogin(request, response, next) {
+  try {
+    const idToken = typeof request.body?.idToken === 'string' ? request.body.idToken.trim() : '';
+    if (idToken.length < 100 || idToken.length > 12000) {
+      response.status(400).json({ error: 'Credencial do Google inválida.', code: 'INVALID_GOOGLE_CREDENTIAL' });
+      return;
+    }
+
+    let payload;
+    try {
+      const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_CLIENT_ID });
+      payload = ticket.getPayload();
+    } catch {
+      securityAudit('google_login', request, { success: false });
+      response.status(401).json({ error: 'Não foi possível validar sua conta Google.', code: 'INVALID_GOOGLE_TOKEN' });
+      return;
+    }
+
+    const googleSub = typeof payload?.sub === 'string' ? payload.sub : '';
+    const email = typeof payload?.email === 'string' ? payload.email.trim().toLowerCase() : '';
+    if (!googleSub || googleSub.length > 128 || !payload?.email_verified
+      || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 320) {
+      response.status(401).json({ error: 'A conta Google não possui um e-mail verificado.', code: 'UNVERIFIED_GOOGLE_EMAIL' });
+      return;
+    }
+
+    const avatarUrl = trustedGoogleAvatar(payload.picture);
+    let user = await User.findByGoogleSub(googleSub);
+    if (user) {
+      user = await User.refreshGoogleProfile(user.id, { email, avatarUrl });
+    } else {
+      const existingEmail = await User.findByEmail(email);
+      if (existingEmail?.google_sub && existingEmail.google_sub !== googleSub) {
+        securityAudit('google_login_identity_conflict', request, { userId: existingEmail.id, success: false });
+        response.status(409).json({ error: 'Este e-mail já está vinculado a outra identidade.', code: 'GOOGLE_IDENTITY_CONFLICT' });
+        return;
+      }
+
+      if (existingEmail) {
+        user = await User.linkGoogleIdentity(existingEmail.id, { email, googleSub, avatarUrl });
+      } else {
+        const username = await uniqueGoogleUsername(payload);
+        try {
+          user = await User.createGoogle({
+            username,
+            email,
+            googleSub,
+            avatarUrl,
+            passwordSentinel: `google-only:${crypto.randomBytes(48).toString('hex')}`,
+          });
+        } catch (error) {
+          // Uma autenticação simultânea pode ter criado a identidade entre a
+          // consulta e o INSERT. Nesse caso, reutilizamos a conta já validada.
+          if (error.code !== '23505') throw error;
+          user = await User.findByGoogleSub(googleSub) || await User.findByEmail(email);
+          if (!user) throw error;
+        }
+      }
+    }
+
+    if (!user) {
+      response.status(409).json({ error: 'Não foi possível vincular a conta Google.', code: 'GOOGLE_LINK_FAILED' });
+      return;
+    }
+
+    const session = await Session.create(user.id);
+    securityAudit('google_login', request, { userId: user.id, success: true });
+    response.status(200).json({
+      message: 'Login com Google realizado com sucesso.',
+      token: session.token,
+      expiresAt: session.expirationDate,
+      user: publicUser(user),
+    });
+  } catch (error) {
+    securityAudit('google_login_error', request, { success: false });
+    if (error.code === '23505') {
+      response.status(409).json({
+        error: 'Esta identidade Google já está vinculada a outra conta.',
+        code: 'GOOGLE_IDENTITY_CONFLICT',
+      });
+      return;
+    }
+    next(error);
+  }
+}
+
 async function getSecurityQuestion(request, response, next) {
   try {
     const username = normalizeUsername(request.body?.username);
@@ -282,10 +414,20 @@ async function logout(request, response, next) {
 
 module.exports = {
   getSecurityQuestion,
+  googleLogin,
   login,
   logout,
   register,
   resetPassword,
   verify,
-  _test: { hashSecret, normalizeSecurityAnswer, publicUser, validateCredentials, verifySecret },
+  _test: {
+    googleClient,
+    googleUsernameCandidate,
+    hashSecret,
+    normalizeSecurityAnswer,
+    publicUser,
+    trustedGoogleAvatar,
+    validateCredentials,
+    verifySecret,
+  },
 };

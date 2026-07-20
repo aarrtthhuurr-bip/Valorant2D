@@ -86,16 +86,30 @@ async function initializeDatabase() {
         id SERIAL PRIMARY KEY,
         username VARCHAR(24) NOT NULL UNIQUE,
         senha_hash TEXT NOT NULL,
+        email VARCHAR(320),
+        google_sub VARCHAR(128),
+        auth_provider VARCHAR(16) NOT NULL DEFAULT 'local',
+        avatar_url TEXT,
         pergunta_seguranca TEXT,
         resposta_seguranca TEXT,
         partidas_jogadas INTEGER NOT NULL DEFAULT 0,
         vitorias INTEGER NOT NULL DEFAULT 0,
         abates_totais INTEGER NOT NULL DEFAULT 0,
         pontuacao_maxima INTEGER NOT NULL DEFAULT 0,
+        matches_default INTEGER NOT NULL DEFAULT 0,
+        wins_default INTEGER NOT NULL DEFAULT 0,
+        kills_default INTEGER NOT NULL DEFAULT 0,
+        deaths_default INTEGER NOT NULL DEFAULT 0,
+        matches_blackout INTEGER NOT NULL DEFAULT 0,
+        wins_blackout INTEGER NOT NULL DEFAULT 0,
+        kills_blackout INTEGER NOT NULL DEFAULT 0,
+        deaths_blackout INTEGER NOT NULL DEFAULT 0,
+        highest_wave_outbreak INTEGER NOT NULL DEFAULT 0,
         mostrar_dicas BOOLEAN NOT NULL DEFAULT TRUE,
         volume_geral INTEGER NOT NULL DEFAULT 40 CHECK (volume_geral BETWEEN 0 AND 100),
         preferencias_json JSONB NOT NULL DEFAULT '{}'::jsonb,
         core_balance INTEGER NOT NULL DEFAULT 300 CHECK (core_balance >= 0),
+        core_earned_total INTEGER NOT NULL DEFAULT 0 CHECK (core_earned_total >= 0),
         is_admin BOOLEAN NOT NULL DEFAULT FALSE,
         onboarding_completed BOOLEAN NOT NULL DEFAULT TRUE,
         menu_tour_completed BOOLEAN NOT NULL DEFAULT TRUE,
@@ -104,12 +118,25 @@ async function initializeDatabase() {
     `);
 
     const userMigrations = [
+      'ADD COLUMN IF NOT EXISTS email VARCHAR(320)',
+      'ADD COLUMN IF NOT EXISTS google_sub VARCHAR(128)',
+      "ADD COLUMN IF NOT EXISTS auth_provider VARCHAR(16) NOT NULL DEFAULT 'local'",
+      'ADD COLUMN IF NOT EXISTS avatar_url TEXT',
       'ADD COLUMN IF NOT EXISTS pergunta_seguranca TEXT',
       'ADD COLUMN IF NOT EXISTS resposta_seguranca TEXT',
       'ADD COLUMN IF NOT EXISTS partidas_jogadas INTEGER NOT NULL DEFAULT 0',
       'ADD COLUMN IF NOT EXISTS vitorias INTEGER NOT NULL DEFAULT 0',
       'ADD COLUMN IF NOT EXISTS abates_totais INTEGER NOT NULL DEFAULT 0',
       'ADD COLUMN IF NOT EXISTS pontuacao_maxima INTEGER NOT NULL DEFAULT 0',
+      'ADD COLUMN IF NOT EXISTS matches_default INTEGER NOT NULL DEFAULT 0',
+      'ADD COLUMN IF NOT EXISTS wins_default INTEGER NOT NULL DEFAULT 0',
+      'ADD COLUMN IF NOT EXISTS kills_default INTEGER NOT NULL DEFAULT 0',
+      'ADD COLUMN IF NOT EXISTS deaths_default INTEGER NOT NULL DEFAULT 0',
+      'ADD COLUMN IF NOT EXISTS matches_blackout INTEGER NOT NULL DEFAULT 0',
+      'ADD COLUMN IF NOT EXISTS wins_blackout INTEGER NOT NULL DEFAULT 0',
+      'ADD COLUMN IF NOT EXISTS kills_blackout INTEGER NOT NULL DEFAULT 0',
+      'ADD COLUMN IF NOT EXISTS deaths_blackout INTEGER NOT NULL DEFAULT 0',
+      'ADD COLUMN IF NOT EXISTS highest_wave_outbreak INTEGER NOT NULL DEFAULT 0',
       'ADD COLUMN IF NOT EXISTS mostrar_dicas BOOLEAN NOT NULL DEFAULT TRUE',
       'ADD COLUMN IF NOT EXISTS volume_geral INTEGER NOT NULL DEFAULT 40',
       "ADD COLUMN IF NOT EXISTS preferencias_json JSONB NOT NULL DEFAULT '{}'::jsonb",
@@ -117,6 +144,7 @@ async function initializeDatabase() {
       'ADD COLUMN IF NOT EXISTS bloqueado_ate TIMESTAMPTZ',
       'ADD COLUMN IF NOT EXISTS ultimo_login TIMESTAMPTZ',
       'ADD COLUMN IF NOT EXISTS core_balance INTEGER NOT NULL DEFAULT 300',
+      'ADD COLUMN IF NOT EXISTS core_earned_total INTEGER NOT NULL DEFAULT 0',
       'ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE',
       // TRUE preserva o fluxo das contas anteriores a esta funcionalidade.
       'ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN NOT NULL DEFAULT TRUE',
@@ -133,6 +161,9 @@ async function initializeDatabase() {
         player_name VARCHAR(24) NOT NULL,
         score INTEGER NOT NULL CHECK (score >= 0),
         max_wave INTEGER NOT NULL DEFAULT 0 CHECK (max_wave >= 0),
+        victory BOOLEAN NOT NULL DEFAULT FALSE,
+        kills INTEGER NOT NULL DEFAULT 0 CHECK (kills >= 0),
+        deaths INTEGER NOT NULL DEFAULT 0 CHECK (deaths >= 0),
         core_reward INTEGER NOT NULL DEFAULT 0 CHECK (core_reward >= 0),
         game_mode VARCHAR(24) NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -142,6 +173,9 @@ async function initializeDatabase() {
     await client.query('ALTER TABLE leaderboard ADD COLUMN IF NOT EXISTS player_name VARCHAR(24)');
     await client.query('ALTER TABLE leaderboard ADD COLUMN IF NOT EXISTS score INTEGER');
     await client.query('ALTER TABLE leaderboard ADD COLUMN IF NOT EXISTS max_wave INTEGER NOT NULL DEFAULT 0');
+    await client.query('ALTER TABLE leaderboard ADD COLUMN IF NOT EXISTS victory BOOLEAN NOT NULL DEFAULT FALSE');
+    await client.query('ALTER TABLE leaderboard ADD COLUMN IF NOT EXISTS kills INTEGER NOT NULL DEFAULT 0');
+    await client.query('ALTER TABLE leaderboard ADD COLUMN IF NOT EXISTS deaths INTEGER NOT NULL DEFAULT 0');
     await client.query('ALTER TABLE leaderboard ADD COLUMN IF NOT EXISTS core_reward INTEGER NOT NULL DEFAULT 0');
     await client.query('ALTER TABLE leaderboard ADD COLUMN IF NOT EXISTS game_mode VARCHAR(24)');
     await client.query('ALTER TABLE leaderboard ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ');
@@ -205,6 +239,12 @@ async function initializeDatabase() {
         IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'leaderboard_core_reward_nonnegative') THEN
           ALTER TABLE leaderboard
           ADD CONSTRAINT leaderboard_core_reward_nonnegative CHECK (core_reward >= 0);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'leaderboard_kills_nonnegative') THEN
+          ALTER TABLE leaderboard ADD CONSTRAINT leaderboard_kills_nonnegative CHECK (kills >= 0);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'leaderboard_deaths_nonnegative') THEN
+          ALTER TABLE leaderboard ADD CONSTRAINT leaderboard_deaths_nonnegative CHECK (deaths >= 0);
         END IF;
       END $$
     `);
@@ -314,6 +354,23 @@ async function initializeDatabase() {
         IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_core_balance_nonnegative') THEN
           ALTER TABLE users ADD CONSTRAINT users_core_balance_nonnegative CHECK (core_balance >= 0);
         END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_core_earned_nonnegative') THEN
+          ALTER TABLE users ADD CONSTRAINT users_core_earned_nonnegative CHECK (core_earned_total >= 0);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_auth_provider_valid') THEN
+          ALTER TABLE users ADD CONSTRAINT users_auth_provider_valid
+          CHECK (auth_provider IN ('local', 'google', 'local+google'));
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_mode_statistics_nonnegative') THEN
+          ALTER TABLE users ADD CONSTRAINT users_mode_statistics_nonnegative CHECK (
+            matches_default >= 0 AND wins_default >= 0 AND kills_default >= 0 AND deaths_default >= 0
+            AND wins_default <= matches_default
+            AND matches_blackout >= 0 AND wins_blackout >= 0
+            AND wins_blackout <= matches_blackout
+            AND kills_blackout >= 0 AND deaths_blackout >= 0
+            AND highest_wave_outbreak >= 0
+          );
+        END IF;
       END $$
     `);
 
@@ -321,6 +378,11 @@ async function initializeDatabase() {
     await client.query('CREATE INDEX IF NOT EXISTS idx_leaderboard_mode_score ON leaderboard (game_mode, score DESC, created_at ASC)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_leaderboard_user_mode ON leaderboard (user_id, game_mode, score DESC)');
     await client.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower ON users (LOWER(username))');
+    await client.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower ON users (LOWER(email)) WHERE email IS NOT NULL');
+    await client.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub ON users (google_sub) WHERE google_sub IS NOT NULL');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_users_default_ranking ON users (wins_default DESC, matches_default ASC) WHERE matches_default > 0');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_users_blackout_ranking ON users (wins_blackout DESC, matches_blackout ASC) WHERE matches_blackout > 0');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_users_outbreak_ranking ON users (highest_wave_outbreak DESC) WHERE highest_wave_outbreak > 0');
     await client.query('CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions (user_id)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_sessions_expiration ON sessions (data_expiracao)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_password_reset_expiration ON password_reset_challenges (data_expiracao)');

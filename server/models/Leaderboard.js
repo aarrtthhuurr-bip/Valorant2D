@@ -8,31 +8,36 @@ function coreRewardForMatch(gameMode, maxWave = 0, randomInt = crypto.randomInt)
   return randomInt(5, 16);
 }
 
+const RANKING_CONFIGURATION = Object.freeze({
+  default: Object.freeze({ metric: 'wins_default', played: 'matches_default > 0', type: 'wins' }),
+  blackout: Object.freeze({ metric: 'wins_blackout', played: 'matches_blackout > 0', type: 'wins' }),
+  outbreak: Object.freeze({ metric: 'highest_wave_outbreak', played: 'highest_wave_outbreak > 0', type: 'wave' }),
+});
+
+function rankingConfiguration(gameMode) {
+  return RANKING_CONFIGURATION[gameMode] || null;
+}
+
 class Leaderboard {
-  /** Retorna apenas o melhor resultado de cada conta no modo solicitado. */
+  /**
+   * O ranking oficial usa exclusivamente vitórias nos modos competitivos e
+   * maior wave no Outbreak. As colunas são escolhidas por uma lista interna,
+   * nunca por texto recebido do cliente.
+   */
   static listByMode(gameMode, limit = 10) {
+    const configuration = rankingConfiguration(gameMode);
+    if (!configuration) return Promise.resolve([]);
     return database.all(
-      `SELECT id, player_name, score, max_wave, game_mode, created_at,
-              RANK() OVER (
-                ORDER BY CASE WHEN $1 = 'outbreak' THEN max_wave ELSE score END DESC
-              ) AS rank_position
-       FROM (
-         SELECT id, user_id, player_name, score, max_wave, game_mode, created_at,
-                ROW_NUMBER() OVER (
-                  PARTITION BY user_id
-                  ORDER BY
-                    CASE WHEN $1 = 'outbreak' THEN max_wave END DESC,
-                    CASE WHEN $1 <> 'outbreak' THEN score END DESC,
-                    created_at ASC, id ASC
-                ) AS player_position
-         FROM leaderboard
-         WHERE game_mode = $1
-       ) AS personal_bests
-       WHERE player_position = 1
-       ORDER BY
-         CASE WHEN $1 = 'outbreak' THEN max_wave END DESC,
-         CASE WHEN $1 <> 'outbreak' THEN score END DESC,
-         created_at ASC, id ASC
+      `SELECT id AS user_id, username AS player_name,
+              ${configuration.metric} AS ranking_value,
+              CASE WHEN $1 = 'outbreak' THEN ${configuration.metric} ELSE 0 END AS max_wave,
+              CASE WHEN $1 <> 'outbreak' THEN ${configuration.metric} ELSE 0 END AS score,
+              $1::VARCHAR AS game_mode,
+              '${configuration.type}'::VARCHAR AS metric_type,
+              RANK() OVER (ORDER BY ${configuration.metric} DESC) AS rank_position
+       FROM users
+       WHERE ${configuration.played}
+       ORDER BY ${configuration.metric} DESC, username ASC, id ASC
        LIMIT $2`,
       [gameMode, limit],
     );
@@ -40,22 +45,19 @@ class Leaderboard {
 
   /** Resume o histórico individual do jogador somente no modo selecionado. */
   static async personalStats(userId, gameMode) {
+    const configuration = rankingConfiguration(gameMode);
+    if (!configuration) return null;
     const statistics = await database.get(
       `WITH mode_entries AS (
          SELECT user_id, score, max_wave, created_at
          FROM leaderboard
          WHERE game_mode = $2
        ),
-       best_by_player AS (
-         SELECT user_id,
-                MAX(CASE WHEN $2 = 'outbreak' THEN max_wave ELSE score END) AS ranking_value
-         FROM mode_entries
-         GROUP BY user_id
-       ),
        ranked_players AS (
-         SELECT user_id,
-                RANK() OVER (ORDER BY ranking_value DESC) AS global_position
-         FROM best_by_player
+         SELECT id AS user_id, ${configuration.metric} AS ranking_value,
+                RANK() OVER (ORDER BY ${configuration.metric} DESC) AS global_position
+         FROM users
+         WHERE ${configuration.played}
        )
        SELECT COUNT(*) AS total_matches,
               COALESCE(MAX(score), 0) AS personal_best,
@@ -63,6 +65,8 @@ class Leaderboard {
               COALESCE(ROUND(AVG(score)), 0) AS average_score,
               MAX(created_at) AS last_played_at,
               (SELECT global_position FROM ranked_players WHERE user_id = $1) AS global_position,
+              COALESCE((SELECT ranking_value FROM ranked_players WHERE user_id = $1), 0) AS ranking_value,
+              '${configuration.type}'::VARCHAR AS metric_type,
               COALESCE((SELECT partidas_jogadas FROM users WHERE id = $1), 0) AS account_total_matches,
               COALESCE((SELECT vitorias FROM users WHERE id = $1), 0) AS account_total_wins,
               COALESCE((SELECT abates_totais FROM users WHERE id = $1), 0) AS account_total_kills
@@ -75,6 +79,8 @@ class Leaderboard {
       personal_best: Number(statistics?.personal_best) || 0,
       personal_max_wave: Number(statistics?.personal_max_wave) || 0,
       average_score: Number(statistics?.average_score) || 0,
+      ranking_value: Number(statistics?.ranking_value) || 0,
+      metric_type: statistics?.metric_type || configuration.type,
       global_position: statistics?.global_position ? Number(statistics.global_position) : null,
       account_total_matches: Number(statistics?.account_total_matches) || 0,
       account_total_wins: Number(statistics?.account_total_wins) || 0,
@@ -87,7 +93,7 @@ class Leaderboard {
    * Consome o comprovante, atualiza estatísticas e grava o ranking na mesma
    * transação. Uma falha não deixa a partida parcialmente registrada.
    */
-  static async recordCompletedMatch({ matchId, userId, playerName, gameMode, score, maxWave = 0, victory, kills }) {
+  static async recordCompletedMatch({ matchId, userId, playerName, gameMode, score, maxWave = 0, victory, kills, deaths = 0 }) {
     const client = await database.pool.connect();
     try {
       await client.query('BEGIN');
@@ -112,16 +118,34 @@ class Leaderboard {
              vitorias = vitorias + $1,
              abates_totais = abates_totais + $2,
              pontuacao_maxima = GREATEST(pontuacao_maxima, $3),
-             core_balance = core_balance + $4
+             core_balance = core_balance + $4,
+             core_earned_total = core_earned_total + $4,
+             matches_default = matches_default + CASE WHEN $6 = 'default' THEN 1 ELSE 0 END,
+             wins_default = wins_default + CASE WHEN $6 = 'default' AND $1 = 1 THEN 1 ELSE 0 END,
+             kills_default = kills_default + CASE WHEN $6 = 'default' THEN $2 ELSE 0 END,
+             deaths_default = deaths_default + CASE WHEN $6 = 'default' THEN $7 ELSE 0 END,
+             matches_blackout = matches_blackout + CASE WHEN $6 = 'blackout' THEN 1 ELSE 0 END,
+             wins_blackout = wins_blackout + CASE WHEN $6 = 'blackout' AND $1 = 1 THEN 1 ELSE 0 END,
+             kills_blackout = kills_blackout + CASE WHEN $6 = 'blackout' THEN $2 ELSE 0 END,
+             deaths_blackout = deaths_blackout + CASE WHEN $6 = 'blackout' THEN $7 ELSE 0 END,
+             highest_wave_outbreak = CASE
+               WHEN $6 = 'outbreak' THEN GREATEST(highest_wave_outbreak, $8)
+               ELSE highest_wave_outbreak
+             END
          WHERE id = $5
-         RETURNING partidas_jogadas, vitorias, abates_totais, pontuacao_maxima, core_balance`,
-        [victory ? 1 : 0, kills, score, coreReward, userId],
+         RETURNING partidas_jogadas, vitorias, abates_totais, pontuacao_maxima,
+                   core_balance, core_earned_total, matches_default, wins_default,
+                   kills_default, deaths_default, matches_blackout, wins_blackout,
+                   kills_blackout, deaths_blackout, highest_wave_outbreak`,
+        [victory ? 1 : 0, kills, score, coreReward, userId, gameMode, deaths, maxWave],
       );
       const entryResult = await client.query(
-        `INSERT INTO leaderboard (user_id, player_name, score, max_wave, core_reward, game_mode)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING id, player_name, score, max_wave, core_reward, game_mode, created_at`,
-        [userId, playerName, score, maxWave, coreReward, gameMode],
+        `INSERT INTO leaderboard
+         (user_id, player_name, score, max_wave, victory, kills, deaths, core_reward, game_mode)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING id, player_name, score, max_wave, victory, kills, deaths,
+                   core_reward, game_mode, created_at`,
+        [userId, playerName, score, maxWave, victory, kills, deaths, coreReward, gameMode],
       );
       await Commerce.updateMissionProgress(client, userId, { victory, kills, score, maxWave, gameMode });
       await client.query('COMMIT');
@@ -141,4 +165,4 @@ class Leaderboard {
 }
 
 module.exports = Leaderboard;
-module.exports._test = { coreRewardForMatch };
+module.exports._test = { coreRewardForMatch, rankingConfiguration };
