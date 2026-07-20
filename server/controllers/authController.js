@@ -95,6 +95,17 @@ async function register(request, response, next) {
       return;
     }
 
+    // A conta administrativa legada já existe no banco. Reservar seu nome
+    // impede que ele seja reivindicado pelo cadastro público em uma instalação
+    // nova antes da configuração do administrador no PostgreSQL.
+    if (username.toLocaleLowerCase('pt-BR') === 'admin') {
+      response.status(403).json({
+        error: 'Este nome de usuário não está disponível.',
+        code: 'USERNAME_RESERVED',
+      });
+      return;
+    }
+
     if (!SECURITY_QUESTIONS.has(securityQuestion) || securityAnswer.length < 2 || rawSecurityAnswer.length > 100) {
       response.status(400).json({
         error: 'Selecione uma pergunta e informe uma resposta de segurança válida.',

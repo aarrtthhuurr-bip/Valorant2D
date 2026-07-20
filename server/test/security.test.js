@@ -93,6 +93,20 @@ test('credenciais e respostas de segurança são normalizadas e limitadas', () =
   assert.equal(authSecurity.normalizeSecurityAnswer('  AÇUL  '), 'açul');
 });
 
+test('nome da conta administrativa não pode ser reivindicado pelo cadastro público', async () => {
+  const response = await request(app)
+    .post('/api/register')
+    .set('Content-Type', 'application/json')
+    .send({
+      username: 'Admin',
+      password: 'senha-forte-123',
+      securityQuestion: 'Qual sua cor favorita?',
+      securityAnswer: 'azul',
+    })
+    .expect(403);
+  assert.equal(response.body.code, 'USERNAME_RESERVED');
+});
+
 test('login malicioso recebe resposta genérica sem consultar username inválido', async () => {
   const originalFind = User.findByUsername;
   let queried = false;

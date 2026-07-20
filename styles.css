@@ -3068,7 +3068,8 @@ button.click-feedback::after {
 .skin-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 11px; perspective: 900px; }
 .daily-offers { margin-bottom: 24px; }
 .skin-card { position: relative; min-height: 176px; display: grid; grid-template-rows: 105px auto auto; gap: 7px; padding: 11px; overflow: hidden; border: 1px solid rgba(132,170,190,.17); border-radius: 8px; background: linear-gradient(145deg, rgba(17,29,41,.9), rgba(7,14,22,.92)); text-align: left; transform-style: preserve-3d; }
-.skin-card::before { content:""; position:absolute; inset:0; background: radial-gradient(circle at 50% 38%, rgba(0,243,255,.1), transparent 48%); opacity:0; transition:opacity .2s; }
+.skin-card::before { content:""; position:absolute; inset:0; pointer-events:none; background: radial-gradient(circle at 50% 38%, rgba(0,243,255,.1), transparent 48%); opacity:0; transition:opacity .2s; }
+.skin-card > * { position:relative; z-index:1; }
 .skin-card:hover { border-color: rgba(0,243,255,.5); box-shadow: 0 10px 26px rgba(0,0,0,.28), 0 0 20px rgba(0,243,255,.08); }
 .skin-card:hover::before { opacity:1; }
 .skin-card-art { display:grid; place-items:center; transform-style:preserve-3d; }

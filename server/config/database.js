@@ -286,8 +286,13 @@ async function initializeDatabase() {
       )
     `);
 
-    // A promoção inicial exige configuração explícita no ambiente do Render.
-    // Depois disso, todas as autorizações consultam exclusivamente is_admin.
+    // Compatibilidade com a conta administrativa criada antes da flag is_admin.
+    // Novos cadastros com esse nome são bloqueados pelo controlador, portanto a
+    // migração não permite que uma conta pública futura obtenha privilégios.
+    await client.query("UPDATE users SET is_admin = TRUE WHERE username = 'Admin'");
+
+    // Permite selecionar outro administrador por variável de ambiente. Depois
+    // da promoção, toda autorização continua baseada somente em is_admin.
     const bootstrapAdmin = process.env.ADMIN_USERNAME?.trim();
     if (bootstrapAdmin) {
       await client.query('UPDATE users SET is_admin = TRUE WHERE LOWER(username) = LOWER($1)', [bootstrapAdmin]);
