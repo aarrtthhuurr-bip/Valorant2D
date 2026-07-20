@@ -762,7 +762,6 @@ function updateAccountSummary(profile) {
       : profile.accountProvider?.includes("google") ? "Conta Google conectada" : "Conta conectada";
   }
   if (ui.accountUsername) ui.accountUsername.textContent = profile.username;
-  if (ui.accountAvatar) ui.accountAvatar.textContent = String(profile.username || "A").trim().charAt(0).toUpperCase() || "A";
   if (ui.logoutButton) ui.logoutButton.textContent = profile.isGuest ? "Entrar" : "Sair";
 }
 
@@ -9989,11 +9988,20 @@ function profileField(selector, value) {
   if (element) element.textContent = value;
 }
 
+function profileAvatarIcon() {
+  return `<svg viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+    <path class="profile-avatar-frame" d="M16 2.5 27 8v12.5L16 29.5 5 20.5V8Z"></path>
+    <circle class="profile-avatar-head" cx="16" cy="12" r="4"></circle>
+    <path class="profile-avatar-body" d="M9.5 23c.8-4 3.1-6 6.5-6s5.7 2 6.5 6"></path>
+    <path class="profile-avatar-accent" d="M5 12V8l4-2M27 20v.5l-4 3.3"></path>
+  </svg>`;
+}
+
 function renderGuestProfile() {
   if (!ui.playerProfileContent) return;
   ui.playerProfileContent.innerHTML = `
     <section class="profile-identity-card is-guest">
-      <span class="profile-large-avatar" aria-hidden="true">C</span>
+      <span class="profile-large-avatar" aria-hidden="true">${profileAvatarIcon()}</span>
       <div><span>JOGADOR ATUAL</span><h3 data-profile="username"></h3><p>Tipo de conta: Convidado</p></div>
     </section>
     <aside class="profile-guest-banner">
@@ -10018,7 +10026,7 @@ function renderPlayerProfile(profile) {
   const accountLabel = profile.accountProvider?.includes("google") ? "Logado com Google" : "Logado";
   ui.playerProfileContent.innerHTML = `
     <section class="profile-identity-card">
-      <span class="profile-large-avatar" data-profile="avatar" aria-hidden="true">A</span>
+      <span class="profile-large-avatar" aria-hidden="true">${profileAvatarIcon()}</span>
       <div class="profile-identity-copy"><span>IDENTIDADE ATIVA</span><h3 data-profile="username"></h3><p data-profile="email"></p></div>
       <dl class="profile-account-facts">
         <div><dt>TIPO DE CONTA</dt><dd data-profile="type"></dd></div>
@@ -10050,7 +10058,6 @@ function renderPlayerProfile(profile) {
 
   const stats = profile.statistics || {};
   const number = (value) => Math.max(0, Number(value) || 0).toLocaleString("pt-BR");
-  profileField('[data-profile="avatar"]', String(profile.username || "A").charAt(0).toUpperCase());
   profileField('[data-profile="username"]', profile.username || "Agente");
   profileField('[data-profile="email"]', profile.email || "E-mail não informado");
   profileField('[data-profile="type"]', accountLabel);

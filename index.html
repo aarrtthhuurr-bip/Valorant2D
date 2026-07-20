@@ -292,7 +292,14 @@
         <div class="menu-card glass">
           <div class="account-summary hidden" id="accountSummary">
             <button type="button" class="account-profile-trigger" id="profileButton" aria-label="Abrir perfil do jogador">
-              <span class="account-avatar" id="accountAvatar" aria-hidden="true">A</span>
+              <span class="account-avatar" id="accountAvatar" aria-hidden="true">
+                <svg viewBox="0 0 32 32" focusable="false">
+                  <path class="profile-avatar-frame" d="M16 2.5 27 8v12.5L16 29.5 5 20.5V8Z"></path>
+                  <circle class="profile-avatar-head" cx="16" cy="12" r="4"></circle>
+                  <path class="profile-avatar-body" d="M9.5 23c.8-4 3.1-6 6.5-6s5.7 2 6.5 6"></path>
+                  <path class="profile-avatar-accent" d="M5 12V8l4-2M27 20v.5l-4 3.3"></path>
+                </svg>
+              </span>
               <span class="account-profile-copy">
                 <span id="accountType">Conta conectada</span>
                 <strong id="accountUsername">Jogador</strong>
