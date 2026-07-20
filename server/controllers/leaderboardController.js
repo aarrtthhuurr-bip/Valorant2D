@@ -45,7 +45,17 @@ function validatedMatchPayload(body, match) {
     if (score > kills * 200 + 10000) return null;
   }
 
-  return { gameMode, score, kills, deaths, victory, maxWave: gameMode === 'outbreak' ? wave : 0 };
+  return {
+    gameMode,
+    score,
+    kills,
+    deaths,
+    victory,
+    maxWave: gameMode === 'outbreak' ? wave : 0,
+    // A wave exibida é a onda em que o jogador foi eliminado. Portanto,
+    // somente as anteriores foram efetivamente concluídas.
+    completedWaves: gameMode === 'outbreak' ? Math.max(0, wave - 1) : 0,
+  };
 }
 
 function recordedMatchMatches(body, entry) {

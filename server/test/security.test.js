@@ -622,6 +622,7 @@ test('leaderboard salva pontuação autenticada com comprovante e nome da sessã
       })
       .expect(201);
     assert.equal(recordedPayload.maxWave, 12);
+    assert.equal(recordedPayload.completedWaves, 11);
     assert.equal(outbreak.body.entry.game_mode, 'outbreak');
   } finally {
     Session.findValid = originals.session;
@@ -703,4 +704,5 @@ test('recompensa Core respeita as faixas de cada modo e as waves do Outbreak', (
   assert.equal(reward('blackout', 0, (minimum) => minimum), 10);
   assert.equal(reward('blackout', 0, (_minimum, maximum) => maximum - 1), 20);
   assert.equal(reward('outbreak', 17), 17);
+  assert.equal(reward('outbreak', 0), 0);
 });

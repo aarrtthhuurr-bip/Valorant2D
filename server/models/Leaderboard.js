@@ -2,8 +2,8 @@ const crypto = require('crypto');
 const database = require('../config/database');
 const Commerce = require('./Commerce');
 
-function coreRewardForMatch(gameMode, maxWave = 0, randomInt = crypto.randomInt) {
-  if (gameMode === 'outbreak') return Math.max(1, Math.trunc(Number(maxWave) || 1));
+function coreRewardForMatch(gameMode, completedWaves = 0, randomInt = crypto.randomInt) {
+  if (gameMode === 'outbreak') return Math.max(0, Math.trunc(Number(completedWaves) || 0));
   if (gameMode === 'blackout') return randomInt(10, 21);
   return randomInt(5, 16);
 }
@@ -132,7 +132,7 @@ class Leaderboard {
    * Consome o comprovante, atualiza estatísticas e grava o ranking na mesma
    * transação. Uma falha não deixa a partida parcialmente registrada.
    */
-  static async recordCompletedMatch({ matchId, userId, playerName, gameMode, score, maxWave = 0, victory, kills, deaths = 0 }) {
+  static async recordCompletedMatch({ matchId, userId, playerName, gameMode, score, maxWave = 0, completedWaves = 0, victory, kills, deaths = 0 }) {
     const client = await database.pool.connect();
     try {
       await client.query('BEGIN');
@@ -150,7 +150,7 @@ class Leaderboard {
       }
       // A recompensa nasce somente depois que o comprovante descartável foi
       // consumido e dentro da mesma transação das estatísticas da partida.
-      const coreReward = coreRewardForMatch(gameMode, maxWave);
+      const coreReward = coreRewardForMatch(gameMode, completedWaves);
       const statisticsResult = await client.query(
         `UPDATE users
          SET partidas_jogadas = partidas_jogadas + 1,

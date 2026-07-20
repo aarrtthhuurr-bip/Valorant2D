@@ -1133,6 +1133,10 @@ const AUDIO_MIX = {
   pickup: 0.32,
   denied: 0.24,
   purchase: 0.32,
+  menu_click: 0.2,
+  wave_transition: 0.34,
+  wave_start: 0.4,
+  game_over: 0.42,
 };
 const AUDIO_THROTTLE_MS = {
   shot: 24,
@@ -1142,6 +1146,10 @@ const AUDIO_THROTTLE_MS = {
   pickup: 70,
   denied: 90,
   purchase: 100,
+  menu_click: 45,
+  wave_transition: 500,
+  wave_start: 500,
+  game_over: 800,
 };
 const AUDIO_NAMES = {
   shot: "Tiro",
@@ -1740,13 +1748,13 @@ function initAudio() {
   primeWeaponAudioCache();
 }
 
-function playTone(freq, duration = 0.06, type = "square", gain = 0.035) {
+function playTone(freq, duration = 0.06, type = "square", gain = 0.035, delay = 0) {
   if (!audio.enabled) return;
   initAudio();
   if (!audio.ctx) return;
   const output = audioOutputNode();
   if (!output) return;
-  const now = audio.ctx.currentTime;
+  const now = audio.ctx.currentTime + Math.max(0, delay);
   const osc = audio.ctx.createOscillator();
   const amp = audio.ctx.createGain();
   osc.type = type;
@@ -1914,13 +1922,46 @@ function playSound(name) {
   if (name === "headshot"){ playTone(1200,0.05, "triangle", 0.14 * mix); playTone(800, 0.08, "sine",     0.08 * mix); }
   if (name === "reload")  playTone(280, 0.1,  "sawtooth",  0.09 * mix);
   if (name === "plant")   { playTone(440, 0.08, "sine", 0.11 * mix); playTone(660, 0.12, "sine", 0.08 * mix); }
-  if (name === "round_win")  { playTone(523, 0.1, "sine", 0.09 * mix); playTone(659, 0.1, "sine", 0.09 * mix); playTone(784, 0.2, "sine", 0.1 * mix); }
-  if (name === "round_lose") { playTone(392, 0.1, "sine", 0.09 * mix); playTone(330, 0.1, "sine", 0.09 * mix); playTone(262, 0.22,"sine", 0.1 * mix); }
+  if (name === "round_win")  {
+    playTone(523, 0.08, "square", 0.08 * mix);
+    playTone(659, 0.08, "square", 0.09 * mix, 0.09);
+    playTone(784, 0.16, "square", 0.1 * mix, 0.18);
+  }
+  if (name === "round_lose") {
+    playTone(392, 0.08, "square", 0.08 * mix);
+    playTone(330, 0.08, "square", 0.08 * mix, 0.09);
+    playTone(262, 0.2, "square", 0.09 * mix, 0.18);
+  }
   if (name === "spike")   playTone(80,  0.3,  "sawtooth",  0.12 * mix);
   if (name === "ability") playTone(620, 0.14, "triangle",  0.11 * mix);
   if (name === "pickup")  { playTone(760, 0.06, "sine", 0.12 * mix); playTone(1040, 0.08, "sine", 0.09 * mix); }
   if (name === "denied")  { playTone(180, 0.08, "sawtooth", 0.11 * mix); playTone(120, 0.12, "sawtooth", 0.08 * mix); }
-  if (name === "purchase"){ playTone(520, 0.06, "sine", 0.1 * mix); playTone(780, 0.1, "triangle", 0.11 * mix); }
+  if (name === "purchase"){
+    playTone(392, 0.055, "square", 0.08 * mix);
+    playTone(659, 0.065, "square", 0.09 * mix, 0.065);
+    playTone(988, 0.11, "square", 0.1 * mix, 0.14);
+  }
+  if (name === "menu_click") {
+    playTone(220, 0.025, "square", 0.055 * mix);
+    playTone(330, 0.035, "square", 0.045 * mix, 0.022);
+  }
+  if (name === "wave_transition") {
+    playTone(196, 0.07, "square", 0.075 * mix);
+    playTone(247, 0.07, "square", 0.075 * mix, 0.08);
+    playTone(294, 0.11, "square", 0.085 * mix, 0.16);
+  }
+  if (name === "wave_start") {
+    playTone(262, 0.065, "square", 0.08 * mix);
+    playTone(392, 0.065, "square", 0.085 * mix, 0.075);
+    playTone(523, 0.065, "square", 0.09 * mix, 0.15);
+    playTone(784, 0.14, "square", 0.1 * mix, 0.225);
+  }
+  if (name === "game_over") {
+    playTone(392, 0.09, "square", 0.09 * mix);
+    playTone(330, 0.09, "square", 0.085 * mix, 0.11);
+    playTone(262, 0.12, "square", 0.09 * mix, 0.22);
+    playTone(131, 0.28, "sawtooth", 0.075 * mix, 0.36);
+  }
 }
 
 const DEFAULT_MAP = {
@@ -2300,6 +2341,9 @@ const game = {
   outbreakElapsed: 0,
   outbreakLastDamageAt: 0,
   outbreakWaveDelay: 0,
+  outbreakSpawnQueue: [],
+  outbreakSpawnCooldown: 0,
+  outbreakWaveEnemyTotal: 0,
   outbreakShopPending: false,
   // Indica que a loja foi aberta pelo painel de desenvolvimento e deve
   // retomar a mesma onda, preservando os inimigos que estavam ativos.
@@ -3108,6 +3152,9 @@ function fullReset() {
   game.airdropVisuals = [];
   game.outbreakOverdriveTrailTimer = 0;
   game.outbreakPhaseTrailTimer = 0;
+  game.outbreakSpawnQueue = [];
+  game.outbreakSpawnCooldown = 0;
+  game.outbreakWaveEnemyTotal = 0;
   game.selectedAgent = agents[0];
   game.agentLocked = false;
   game.godMode = false;
@@ -3134,6 +3181,9 @@ function startNewMatch() {
   game.statisticsRecorded = false;
   game.matchSubmissionToken = "";
   game.matchSubmissionPromise = null;
+  game.outbreakSpawnQueue = [];
+  game.outbreakSpawnCooldown = 0;
+  game.outbreakWaveEnemyTotal = 0;
   game.startingSide = game.outbreak ? "attackers" : Math.random() < 0.5 ? "attackers" : "defenders";
   game.playerSide = game.startingSide;
   map = game.training ? TRAINING_MAP : game.outbreak ? generateOutbreakMap() : MAPS[Math.floor(Math.random() * MAPS.length)];
@@ -3177,17 +3227,25 @@ function prepareMatchCoreReward() {
   const eligible = !currentProfile?.isGuest && !game.sandbox && !game.training && !game.tutorial;
   ui.matchCoreReward.classList.toggle("hidden", !eligible);
   ui.matchCoreReward.classList.remove("is-confirmed", "is-error");
-  ui.matchCoreRewardText.textContent = eligible ? "Validando recompensa no servidor..." : "";
+  if (ui.matchCoreRewardText) {
+    const completedWaves = Math.max(0, Math.round(game.outbreakWave || 1) - 1);
+    ui.matchCoreRewardText.textContent = eligible
+      ? game.outbreak
+        ? `${completedWaves} C faturados · sincronizando...`
+        : "Validando recompensa no servidor..."
+      : "";
+  }
 }
 
 function confirmMatchCoreReward(payload) {
   const reward = Number(payload?.coreReward);
   const balance = Number(payload?.coreBalance);
   if (!Number.isInteger(reward) || reward < 0 || !Number.isFinite(balance)) return false;
-  const label = reward === 1 ? "Core obtido" : "Cores obtidos";
   ui.matchCoreReward?.classList.remove("hidden", "is-error");
   ui.matchCoreReward?.classList.add("is-confirmed");
-  if (ui.matchCoreRewardText) ui.matchCoreRewardText.textContent = `+${reward} ${label}`;
+  if (ui.matchCoreRewardText) ui.matchCoreRewardText.textContent = payload?.entry?.game_mode === "outbreak"
+    ? `+${reward} C · Core faturado na partida`
+    : `+${reward} ${reward === 1 ? "Core obtido" : "Cores obtidos"}`;
   // O valor exibido vem diretamente da transação concluída no servidor.
   updateCoreBalances(balance);
   return true;
@@ -3283,7 +3341,7 @@ function showOutbreakGameOver(reason = "Sinal vital perdido") {
     ui.newGameButton.querySelector("span").textContent = "TENTAR DE NOVO";
   }
   ui.outbreakMenuButton?.classList.remove("hidden");
-  playSound("round_lose");
+  playSound("game_over");
   recordCompletedMatch();
 }
 
@@ -3494,6 +3552,7 @@ function updateOutbreak(dt) {
   updateOutbreakAirdrops(dt);
   updateAirdropModifierVisuals(dt);
   synchronizePlayerEquipment();
+  updateOutbreakSpawnQueue(dt);
   for (const bot of game.bots) {
     if (!bot.alive) continue;
     bot.lastKnownPlayer = { x: game.player.x, y: game.player.y };
@@ -5494,7 +5553,10 @@ function cachedBotNavigationTarget(bot, target) {
   const now = performance.now();
   const distanceFromPlayer = game.player ? Math.hypot(bot.x - game.player.x, bot.y - game.player.y) : 0;
   const distant = distanceFromPlayer > 720 || isOutsideViewport(bot);
-  const interval = distant ? DISTANT_BOT_NAVIGATION_INTERVAL : BOT_NAVIGATION_INTERVAL;
+  const outbreakInterval = game.outbreak
+    ? Math.max(82, 155 - Math.max(1, game.outbreakWave) * 2.1)
+    : BOT_NAVIGATION_INTERVAL;
+  const interval = distant ? DISTANT_BOT_NAVIGATION_INTERVAL : outbreakInterval;
   const targetMoved = !bot.cachedNavDestination
     || Math.hypot(target.x - bot.cachedNavDestination.x, target.y - bot.cachedNavDestination.y) > 96;
   if (!bot.cachedNavTarget || targetMoved || now >= (bot.nextNavigationUpdate || 0)) {
@@ -5652,7 +5714,8 @@ function cachedBotPerception(bot, key, resolver) {
   const cacheKey = `cachedSense_${key}`;
   const updateKey = `nextSense_${key}`;
   const distance = game.player ? Math.hypot(bot.x - game.player.x, bot.y - game.player.y) : 0;
-  const interval = distance > 720 || isOutsideViewport(bot) ? 340 : 130;
+  const nearInterval = game.outbreak ? Math.max(78, 142 - Math.max(1, game.outbreakWave) * 1.8) : 130;
+  const interval = distance > 720 || isOutsideViewport(bot) ? 340 : nearInterval;
   if (!(updateKey in bot) || now >= bot[updateKey]) {
     bot[cacheKey] = resolver();
     bot[updateKey] = now + interval + (bot.patrol % 6) * 9;
@@ -5669,10 +5732,14 @@ function botShootAt(bot, target, dt, team, firePenalty = 1, options = {}) {
   bot.angle = angle;
   bot.fireTimer -= dt;
   if (bot.fireTimer <= 0) {
+    const bulletStart = game.bullets.length;
     shoot(bot, aimX, aimY, weapon, team);
+    const latest = game.bullets.slice(bulletStart);
     if (team === "ally" && game.allyLoadout.damageMultiplier > 1) {
-      const latest = game.bullets.slice(-Math.max(1, weapon.pellets || 1));
       latest.forEach((bullet) => { if (bullet.team === "ally") bullet.damage *= game.allyLoadout.damageMultiplier; });
+    }
+    if (team === "bot" && game.outbreak && bot.outbreakDamageMultiplier > 1) {
+      latest.forEach((bullet) => { if (bullet.team === "bot") bullet.damage *= bot.outbreakDamageMultiplier; });
     }
     if (options.smokeProbe) {
       game.neonTrails.push({
@@ -5696,7 +5763,7 @@ function updateBotAwareness(bot, visibleTarget, dt) {
   if (visibleTarget) {
     bot.shootGraceTimer = BOT_SHOOT_GRACE_TIME;
     if (bot.reactionTimer === undefined) {
-      bot.reactionTimer = BOT_REACTION_TIME + Math.random() * 0.18;
+      bot.reactionTimer = (bot.outbreakReactionTime || BOT_REACTION_TIME) + Math.random() * (game.outbreak ? 0.08 : 0.18);
     }
     if (bot.reactionTimer > 0) {
       bot.reactionTimer = Math.max(0, bot.reactionTimer - dt);
@@ -5711,7 +5778,7 @@ function updateBotAwareness(bot, visibleTarget, dt) {
   } else {
     bot.shootGraceTimer = Math.max(0, (bot.shootGraceTimer || 0) - dt);
     if (bot.shootGraceTimer <= 0) {
-      bot.reactionTimer = BOT_REACTION_TIME;
+      bot.reactionTimer = bot.outbreakReactionTime || BOT_REACTION_TIME;
       bot.canShoot = false;
     }
     bot.memoryTimer = Math.max(0, bot.memoryTimer - dt);
@@ -6896,7 +6963,9 @@ function checkWinConditions() {
   if (game.tutorial) return;
   if (game.training) return;
   if (game.outbreak) {
-    if (game.bots.length > 0 && game.bots.every((bot) => !bot.alive) && game.outbreakWaveDelay <= 0) {
+    if (game.bots.length > 0 && game.outbreakSpawnQueue.length === 0
+      && game.bots.every((bot) => !bot.alive) && game.outbreakWaveDelay <= 0) {
+      playSound("wave_transition");
       if (game.outbreakWave % 10 === 0) {
         openOutbreakShopBreak();
         return;
@@ -8673,8 +8742,17 @@ function draw() {
     if (isOutsideViewport(bot, bot.r + 24)) continue;
     if (!isBotVisible(bot)) continue;
     const visible = game.revealTimer > 0 || hasLineOfSight(game.player, bot);
-    const label = `${bot.side === "attackers" ? "ATK" : "DEF"} ${bot.weapon?.name || "Pistol"}`;
-    const color = bot.side === "attackers" ? "#ff8a5b" : "#4fb3ff";
+    const outbreakTypeLabel = bot.outbreakArchetype === "tank"
+      ? "TANK"
+      : bot.outbreakArchetype === "runner"
+        ? "CORREDOR"
+        : "ASSALTO";
+    const label = game.outbreak
+      ? `${outbreakTypeLabel} · ${bot.weapon?.name || "Classic"}`
+      : `${bot.side === "attackers" ? "ATK" : "DEF"} ${bot.weapon?.name || "Pistol"}`;
+    const color = game.outbreak
+      ? bot.outbreakArchetype === "tank" ? "#a83e48" : bot.outbreakArchetype === "runner" ? "#c8793b" : "#9d4453"
+      : bot.side === "attackers" ? "#ff8a5b" : "#4fb3ff";
     drawEntity(bot, visible ? color : "#274351", visible ? label : "", "bot");
   }
   for (const ally of game.allies) {
@@ -11257,17 +11335,25 @@ function startMode(label, difficulty) {
   }, 220);
 }
 
+function outbreakWavePlan(wave) {
+  const safeWave = Math.max(1, Math.round(wave) || 1);
+  return {
+    total: safeWave <= 3 ? 3 : safeWave <= 10 ? 4 : Math.min(5 + Math.floor((safeWave - 11) / 4), 10),
+    activeCap: safeWave <= 10 ? 3 : safeWave <= 20 ? 4 : safeWave <= 35 ? 5 : 6,
+    spawnInterval: Math.max(1.15, 2.25 - safeWave * 0.018),
+  };
+}
+
+function outbreakBotArchetype(wave, index) {
+  if (wave >= 15 && index % 5 === 0) return "tank";
+  if (wave >= 11 && index % 3 === 1) return "runner";
+  return "assault";
+}
+
 function createOutbreakWave(wave) {
-  // As dez primeiras ondas funcionam como uma introdução gradual.
-  const count = wave <= 3
-    ? 3
-    : wave <= 6
-      ? 4
-      : wave <= 10
-        ? 5
-        : Math.min(6 + Math.floor((wave - 11) * 0.7), 14);
+  const plan = outbreakWavePlan(wave);
   const baseSpawns = [...map.defendersSpawn, ...map.attackerBotSpawns];
-  return Array.from({ length: count }, (_, index) => {
+  return Array.from({ length: plan.total }, (_, index) => {
     const base = baseSpawns[index % baseSpawns.length];
     const ring = Math.floor(index / baseSpawns.length) + 1;
     const angle = index * 2.19;
@@ -11276,24 +11362,58 @@ function createOutbreakWave(wave) {
       y: base.y + Math.sin(angle) * ring * 34,
     }, base);
     const bot = makeBot(spawn, index);
+    const archetype = outbreakBotArchetype(wave, index);
+    const baseHp = 64 + wave * 7;
+    const hpScale = archetype === "tank" ? 1.65 : archetype === "runner" ? 0.72 : 1;
+    const speedScale = archetype === "tank" ? 0.7 : archetype === "runner" ? 1.28 : 1;
     bot.id = `bot-outbreak-${wave}-${index}`;
     bot.hasSpike = false;
-    bot.hp = wave <= 10 ? 60 + wave * 4 : 110 + (wave - 10) * 8;
+    bot.outbreakArchetype = archetype;
+    bot.hp = Math.round(baseHp * hpScale);
     bot.maxHp = bot.hp;
     // As dez primeiras ondas não possuem escudo. A progressão começa na onda 11.
-    bot.armor = wave < 11 ? 0 : Math.min(50, 15 + (wave - 11) * 3);
+    bot.armor = wave < 11 ? 0 : Math.min(archetype === "tank" ? 90 : 55, 12 + (wave - 11) * (archetype === "tank" ? 4 : 2));
     bot.maxArmor = bot.armor;
-    bot.speed = wave <= 10
-      ? Math.min(104, 78 + wave * 2 + index)
-      : Math.min(184, 112 + (wave - 11) * 4 + index * 2);
+    bot.speed = Math.min(archetype === "runner" ? 190 : archetype === "tank" ? 118 : 158, (80 + wave * 2.1) * speedScale);
+    bot.r = archetype === "tank" ? 21 : archetype === "runner" ? 15 : 17;
     if (wave <= 10) bot.weapon = weapons[0];
     // O arsenal-base passa a incluir a Operator no fim da progressão, porém o
     // rifle de precisão fica estritamente bloqueado até a Wave 21.
     if (wave < 21 && bot.weapon?.id === "sniper") bot.weapon = weapons.find((weapon) => weapon.id === "dmr") || weapons[0];
-    bot.outbreakScatter = wave <= 10 ? Math.max(18, 58 - wave * 4) : Math.max(0, 16 - (wave - 11));
-    bot.outbreakFirePenalty = wave <= 10 ? Math.max(1.25, 2.25 - wave * 0.08) : 1;
+    bot.outbreakScatter = wave <= 10
+      ? Math.max(20, 60 - wave * 4)
+      : Math.max(3, 20 - (wave - 10) * 0.5) + (archetype === "runner" ? 7 : 0);
+    bot.outbreakFirePenalty = wave <= 10
+      ? Math.max(1.3, 2.2 - wave * 0.08)
+      : Math.max(0.78, 1 - (wave - 11) * 0.008);
+    bot.outbreakDamageMultiplier = Math.min(2.6, 1 + Math.max(0, wave - 1) * 0.032)
+      * (archetype === "tank" ? 1.16 : archetype === "runner" ? 0.88 : 1);
+    bot.outbreakReactionTime = Math.max(0.065, 0.29 - wave * 0.006)
+      * (archetype === "runner" ? 0.72 : archetype === "tank" ? 1.18 : 1);
     return bot;
   });
+}
+
+function releaseOutbreakBot() {
+  const bot = game.outbreakSpawnQueue.shift();
+  if (!bot) return false;
+  sanitizeEntityPosition(bot);
+  game.bots.push(bot);
+  spawnParticles(bot.x, bot.y, bot.outbreakArchetype === "tank" ? "#ff7d62" : bot.outbreakArchetype === "runner" ? "#ffbf66" : "#ff5364", 12, 90);
+  return true;
+}
+
+function updateOutbreakSpawnQueue(dt) {
+  if (!game.outbreakSpawnQueue.length || game.outbreakShopPending || game.phase !== "action") return;
+  const plan = outbreakWavePlan(game.outbreakWave);
+  const activeBots = game.bots.reduce((total, bot) => total + (bot.alive ? 1 : 0), 0);
+  if (activeBots >= plan.activeCap) {
+    game.outbreakSpawnCooldown = Math.max(game.outbreakSpawnCooldown, plan.spawnInterval);
+    return;
+  }
+  game.outbreakSpawnCooldown = Math.max(0, game.outbreakSpawnCooldown - dt);
+  if (game.outbreakSpawnCooldown > 0) return;
+  if (releaseOutbreakBot()) game.outbreakSpawnCooldown = plan.spawnInterval;
 }
 
 function deployOutbreakWave(wave) {
@@ -11305,15 +11425,21 @@ function deployOutbreakWave(wave) {
   game.outbreakWaveCredits = 0;
   game.roundNumber = wave;
   synchronizePlayerEquipment();
-  game.bots = createOutbreakWave(wave);
-  game.bots.forEach(sanitizeEntityPosition);
+  const waveBots = createOutbreakWave(wave);
+  const plan = outbreakWavePlan(wave);
+  game.bots = [];
+  game.outbreakSpawnQueue = waveBots;
+  game.outbreakWaveEnemyTotal = waveBots.length;
+  game.outbreakSpawnCooldown = plan.spawnInterval;
+  for (let index = 0; index < Math.min(2, plan.activeCap); index += 1) releaseOutbreakBot();
   game.bullets = [];
   spawnOutbreakMedkits();
   spawnOutbreakAirdrop();
   if (game.allyLoadout.recruited && !game.allies.some((ally) => ally.alive)) recruitOutbreakAlly(true);
   game.outbreakWaveDelay = 0;
-  showRoundBanner(`ONDA ${wave}`, `${game.bots.length} ameaças detectadas`, "OUTBREAK", 2.4);
+  showRoundBanner(`ONDA ${wave}`, `${game.outbreakWaveEnemyTotal} ameaças em aproximação`, "OUTBREAK", 2.4);
   setMessage(`Outbreak: onda ${wave} iniciada. Elimine todas as ameaças.`);
+  playSound("wave_start");
   if (wave === 1) showContextTipOnce("outbreak-start", "Med-kits restauram vida. Airdrops concedem modificadores temporários e mostram seu efeito antes da coleta.");
 }
 
@@ -11325,7 +11451,10 @@ function openOutbreakShopBreak({ resumeCurrentWave = false } = {}) {
   game.outbreakShopPending = true;
   game.outbreakAdminShopResume = Boolean(resumeCurrentWave);
   game.outbreakWaveDelay = 0;
-  if (!resumeCurrentWave) game.bots = [];
+  if (!resumeCurrentWave) {
+    game.bots = [];
+    game.outbreakSpawnQueue = [];
+  }
   game.bullets = [];
   game.phase = "buy";
   game.phaseTime = Number.POSITIVE_INFINITY;
@@ -11390,6 +11519,9 @@ function startOutbreakMode() {
   game.outbreakElapsed = 0;
   game.outbreakLastDamageAt = -5;
   game.outbreakWaveDelay = 0;
+  game.outbreakSpawnQueue = [];
+  game.outbreakSpawnCooldown = 0;
+  game.outbreakWaveEnemyTotal = 0;
   game.outbreakEffects = {
     superShieldUntilWave: 0, ultraShieldUntilWave: 0, blasterShieldUntilWave: 0,
     magazineUntilWave: 0, adrenalineUntilWave: 0, pulseShieldUntil: 0,
@@ -12110,6 +12242,15 @@ if (canvas) canvas.addEventListener("mousemove", (event) => {
   mouse.x = ((event.clientX - rect.left) / rect.width) * canvas.width;
   mouse.y = ((event.clientY - rect.top) / rect.height) * canvas.height;
 });
+
+// Um único listener cobre botões estáticos e componentes gerados em tempo
+// de execução, incluindo menus, configurações e todos os módulos da loja.
+if (document) document.addEventListener("pointerdown", (event) => {
+  const button = event.target?.closest?.("button");
+  if (!button || button.disabled) return;
+  initAudio();
+  playSound("menu_click");
+}, { passive: true });
 
 if (canvas) canvas.addEventListener("contextmenu", (event) => event.preventDefault());
 
