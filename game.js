@@ -1701,7 +1701,9 @@ function clamp01(value) {
 function soundMix(name, multiplier = 1) {
   const sfx = Number(settings?.sfxVolume);
   const sfxScale = Number.isFinite(sfx) ? sfx / 100 : 1;
-  return clamp01((AUDIO_MIX[name] ?? AUDIO_MIX.ability) * multiplier * sfxScale);
+  const gunshots = Number(settings?.gunshotVolume);
+  const gunshotScale = name === "shot" && Number.isFinite(gunshots) ? gunshots / 100 : 1;
+  return clamp01((AUDIO_MIX[name] ?? AUDIO_MIX.ability) * multiplier * sfxScale * gunshotScale);
 }
 
 function audioOutputNode() {
@@ -10609,7 +10611,7 @@ const OPTIONS_DEFAULTS = {
   masterVolume: 40,
   musicVolume: 50,
   sfxVolume: 80,
-  voiceVolume: 70,
+  gunshotVolume: 70,
   muted: false,
   highlightSteps: true,
   impactEffects: true,
@@ -10627,7 +10629,12 @@ const OPTIONS_DEFAULTS = {
 function loadOptionsSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem(OPTIONS_STORAGE_KEY) || "null");
-    return saved ? { ...cloneOptions(OPTIONS_DEFAULTS), ...saved, keys: { ...OPTIONS_DEFAULTS.keys, ...(saved.keys || {}) } } : cloneOptions(OPTIONS_DEFAULTS);
+    if (!saved) return cloneOptions(OPTIONS_DEFAULTS);
+    // Migra silenciosamente o controle antigo, que não possuía efeito real,
+    // preservando o valor escolhido pelo jogador como volume dos disparos.
+    if (saved.gunshotVolume == null && saved.voiceVolume != null) saved.gunshotVolume = saved.voiceVolume;
+    delete saved.voiceVolume;
+    return { ...cloneOptions(OPTIONS_DEFAULTS), ...saved, keys: { ...OPTIONS_DEFAULTS.keys, ...(saved.keys || {}) } };
   } catch {
     return cloneOptions(OPTIONS_DEFAULTS);
   }
@@ -10704,10 +10711,13 @@ function setOptionValue(key, value) {
 
 function normalizedOptions(source) {
   const candidate = source && typeof source === "object" ? source : {};
+  const { voiceVolume, ...currentCandidate } = candidate;
+  const migratedGunshotVolume = currentCandidate.gunshotVolume ?? voiceVolume ?? OPTIONS_DEFAULTS.gunshotVolume;
   return {
     ...cloneOptions(OPTIONS_DEFAULTS),
-    ...candidate,
-    keys: { ...OPTIONS_DEFAULTS.keys, ...(candidate.keys || {}) },
+    ...currentCandidate,
+    gunshotVolume: migratedGunshotVolume,
+    keys: { ...OPTIONS_DEFAULTS.keys, ...(currentCandidate.keys || {}) },
   };
 }
 
@@ -10843,6 +10853,9 @@ function SettingSlider(label, key, min, max, step = 1, unit = "") {
     }
     updateCrosshairPreview();
     queuePreferencesSync();
+    // Uma amostra curta permite ajustar o volume sem sair do menu. O
+    // throttling de disparos impede sobreposição excessiva ao arrastar.
+    if (key === "gunshotVolume" && audio.enabled) playSound("shot");
   });
   wrap.append(input, value);
   return optionRow(label, wrap);
@@ -11063,7 +11076,7 @@ function renderAudioOptions() {
       SettingSlider("Volume Geral", "masterVolume", 0, 100, 1, "%"),
       SettingSlider("Música", "musicVolume", 0, 100, 1, "%"),
       SettingSlider("Efeitos de Som", "sfxVolume", 0, 100, 1, "%"),
-      SettingSlider("Comunicação/Voz", "voiceVolume", 0, 100, 1, "%"),
+      SettingSlider("Volume dos Disparos", "gunshotVolume", 0, 100, 1, "%"),
     ]),
     optionSection("OPÇÕES", [
       ToggleSwitch("Som Mudo", "muted"),
@@ -11284,7 +11297,7 @@ function resetOptionsSettings() {
     general: ["language", "playerName", "showFps", "showPing"],
     controls: ["movementScheme", "mouseSensitivity", "adsSensitivity", "invertY", "keys"],
     crosshair: ["crosshairType", "crosshairColor", "crosshairCustomColor", "crosshairSize", "crosshairThickness", "crosshairOpacity", "crosshairGap"],
-    audio: ["masterVolume", "musicVolume", "sfxVolume", "voiceVolume", "muted", "impactEffects"],
+    audio: ["masterVolume", "musicVolume", "sfxVolume", "gunshotVolume", "muted", "impactEffects"],
     video: ["displayMode", "resolution", "fpsLimit", "vsync", "quality", "brightness", "particles", "bloodEffects", "shadows"],
     accessibility: ["reduceMotion", "highContrast", "largeText", "showTips", "highlightSteps"],
   };

@@ -7,7 +7,7 @@ const ALLOWED_KEYS = new Set([
   'mouseSensitivity', 'adsSensitivity', 'invertY', 'keys', 'crosshairType',
   'crosshairColor', 'crosshairCustomColor', 'crosshairSize', 'crosshairThickness',
   'crosshairOpacity', 'crosshairGap', 'masterVolume', 'musicVolume', 'sfxVolume',
-  'voiceVolume', 'muted', 'highlightSteps', 'impactEffects', 'displayMode',
+  'voiceVolume', 'gunshotVolume', 'muted', 'highlightSteps', 'impactEffects', 'displayMode',
   'resolution', 'fpsLimit', 'vsync', 'quality', 'brightness', 'particles',
   'bloodEffects', 'shadows',
 ]);
