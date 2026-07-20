@@ -9998,6 +9998,11 @@ function renderPlayerProfile(profile) {
         <div><dt>CORE FATURADO</dt><dd><b data-profile="coreEarned"></b> C</dd></div>
       </dl>
     </section>
+    <section class="profile-career-summary" aria-label="Resumo geral da carreira">
+      <article><span>PARTIDAS TOTAIS</span><strong data-profile="totalMatches">0</strong></article>
+      <article><span>KILLS TOTAIS</span><strong data-profile="totalKills">0</strong></article>
+      <article><span>TAXA K/D GERAL</span><strong data-profile="totalKd">0.00</strong></article>
+    </section>
     <section class="profile-statistics-block">
       <header><span>DESEMPENHO CONSOLIDADO</span><h3>ESTATÍSTICAS</h3></header>
       <div class="profile-mode-grid">
@@ -10023,6 +10028,9 @@ function renderPlayerProfile(profile) {
   profileField('[data-profile="email"]', profile.email || "E-mail não informado");
   profileField('[data-profile="type"]', accountLabel);
   profileField('[data-profile="coreEarned"]', number(profile.coreEarnedTotal));
+  profileField('[data-profile="totalMatches"]', number(stats.totals?.matches));
+  profileField('[data-profile="totalKills"]', number(stats.totals?.kills));
+  profileField('[data-profile="totalKd"]', Number(stats.totals?.kd || 0).toFixed(2));
   profileField('[data-profile="defaultMatches"]', number(stats.default?.matches));
   profileField('[data-profile="defaultWins"]', number(stats.default?.wins));
   profileField('[data-profile="defaultKills"]', number(stats.default?.kills));
@@ -10107,12 +10115,12 @@ function renderGlobalRanking(payload = {}) {
     ui.globalRankingRows.appendChild(row);
   });
 
-  const player = payload.playerStats;
+  const player = payload.currentPlayer || payload.playerStats;
   ui.currentPlayerRanking.replaceChildren();
   if (!player) {
     ui.currentPlayerRanking.innerHTML = '<span>SUA POSIÇÃO</span><strong>Entre com uma conta para aparecer no ranking global.</strong>';
   } else {
-    const rank = Number(player.global_position);
+    const rank = Number(player.rank_position ?? player.global_position);
     const value = Math.max(0, Number(player.ranking_value) || 0);
     const label = document.createElement("span");
     label.textContent = "SUA POSIÇÃO";
@@ -10135,7 +10143,7 @@ async function loadGlobalRanking(mode) {
     const headers = session?.token && !currentProfile?.isGuest
       ? { Authorization: `Bearer ${session.token}` }
       : undefined;
-    const payload = await requestApi(`/api/leaderboard/${encodeURIComponent(mode)}`, { method: "GET", headers });
+    const payload = await requestApi(`/api/leaderboard?mode=${encodeURIComponent(mode)}`, { method: "GET", headers });
     renderGlobalRanking(payload);
   } catch (error) {
     ui.globalRankingRows.innerHTML = '<div class="player-modal-error compact"><strong>RANKING INDISPONÍVEL</strong><p></p><button type="button">TENTAR NOVAMENTE</button></div>';

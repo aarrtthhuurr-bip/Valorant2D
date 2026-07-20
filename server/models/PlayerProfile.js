@@ -6,6 +6,7 @@ class PlayerProfile {
     const row = await database.get(
       `SELECT id, username, email, auth_provider, avatar_url,
               core_balance, core_earned_total, data_criacao,
+              total_matches, total_kills, total_deaths,
               matches_default, wins_default, kills_default, deaths_default,
               matches_blackout, wins_blackout, kills_blackout,
               highest_wave_outbreak
@@ -17,6 +18,8 @@ class PlayerProfile {
 
     const kills = Number(row.kills_default) || 0;
     const deaths = Number(row.deaths_default) || 0;
+    const totalKills = Number(row.total_kills) || 0;
+    const totalDeaths = Number(row.total_deaths) || 0;
     return {
       id: row.id,
       username: row.username,
@@ -27,6 +30,12 @@ class PlayerProfile {
       coreEarnedTotal: Number(row.core_earned_total) || 0,
       createdAt: row.data_criacao,
       statistics: {
+        totals: {
+          matches: Number(row.total_matches) || 0,
+          kills: totalKills,
+          deaths: totalDeaths,
+          kd: totalDeaths > 0 ? Number((totalKills / totalDeaths).toFixed(2)) : totalKills,
+        },
         default: {
           matches: Number(row.matches_default) || 0,
           wins: Number(row.wins_default) || 0,

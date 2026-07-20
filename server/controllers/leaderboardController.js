@@ -77,7 +77,8 @@ async function saveScore(request, response, next) {
 
 async function listScores(request, response, next) {
   try {
-    const gameMode = typeof request.params.mode === 'string' ? request.params.mode.toLowerCase() : '';
+    const rawMode = typeof request.query.mode === 'string' ? request.query.mode : request.params.mode;
+    const gameMode = typeof rawMode === 'string' ? rawMode.toLowerCase() : '';
     if (!ALLOWED_MODES.has(gameMode)) {
       response.status(400).json({ error: 'Modo de jogo inválido.', code: 'INVALID_GAME_MODE' });
       return;
@@ -92,12 +93,22 @@ async function listScores(request, response, next) {
       }
     }
     const [leaderboard, playerStats] = await Promise.all([
-      Leaderboard.listByMode(gameMode, 10),
+      Leaderboard.listByMode(gameMode, 50),
       user ? Leaderboard.personalStats(user.id, gameMode) : Promise.resolve(null),
     ]);
+    const currentPlayer = playerStats ? {
+      user_id: user.id,
+      player_name: user.username,
+      rank_position: Number(playerStats.global_position) || null,
+      ranking_value: Math.max(0, Number(playerStats.ranking_value) || 0),
+      metric_type: playerStats.metric_type,
+      is_top_50: leaderboard.some((entry) => Number(entry.user_id) === Number(user.id)),
+    } : null;
     response.status(200).json({
       gameMode,
+      limit: 50,
       leaderboard,
+      currentPlayer,
       playerStats: playerStats ? { ...playerStats, player_name: user.username } : null,
     });
   } catch (error) {

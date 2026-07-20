@@ -5201,6 +5201,36 @@ button.click-feedback::after {
 .profile-account-facts dd { margin: 3px 0 0; color: #dce8ed; font-size: 13px; font-weight: 700; }
 .profile-account-facts dd b { color: #ff6370; font-size: 17px; }
 
+.profile-career-summary {
+  display: grid;
+  margin-top: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.profile-career-summary article {
+  display: flex;
+  min-height: 72px;
+  padding: 11px 13px;
+  border: 1px solid rgba(66, 202, 236, 0.2);
+  background: linear-gradient(135deg, rgba(41, 174, 208, 0.09), rgba(8, 18, 27, 0.72));
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.profile-career-summary span {
+  color: #7892a1;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+}
+
+.profile-career-summary strong {
+  color: #8cecff;
+  font-size: 23px;
+  line-height: 1;
+}
+
 .profile-statistics-block { margin-top: 18px; }
 .profile-statistics-block > header { display: flex; margin-bottom: 10px; align-items: end; justify-content: space-between; }
 .profile-statistics-block > header span { color: #718797; font-size: 9px; font-weight: 800; letter-spacing: 0.13em; }
@@ -5266,11 +5296,11 @@ button.click-feedback::after {
 .global-ranking-rows article.is-top-3 strong { color: #be8465; }
 .global-ranking-empty { margin: 0; padding: 90px 20px; color: #778c99; text-align: center; }
 
-.current-player-ranking { display: grid; min-height: 62px; margin-top: 12px; padding: 11px 18px; border-top: 1px solid rgba(255, 70, 85, 0.38); background: linear-gradient(90deg, rgba(255, 70, 85, 0.12), rgba(255, 70, 85, 0.035)); grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: 14px; }
-.current-player-ranking span { color: #ff6c78; font-size: 8px; font-weight: 800; letter-spacing: 0.12em; }
+.current-player-ranking { display: grid; min-height: 62px; margin-top: 12px; padding: 11px 18px; border-top: 1px solid rgba(76, 225, 255, 0.48); background: linear-gradient(90deg, rgba(47, 201, 232, 0.13), rgba(255, 209, 102, 0.045)); box-shadow: inset 0 1px rgba(126, 238, 255, 0.05); grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: 14px; }
+.current-player-ranking span { color: #70e8ff; font-size: 8px; font-weight: 800; letter-spacing: 0.12em; }
 .current-player-ranking strong { color: #f7f9fa; font-size: 16px; }
 .current-player-ranking em { overflow: hidden; color: #bccbd2; font-size: 13px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
-.current-player-ranking b { color: #ff7984; font-size: 13px; text-align: right; }
+.current-player-ranking b { color: #ffd166; font-size: 13px; text-align: right; }
 .current-player-ranking span + strong:last-child { grid-column: 2 / -1; color: #9babb4; font-size: 12px; }
 
 @keyframes playerModalIn {

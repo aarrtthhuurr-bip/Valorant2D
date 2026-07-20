@@ -16,6 +16,7 @@ const MatchSubmission = require('../models/MatchSubmission');
 const Statistic = require('../models/Statistic');
 const Leaderboard = require('../models/Leaderboard');
 const PlayerProfile = require('../models/PlayerProfile');
+const database = require('../config/database');
 
 test('health check aplica headers de segurança e identificador', async () => {
   const response = await request(app).get('/').expect(200);
@@ -174,6 +175,7 @@ test('perfil consolidado exige sessão e mantém estatísticas separadas por mod
       email: 'perfil@example.com',
       coreEarnedTotal: 180,
       statistics: {
+        totals: { matches: 16, kills: 56, deaths: 14, kd: 4 },
         default: { matches: 8, wins: 5, kills: 27, deaths: 9, kd: 3 },
         blackout: { matches: 3, wins: 1, kills: 8 },
         outbreak: { highestWave: 14 },
@@ -184,11 +186,37 @@ test('perfil consolidado exige sessão e mantém estatísticas separadas por mod
       .set('Authorization', `Bearer ${'a'.repeat(64)}`)
       .expect(200);
     assert.equal(response.body.profile.statistics.default.wins, 5);
+    assert.equal(response.body.profile.statistics.totals.matches, 16);
+    assert.equal(response.body.profile.statistics.totals.kd, 4);
     assert.equal(response.body.profile.statistics.outbreak.highestWave, 14);
     assert.equal(response.body.profile.coreEarnedTotal, 180);
   } finally {
     Session.findValid = originals.session;
     PlayerProfile.findByUserId = originals.profile;
+  }
+});
+
+test('modelo de perfil calcula partidas, kills e K/D totais', async () => {
+  const originalGet = database.get;
+  database.get = async () => ({
+    id: 5,
+    username: 'perfil_total',
+    total_matches: 20,
+    total_kills: 75,
+    total_deaths: 25,
+    wins_default: 7,
+    wins_blackout: 3,
+    highest_wave_outbreak: 19,
+  });
+  try {
+    const profile = await PlayerProfile.findByUserId(5);
+    assert.equal(profile.statistics.totals.matches, 20);
+    assert.equal(profile.statistics.totals.kills, 75);
+    assert.equal(profile.statistics.totals.kd, 3);
+    assert.equal(profile.statistics.default.wins, 7);
+    assert.equal(profile.statistics.outbreak.highestWave, 19);
+  } finally {
+    database.get = originalGet;
   }
 });
 
@@ -384,10 +412,12 @@ test('leaderboard lista modo válido e rejeita filtros desconhecidos', async () 
     limit,
   }];
   try {
-    const response = await request(app).get('/api/leaderboard/default').expect(200);
+    const response = await request(app).get('/api/leaderboard?mode=default').expect(200);
     assert.equal(response.body.gameMode, 'default');
+    assert.equal(response.body.limit, 50);
     assert.equal(response.body.leaderboard.length, 1);
     assert.equal(response.body.leaderboard[0].player_name, 'usuario_teste');
+    assert.equal(response.body.leaderboard[0].limit, 50);
 
     const invalid = await request(app).get('/api/leaderboard/modo-inexistente').expect(400);
     assert.equal(invalid.body.code, 'INVALID_GAME_MODE');
@@ -423,7 +453,7 @@ test('leaderboard autenticada retorna estatísticas pessoais do modo selecionado
   };
   try {
     const response = await request(app)
-      .get('/api/leaderboard/outbreak')
+      .get('/api/leaderboard?mode=outbreak')
       .set('Authorization', `Bearer ${'a'.repeat(64)}`)
       .expect(200);
 
@@ -435,6 +465,9 @@ test('leaderboard autenticada retorna estatísticas pessoais do modo selecionado
     assert.equal(response.body.playerStats.personal_max_wave, 12);
     assert.equal(response.body.playerStats.account_total_matches, 18);
     assert.equal(response.body.playerStats.account_total_wins, 11);
+    assert.equal(response.body.currentPlayer.rank_position, 3);
+    assert.equal(response.body.currentPlayer.ranking_value, 0);
+    assert.equal(response.body.currentPlayer.is_top_50, false);
   } finally {
     Session.findValid = originals.session;
     Leaderboard.listByMode = originals.list;

@@ -53,6 +53,7 @@ async function recordMatch(request, response, next) {
 
     const victory = request.body?.victory;
     const kills = Number(request.body?.kills);
+    const deaths = Number(request.body?.deaths ?? 0);
     const score = Number(request.body?.score);
     const match = await MatchSubmission.findValid(user.id, request.body?.matchToken);
     const duration = Number(match?.duracao_segundos);
@@ -61,6 +62,7 @@ async function recordMatch(request, response, next) {
     if (!match || duration < 15 || duration > 7200
       || typeof victory !== 'boolean'
       || !Number.isInteger(kills) || kills < 0 || kills > 10000 || kills > plausibleKillLimit
+      || !Number.isInteger(deaths) || deaths < 0 || deaths > Math.ceil(duration / 5) + 10
       || !Number.isInteger(score) || score < 0 || score > 10000000) {
       securityAudit('invalid_match_submission', request, { userId: user.id, success: false });
       response.status(400).json({ error: 'Estatísticas da partida inválidas.', code: 'INVALID_STATISTICS' });
@@ -77,7 +79,7 @@ async function recordMatch(request, response, next) {
       response.status(409).json({ error: 'Esta partida já foi registrada.', code: 'MATCH_ALREADY_RECORDED' });
       return;
     }
-    const statistics = await Statistic.recordMatch(user.id, { victory, kills, score });
+    const statistics = await Statistic.recordMatch(user.id, { victory, kills, deaths, score });
     response.status(200).json({ message: 'Estatísticas atualizadas.', statistics });
   } catch (error) {
     next(error);

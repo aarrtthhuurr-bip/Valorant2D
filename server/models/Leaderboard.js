@@ -24,7 +24,7 @@ class Leaderboard {
    * maior wave no Outbreak. As colunas são escolhidas por uma lista interna,
    * nunca por texto recebido do cliente.
    */
-  static listByMode(gameMode, limit = 10) {
+  static listByMode(gameMode, limit = 50) {
     const configuration = rankingConfiguration(gameMode);
     if (!configuration) return Promise.resolve([]);
     return database.all(
@@ -67,9 +67,9 @@ class Leaderboard {
               (SELECT global_position FROM ranked_players WHERE user_id = $1) AS global_position,
               COALESCE((SELECT ranking_value FROM ranked_players WHERE user_id = $1), 0) AS ranking_value,
               '${configuration.type}'::VARCHAR AS metric_type,
-              COALESCE((SELECT partidas_jogadas FROM users WHERE id = $1), 0) AS account_total_matches,
+              COALESCE((SELECT total_matches FROM users WHERE id = $1), 0) AS account_total_matches,
               COALESCE((SELECT vitorias FROM users WHERE id = $1), 0) AS account_total_wins,
-              COALESCE((SELECT abates_totais FROM users WHERE id = $1), 0) AS account_total_kills
+              COALESCE((SELECT total_kills FROM users WHERE id = $1), 0) AS account_total_kills
        FROM mode_entries
        WHERE user_id = $1`,
       [userId, gameMode],
@@ -117,6 +117,9 @@ class Leaderboard {
          SET partidas_jogadas = partidas_jogadas + 1,
              vitorias = vitorias + $1,
              abates_totais = abates_totais + $2,
+             total_matches = total_matches + 1,
+             total_kills = total_kills + $2,
+             total_deaths = total_deaths + $7,
              pontuacao_maxima = GREATEST(pontuacao_maxima, $3),
              core_balance = core_balance + $4,
              core_earned_total = core_earned_total + $4,
@@ -134,6 +137,7 @@ class Leaderboard {
              END
          WHERE id = $5
          RETURNING partidas_jogadas, vitorias, abates_totais, pontuacao_maxima,
+                   total_matches, total_kills, total_deaths,
                    core_balance, core_earned_total, matches_default, wins_default,
                    kills_default, deaths_default, matches_blackout, wins_blackout,
                    kills_blackout, deaths_blackout, highest_wave_outbreak`,

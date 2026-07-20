@@ -5,6 +5,7 @@ const { authenticatedWriteLimiter } = require('../middleware/security');
 const router = express.Router();
 
 router.post('/save', authenticatedWriteLimiter, leaderboardController.saveScore);
+router.get('/', leaderboardController.listScores);
 router.get('/:mode', leaderboardController.listScores);
 
 module.exports = router;

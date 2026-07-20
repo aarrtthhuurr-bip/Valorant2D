@@ -95,6 +95,9 @@ async function initializeDatabase() {
         partidas_jogadas INTEGER NOT NULL DEFAULT 0,
         vitorias INTEGER NOT NULL DEFAULT 0,
         abates_totais INTEGER NOT NULL DEFAULT 0,
+        total_matches INTEGER NOT NULL DEFAULT 0,
+        total_kills INTEGER NOT NULL DEFAULT 0,
+        total_deaths INTEGER NOT NULL DEFAULT 0,
         pontuacao_maxima INTEGER NOT NULL DEFAULT 0,
         matches_default INTEGER NOT NULL DEFAULT 0,
         wins_default INTEGER NOT NULL DEFAULT 0,
@@ -127,6 +130,9 @@ async function initializeDatabase() {
       'ADD COLUMN IF NOT EXISTS partidas_jogadas INTEGER NOT NULL DEFAULT 0',
       'ADD COLUMN IF NOT EXISTS vitorias INTEGER NOT NULL DEFAULT 0',
       'ADD COLUMN IF NOT EXISTS abates_totais INTEGER NOT NULL DEFAULT 0',
+      'ADD COLUMN IF NOT EXISTS total_matches INTEGER NOT NULL DEFAULT 0',
+      'ADD COLUMN IF NOT EXISTS total_kills INTEGER NOT NULL DEFAULT 0',
+      'ADD COLUMN IF NOT EXISTS total_deaths INTEGER NOT NULL DEFAULT 0',
       'ADD COLUMN IF NOT EXISTS pontuacao_maxima INTEGER NOT NULL DEFAULT 0',
       'ADD COLUMN IF NOT EXISTS matches_default INTEGER NOT NULL DEFAULT 0',
       'ADD COLUMN IF NOT EXISTS wins_default INTEGER NOT NULL DEFAULT 0',
@@ -153,6 +159,13 @@ async function initializeDatabase() {
     for (const migration of userMigrations) {
       await client.query(`ALTER TABLE users ${migration}`);
     }
+    // Preserva os acumuladores anteriores na primeira execução da migração.
+    await client.query(`
+      UPDATE users
+      SET total_matches = GREATEST(total_matches, partidas_jogadas),
+          total_kills = GREATEST(total_kills, abates_totais),
+          total_deaths = GREATEST(total_deaths, deaths_default + deaths_blackout)
+    `);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS leaderboard (
@@ -369,7 +382,12 @@ async function initializeDatabase() {
             AND wins_blackout <= matches_blackout
             AND kills_blackout >= 0 AND deaths_blackout >= 0
             AND highest_wave_outbreak >= 0
+            AND total_matches >= 0 AND total_kills >= 0 AND total_deaths >= 0
           );
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_total_statistics_nonnegative') THEN
+          ALTER TABLE users ADD CONSTRAINT users_total_statistics_nonnegative
+          CHECK (total_matches >= 0 AND total_kills >= 0 AND total_deaths >= 0);
         END IF;
       END $$
     `);
