@@ -8,26 +8,13 @@
   <!-- Altere apenas este valor caso o endereço definitivo do Render mude. -->
   <meta name="valorant2d-api-url" content="https://valorant2d.onrender.com">
   <title>Valorant2D</title>
-  <link rel="stylesheet" href="./styles.css?v=20260720-ranking50">
+  <link rel="stylesheet" href="./styles.css?v=20260720-core-logo">
   <script src="https://unpkg.com/lucide@1.24.0" integrity="sha384-mooE85Luwgx+AyykX7e90VcN8/QCFTSIwPuHLmvcsLVoA0en7lKYb9XlOzn5G2co" crossorigin="anonymous"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="shortcut icon" href="./assets/Favicon/favicon.ico" type="image/x-icon">
 </head>
 <body>
   <div class="ux-toast-region" id="uxToastRegion" role="status" aria-live="polite" aria-atomic="false"></div>
-  <svg class="core-icon-definitions" aria-hidden="true" focusable="false">
-    <symbol id="coreIcosahedron" viewBox="0 0 32 32">
-      <path class="core-shell" fill="#061f28" stroke="#00f3ff" stroke-width="1.35" stroke-linejoin="round" d="M16 1 27 7 30 18 25 26 16 31 7 26 2 18 5 7Z"></path>
-      <path class="core-faces" fill="none" stroke="#46a8ff" stroke-width="0.72" stroke-linecap="round" opacity="0.88" d="M16 1v30M5 7l22 19M27 7 7 26M2 18h28M5 7l11 8 11-8M2 18l14-3 14 3M7 26l9-11 9 11"></path>
-      <g class="core-vertices" fill="#bffcff" stroke="#00f3ff" stroke-width="0.35">
-        <circle cx="16" cy="1" r="1"></circle><circle cx="27" cy="7" r="1"></circle>
-        <circle cx="30" cy="18" r="1"></circle><circle cx="25" cy="26" r="1"></circle>
-        <circle cx="16" cy="31" r="1"></circle><circle cx="7" cy="26" r="1"></circle>
-        <circle cx="2" cy="18" r="1"></circle><circle cx="5" cy="7" r="1"></circle>
-        <circle cx="16" cy="15" r="1.2"></circle>
-      </g>
-    </symbol>
-  </svg>
   <main class="shell" id="game-root">
     <div class="game-stage" id="game-viewport">
       <div class="top-hud hud-scoreboard glass hidden" id="topHud">
@@ -250,7 +237,7 @@
           <p class="match-score" id="overlayText">15 <span>:</span> 0</p>
           <div class="match-result-line" aria-hidden="true"><i></i><b></b><i></i></div>
           <div class="match-core-reward hidden" id="matchCoreReward" aria-live="polite">
-            <span class="core-icon" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="#coreIcosahedron"></use></svg></span>
+            <span class="core-icon" aria-hidden="true"><img src="./assets/images/core_v4_4.png" alt=""></span>
             <strong id="matchCoreRewardText">Calculando recompensa...</strong>
           </div>
           <div class="match-stats" aria-label="Estatísticas finais">
@@ -286,7 +273,7 @@
       <div class="menu-overlay hidden" id="menuOverlay">
         <div class="menu-art" aria-hidden="true"></div>
         <div class="core-wallet main-core-wallet hidden" id="mainCoreWallet" aria-label="Saldo de Core">
-          <span class="core-icon" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="#coreIcosahedron"></use></svg></span><strong id="mainCoreBalance">0</strong><em>C</em>
+          <span class="core-icon" aria-hidden="true"><img src="./assets/images/core_v4_4.png" alt=""></span><strong id="mainCoreBalance">0</strong><em>C</em>
         </div>
         <button type="button" class="menu-tutorial-shortcut hidden" id="menuTutorialButton" aria-label="Abrir ajuda do jogo">?</button>
         <div class="menu-card glass">
@@ -321,7 +308,7 @@
           <header class="commerce-header">
             <div><span>CORE MARKET</span><h2>Arsenal de Skins</h2></div>
             <div class="commerce-header-actions">
-              <div class="core-wallet"><span class="core-icon" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="#coreIcosahedron"></use></svg></span><strong id="storeCoreBalance">0</strong><em>C</em></div>
+              <div class="core-wallet"><span class="core-icon" aria-hidden="true"><img src="./assets/images/core_v4_4.png" alt=""></span><strong id="storeCoreBalance">0</strong><em>C</em></div>
               <button type="button" id="commerceCloseButton" aria-label="Fechar loja">×</button>
             </div>
           </header>

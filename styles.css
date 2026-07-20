@@ -3033,12 +3033,8 @@ button.click-feedback::after {
 }
 .core-wallet strong { font-size: 17px; font-variant-numeric: tabular-nums; }
 .core-wallet em { color: #46a8ff; font-size: 11px; font-style: normal; font-weight: 900; }
-.core-icon-definitions { position:absolute; width:0; height:0; overflow:hidden; }
-.core-icon { display:inline-grid; place-items:center; width:27px; height:27px; flex:0 0 27px; filter:drop-shadow(0 0 6px rgba(0,243,255,.62)); }
-.core-icon svg { width:100%; height:100%; overflow:visible; }
-.core-icon .core-shell { fill:rgba(0,243,255,.08); stroke:#00f3ff; stroke-width:1.35; stroke-linejoin:round; }
-.core-icon .core-faces { fill:none; stroke:#46a8ff; stroke-width:.72; stroke-linecap:round; opacity:.88; }
-.core-icon .core-vertices { fill:#bffcff; stroke:#00f3ff; stroke-width:.35; }
+.core-icon { display:inline-grid; place-items:center; width:30px; height:30px; overflow:hidden; flex:0 0 30px; border-radius:50%; filter:drop-shadow(0 0 7px rgba(0,243,255,.5)); }
+.core-icon img { display:block; width:100%; height:100%; object-fit:cover; transform:scale(1.08); }
 .main-core-wallet { position: absolute; z-index: 8; top: 22px; right: 24px; }
 .menu-tutorial-shortcut { position: absolute; z-index: 8; left: 22px; bottom: 22px; width: 46px; height: 46px; padding: 0; border: 1px solid rgba(0,243,255,.45); border-radius: 50%; background: rgba(8,20,31,.9); color: #8bf9ff; font: 800 21px Rajdhani, Arial; box-shadow: 0 0 22px rgba(0,243,255,.14); }
 .menu-tutorial-shortcut:hover { border-color: #00f3ff; transform: translateY(-2px); }
