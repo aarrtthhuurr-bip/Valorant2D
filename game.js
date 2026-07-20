@@ -658,7 +658,7 @@ function renderCommerceTab() {
   if (commerceState.tab === "codes") renderCommerceCodes();
 }
 
-async function commerceMutation(path, options, successMessage) {
+async function commerceMutation(path, options, successMessage, { successSound = "" } = {}) {
   if (commerceState.busy) return;
   commerceState.busy = true;
   setCommerceFeedback("Processando no servidor...");
@@ -666,13 +666,23 @@ async function commerceMutation(path, options, successMessage) {
     const payload = await requestApi(path, { ...options, headers: { ...commerceAuthorization(), ...(options.headers || {}) } });
     await refreshCommerceProfile();
     setCommerceFeedback(successMessage(payload), "success");
+    // A confirmação sonora só ocorre depois que o servidor persistiu a
+    // transação e o inventário atualizado foi carregado com sucesso.
+    if (successSound) playSound(successSound);
   } catch (error) {
     if (Number.isFinite(Number(error.coreBalance))) updateCoreBalances(error.coreBalance);
     setCommerceFeedback(error.message, "error");
   } finally { commerceState.busy = false; renderCommerceTab(); }
 }
 
-function purchaseCommerceSkin(skinId) { return commerceMutation(`/api/commerce/skins/${encodeURIComponent(skinId)}/purchase`, { method: "POST", body: "{}" }, (data) => `${data.skin.name} adicionada ao inventário por ${data.paid} C.`); }
+function purchaseCommerceSkin(skinId) {
+  return commerceMutation(
+    `/api/commerce/skins/${encodeURIComponent(skinId)}/purchase`,
+    { method: "POST", body: "{}" },
+    (data) => `${data.skin.name} adicionada ao inventário por ${data.paid} C.`,
+    { successSound: "skin_purchase" },
+  );
+}
 function equipCommerceSkin(skin) { return commerceMutation(`/api/commerce/inventory/${encodeURIComponent(skin.weaponId)}`, { method: "PUT", body: JSON.stringify({ skinId: skin.id }) }, () => `${skin.name} equipada.`); }
 function restoreDefaultSkin(weaponId) { return commerceMutation(`/api/commerce/inventory/${encodeURIComponent(weaponId)}`, { method: "PUT", body: JSON.stringify({ skinId: null }) }, () => "Visual padrão restaurado."); }
 function claimCommerceMission(id) { return commerceMutation(`/api/commerce/missions/${encodeURIComponent(id)}/claim`, { method: "POST", body: "{}" }, (data) => `${data.reward} C adicionados à conta.`); }
@@ -1132,7 +1142,8 @@ const AUDIO_MIX = {
   ability: 0.3,
   pickup: 0.32,
   denied: 0.24,
-  purchase: 0.32,
+  ingame_purchase: 0.36,
+  skin_purchase: 0.4,
   // O clique precisa permanecer perceptível mesmo com a trilha e os efeitos
   // da partida ativos, mas sem competir com tiros ou confirmações de compra.
   menu_click: 0.32,
@@ -1150,7 +1161,8 @@ const AUDIO_THROTTLE_MS = {
   headshot: 48,
   pickup: 70,
   denied: 90,
-  purchase: 100,
+  ingame_purchase: 100,
+  skin_purchase: 240,
   menu_click: 45,
   option_on: 70,
   option_off: 70,
@@ -1944,10 +1956,20 @@ function playSound(name) {
   if (name === "ability") playTone(620, 0.14, "triangle",  0.11 * mix);
   if (name === "pickup")  { playTone(760, 0.06, "sine", 0.12 * mix); playTone(1040, 0.08, "sine", 0.09 * mix); }
   if (name === "denied")  { playTone(180, 0.08, "sawtooth", 0.11 * mix); playTone(120, 0.12, "sawtooth", 0.08 * mix); }
-  if (name === "purchase"){
-    playTone(392, 0.055, "square", 0.08 * mix);
-    playTone(659, 0.065, "square", 0.09 * mix, 0.065);
-    playTone(988, 0.11, "square", 0.1 * mix, 0.14);
+  if (name === "ingame_purchase") {
+    // Confirmação tática curta: lembra o encaixe de um carregador e não
+    // atrasa compras consecutivas durante os poucos segundos da fase de compra.
+    playTone(175, 0.035, "square", 0.1 * mix);
+    playTone(262, 0.045, "square", 0.09 * mix, 0.035);
+    playTone(523, 0.075, "square", 0.095 * mix, 0.075);
+  }
+  if (name === "skin_purchase") {
+    // Sequência de desbloqueio mais longa e brilhante para uma aquisição
+    // permanente, claramente distinta da compra tática feita dentro da partida.
+    playTone(330, 0.055, "square", 0.08 * mix);
+    playTone(494, 0.055, "square", 0.085 * mix, 0.06);
+    playTone(659, 0.075, "triangle", 0.1 * mix, 0.12);
+    playTone(988, 0.14, "square", 0.09 * mix, 0.2);
   }
   if (name === "menu_click") {
     // Pulso curto em duas notas, inspirado nos menus de consoles 8-bit. A
@@ -3083,11 +3105,12 @@ function setShopFeedback(text, tone = "info") {
   ui.shopFeedback.className = `shop-feedback is-${tone}`;
 }
 
-function announceShopResult(text, { success = false, title = "ARSENAL" } = {}) {
+function announceShopResult(text, { success = false, title = "ARSENAL", purchaseSound = success } = {}) {
   setMessage(text);
   setShopFeedback(text, success ? "success" : "warning");
   showUxToast(text, { title, tone: success ? "success" : "warning", duration: success ? 2200 : 3200 });
-  playSound(success ? "purchase" : "denied");
+  if (purchaseSound) playSound("ingame_purchase");
+  else if (!success) playSound("denied");
 }
 
 function showContextTipOnce(id, message) {
@@ -11928,7 +11951,11 @@ function buyAllyItem(item) {
       ally.armor = game.allyLoadout.armor || 0;
     }
   }
-  announceShopResult(weaponOwned ? `${item.name} equipado no aliado.` : `${item.name} adquirido para o aliado.`, { success: true, title: weaponOwned ? "EQUIPAMENTO ALTERADO" : "COMPRA CONCLUÍDA" });
+  announceShopResult(weaponOwned ? `${item.name} equipado no aliado.` : `${item.name} adquirido para o aliado.`, {
+    success: true,
+    title: weaponOwned ? "EQUIPAMENTO ALTERADO" : "COMPRA CONCLUÍDA",
+    purchaseSound: !weaponOwned,
+  });
   updateShopState();
   updateUi();
 }
@@ -12078,7 +12105,11 @@ function buyWeapon(weapon) {
   game.selectedWeapon = weapon;
   game.player.weapon = weapon;
   game.player.ammo = currentMagSize();
-  announceShopResult(alreadyOwned ? `${weapon.name} equipada.` : `${weapon.name} comprada e equipada.`, { success: true, title: alreadyOwned ? "ARMA EQUIPADA" : "COMPRA CONCLUÍDA" });
+  announceShopResult(alreadyOwned ? `${weapon.name} equipada.` : `${weapon.name} comprada e equipada.`, {
+    success: true,
+    title: alreadyOwned ? "ARMA EQUIPADA" : "COMPRA CONCLUÍDA",
+    purchaseSound: !alreadyOwned,
+  });
   updateShopState();
   updateUi();
   window.setTimeout(() => {
