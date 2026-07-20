@@ -1136,6 +1136,9 @@ const AUDIO_MIX = {
   // O clique precisa permanecer perceptível mesmo com a trilha e os efeitos
   // da partida ativos, mas sem competir com tiros ou confirmações de compra.
   menu_click: 0.32,
+  option_on: 0.34,
+  option_off: 0.3,
+  play_action: 0.42,
   wave_transition: 0.34,
   wave_start: 0.4,
   game_over: 0.42,
@@ -1149,6 +1152,9 @@ const AUDIO_THROTTLE_MS = {
   denied: 90,
   purchase: 100,
   menu_click: 45,
+  option_on: 70,
+  option_off: 70,
+  play_action: 180,
   wave_transition: 500,
   wave_start: 500,
   game_over: 800,
@@ -1949,6 +1955,22 @@ function playSound(name) {
     // cliques rápidos produzam uma cauda sonora cansativa.
     playTone(294, 0.032, "square", 0.09 * mix);
     playTone(440, 0.042, "square", 0.075 * mix, 0.026);
+  }
+  if (name === "option_on") {
+    // Confirmação ascendente: comunica ativação sem depender somente da cor.
+    playTone(392, 0.045, "square", 0.085 * mix);
+    playTone(659, 0.075, "square", 0.095 * mix, 0.045);
+  }
+  if (name === "option_off") {
+    // Movimento descendente e mais grave para tornar a desativação inequívoca.
+    playTone(440, 0.04, "square", 0.075 * mix);
+    playTone(220, 0.085, "square", 0.085 * mix, 0.04);
+  }
+  if (name === "play_action") {
+    // Pequena fanfarra de confirmação usada ao entrar no fluxo de partida.
+    playTone(262, 0.055, "square", 0.085 * mix);
+    playTone(392, 0.065, "square", 0.09 * mix, 0.055);
+    playTone(523, 0.12, "square", 0.1 * mix, 0.12);
   }
   if (name === "wave_transition") {
     playTone(196, 0.07, "square", 0.075 * mix);
@@ -9372,6 +9394,7 @@ function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
     const button = document.createElement("button");
     button.className = "menu-button";
     button.style.setProperty("--menu-index", index);
+    if (item.audioCue) button.dataset.audioCue = item.audioCue;
     if (item.onboardingTarget) button.dataset.onboardingTarget = item.onboardingTarget;
     const isBack = item.back || item.label.toLowerCase().includes("voltar");
     if (isBack) {
@@ -9900,7 +9923,7 @@ function showMainMenu() {
   try { lastMode = localStorage.getItem("valorant2d-last-mode") || ""; } catch {}
   const lastModeLabel = ({ default: "DEFAULT", blackout: "BLACKOUT", outbreak: "OUTBREAK", sandbox: "SANDBOX", training: "TREINO" })[lastMode];
   setMenu("Valorant 2D", "", [
-    { label: "JOGAR", description: lastModeLabel ? `ÚLTIMO: ${lastModeLabel}` : "ESCOLHA SEU MODO", icon: "gamepad", action: showModeSelect, onboardingTarget: "play" },
+    { label: "JOGAR", description: lastModeLabel ? `ÚLTIMO: ${lastModeLabel}` : "ESCOLHA SEU MODO", icon: "gamepad", action: showModeSelect, onboardingTarget: "play", audioCue: "play_action" },
     { label: "OPÇÕES", icon: "tools", action: showOptionsMenu },
     { label: "LOJA", icon: "store", action: openCommerceStore, onboardingTarget: "store" },
     { label: "RANKING", icon: "trophy", action: openGlobalRanking },
@@ -10745,9 +10768,20 @@ function showOptionsFeedback(text) {
 
 function ToggleSwitch(label, key, activeLabel = "LIG", inactiveLabel = "DESL") {
   const active = Boolean(optionsSettings[key]);
+  const next = !active;
   const button = createOptionElement("button", `option-toggle ${active ? "is-active" : ""}`, active ? activeLabel : inactiveLabel);
   button.type = "button";
-  button.addEventListener("click", () => setOptionValue(key, !active));
+  // Este controle reproduz o feedback depois da mudança de estado. O marcador
+  // impede que o listener global sobreponha o clique comum ao sinal LIG/DESL.
+  button.dataset.audioCue = "handled";
+  button.addEventListener("click", () => {
+    const soundName = next ? "option_on" : "option_off";
+    // Ao ativar o mudo, o sinal precisa tocar antes que a saída seja desligada;
+    // ao desativá-lo, precisa tocar depois que o áudio voltar a ficar disponível.
+    if (key === "muted" && next) playSound(soundName);
+    setOptionValue(key, next);
+    if (!(key === "muted" && next)) playSound(soundName);
+  });
   attachButtonFeedback(button);
   return optionRow(label, button);
 }
@@ -12253,8 +12287,10 @@ if (canvas) canvas.addEventListener("mousemove", (event) => {
 if (document) document.addEventListener("pointerdown", (event) => {
   const button = event.target?.closest?.("button");
   if (!button || button.disabled) return;
+  const cue = button.dataset.audioCue;
+  if (cue === "handled") return;
   initAudio();
-  playSound("menu_click");
+  playSound(cue || "menu_click");
 }, { passive: true });
 
 if (canvas) canvas.addEventListener("contextmenu", (event) => event.preventDefault());
