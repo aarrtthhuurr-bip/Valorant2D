@@ -75,6 +75,7 @@ const ui = {
   introMode: document.getElementById("introMode"),
   introMap: document.getElementById("introMap"),
   introTeam: document.getElementById("introTeam"),
+  introTimebar: document.getElementById("introTimebar"),
   roundBanner: document.getElementById("roundBanner"),
   roundKicker: document.getElementById("roundKicker"),
   roundTitle: document.getElementById("roundTitle"),
@@ -1133,11 +1134,14 @@ const AUDIO_MASTER_HEADROOM = 0.75;
 const AUDIO_MIX = {
   shot: 0.34,
   reload: 0.24,
-  hit: 0.28,
-  headshot: 0.34,
+  bot_hit: 0.32,
+  bot_headshot: 0.38,
+  bot_kill: 0.44,
   plant: 0.32,
-  round_win: 0.42,
-  round_lose: 0.36,
+  match_start: 0.42,
+  round_start: 0.3,
+  round_end_win: 0.36,
+  round_end_lose: 0.34,
   spike: 0.44,
   ability: 0.3,
   pickup: 0.32,
@@ -1157,8 +1161,9 @@ const AUDIO_MIX = {
 const AUDIO_THROTTLE_MS = {
   shot: 24,
   reload: 120,
-  hit: 32,
-  headshot: 48,
+  bot_hit: 28,
+  bot_headshot: 42,
+  bot_kill: 70,
   pickup: 70,
   denied: 90,
   ingame_purchase: 100,
@@ -1167,18 +1172,25 @@ const AUDIO_THROTTLE_MS = {
   option_on: 70,
   option_off: 70,
   play_action: 180,
+  match_start: 800,
+  round_start: 500,
+  round_end_win: 650,
+  round_end_lose: 650,
   wave_transition: 500,
   wave_start: 500,
   game_over: 800,
 };
 const AUDIO_NAMES = {
   shot: "Tiro",
-  hit: "Acerto",
-  headshot: "Headshot",
+  bot_hit: "Dano no inimigo",
+  bot_headshot: "Headshot",
+  bot_kill: "Eliminação",
   reload: "Recarga",
   plant: "Plantando Spike",
-  round_win: "Round Vencido",
-  round_lose: "Round Perdido",
+  match_start: "Início da partida",
+  round_start: "Início do round",
+  round_end_win: "Round vencido",
+  round_end_lose: "Round perdido",
   spike: "Explos\u00e3o da Spike",
   ability: "Habilidade",
 };
@@ -1702,7 +1714,8 @@ function soundMix(name, multiplier = 1) {
   const sfx = Number(settings?.sfxVolume);
   const sfxScale = Number.isFinite(sfx) ? sfx / 100 : 1;
   const gunshots = Number(settings?.gunshotVolume);
-  const gunshotScale = name === "shot" && Number.isFinite(gunshots) ? gunshots / 100 : 1;
+  const weaponSound = name === "shot" || name === "reload";
+  const gunshotScale = weaponSound && Number.isFinite(gunshots) ? gunshots / 100 : 1;
   return clamp01((AUDIO_MIX[name] ?? AUDIO_MIX.ability) * multiplier * sfxScale * gunshotScale);
 }
 
@@ -1940,19 +1953,43 @@ function playSound(name) {
   if (shouldThrottleAudio(name)) return;
   const mix = soundMix(name);
   if (name === "shot")    playTone(110, 0.05, "square",   0.08 * mix);
-  if (name === "hit")     { playTone(900, 0.04, "triangle", 0.12 * mix); playTone(600, 0.06, "triangle", 0.06 * mix); }
-  if (name === "headshot"){ playTone(1200,0.05, "triangle", 0.14 * mix); playTone(800, 0.08, "sine",     0.08 * mix); }
+  if (name === "bot_hit") {
+    // Impacto curto e grave, sem o bipe tonal que competia com o tiro.
+    playTone(145, 0.026, "square", 0.115 * mix);
+    playTone(92, 0.052, "sawtooth", 0.07 * mix, 0.012);
+  }
+  if (name === "bot_headshot") {
+    // Estalo metálico seco seguido de uma confirmação curta.
+    playTone(1180, 0.018, "square", 0.11 * mix);
+    playTone(520, 0.042, "triangle", 0.08 * mix, 0.016);
+    playTone(185, 0.055, "square", 0.06 * mix, 0.03);
+  }
+  if (name === "bot_kill") {
+    // Assinatura descendente de eliminação, mais encorpada e inequívoca.
+    playTone(620, 0.032, "square", 0.105 * mix);
+    playTone(310, 0.052, "square", 0.1 * mix, 0.028);
+    playTone(124, 0.09, "sawtooth", 0.075 * mix, 0.07);
+  }
   if (name === "reload")  playTone(280, 0.1,  "sawtooth",  0.09 * mix);
   if (name === "plant")   { playTone(440, 0.08, "sine", 0.11 * mix); playTone(660, 0.12, "sine", 0.08 * mix); }
-  if (name === "round_win")  {
+  if (name === "match_start") {
     playTone(523, 0.08, "square", 0.08 * mix);
     playTone(659, 0.08, "square", 0.09 * mix, 0.09);
     playTone(784, 0.16, "square", 0.1 * mix, 0.18);
   }
-  if (name === "round_lose") {
-    playTone(392, 0.08, "square", 0.08 * mix);
-    playTone(330, 0.08, "square", 0.08 * mix, 0.09);
-    playTone(262, 0.2, "square", 0.09 * mix, 0.18);
+  if (name === "round_start") {
+    playTone(196, 0.035, "square", 0.075 * mix);
+    playTone(392, 0.065, "square", 0.09 * mix, 0.04);
+  }
+  if (name === "round_end_win") {
+    playTone(440, 0.045, "triangle", 0.08 * mix);
+    playTone(587, 0.055, "square", 0.09 * mix, 0.05);
+    playTone(880, 0.085, "triangle", 0.085 * mix, 0.11);
+  }
+  if (name === "round_end_lose") {
+    playTone(294, 0.05, "square", 0.075 * mix);
+    playTone(220, 0.07, "triangle", 0.08 * mix, 0.055);
+    playTone(147, 0.11, "sawtooth", 0.065 * mix, 0.12);
   }
   if (name === "spike")   playTone(80,  0.3,  "sawtooth",  0.12 * mix);
   if (name === "ability") playTone(620, 0.14, "triangle",  0.11 * mix);
@@ -3083,6 +3120,7 @@ function startActionRound() {
   game.clockActive = game.introTimer <= 0;
   closeShop();
   showRoundBanner(game.playerSide === "attackers" ? "Ataque" : "Defesa", game.playerSide === "attackers" ? "Plante a spike em A ou B." : "Impeca o plant ou desarme.", `Round ${game.roundNumber}`);
+  if (!game.sandbox && !game.training && !game.tutorial && !game.outbreak) playSound("round_start");
   setMessage(game.playerSide === "attackers"
     ? "Ataque: plante a spike em A ou B."
     : "Defesa: impeca o plant. Se plantarem, desarme com F.");
@@ -3529,7 +3567,7 @@ function endRound(winner, reason, outcome = "standard") {
     `${game.playerScore} - ${game.enemyScore}`,
     2.8
   );
-  playSound(won ? "round_win" : "round_lose");
+  playSound(won ? "round_end_win" : "round_end_lose");
   if (game.playerScore >= MATCH_ROUNDS || game.enemyScore >= MATCH_ROUNDS) {
     showMatchResult();
   }
@@ -6489,6 +6527,7 @@ function eliminateBot(bot, { playerCredit = false, weaponName = "Poison Cloud", 
    bot.alive = false;
    if (game.training) bot.respawnTimer = 1.25 + Math.random() * 0.75;
    if (playerCredit) {
+     playSound("bot_kill");
      game.stats.kills += 1;
      addKillFeedEntry(true, weaponName, headshot);
      if (game.player?.ultimate?.type === "jett") {
@@ -6615,7 +6654,9 @@ function updateBullets(dt) {
           }
           game.hitMarkers.push({ x: bot.x, y: bot.y - 28, life: 0.35, maxLife: 0.35, color: region === "head" ? "#ff4d5d" : "#ffd166" });
           spawnParticles(bullet.x, bullet.y, "#4fb3ff", 10, 130);
-          playSound(region === "head" ? "headshot" : "hit");
+          // Em impactos fatais, a confirmação de eliminação substitui o
+          // som de dano para evitar duas assinaturas concorrendo no mesmo frame.
+          if (bullet.team === "player" && bot.hp > 0) playSound(region === "head" ? "bot_headshot" : "bot_hit");
           if (bullet.knife) {
             bullet.pierceLeft = (bullet.pierceLeft || 0) - 1;
             if (bullet.pierceLeft < 0) bullet.life = 0;
@@ -11076,7 +11117,7 @@ function renderAudioOptions() {
       SettingSlider("Volume Geral", "masterVolume", 0, 100, 1, "%"),
       SettingSlider("Música", "musicVolume", 0, 100, 1, "%"),
       SettingSlider("Efeitos de Som", "sfxVolume", 0, 100, 1, "%"),
-      SettingSlider("Volume dos Disparos", "gunshotVolume", 0, 100, 1, "%"),
+      SettingSlider("Volume das Armas", "gunshotVolume", 0, 100, 1, "%"),
     ]),
     optionSection("OPÇÕES", [
       ToggleSwitch("Som Mudo", "muted"),
@@ -11514,7 +11555,9 @@ function deployOutbreakWave(wave) {
   game.outbreakWaveDelay = 0;
   showRoundBanner(`ONDA ${wave}`, `${game.outbreakWaveEnemyTotal} ameaças em aproximação`, "OUTBREAK", 2.4);
   setMessage(`Outbreak: onda ${wave} iniciada. Elimine todas as ameaças.`);
-  playSound("wave_start");
+  // A primeira onda usa a fanfarra do cartão de entrada da partida. Ondas
+  // seguintes mantêm sua própria chamada para não sobrepor dois temas.
+  if (!(wave === 1 && game.introTimer > 0)) playSound("wave_start");
   if (wave === 1) showContextTipOnce("outbreak-start", "Med-kits restauram vida. Airdrops concedem modificadores temporários e mostram seu efeito antes da coleta.");
 }
 
@@ -11707,12 +11750,23 @@ function startTutorialMode() {
 }
 
 function showIntro() {
+  const duration = 5;
   ui.introMode.textContent = game.mode;
   ui.introMap.textContent = game.mapName;
   ui.introTeam.textContent = `${game.playerSide === "attackers" ? "Ataque" : "Defesa"} - ${map.vibe}`;
+  if (ui.introTimebar) {
+    ui.introTimebar.style.setProperty("--intro-duration", `${duration}s`);
+    // Reinicia as duas metades mesmo em uma nova partida aberta sem recarregar a página.
+    for (const half of ui.introTimebar.querySelectorAll(".intro-timebar-half")) {
+      half.style.animation = "none";
+      void half.offsetWidth;
+      half.style.animation = "";
+    }
+  }
   ui.introOverlay.classList.remove("hidden");
-  game.introTimer = 5;
+  game.introTimer = duration;
   game.clockActive = false;
+  playSound("match_start");
 }
 
 const killFeedEntries = [];

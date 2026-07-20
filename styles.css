@@ -2761,6 +2761,46 @@ canvas {
   color: var(--muted);
 }
 
+.intro-timebar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  width: min(320px, 82%);
+  height: 3px;
+  margin: 20px auto 0;
+  overflow: hidden;
+}
+
+.intro-timebar-half {
+  display: block;
+  height: 1px;
+  margin-top: 1px;
+  background: linear-gradient(90deg, rgba(255, 70, 85, 0.22), #ff4655);
+  box-shadow: 0 0 7px rgba(255, 70, 85, 0.72);
+  animation: introTimebarDrain var(--intro-duration, 5s) linear forwards;
+}
+
+.intro-timebar-half.is-left {
+  transform-origin: left center;
+}
+
+.intro-timebar-half.is-right {
+  transform-origin: right center;
+  background: linear-gradient(90deg, #ff4655, rgba(255, 70, 85, 0.22));
+}
+
+@keyframes introTimebarDrain {
+  from { transform: scaleX(1); opacity: 1; }
+  92% { opacity: 1; }
+  to { transform: scaleX(0); opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .intro-timebar-half {
+    animation-timing-function: steps(20, end);
+  }
+}
+
 .menu-grid {
   display: flex;
   flex-direction: column;
