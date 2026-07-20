@@ -2369,6 +2369,7 @@ const game = {
   damageIndicator: null,
   scoreboardVisible: false,
   matchSubmissionToken: "",
+  matchSubmissionPromise: null,
   roundBannerTimer: 0,
   training: false,
   tutorial: false,
@@ -3133,6 +3134,7 @@ function startNewMatch() {
   game.roundNumber = 1;
   game.statisticsRecorded = false;
   game.matchSubmissionToken = "";
+  game.matchSubmissionPromise = null;
   game.startingSide = game.outbreak ? "attackers" : Math.random() < 0.5 ? "attackers" : "defenders";
   game.playerSide = game.startingSide;
   map = game.training ? TRAINING_MAP : game.outbreak ? generateOutbreakMap() : MAPS[Math.floor(Math.random() * MAPS.length)];
@@ -3148,13 +3150,15 @@ function startNewMatch() {
   setMessage(game.playerSide === "attackers"
     ? `Mapa ${game.mapName} (${map.vibe}). Seu time: Ataque. Plante a spike.`
     : `Mapa ${game.mapName} (${map.vibe}). Seu time: Defesa. Impeca o plant ou desarme.`);
-  void beginTrackedMatch();
+  // Guarda a Promise para que o encerramento aguarde o comprovante caso o
+  // servidor ainda esteja acordando quando a partida começar.
+  game.matchSubmissionPromise = beginTrackedMatch();
 }
 
 async function beginTrackedMatch() {
-  if (currentProfile?.isGuest || game.sandbox || game.training || game.tutorial) return;
+  if (currentProfile?.isGuest || game.sandbox || game.training || game.tutorial) return "";
   const session = readStoredSession();
-  if (!session?.token) return;
+  if (!session?.token) return "";
   try {
     const payload = await requestApi("/api/statistics/match/start", {
       method: "POST",
@@ -3162,8 +3166,10 @@ async function beginTrackedMatch() {
       body: JSON.stringify({ mode: game.playMode || "default" }),
     });
     game.matchSubmissionToken = payload.matchToken || "";
+    return game.matchSubmissionToken;
   } catch (error) {
     console.warn("Não foi possível iniciar a validação da partida:", error.message);
+    return "";
   }
 }
 
@@ -3308,6 +3314,12 @@ async function recordCompletedMatch() {
     failMatchCoreReward("Recompensa não sincronizada");
     return;
   }
+
+  // Impede a condição de corrida entre o início da partida e a criação
+  // do comprovante no Render.
+  if (!game.matchSubmissionToken && game.matchSubmissionPromise) {
+    await game.matchSubmissionPromise;
+  }
   if (!game.matchSubmissionToken) {
     if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = "Partida sem comprovante de integridade; estatísticas não enviadas.";
     failMatchCoreReward("Partida sem comprovante de recompensa");
@@ -3316,26 +3328,41 @@ async function recordCompletedMatch() {
   game.statisticsRecorded = true;
   const gameMode = game.outbreak ? "outbreak" : game.playMode === "blackout" ? "blackout" : "default";
   const kills = Math.max(0, Math.round(game.stats?.kills || 0));
+  const deaths = Math.max(0, Math.round(game.stats?.deaths || 0));
   const wave = game.outbreak ? Math.max(1, Math.round(game.outbreakWave || 1)) : 0;
   const survivalSeconds = game.outbreak ? Math.max(0, Math.floor(game.outbreakElapsed || 0)) : 0;
   const score = game.outbreak
     ? wave * 1000 + kills * 100 + survivalSeconds
     : Math.max(0, Math.round(kills * 100 + game.playerScore * 500));
+  const submission = {
+    victory: game.playerScore > game.enemyScore,
+    kills,
+    deaths,
+    score,
+    game_mode: gameMode,
+    wave,
+    survival_seconds: survivalSeconds,
+    matchToken: game.matchSubmissionToken,
+  };
+
   try {
-    const payload = await requestApi("/api/leaderboard/save", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${session.token}` },
-      body: JSON.stringify({
-        victory: game.playerScore > game.enemyScore,
-        kills,
-        deaths,
-        score,
-        game_mode: gameMode,
-        wave,
-        survival_seconds: survivalSeconds,
-        matchToken: game.matchSubmissionToken,
-      }),
-    });
+    let payload;
+    const maximumAttempts = 2;
+    for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
+      try {
+        payload = await requestApi("/api/leaderboard/save", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${session.token}` },
+          body: JSON.stringify(submission),
+        });
+        break;
+      } catch (error) {
+        const transientFailure = error.code === "SERVER_OFFLINE" || Number(error.status) >= 500;
+        if (!transientFailure || attempt === maximumAttempts) throw error;
+        if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = "Servidor acordando; repetindo a sincronização...";
+        await new Promise((resolve) => window.setTimeout(resolve, 1800));
+      }
+    }
     const rewardConfirmed = confirmMatchCoreReward(payload);
     if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = rewardConfirmed
       ? "Pontuação e recompensa sincronizadas."
@@ -3343,7 +3370,7 @@ async function recordCompletedMatch() {
     if (rewardConfirmed) showUxToast("Pontuação, estatísticas e recompensa foram salvas.", { title: "SINCRONIZAÇÃO CONCLUÍDA", tone: "success" });
   } catch (error) {
     // A partida permanece jogável mesmo se a sincronização estiver indisponível.
-    console.warn("Não foi possível sincronizar as estatísticas:", error.message);
+    console.warn("Não foi possível sincronizar as estatísticas:", error.code || error.message, error);
     if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = "A partida foi concluída, mas a sincronização está indisponível.";
     failMatchCoreReward("Recompensa não sincronizada");
     showUxToast("A partida terminou normalmente, mas os dados não puderam ser enviados agora.", { title: "SINCRONIZAÇÃO PENDENTE", tone: "warning", duration: 4200 });

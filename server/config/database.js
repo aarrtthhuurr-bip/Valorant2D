@@ -300,6 +300,20 @@ async function initializeDatabase() {
         utilizado_em TIMESTAMPTZ
       )
     `);
+    // Liga cada resultado ao comprovante descartável que o originou. O índice
+    // único torna o endpoint idempotente: repetir uma requisição nunca paga a
+    // recompensa nem incrementa as estatísticas uma segunda vez.
+    await client.query('ALTER TABLE leaderboard ADD COLUMN IF NOT EXISTS match_submission_id INTEGER');
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'leaderboard_match_submission_fk') THEN
+          ALTER TABLE leaderboard
+          ADD CONSTRAINT leaderboard_match_submission_fk
+          FOREIGN KEY (match_submission_id) REFERENCES match_submissions(id) ON DELETE SET NULL;
+        END IF;
+      END $$
+    `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS user_skins (
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -405,6 +419,7 @@ async function initializeDatabase() {
     await client.query('CREATE INDEX IF NOT EXISTS idx_sessions_expiration ON sessions (data_expiracao)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_password_reset_expiration ON password_reset_challenges (data_expiracao)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_match_submissions_user ON match_submissions (user_id, iniciado_em DESC)');
+    await client.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_leaderboard_match_submission ON leaderboard (match_submission_id) WHERE match_submission_id IS NOT NULL');
     await client.query('CREATE INDEX IF NOT EXISTS idx_user_skins_user ON user_skins (user_id, acquired_at DESC)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_daily_missions_user_date ON daily_mission_progress (user_id, mission_date)');
     await client.query('COMMIT');

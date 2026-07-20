@@ -20,6 +20,45 @@ function rankingConfiguration(gameMode) {
 
 class Leaderboard {
   /**
+   * Recupera o resultado associado a um comprovante já consumido. Isso permite
+   * responder com sucesso quando o navegador repete uma requisição cuja
+   * resposta anterior se perdeu, sem conceder a recompensa novamente.
+   */
+  static async findRecordedMatch(matchId, userId) {
+    const row = await database.get(
+      `SELECT ranking.id, ranking.player_name, ranking.score, ranking.max_wave,
+              ranking.victory, ranking.kills, ranking.deaths,
+              ranking.core_reward, ranking.game_mode, ranking.created_at,
+              users.partidas_jogadas, users.vitorias, users.abates_totais,
+              users.pontuacao_maxima, users.total_matches, users.total_kills,
+              users.total_deaths, users.core_balance, users.core_earned_total,
+              users.matches_default, users.wins_default, users.kills_default,
+              users.deaths_default, users.matches_blackout, users.wins_blackout,
+              users.kills_blackout, users.deaths_blackout,
+              users.highest_wave_outbreak
+       FROM leaderboard AS ranking
+       INNER JOIN users ON users.id = ranking.user_id
+       WHERE ranking.match_submission_id = $1 AND ranking.user_id = $2`,
+      [matchId, userId],
+    );
+    if (!row) return null;
+    const entryFields = [
+      'id', 'player_name', 'score', 'max_wave', 'victory', 'kills', 'deaths',
+      'core_reward', 'game_mode', 'created_at',
+    ];
+    const entry = Object.fromEntries(entryFields.map((field) => [field, row[field]]));
+    const statistics = { ...row };
+    entryFields.forEach((field) => delete statistics[field]);
+    return {
+      entry,
+      statistics,
+      coreReward: Number(row.core_reward),
+      coreBalance: Number(row.core_balance),
+      alreadyRecorded: true,
+    };
+  }
+
+  /**
    * O ranking oficial usa exclusivamente vitórias nos modos competitivos e
    * maior wave no Outbreak. As colunas são escolhidas por uma lista interna,
    * nunca por texto recebido do cliente.
@@ -145,11 +184,11 @@ class Leaderboard {
       );
       const entryResult = await client.query(
         `INSERT INTO leaderboard
-         (user_id, player_name, score, max_wave, victory, kills, deaths, core_reward, game_mode)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         (user_id, player_name, score, max_wave, victory, kills, deaths, core_reward, game_mode, match_submission_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          RETURNING id, player_name, score, max_wave, victory, kills, deaths,
                    core_reward, game_mode, created_at`,
-        [userId, playerName, score, maxWave, victory, kills, deaths, coreReward, gameMode],
+        [userId, playerName, score, maxWave, victory, kills, deaths, coreReward, gameMode, matchId],
       );
       await Commerce.updateMissionProgress(client, userId, { victory, kills, score, maxWave, gameMode });
       await client.query('COMMIT');

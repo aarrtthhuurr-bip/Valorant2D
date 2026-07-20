@@ -10,9 +10,7 @@ class MatchSubmission {
     const token = crypto.randomBytes(32).toString('hex');
     await database.run(
       `DELETE FROM match_submissions
-       WHERE data_expiracao <= CURRENT_TIMESTAMP
-          OR (user_id = $1 AND utilizado_em IS NULL)`,
-      [userId],
+       WHERE data_expiracao <= CURRENT_TIMESTAMP AND utilizado_em IS NULL`,
     );
     await database.run(
       `INSERT INTO match_submissions (user_id, token_hash, modo, data_expiracao)
@@ -25,11 +23,11 @@ class MatchSubmission {
   static findValid(userId, token) {
     if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) return undefined;
     return database.get(
-      `SELECT id, modo, iniciado_em,
+      `SELECT id, modo, iniciado_em, utilizado_em,
               EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - iniciado_em)) AS duracao_segundos
        FROM match_submissions
        WHERE user_id = $1 AND token_hash = $2
-         AND utilizado_em IS NULL AND data_expiracao > CURRENT_TIMESTAMP`,
+         AND (utilizado_em IS NOT NULL OR data_expiracao > CURRENT_TIMESTAMP)`,
       [userId, hashToken(token)],
     );
   }

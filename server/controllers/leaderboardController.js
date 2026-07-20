@@ -48,11 +48,32 @@ function validatedMatchPayload(body, match) {
   return { gameMode, score, kills, deaths, victory, maxWave: gameMode === 'outbreak' ? wave : 0 };
 }
 
+function recordedMatchMatches(body, entry) {
+  if (!entry) return false;
+  return body?.game_mode === entry.game_mode
+    && Number(body?.score) === Number(entry.score)
+    && Number(body?.kills) === Number(entry.kills)
+    && Number(body?.deaths ?? 0) === Number(entry.deaths)
+    && body?.victory === entry.victory
+    && Number(body?.wave ?? 0) === Number(entry.max_wave);
+}
+
 async function saveScore(request, response, next) {
+  let user;
+  let match;
   try {
-    const user = await authenticatedUser(request, response);
+    user = await authenticatedUser(request, response);
     if (!user) return;
-    const match = await MatchSubmission.findValid(user.id, request.body?.matchToken);
+    match = await MatchSubmission.findValid(user.id, request.body?.matchToken);
+    if (match?.utilizado_em) {
+      const recorded = await Leaderboard.findRecordedMatch(match.id, user.id);
+      if (!recordedMatchMatches(request.body, recorded?.entry)) {
+        response.status(409).json({ error: 'Esta partida já foi registrada.', code: 'MATCH_ALREADY_RECORDED' });
+        return;
+      }
+      response.status(200).json({ message: 'Pontuação já estava sincronizada.', ...recorded });
+      return;
+    }
     const payload = validatedMatchPayload(request.body, match);
     if (!payload) {
       securityAudit('invalid_leaderboard_submission', request, { userId: user.id, success: false });
@@ -68,6 +89,11 @@ async function saveScore(request, response, next) {
     response.status(201).json({ message: 'Pontuação registrada na leaderboard.', ...result });
   } catch (error) {
     if (error.code === 'MATCH_ALREADY_RECORDED') {
+      const recorded = match && user ? await Leaderboard.findRecordedMatch(match.id, user.id) : null;
+      if (recordedMatchMatches(request.body, recorded?.entry)) {
+        response.status(200).json({ message: 'Pontuação já estava sincronizada.', ...recorded });
+        return;
+      }
       response.status(409).json({ error: error.message, code: error.code });
       return;
     }
@@ -116,4 +142,4 @@ async function listScores(request, response, next) {
   }
 }
 
-module.exports = { listScores, saveScore, _test: { validatedMatchPayload } };
+module.exports = { listScores, saveScore, _test: { recordedMatchMatches, validatedMatchPayload } };

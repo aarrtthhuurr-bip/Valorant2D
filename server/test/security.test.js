@@ -544,6 +544,72 @@ test('leaderboard salva pontuação autenticada com comprovante e nome da sessã
   }
 });
 
+test('repetição do envio devolve o resultado anterior sem premiar novamente', async () => {
+  const originals = {
+    session: Session.findValid,
+    match: MatchSubmission.findValid,
+    recorded: Leaderboard.findRecordedMatch,
+    record: Leaderboard.recordCompletedMatch,
+  };
+  let newRecordCalls = 0;
+  Session.findValid = async () => ({ id: 3, username: 'usuario_teste' });
+  MatchSubmission.findValid = async () => ({
+    id: 27,
+    modo: 'outbreak',
+    duracao_segundos: 90,
+    utilizado_em: new Date().toISOString(),
+  });
+  Leaderboard.findRecordedMatch = async () => ({
+    entry: {
+      id: 12,
+      player_name: 'usuario_teste',
+      score: 12345,
+      max_wave: 12,
+      victory: false,
+      kills: 3,
+      deaths: 1,
+      core_reward: 12,
+      game_mode: 'outbreak',
+    },
+    statistics: { total_matches: 4 },
+    coreReward: 12,
+    coreBalance: 321,
+    alreadyRecorded: true,
+  });
+  Leaderboard.recordCompletedMatch = async () => {
+    newRecordCalls += 1;
+    throw new Error('Não deveria criar outro registro.');
+  };
+
+  try {
+    const response = await request(app)
+      .post('/api/leaderboard/save')
+      .set('Authorization', `Bearer ${'a'.repeat(64)}`)
+      .set('Content-Type', 'application/json')
+      .send({
+        matchToken: 'e'.repeat(64),
+        game_mode: 'outbreak',
+        victory: false,
+        kills: 3,
+        deaths: 1,
+        wave: 12,
+        survival_seconds: 45,
+        score: 12345,
+      })
+      .expect(200);
+
+    assert.equal(response.body.alreadyRecorded, true);
+    assert.equal(response.body.coreReward, 12);
+    assert.equal(response.body.coreBalance, 321);
+    assert.equal(newRecordCalls, 0);
+  } finally {
+    Session.findValid = originals.session;
+    MatchSubmission.findValid = originals.match;
+    Leaderboard.findRecordedMatch = originals.recorded;
+    Leaderboard.recordCompletedMatch = originals.record;
+  }
+});
+
 test('recompensa Core respeita as faixas de cada modo e as waves do Outbreak', () => {
   const reward = Leaderboard._test.coreRewardForMatch;
   assert.equal(reward('default', 0, (minimum) => minimum), 5);
