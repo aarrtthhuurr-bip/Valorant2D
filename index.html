@@ -8,7 +8,7 @@
   <!-- Altere apenas este valor caso o endereço definitivo do Render mude. -->
   <meta name="valorant2d-api-url" content="https://valorant2d.onrender.com">
   <title>Valorant2D</title>
-  <link rel="stylesheet" href="./styles.css?v=20260718-shop-modes-balance">
+  <link rel="stylesheet" href="./styles.css?v=20260719-core-commerce">
   <script src="https://unpkg.com/lucide@1.24.0" integrity="sha384-mooE85Luwgx+AyykX7e90VcN8/QCFTSIwPuHLmvcsLVoA0en7lKYb9XlOzn5G2co" crossorigin="anonymous"></script>
   <link rel="shortcut icon" href="./assets/Favicon/favicon.ico" type="image/x-icon">
 </head>
@@ -249,6 +249,10 @@
 
       <div class="menu-overlay hidden" id="menuOverlay">
         <div class="menu-art" aria-hidden="true"></div>
+        <div class="core-wallet main-core-wallet hidden" id="mainCoreWallet" aria-label="Saldo de Core">
+          <span class="core-icon" aria-hidden="true"><i></i></span><strong id="mainCoreBalance">0</strong><em>C</em>
+        </div>
+        <button type="button" class="menu-tutorial-shortcut hidden" id="menuTutorialButton" aria-label="Abrir tutorial">?</button>
         <div class="menu-card glass">
           <div class="account-summary hidden" id="accountSummary">
             <span class="account-status-dot" aria-hidden="true"></span>
@@ -266,6 +270,26 @@
           <div class="menu-grid menu-grid-unified" id="menuButtons"></div>
         </div>
       </div>
+
+      <section class="commerce-overlay hidden" id="commerceOverlay" aria-label="Loja de skins">
+        <div class="commerce-shell">
+          <header class="commerce-header">
+            <div><span>CORE MARKET</span><h2>Arsenal de Skins</h2></div>
+            <div class="commerce-header-actions">
+              <div class="core-wallet"><span class="core-icon" aria-hidden="true"><i></i></span><strong id="storeCoreBalance">0</strong><em>C</em></div>
+              <button type="button" id="commerceCloseButton" aria-label="Fechar loja">×</button>
+            </div>
+          </header>
+          <nav class="commerce-tabs" id="commerceTabs" aria-label="Módulos da loja">
+            <button type="button" data-commerce-tab="skins">Skins</button>
+            <button type="button" data-commerce-tab="inventory">Inventário</button>
+            <button type="button" data-commerce-tab="missions">Missões</button>
+            <button type="button" data-commerce-tab="codes">Códigos / ADM</button>
+          </nav>
+          <div class="commerce-content" id="commerceContent" aria-live="polite"></div>
+          <div class="commerce-feedback" id="commerceFeedback" role="status" aria-live="polite"></div>
+        </div>
+      </section>
 
       <div class="agent-overlay hidden" id="agentOverlay">
         <div class="agent-select glass">
@@ -396,6 +420,6 @@
     </div>
   </main>
 
-  <script src="./game.js?v=20260719-weapon-assets-path"></script>
+  <script src="./game.js?v=20260719-core-commerce"></script>
 </body>
 </html>

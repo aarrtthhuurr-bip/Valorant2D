@@ -25,6 +25,8 @@ function publicUser(user) {
   return {
     id: user.id,
     username: user.username,
+    coreBalance: Number(user.core_balance) || 0,
+    isAdmin: Boolean(user.is_admin),
     createdAt: user.data_criacao,
   };
 }

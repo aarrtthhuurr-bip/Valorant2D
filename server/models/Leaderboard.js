@@ -1,4 +1,5 @@
 const database = require('../config/database');
+const Commerce = require('./Commerce');
 
 class Leaderboard {
   /** Retorna apenas o melhor resultado de cada conta no modo solicitado. */
@@ -111,6 +112,7 @@ class Leaderboard {
          RETURNING id, player_name, score, max_wave, game_mode, created_at`,
         [userId, playerName, score, maxWave, gameMode],
       );
+      await Commerce.updateMissionProgress(client, userId, { victory, kills, score, maxWave, gameMode });
       await client.query('COMMIT');
       return { entry: entryResult.rows[0], statistics: statisticsResult.rows[0] };
     } catch (error) {

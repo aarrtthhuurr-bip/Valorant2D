@@ -157,6 +157,15 @@ const ui = {
   recoveryFeedback: document.getElementById("recoveryFeedback"),
   recoverySubmitButton: document.getElementById("recoverySubmitButton"),
   recoveryBackButton: document.getElementById("recoveryBackButton"),
+  mainCoreWallet: document.getElementById("mainCoreWallet"),
+  mainCoreBalance: document.getElementById("mainCoreBalance"),
+  menuTutorialButton: document.getElementById("menuTutorialButton"),
+  commerceOverlay: document.getElementById("commerceOverlay"),
+  commerceTabs: document.getElementById("commerceTabs"),
+  commerceContent: document.getElementById("commerceContent"),
+  commerceFeedback: document.getElementById("commerceFeedback"),
+  commerceCloseButton: document.getElementById("commerceCloseButton"),
+  storeCoreBalance: document.getElementById("storeCoreBalance"),
 };
 
 /**
@@ -216,6 +225,8 @@ function saveSession(payload) {
 
 function clearStoredSession() {
   localStorage.removeItem(AUTH_STORAGE_KEY);
+  commerceState.profile = null;
+  equippedWeaponSkinPaths = {};
 }
 
 async function requestApi(path, options = {}) {
@@ -243,6 +254,7 @@ async function requestApi(path, options = {}) {
       const requestError = new Error(payload.error || "Não foi possível concluir a solicitação.");
       requestError.status = response.status;
       requestError.code = payload.code;
+      requestError.coreBalance = payload.coreBalance;
       throw requestError;
     }
 
@@ -257,6 +269,199 @@ async function requestApi(path, options = {}) {
   } finally {
     window.clearTimeout(timeoutId);
   }
+}
+
+const commerceState = { tab: "skins", profile: null, weaponId: "pistol", busy: false };
+let equippedWeaponSkinPaths = {};
+
+function commerceAuthorization() {
+  const session = readStoredSession();
+  return session?.token && !currentProfile?.isGuest ? { Authorization: `Bearer ${session.token}` } : null;
+}
+
+function updateCoreBalances(balance) {
+  const safeBalance = Math.max(0, Number(balance) || 0);
+  if (ui.mainCoreBalance) ui.mainCoreBalance.textContent = safeBalance.toLocaleString("pt-BR");
+  if (ui.storeCoreBalance) ui.storeCoreBalance.textContent = safeBalance.toLocaleString("pt-BR");
+}
+
+function applyCommerceProfile(profile) {
+  commerceState.profile = profile;
+  updateCoreBalances(profile?.coreBalance || 0);
+  currentProfile = currentProfile ? { ...currentProfile, isAdmin: Boolean(profile?.isAdmin) } : currentProfile;
+  const catalogById = new Map((profile?.catalog || []).map((skin) => [skin.id, skin]));
+  equippedWeaponSkinPaths = Object.fromEntries(Object.entries(profile?.equippedSkins || {}).map(([weaponId, skinId]) => {
+    const skin = catalogById.get(skinId);
+    if (skin?.imagePath) getWeaponSprite({ id: weaponId }, skin.imagePath);
+    return [weaponId, skin?.imagePath || ""];
+  }).filter(([, path]) => path));
+}
+
+async function refreshCommerceProfile({ render = false } = {}) {
+  const headers = commerceAuthorization();
+  if (!headers) {
+    commerceState.profile = null;
+    equippedWeaponSkinPaths = {};
+    updateCoreBalances(0);
+    if (render) renderCommerceTab();
+    return null;
+  }
+  const profile = await requestApi("/api/commerce", { method: "GET", headers });
+  applyCommerceProfile(profile);
+  if (render) renderCommerceTab();
+  return profile;
+}
+
+function setCommerceFeedback(message = "", type = "") {
+  if (!ui.commerceFeedback) return;
+  ui.commerceFeedback.textContent = message;
+  ui.commerceFeedback.className = `commerce-feedback${type ? ` is-${type}` : ""}`;
+}
+
+function commerceSkinCard(skin, { offer = false, inventory = false } = {}) {
+  const owned = commerceState.profile?.ownedSkinIds?.includes(skin.id);
+  const equipped = commerceState.profile?.equippedSkins?.[skin.weaponId] === skin.id;
+  const card = document.createElement("article");
+  card.className = `skin-card${owned ? " is-owned" : ""}${equipped ? " is-equipped" : ""}`;
+  const price = Number(skin.price) || 0;
+  card.innerHTML = `
+    ${offer ? `<span class="skin-discount">-${Number(skin.discountPercent) || 0}%</span>` : ""}
+    <span class="skin-card-art"><img src="${skin.imagePath}" alt="${skin.name} para ${skin.weaponName}"></span>
+    <span><b>${skin.name}</b><small>${skin.weaponName} · ${skin.rarity}</small></span>
+    <span class="skin-price">${offer ? `<del>${Number(skin.originalPrice)} C</del>` : ""}<span>${price} C</span></span>`;
+  const action = document.createElement("button");
+  action.type = "button";
+  if (inventory) {
+    action.className = "inventory-action";
+    action.textContent = equipped ? "EQUIPADO" : "EQUIPAR";
+    action.disabled = equipped || commerceState.busy;
+    action.addEventListener("click", () => equipCommerceSkin(skin));
+  } else {
+    action.textContent = owned ? "ADQUIRIDA" : "COMPRAR";
+    action.disabled = owned || commerceState.busy;
+    action.addEventListener("click", () => purchaseCommerceSkin(skin.id));
+  }
+  card.appendChild(action);
+  return card;
+}
+
+function skinGrid(skins, options) {
+  const grid = document.createElement("div");
+  grid.className = "skin-grid";
+  skins.forEach((skin) => grid.appendChild(commerceSkinCard(skin, options)));
+  return grid;
+}
+
+function renderCommerceSkins() {
+  const profile = commerceState.profile;
+  const weapons = [...new Map(profile.catalog.map((skin) => [skin.weaponId, skin.weaponName])).entries()];
+  if (!weapons.some(([id]) => id === commerceState.weaponId)) commerceState.weaponId = weapons[0]?.[0] || "pistol";
+  ui.commerceContent.innerHTML = `<section class="daily-offers"><div class="commerce-section-title"><div><span>ROTAÇÃO 24H</span><h3>Ofertas do Dia</h3></div></div></section><section class="skin-catalog"><div class="commerce-section-title"><div><span>CATÁLOGO</span><h3>Escolha sua arma</h3></div></div><nav class="skin-category-tabs"></nav></section>`;
+  ui.commerceContent.querySelector(".daily-offers").appendChild(skinGrid(profile.dailyOffers || [], { offer: true }));
+  const tabs = ui.commerceContent.querySelector(".skin-category-tabs");
+  weapons.forEach(([weaponId, weaponName]) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = weaponName;
+    button.classList.toggle("is-active", commerceState.weaponId === weaponId);
+    button.addEventListener("click", () => { commerceState.weaponId = weaponId; renderCommerceSkins(); });
+    tabs.appendChild(button);
+  });
+  ui.commerceContent.querySelector(".skin-catalog").appendChild(skinGrid(profile.catalog.filter((skin) => skin.weaponId === commerceState.weaponId)));
+}
+
+function renderCommerceInventory() {
+  const profile = commerceState.profile;
+  const owned = profile.catalog.filter((skin) => profile.ownedSkinIds.includes(skin.id));
+  ui.commerceContent.innerHTML = '<div class="commerce-section-title"><div><span>COLEÇÃO</span><h3>Inventário</h3></div></div>';
+  if (!owned.length) {
+    ui.commerceContent.insertAdjacentHTML("beforeend", '<div class="inventory-empty">Sua coleção ainda está vazia.<br>Adquira skins no primeiro módulo da loja.</div>');
+    return;
+  }
+  const groups = Map.groupBy ? Map.groupBy(owned, (skin) => skin.weaponId) : owned.reduce((map, skin) => map.set(skin.weaponId, [...(map.get(skin.weaponId) || []), skin]), new Map());
+  for (const [weaponId, skins] of groups) {
+    const section = document.createElement("section");
+    section.className = "inventory-group";
+    section.innerHTML = `<header><strong>${skins[0].weaponName}</strong><button type="button" class="inventory-action">RESTAURAR PADRÃO</button></header>`;
+    section.querySelector("button").addEventListener("click", () => restoreDefaultSkin(weaponId));
+    section.appendChild(skinGrid(skins, { inventory: true }));
+    ui.commerceContent.appendChild(section);
+  }
+}
+
+function renderCommerceMissions() {
+  ui.commerceContent.innerHTML = '<div class="commerce-section-title"><div><span>CICLO DIÁRIO</span><h3>Missões</h3></div></div><div class="mission-grid"></div>';
+  const grid = ui.commerceContent.querySelector(".mission-grid");
+  for (const mission of commerceState.profile.missions || []) {
+    const ratio = Math.min(100, Math.round((mission.progress / Math.max(1, mission.target)) * 100));
+    const card = document.createElement("article");
+    card.className = `mission-card${mission.claimed ? " is-claimed" : ""}`;
+    card.innerHTML = `<div class="mission-reward">${mission.reward} C<small>RECOMPENSA</small></div><div class="mission-copy"><strong>${mission.description}</strong><div class="mission-progress"><i style="width:${ratio}%"></i></div><span>${mission.progress}/${mission.target}</span></div>`;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = mission.claimed ? "RESGATADO" : mission.completed ? "RESGATAR" : "EM PROGRESSO";
+    button.disabled = mission.claimed || !mission.completed || commerceState.busy;
+    button.addEventListener("click", () => claimCommerceMission(mission.assignmentId));
+    card.appendChild(button);
+    grid.appendChild(card);
+  }
+}
+
+function renderCommerceCodes() {
+  const isAdmin = commerceState.profile.isAdmin;
+  ui.commerceContent.innerHTML = `<div class="commerce-section-title"><div><span>RECOMPENSAS</span><h3>Códigos</h3></div></div><div class="code-layout">${isAdmin ? '<section class="code-panel admin"><h3>Painel Administrativo</h3><p>Crie um código promocional e determine a recompensa de Core.</p><form class="code-form admin-form" id="adminCodeForm"><input name="code" maxlength="32" placeholder="NOVO_CODIGO" required><input name="amount" type="number" min="1" max="10000" placeholder="CORE" required><button>CRIAR</button></form></section>' : ""}<section class="code-panel"><h3>Resgate seus códigos aqui</h3><p>Cada código pode ser usado uma única vez por conta.</p><form class="code-form" id="redeemCodeForm"><input name="code" maxlength="32" placeholder="INSIRA O CÓDIGO" required><button>RESGATAR</button></form></section></div>`;
+  ui.commerceContent.querySelector("#redeemCodeForm")?.addEventListener("submit", (event) => { event.preventDefault(); redeemCommerceCode(new FormData(event.currentTarget).get("code")); });
+  ui.commerceContent.querySelector("#adminCodeForm")?.addEventListener("submit", (event) => { event.preventDefault(); const form = new FormData(event.currentTarget); createCommerceCode(form.get("code"), Number(form.get("amount"))); });
+}
+
+function renderCommerceTab() {
+  ui.commerceTabs?.querySelectorAll("[data-commerce-tab]").forEach((button) => button.classList.toggle("is-active", button.dataset.commerceTab === commerceState.tab));
+  if (!commerceState.profile) {
+    ui.commerceContent.innerHTML = '<div class="inventory-empty">Entre com uma conta para acessar a economia Core, a loja e suas missões.</div>';
+    return;
+  }
+  if (commerceState.tab === "skins") renderCommerceSkins();
+  if (commerceState.tab === "inventory") renderCommerceInventory();
+  if (commerceState.tab === "missions") renderCommerceMissions();
+  if (commerceState.tab === "codes") renderCommerceCodes();
+}
+
+async function commerceMutation(path, options, successMessage) {
+  if (commerceState.busy) return;
+  commerceState.busy = true;
+  setCommerceFeedback("Processando no servidor...");
+  try {
+    const payload = await requestApi(path, { ...options, headers: { ...commerceAuthorization(), ...(options.headers || {}) } });
+    await refreshCommerceProfile();
+    setCommerceFeedback(successMessage(payload), "success");
+  } catch (error) {
+    if (Number.isFinite(Number(error.coreBalance))) updateCoreBalances(error.coreBalance);
+    setCommerceFeedback(error.message, "error");
+  } finally { commerceState.busy = false; renderCommerceTab(); }
+}
+
+function purchaseCommerceSkin(skinId) { return commerceMutation(`/api/commerce/skins/${encodeURIComponent(skinId)}/purchase`, { method: "POST", body: "{}" }, (data) => `${data.skin.name} adicionada ao inventário por ${data.paid} C.`); }
+function equipCommerceSkin(skin) { return commerceMutation(`/api/commerce/inventory/${encodeURIComponent(skin.weaponId)}`, { method: "PUT", body: JSON.stringify({ skinId: skin.id }) }, () => `${skin.name} equipada.`); }
+function restoreDefaultSkin(weaponId) { return commerceMutation(`/api/commerce/inventory/${encodeURIComponent(weaponId)}`, { method: "PUT", body: JSON.stringify({ skinId: null }) }, () => "Visual padrão restaurado."); }
+function claimCommerceMission(id) { return commerceMutation(`/api/commerce/missions/${encodeURIComponent(id)}/claim`, { method: "POST", body: "{}" }, (data) => `${data.reward} C adicionados à conta.`); }
+function redeemCommerceCode(code) { return commerceMutation("/api/commerce/codes/redeem", { method: "POST", body: JSON.stringify({ code }) }, (data) => `Código resgatado: +${data.reward} C.`); }
+function createCommerceCode(code, coreAmount) { return commerceMutation("/api/commerce/admin/codes", { method: "POST", body: JSON.stringify({ code, coreAmount }) }, (data) => `Código ${data.code.code_display} criado com ${data.code.core_amount} C.`); }
+
+async function openCommerceStore() {
+  ui.mainCoreWallet?.classList.add("hidden");
+  ui.menuTutorialButton?.classList.add("hidden");
+  ui.menuOverlay?.classList.add("hidden");
+  ui.commerceOverlay?.classList.remove("hidden", "is-leaving");
+  game.menuState = "commerce";
+  game.paused = true;
+  ui.commerceContent.innerHTML = '<div class="commerce-loading"><span>Sincronizando loja e inventário...</span></div>';
+  setCommerceFeedback("");
+  try { await refreshCommerceProfile({ render: true }); } catch (error) { setCommerceFeedback(error.message, "error"); renderCommerceTab(); }
+}
+
+function closeCommerceStore() {
+  ui.commerceOverlay?.classList.add("is-leaving");
+  window.setTimeout(() => { ui.commerceOverlay?.classList.add("hidden"); ui.commerceOverlay?.classList.remove("is-leaving"); showMainMenu(); }, 220);
 }
 
 function setAuthFeedback(message = "", type = "") {
@@ -331,7 +536,15 @@ function enterGameWithProfile(profile) {
   game.playerName = profile.username;
   updateAccountSummary(profile);
   showMainMenu();
-  if (!profile.isGuest) void synchronizePreferencesFromServer();
+  if (!profile.isGuest) {
+    void synchronizePreferencesFromServer();
+    void refreshCommerceProfile().then(() => {
+      if (game.menuState === "main") {
+        updateCoreBalances(commerceState.profile?.coreBalance || 0);
+        ui.mainCoreWallet?.classList.remove("hidden");
+      }
+    }).catch((error) => console.warn("Não foi possível sincronizar o inventário:", error.message));
+  }
 
   if (!ui.authOverlay) return;
   ui.authOverlay.classList.add("is-leaving");
@@ -899,8 +1112,8 @@ function weaponSpritePath(weapon) {
   return `./assets/models/${file}`;
 }
 
-function getWeaponSprite(weapon) {
-  const src = weaponSpritePath(weapon);
+function getWeaponSprite(weapon, customSource = "") {
+  const src = customSource || weaponSpritePath(weapon);
   const cached = weaponSpriteCache.get(src);
   if (cached) return cached;
   const image = new Image();
@@ -6497,7 +6710,8 @@ function drawHeldWeapon(entity, weapon, kind) {
     ctx.fillRect(entity.r + 26, -4, 10, 8);
     return;
   }
-  const sprite = getWeaponSprite(weapon);
+  const equippedSkin = kind === "player" ? equippedWeaponSkinPaths[weapon?.id] : "";
+  const sprite = getWeaponSprite(weapon, equippedSkin);
   if (sprite?.ready && !sprite.failed) {
     const config = weaponSpriteVisuals[weapon?.id] || weaponSpriteVisuals.pistol;
     const image = sprite.image;
@@ -8464,6 +8678,10 @@ function loadSandboxConfig() {
 }
 
 function handleEscape() {
+  if (game.menuState === "commerce") {
+    closeCommerceStore();
+    return;
+  }
   if (game.omenUlt) {
     cancelOmenUltimate();
     return;
@@ -8551,6 +8769,8 @@ function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
   ui.menuOverlay?.classList.remove("hidden");
   game.paused = true;
   game.menuState = state;
+  ui.mainCoreWallet?.classList.toggle("hidden", state !== "main" || currentProfile?.isGuest);
+  ui.menuTutorialButton?.classList.toggle("hidden", state !== "main");
 }
 
 function mainMenuIconSvg(icon) {
@@ -8578,6 +8798,10 @@ function mainMenuIconSvg(icon) {
     stats: {
       lucide: "chart-no-axes-column-increasing",
       fallback: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 20V10"></path><path d="M10 20V4"></path><path d="M16 20v-7"></path><path d="M22 20V7"></path></svg>',
+    },
+    store: {
+      lucide: "shopping-bag",
+      fallback: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h12l1 13H5L6 8Z"></path><path d="M9 9V6a3 3 0 0 1 6 0v3"></path></svg>',
     },
   };
   const selected = icons[icon] || icons.star;
@@ -8948,11 +9172,10 @@ function showMainMenu() {
   setMenu("Valorant 2D", "", [
     { label: "JOGAR", icon: "gamepad", action: showModeSelect },
     { label: "OPÇÕES", icon: "tools", action: showOptionsMenu },
+    { label: "LOJA", icon: "store", action: openCommerceStore },
     { label: "ESTATÍSTICAS", icon: "stats", action: showStatisticsMenu },
-    { label: "SANDBOX", icon: "money", action: startSandboxMode },
-    { label: "TREINO", icon: "star", action: startTrainingMode },
-    { label: "TUTORIAL", icon: "link", action: startTutorialMode },
   ], "MENU", "main");
+  updateCoreBalances(commerceState.profile?.coreBalance || currentProfile?.coreBalance || 0);
 }
 
 const PLAY_MODE_OPTIONS = [
@@ -8974,6 +9197,8 @@ const PLAY_MODE_OPTIONS = [
     tag: "SOBREVIVÊNCIA",
     description: "Sobrevivência em ondas infinitas.",
   },
+  { id: "sandbox", name: "Sandbox", tag: "LABORATÓRIO", description: "Teste livre de armas, bots e física." },
+  { id: "training", name: "Treino", tag: "AQUECIMENTO", description: "Pratique movimentação, mira e combate." },
 ];
 
 function playModeIconSvg(modeId) {
@@ -8981,6 +9206,8 @@ function playModeIconSvg(modeId) {
     default: '<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="8"></circle><circle cx="16" cy="16" r="2"></circle><path d="M16 3v6M16 23v6M3 16h6M23 16h6"></path></svg>',
     blackout: '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 16s5-8 13-8 13 8 13 8-5 8-13 8S3 16 3 16Z"></path><circle cx="16" cy="16" r="4"></circle><path d="M6 5l20 22"></path></svg>',
     outbreak: '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 17h5l3-8 5 15 3-7h8"></path><path d="M25 7a12 12 0 1 0 2 17"></path></svg>',
+    sandbox: '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M8 4h16v24H8z"></path><path d="M12 10h8M12 16h8M12 22h5"></path></svg>',
+    training: '<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12"></circle><circle cx="16" cy="16" r="6"></circle><path d="M16 2v7M16 23v7M2 16h7M23 16h7"></path></svg>',
   };
   return icons[modeId] || icons.default;
 }
@@ -9030,6 +9257,8 @@ function renderModeSelect() {
 
 function selectPlayMode(modeId) {
   game.playMode = modeId;
+  if (modeId === "sandbox") { startSandboxMode(); return; }
+  if (modeId === "training") { startTrainingMode(); return; }
   if (modeId === "outbreak") {
     startOutbreakMode();
     return;
@@ -11044,6 +11273,15 @@ document.querySelectorAll("[data-password-toggle]").forEach((button) => {
 });
 ui.guestButton?.addEventListener("click", enterAsGuest);
 ui.logoutButton?.addEventListener("click", logoutCurrentProfile);
+ui.menuTutorialButton?.addEventListener("click", startTutorialMode);
+ui.commerceCloseButton?.addEventListener("click", closeCommerceStore);
+ui.commerceTabs?.querySelectorAll("[data-commerce-tab]").forEach((button) => {
+  button.addEventListener("click", () => {
+    commerceState.tab = button.dataset.commerceTab;
+    setCommerceFeedback("");
+    renderCommerceTab();
+  });
+});
 ui.authUsername?.addEventListener("input", () => {
   ui.authUsername.removeAttribute("aria-invalid");
   setAuthFeedback("");

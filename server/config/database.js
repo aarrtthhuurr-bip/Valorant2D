@@ -95,6 +95,8 @@ async function initializeDatabase() {
         mostrar_dicas BOOLEAN NOT NULL DEFAULT TRUE,
         volume_geral INTEGER NOT NULL DEFAULT 40 CHECK (volume_geral BETWEEN 0 AND 100),
         preferencias_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+        core_balance INTEGER NOT NULL DEFAULT 300 CHECK (core_balance >= 0),
+        is_admin BOOLEAN NOT NULL DEFAULT FALSE,
         data_criacao TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -112,6 +114,8 @@ async function initializeDatabase() {
       'ADD COLUMN IF NOT EXISTS tentativas_login INTEGER NOT NULL DEFAULT 0',
       'ADD COLUMN IF NOT EXISTS bloqueado_ate TIMESTAMPTZ',
       'ADD COLUMN IF NOT EXISTS ultimo_login TIMESTAMPTZ',
+      'ADD COLUMN IF NOT EXISTS core_balance INTEGER NOT NULL DEFAULT 300',
+      'ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE',
     ];
     for (const migration of userMigrations) {
       await client.query(`ALTER TABLE users ${migration}`);
@@ -232,6 +236,70 @@ async function initializeDatabase() {
         utilizado_em TIMESTAMPTZ
       )
     `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_skins (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        skin_id VARCHAR(100) NOT NULL,
+        acquired_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, skin_id)
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS equipped_skins (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        weapon_id VARCHAR(32) NOT NULL,
+        skin_id VARCHAR(100) NOT NULL,
+        equipped_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, weapon_id),
+        UNIQUE (user_id, skin_id),
+        FOREIGN KEY (user_id, skin_id) REFERENCES user_skins(user_id, skin_id) ON DELETE CASCADE
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS daily_mission_progress (
+        id BIGSERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        mission_date DATE NOT NULL,
+        mission_id VARCHAR(32) NOT NULL,
+        progress INTEGER NOT NULL DEFAULT 0 CHECK (progress >= 0),
+        claimed_at TIMESTAMPTZ,
+        UNIQUE (user_id, mission_date, mission_id)
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS promo_codes (
+        id BIGSERIAL PRIMARY KEY,
+        code_hash CHAR(64) NOT NULL UNIQUE,
+        code_display VARCHAR(32) NOT NULL,
+        core_amount INTEGER NOT NULL CHECK (core_amount BETWEEN 1 AND 10000),
+        created_by INTEGER NOT NULL REFERENCES users(id),
+        active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS code_redemptions (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        code_id BIGINT NOT NULL REFERENCES promo_codes(id) ON DELETE CASCADE,
+        redeemed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, code_id)
+      )
+    `);
+
+    // A promoção inicial exige configuração explícita no ambiente do Render.
+    // Depois disso, todas as autorizações consultam exclusivamente is_admin.
+    const bootstrapAdmin = process.env.ADMIN_USERNAME?.trim();
+    if (bootstrapAdmin) {
+      await client.query('UPDATE users SET is_admin = TRUE WHERE LOWER(username) = LOWER($1)', [bootstrapAdmin]);
+    }
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_core_balance_nonnegative') THEN
+          ALTER TABLE users ADD CONSTRAINT users_core_balance_nonnegative CHECK (core_balance >= 0);
+        END IF;
+      END $$
+    `);
 
     await client.query('DROP INDEX IF EXISTS idx_leaderboard_waves');
     await client.query('CREATE INDEX IF NOT EXISTS idx_leaderboard_mode_score ON leaderboard (game_mode, score DESC, created_at ASC)');
@@ -241,6 +309,8 @@ async function initializeDatabase() {
     await client.query('CREATE INDEX IF NOT EXISTS idx_sessions_expiration ON sessions (data_expiracao)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_password_reset_expiration ON password_reset_challenges (data_expiracao)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_match_submissions_user ON match_submissions (user_id, iniciado_em DESC)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_user_skins_user ON user_skins (user_id, acquired_at DESC)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_daily_missions_user_date ON daily_mission_progress (user_id, mission_date)');
     await client.query('COMMIT');
 
     console.log(`[PostgreSQL] Conectado a ${parsedDatabaseUrl.hostname}.`);

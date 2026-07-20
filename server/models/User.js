@@ -10,14 +10,14 @@ class User {
       `INSERT INTO users
        (username, senha_hash, pergunta_seguranca, resposta_seguranca)
        VALUES ($1, $2, $3, $4)
-       RETURNING id, username, data_criacao`,
+       RETURNING id, username, core_balance, is_admin, data_criacao`,
       [username, senhaHash, perguntaSeguranca, respostaSegurancaHash],
     );
   }
 
   static findById(id) {
     return database.get(
-      'SELECT id, username, data_criacao FROM users WHERE id = $1',
+      'SELECT id, username, core_balance, is_admin, data_criacao FROM users WHERE id = $1',
       [id],
     );
   }
@@ -31,7 +31,7 @@ class User {
 
   static findPublicById(id) {
     return database.get(
-      'SELECT id, username, data_criacao FROM users WHERE id = $1',
+      'SELECT id, username, core_balance, is_admin, data_criacao FROM users WHERE id = $1',
       [id],
     );
   }
