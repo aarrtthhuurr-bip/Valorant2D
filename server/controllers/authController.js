@@ -260,19 +260,22 @@ async function googleLogin(request, response, next) {
     }
 
     const avatarUrl = trustedGoogleAvatar(payload.picture);
-    let user = await User.findByGoogleSub(googleSub);
-    if (user) {
-      user = await User.refreshGoogleProfile(user.id, { email, avatarUrl });
-    } else {
-      const existingEmail = await User.findByEmail(email);
-      if (existingEmail?.google_sub && existingEmail.google_sub !== googleSub) {
+    // O e-mail verificado é a primeira chave de reconciliação. Assim, uma
+    // conta local preexistente (incluindo Admin) recebe a identidade Google em
+    // vez de originar um segundo usuário.
+    const existingEmail = await User.findByEmail(email);
+    let user;
+    if (existingEmail) {
+      if (existingEmail.google_sub && existingEmail.google_sub !== googleSub) {
         securityAudit('google_login_identity_conflict', request, { userId: existingEmail.id, success: false });
         response.status(409).json({ error: 'Este e-mail já está vinculado a outra identidade.', code: 'GOOGLE_IDENTITY_CONFLICT' });
         return;
       }
-
-      if (existingEmail) {
-        user = await User.linkGoogleIdentity(existingEmail.id, { email, googleSub, avatarUrl });
+      user = await User.linkGoogleIdentity(existingEmail.id, { email, googleSub, avatarUrl });
+    } else {
+      const existingGoogleIdentity = await User.findByGoogleSub(googleSub);
+      if (existingGoogleIdentity) {
+        user = await User.refreshGoogleProfile(existingGoogleIdentity.id, { email, avatarUrl });
       } else {
         const username = await uniqueGoogleUsername(payload);
         try {
@@ -287,7 +290,7 @@ async function googleLogin(request, response, next) {
           // Uma autenticação simultânea pode ter criado a identidade entre a
           // consulta e o INSERT. Nesse caso, reutilizamos a conta já validada.
           if (error.code !== '23505') throw error;
-          user = await User.findByGoogleSub(googleSub) || await User.findByEmail(email);
+          user = await User.findByEmail(email) || await User.findByGoogleSub(googleSub);
           if (!user) throw error;
         }
       }

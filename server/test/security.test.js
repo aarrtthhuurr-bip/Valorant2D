@@ -162,6 +162,92 @@ test('login Google valida o ID token e cria conta sem saldo inicial', async () =
   }
 });
 
+test('login Google prioriza o e-mail e vincula a identidade à conta Admin existente', async () => {
+  const originals = {
+    verifyIdToken: authSecurity.googleClient.verifyIdToken,
+    findByGoogleSub: User.findByGoogleSub,
+    findByEmail: User.findByEmail,
+    linkGoogleIdentity: User.linkGoogleIdentity,
+    createGoogle: User.createGoogle,
+    sessionCreate: Session.create,
+  };
+  const adminEmail = 'arthurdealmeida124@gmail.com';
+  let linkedIdentity;
+  let googleSubLookups = 0;
+  let createdAccounts = 0;
+
+  authSecurity.googleClient.verifyIdToken = async () => ({
+    getPayload: () => ({
+      sub: 'google-admin-sub-456',
+      email: adminEmail,
+      email_verified: true,
+      name: 'Arthur A',
+      picture: 'https://lh3.googleusercontent.com/admin-avatar',
+    }),
+  });
+  User.findByEmail = async (email) => ({
+    id: 1,
+    username: 'Admin',
+    email,
+    google_sub: null,
+    auth_provider: 'local',
+    is_admin: true,
+    core_balance: 300,
+    core_earned_total: 0,
+    onboarding_completed: true,
+    menu_tour_completed: true,
+  });
+  User.findByGoogleSub = async () => {
+    googleSubLookups += 1;
+    return undefined;
+  };
+  User.linkGoogleIdentity = async (id, identity) => {
+    linkedIdentity = { id, ...identity };
+    return {
+      id,
+      username: 'Admin',
+      email: identity.email,
+      google_sub: identity.googleSub,
+      auth_provider: 'local+google',
+      avatar_url: identity.avatarUrl,
+      is_admin: true,
+      core_balance: 300,
+      core_earned_total: 0,
+      onboarding_completed: true,
+      menu_tour_completed: true,
+    };
+  };
+  User.createGoogle = async () => {
+    createdAccounts += 1;
+    return undefined;
+  };
+  Session.create = async () => ({ token: 'e'.repeat(64), expirationDate: new Date().toISOString() });
+
+  try {
+    const response = await request(app)
+      .post('/api/auth/google')
+      .set('Content-Type', 'application/json')
+      .send({ idToken: 'g'.repeat(200) })
+      .expect(200);
+
+    assert.equal(linkedIdentity.id, 1);
+    assert.equal(linkedIdentity.email, adminEmail);
+    assert.equal(linkedIdentity.googleSub, 'google-admin-sub-456');
+    assert.equal(googleSubLookups, 0);
+    assert.equal(createdAccounts, 0);
+    assert.equal(response.body.user.username, 'Admin');
+    assert.equal(response.body.user.isAdmin, true);
+    assert.equal(response.body.user.accountProvider, 'local+google');
+  } finally {
+    authSecurity.googleClient.verifyIdToken = originals.verifyIdToken;
+    User.findByGoogleSub = originals.findByGoogleSub;
+    User.findByEmail = originals.findByEmail;
+    User.linkGoogleIdentity = originals.linkGoogleIdentity;
+    User.createGoogle = originals.createGoogle;
+    Session.create = originals.sessionCreate;
+  }
+});
+
 test('perfil consolidado exige sessão e mantém estatísticas separadas por modo', async () => {
   const originals = { session: Session.findValid, profile: PlayerProfile.findByUserId };
   try {

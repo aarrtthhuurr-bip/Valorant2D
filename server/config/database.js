@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const { Pool } = require('pg');
 
 const databaseUrl = process.env.DATABASE_URL?.trim();
@@ -71,6 +73,48 @@ async function get(sql, params = []) {
 async function all(sql, params = []) {
   const result = await query(sql, params);
   return result.rows;
+}
+
+/**
+ * Executa migrações SQL versionadas exatamente uma vez. Todas participam da
+ * mesma transação da inicialização; uma falha desfaz o lote inteiro.
+ */
+async function applySqlMigrations(client) {
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      migration_name TEXT PRIMARY KEY,
+      applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  const migrationsDirectory = path.join(__dirname, '..', 'migrations');
+  if (!fs.existsSync(migrationsDirectory)) return;
+  const migrationFiles = fs.readdirSync(migrationsDirectory)
+    .filter((fileName) => fileName.endsWith('.sql'))
+    .sort();
+
+  for (const migrationName of migrationFiles) {
+    const existing = await client.query(
+      'SELECT 1 FROM schema_migrations WHERE migration_name = $1',
+      [migrationName],
+    );
+    if (existing.rowCount) continue;
+
+    const sql = fs.readFileSync(path.join(migrationsDirectory, migrationName), 'utf8');
+    const execution = await client.query(sql);
+    const lastResult = Array.isArray(execution) ? execution.at(-1) : execution;
+    // Migrações condicionais podem aguardar um registro necessário sem
+    // serem marcadas como concluídas prematuramente.
+    if (lastResult?.rows?.[0]?.migration_applied === false) {
+      console.warn(`[PostgreSQL] Migração pendente: ${migrationName}.`);
+      continue;
+    }
+    await client.query(
+      'INSERT INTO schema_migrations (migration_name) VALUES ($1)',
+      [migrationName],
+    );
+    console.log(`[PostgreSQL] Migração aplicada: ${migrationName}.`);
+  }
 }
 
 /**
@@ -422,6 +466,7 @@ async function initializeDatabase() {
     await client.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_leaderboard_match_submission ON leaderboard (match_submission_id) WHERE match_submission_id IS NOT NULL');
     await client.query('CREATE INDEX IF NOT EXISTS idx_user_skins_user ON user_skins (user_id, acquired_at DESC)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_daily_missions_user_date ON daily_mission_progress (user_id, mission_date)');
+    await applySqlMigrations(client);
     await client.query('COMMIT');
 
     console.log(`[PostgreSQL] Conectado a ${parsedDatabaseUrl.hostname}.`);
