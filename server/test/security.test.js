@@ -91,6 +91,14 @@ test('credenciais e respostas de segurança são normalizadas e limitadas', () =
   assert.match(authSecurity.validateCredentials("x' OR 1=1--", 'senha-forte-123'), /usuário/i);
   assert.match(authSecurity.validateCredentials('usuario_1', 'x'.repeat(73)), /senha/i);
   assert.equal(authSecurity.normalizeSecurityAnswer('  AÇUL  '), 'açul');
+  const newPlayer = authSecurity.publicUser({
+    id: 1,
+    username: 'novato',
+    onboarding_completed: false,
+    menu_tour_completed: false,
+  });
+  assert.equal(newPlayer.onboardingCompleted, false);
+  assert.equal(newPlayer.menuTourCompleted, false);
 });
 
 test('nome da conta administrativa não pode ser reivindicado pelo cadastro público', async () => {
@@ -105,6 +113,48 @@ test('nome da conta administrativa não pode ser reivindicado pelo cadastro púb
     })
     .expect(403);
   assert.equal(response.body.code, 'USERNAME_RESERVED');
+});
+
+test('progresso da apresentação é atualizado apenas para a sessão autenticada', async () => {
+  const originalSession = Session.findValid;
+  const originalComplete = User.completeOnboarding;
+  let saved;
+  User.completeOnboarding = async (userId, state) => {
+    saved = { userId, ...state };
+    return { onboarding_completed: true, menu_tour_completed: false };
+  };
+  try {
+    Session.findValid = async () => undefined;
+    const unauthorized = await request(app)
+      .put('/api/onboarding')
+      .set('Authorization', `Bearer ${'d'.repeat(64)}`)
+      .set('Content-Type', 'application/json')
+      .send({ welcomeCompleted: true })
+      .expect(401);
+    assert.equal(unauthorized.body.code, 'INVALID_SESSION');
+
+    Session.findValid = async () => ({ id: 14, username: 'novato' });
+    const response = await request(app)
+      .put('/api/onboarding')
+      .set('Authorization', `Bearer ${'e'.repeat(64)}`)
+      .set('Content-Type', 'application/json')
+      .send({ welcomeCompleted: true })
+      .expect(200);
+    assert.deepEqual(saved, { userId: 14, welcomeCompleted: true, menuTourCompleted: false });
+    assert.equal(response.body.onboardingCompleted, true);
+    assert.equal(response.body.menuTourCompleted, false);
+
+    const invalid = await request(app)
+      .put('/api/onboarding')
+      .set('Authorization', `Bearer ${'e'.repeat(64)}`)
+      .set('Content-Type', 'application/json')
+      .send({ welcomeCompleted: false })
+      .expect(400);
+    assert.equal(invalid.body.code, 'INVALID_ONBOARDING_STEP');
+  } finally {
+    Session.findValid = originalSession;
+    User.completeOnboarding = originalComplete;
+  }
 });
 
 test('login malicioso recebe resposta genérica sem consultar username inválido', async () => {

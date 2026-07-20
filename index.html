@@ -8,7 +8,7 @@
   <!-- Altere apenas este valor caso o endereço definitivo do Render mude. -->
   <meta name="valorant2d-api-url" content="https://valorant2d.onrender.com">
   <title>Valorant2D</title>
-  <link rel="stylesheet" href="./styles.css?v=20260720-core-rewards">
+  <link rel="stylesheet" href="./styles.css?v=20260720-onboarding">
   <script src="https://unpkg.com/lucide@1.24.0" integrity="sha384-mooE85Luwgx+AyykX7e90VcN8/QCFTSIwPuHLmvcsLVoA0en7lKYb9XlOzn5G2co" crossorigin="anonymous"></script>
   <link rel="shortcut icon" href="./assets/Favicon/favicon.ico" type="image/x-icon">
 </head>
@@ -271,7 +271,7 @@
         <div class="core-wallet main-core-wallet hidden" id="mainCoreWallet" aria-label="Saldo de Core">
           <span class="core-icon" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="#coreIcosahedron"></use></svg></span><strong id="mainCoreBalance">0</strong><em>C</em>
         </div>
-        <button type="button" class="menu-tutorial-shortcut hidden" id="menuTutorialButton" aria-label="Abrir tutorial">?</button>
+        <button type="button" class="menu-tutorial-shortcut hidden" id="menuTutorialButton" aria-label="Abrir ajuda do jogo">?</button>
         <div class="menu-card glass">
           <div class="account-summary hidden" id="accountSummary">
             <span class="account-status-dot" aria-hidden="true"></span>
@@ -430,6 +430,68 @@
           <strong>Validando sessão</strong>
         </div>
       </section>
+
+      <section class="welcome-overlay hidden" id="welcomeOverlay" aria-labelledby="welcomeTitle" aria-hidden="true">
+        <div class="welcome-background" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="welcome-panel" role="dialog" aria-modal="true">
+          <button type="button" class="welcome-close hidden" id="welcomeCloseButton" aria-label="Fechar apresentação">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg>
+          </button>
+          <header class="welcome-header">
+            <img src="./assets/Favicon/V2D_transparent.png" alt="" aria-hidden="true">
+            <div><span id="welcomeKicker">PRIMEIRO ACESSO</span><h1 id="welcomeTitle">BEM-VINDO, <b id="welcomePlayerName">AGENTE</b></h1><p id="welcomeSubtitle">Aqui está o essencial para começar.</p></div>
+          </header>
+          <div class="welcome-objectives" aria-label="Objetivo do modo clássico">
+            <article class="welcome-objective welcome-attack">
+              <span aria-hidden="true">A</span><div><small>ATAQUE</small><strong>Plante a Spike e proteja-a.</strong></div>
+            </article>
+            <article class="welcome-objective welcome-defense">
+              <span aria-hidden="true">D</span><div><small>DEFESA</small><strong>Impeça o plant ou desarme a Spike.</strong></div>
+            </article>
+            <article class="welcome-objective welcome-victory">
+              <span aria-hidden="true">9</span><div><small>VITÓRIA</small><strong>Faça 9 pontos antes do outro time.</strong></div>
+            </article>
+          </div>
+          <div class="welcome-controls" aria-label="Controles essenciais">
+            <span><kbd>WASD</kbd> MOVER</span><span><kbd>MOUSE</kbd> MIRAR</span>
+            <span><kbd>F</kbd> OBJETIVO</span><span><kbd>E</kbd> HABILIDADE</span>
+            <span><kbd>Q</kbd> ULTIMATE</span><span><kbd>B</kbd> LOJA</span>
+          </div>
+          <p class="welcome-feedback" id="welcomeFeedback" role="status" aria-live="polite"></p>
+          <footer class="welcome-actions">
+            <button type="button" class="welcome-primary" id="welcomeTutorialButton">INICIAR TUTORIAL</button>
+            <button type="button" class="welcome-secondary" id="welcomeMenuButton">IR PARA O MENU</button>
+          </footer>
+          <p class="welcome-note">Esta tela continua disponível no botão ? do menu.</p>
+        </div>
+      </section>
+
+      <section class="mode-info-overlay hidden" id="modeInfoOverlay" aria-labelledby="modeInfoTitle" aria-hidden="true">
+        <div class="mode-info-panel" role="dialog" aria-modal="true">
+          <button type="button" class="mode-info-close" id="modeInfoCloseButton" aria-label="Fechar informações do modo">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg>
+          </button>
+          <header><span class="mode-info-icon" id="modeInfoIcon" aria-hidden="true"></span><div><small id="modeInfoTag">MODO</small><h2 id="modeInfoTitle">DEFAULT</h2></div></header>
+          <div class="mode-info-sections">
+            <article><small>OBJETIVO</small><p id="modeInfoObjective"></p></article>
+            <article><small>COMO JOGAR</small><p id="modeInfoHow"></p></article>
+            <article><small id="modeInfoOutcomeLabel">VITÓRIA</small><p id="modeInfoOutcome"></p></article>
+          </div>
+          <p class="mode-info-note" id="modeInfoNote"></p>
+          <button type="button" class="mode-info-confirm" id="modeInfoConfirmButton">ENTENDI</button>
+        </div>
+      </section>
+
+      <div class="menu-tour-layer hidden" id="menuTourLayer" aria-hidden="true">
+        <div class="menu-tour-spotlight" id="menuTourSpotlight"></div>
+        <section class="menu-tour-bubble" id="menuTourBubble" role="dialog" aria-modal="true" aria-labelledby="menuTourTitle">
+          <span class="menu-tour-step" id="menuTourStep">1/3</span>
+          <h2 id="menuTourTitle">JOGAR</h2>
+          <p id="menuTourText">Escolha seu modo.</p>
+          <p class="menu-tour-feedback" id="menuTourFeedback" role="status" aria-live="polite"></p>
+          <div><button type="button" class="menu-tour-skip" id="menuTourSkipButton">PULAR</button><button type="button" class="menu-tour-next" id="menuTourNextButton">PRÓXIMO</button></div>
+        </section>
+      </div>
       </section>
 
       <div class="message glass" id="message">
@@ -439,6 +501,6 @@
     </div>
   </main>
 
-  <script src="./game.js?v=20260720-core-rewards"></script>
+  <script src="./game.js?v=20260720-onboarding"></script>
 </body>
 </html>

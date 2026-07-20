@@ -9,6 +9,7 @@ const leaderboardRoutes = require('./routes/leaderboardRoutes');
 const statisticsRoutes = require('./routes/statisticsRoutes');
 const preferencesRoutes = require('./routes/preferencesRoutes');
 const commerceRoutes = require('./routes/commerceRoutes');
+const onboardingRoutes = require('./routes/onboardingRoutes');
 const {
   globalLimiter,
   requestId,
@@ -66,6 +67,7 @@ app.use('/api/statistics', statisticsRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/preferences', preferencesRoutes);
 app.use('/api/commerce', commerceRoutes);
+app.use('/api/onboarding', onboardingRoutes);
 
 app.use((request, response) => {
   response.status(404).json({ erro: 'Rota não encontrada.' });

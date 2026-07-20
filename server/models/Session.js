@@ -52,7 +52,8 @@ class Session {
     const session = await database.get(
       `SELECT sessions.id AS session_id, sessions.data_expiracao,
               users.id, users.username, users.data_criacao,
-              users.core_balance, users.is_admin
+              users.core_balance, users.is_admin,
+              users.onboarding_completed, users.menu_tour_completed
        FROM sessions
        INNER JOIN users ON users.id = sessions.user_id
        WHERE sessions.token_hash = $1

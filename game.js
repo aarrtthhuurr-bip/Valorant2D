@@ -169,20 +169,47 @@ const ui = {
   commerceCloseButton: document.getElementById("commerceCloseButton"),
   storeCoreBalance: document.getElementById("storeCoreBalance"),
   easterEggCodes: document.getElementById("easterEggCodes"),
+  welcomeOverlay: document.getElementById("welcomeOverlay"),
+  welcomeKicker: document.getElementById("welcomeKicker"),
+  welcomePlayerName: document.getElementById("welcomePlayerName"),
+  welcomeSubtitle: document.getElementById("welcomeSubtitle"),
+  welcomeFeedback: document.getElementById("welcomeFeedback"),
+  welcomeTutorialButton: document.getElementById("welcomeTutorialButton"),
+  welcomeMenuButton: document.getElementById("welcomeMenuButton"),
+  welcomeCloseButton: document.getElementById("welcomeCloseButton"),
+  modeInfoOverlay: document.getElementById("modeInfoOverlay"),
+  modeInfoCloseButton: document.getElementById("modeInfoCloseButton"),
+  modeInfoConfirmButton: document.getElementById("modeInfoConfirmButton"),
+  modeInfoIcon: document.getElementById("modeInfoIcon"),
+  modeInfoTag: document.getElementById("modeInfoTag"),
+  modeInfoTitle: document.getElementById("modeInfoTitle"),
+  modeInfoObjective: document.getElementById("modeInfoObjective"),
+  modeInfoHow: document.getElementById("modeInfoHow"),
+  modeInfoOutcomeLabel: document.getElementById("modeInfoOutcomeLabel"),
+  modeInfoOutcome: document.getElementById("modeInfoOutcome"),
+  modeInfoNote: document.getElementById("modeInfoNote"),
+  menuTourLayer: document.getElementById("menuTourLayer"),
+  menuTourSpotlight: document.getElementById("menuTourSpotlight"),
+  menuTourBubble: document.getElementById("menuTourBubble"),
+  menuTourStep: document.getElementById("menuTourStep"),
+  menuTourTitle: document.getElementById("menuTourTitle"),
+  menuTourText: document.getElementById("menuTourText"),
+  menuTourFeedback: document.getElementById("menuTourFeedback"),
+  menuTourSkipButton: document.getElementById("menuTourSkipButton"),
+  menuTourNextButton: document.getElementById("menuTourNextButton"),
 };
 
 /**
- * A tela de autenticação precisa acompanhar a viewport do navegador, não a
- * transformação aplicada ao Canvas de 1280 x 720. Em telas estreitas, mantê-la
- * dentro de gameViewport reduziria o formulário junto com o jogo.
+ * Telas de conta e ajuda acompanham a viewport do navegador, não a transformação
+ * aplicada ao Canvas de 1280 x 720. Isso preserva a leitura em telas estreitas.
  */
-function mountAuthenticationAtViewportRoot() {
-  if (ui.authOverlay && ui.gameRoot && ui.authOverlay.parentElement !== ui.gameRoot) {
-    ui.gameRoot.appendChild(ui.authOverlay);
+function mountViewportOverlays() {
+  for (const overlay of [ui.authOverlay, ui.welcomeOverlay, ui.modeInfoOverlay, ui.menuTourLayer]) {
+    if (overlay && ui.gameRoot && overlay.parentElement !== ui.gameRoot) ui.gameRoot.appendChild(overlay);
   }
 }
 
-mountAuthenticationAtViewportRoot();
+mountViewportOverlays();
 
 const AUTH_STORAGE_KEY = "valorant2d-auth-session";
 const configuredApiUrl = document
@@ -206,6 +233,11 @@ let currentProfile = null;
 let authMode = "login";
 let recoveryQuestionLoaded = false;
 let passwordRecoveryToken = "";
+let welcomeFirstAccess = false;
+let welcomeBusy = false;
+let menuTourIndex = 0;
+let menuTourTimer = 0;
+let modeInfoReturnFocus = null;
 
 function readStoredSession() {
   try {
@@ -273,6 +305,94 @@ async function requestApi(path, options = {}) {
   } finally {
     window.clearTimeout(timeoutId);
   }
+}
+
+function mergeCurrentProfile(patch) {
+  if (!currentProfile) return;
+  currentProfile = { ...currentProfile, ...patch };
+  const stored = readStoredSession();
+  if (stored?.token) {
+    saveSession({
+      token: stored.token,
+      expiresAt: stored.expiresAt,
+      user: { ...(stored.user || {}), ...patch },
+    });
+  }
+}
+
+async function persistOnboardingProgress(changes) {
+  if (currentProfile?.isGuest) {
+    mergeCurrentProfile(changes);
+    return changes;
+  }
+  const session = readStoredSession();
+  if (!session?.token) throw new Error("Sessão indisponível. Entre novamente para continuar.");
+  const payload = await requestApi("/api/onboarding", {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${session.token}` },
+    body: JSON.stringify(changes),
+  });
+  mergeCurrentProfile({
+    onboardingCompleted: Boolean(payload.onboardingCompleted),
+    menuTourCompleted: Boolean(payload.menuTourCompleted),
+  });
+  return payload;
+}
+
+function setWelcomeBusy(isBusy) {
+  welcomeBusy = isBusy;
+  if (ui.welcomeTutorialButton) ui.welcomeTutorialButton.disabled = isBusy;
+  if (ui.welcomeMenuButton) ui.welcomeMenuButton.disabled = isBusy;
+  if (ui.welcomeCloseButton) ui.welcomeCloseButton.disabled = isBusy;
+}
+
+function showWelcomeScreen({ firstAccess = false } = {}) {
+  window.clearTimeout(menuTourTimer);
+  hideMenuTour();
+  closeModeInfo();
+  welcomeFirstAccess = firstAccess;
+  if (ui.welcomePlayerName) ui.welcomePlayerName.textContent = currentProfile?.username || "AGENTE";
+  if (ui.welcomeKicker) ui.welcomeKicker.textContent = firstAccess ? "PRIMEIRO ACESSO" : "CENTRAL DO AGENTE";
+  if (ui.welcomeSubtitle) ui.welcomeSubtitle.textContent = firstAccess
+    ? "Aqui está o essencial para começar."
+    : "Revise as regras ou entre no treinamento.";
+  if (ui.welcomeFeedback) ui.welcomeFeedback.textContent = "";
+  ui.welcomeCloseButton?.classList.toggle("hidden", firstAccess);
+  ui.welcomeOverlay?.classList.remove("hidden");
+  ui.welcomeOverlay?.setAttribute("aria-hidden", "false");
+  setWelcomeBusy(false);
+  window.setTimeout(() => ui.welcomeTutorialButton?.focus(), 30);
+}
+
+function hideWelcomeScreen() {
+  ui.welcomeOverlay?.classList.add("hidden");
+  ui.welcomeOverlay?.setAttribute("aria-hidden", "true");
+  welcomeFirstAccess = false;
+}
+
+async function leaveWelcomeScreen(destination) {
+  if (welcomeBusy) return;
+  setWelcomeBusy(true);
+  if (ui.welcomeFeedback) ui.welcomeFeedback.textContent = currentProfile?.onboardingCompleted === false
+    ? "Salvando seu primeiro acesso..."
+    : "";
+  try {
+    if (currentProfile && !currentProfile.isGuest && currentProfile.onboardingCompleted === false) {
+      await persistOnboardingProgress({ welcomeCompleted: true });
+    }
+    hideWelcomeScreen();
+    if (destination === "tutorial") startTutorialMode();
+    else showMainMenu();
+  } catch (error) {
+    if (ui.welcomeFeedback) ui.welcomeFeedback.textContent = error.message;
+    setWelcomeBusy(false);
+  }
+}
+
+function closeWelcomeReview() {
+  if (welcomeFirstAccess || welcomeBusy) return;
+  hideWelcomeScreen();
+  showMainMenu();
 }
 
 const commerceState = { tab: "skins", profile: null, weaponId: "pistol", busy: false };
@@ -466,6 +586,7 @@ function redeemCommerceCode(code) { return commerceMutation("/api/commerce/codes
 function createCommerceCode(code, coreAmount) { return commerceMutation("/api/commerce/admin/codes", { method: "POST", body: JSON.stringify({ code, coreAmount }) }, (data) => `Código ${data.code.code_display} criado com ${data.code.core_amount} C.`); }
 
 async function openCommerceStore() {
+  hideMenuTour();
   ui.mainCoreWallet?.classList.add("hidden");
   ui.menuTutorialButton?.classList.add("hidden");
   ui.menuOverlay?.classList.add("hidden");
@@ -554,6 +675,8 @@ function enterGameWithProfile(profile) {
   game.playerName = profile.username;
   updateAccountSummary(profile);
   showMainMenu();
+  const needsWelcome = !profile.isGuest && profile.onboardingCompleted === false;
+  if (needsWelcome) window.setTimeout(() => showWelcomeScreen({ firstAccess: true }), 340);
   if (!profile.isGuest) {
     void synchronizePreferencesFromServer();
     void refreshCommerceProfile().then(() => {
@@ -734,6 +857,9 @@ async function logoutCurrentProfile() {
 
   clearStoredSession();
   currentProfile = null;
+  hideWelcomeScreen();
+  hideMenuTour();
+  closeModeInfo();
   ui.accountSummary?.classList.add("hidden");
   ui.menuOverlay?.classList.add("hidden");
   ui.authPassword.value = "";
@@ -8732,7 +8858,42 @@ function loadSandboxConfig() {
   }
 }
 
+function activeGuidanceDialog() {
+  if (!ui.modeInfoOverlay?.classList.contains("hidden")) return ui.modeInfoOverlay.querySelector(".mode-info-panel");
+  if (!ui.welcomeOverlay?.classList.contains("hidden")) return ui.welcomeOverlay.querySelector(".welcome-panel");
+  if (!ui.menuTourLayer?.classList.contains("hidden")) return ui.menuTourBubble;
+  return null;
+}
+
+function trapGuidanceFocus(event, dialog) {
+  if (event.key !== "Tab" || !dialog) return;
+  const focusable = [...dialog.querySelectorAll('button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])')]
+    .filter((element) => !element.classList.contains("hidden"));
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
 function handleEscape() {
+  if (!ui.modeInfoOverlay?.classList.contains("hidden")) {
+    closeModeInfo();
+    return;
+  }
+  if (!ui.welcomeOverlay?.classList.contains("hidden")) {
+    closeWelcomeReview();
+    return;
+  }
+  if (!ui.menuTourLayer?.classList.contains("hidden")) {
+    void finishMenuTour();
+    return;
+  }
   if (game.menuState === "commerce") {
     closeCommerceStore();
     return;
@@ -8788,6 +8949,7 @@ function canOpenPauseMenu() {
 
 function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
   hidePauseOverlay();
+  if (state !== "main") hideMenuTour();
   if (ui.menuKicker) ui.menuKicker.textContent = kicker;
   if (ui.menuTitle) ui.menuTitle.textContent = title;
   if (ui.menuText) ui.menuText.textContent = "";
@@ -8798,6 +8960,7 @@ function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
     const button = document.createElement("button");
     button.className = "menu-button";
     button.style.setProperty("--menu-index", index);
+    if (item.onboardingTarget) button.dataset.onboardingTarget = item.onboardingTarget;
     const isBack = item.back || item.label.toLowerCase().includes("voltar");
     if (isBack) {
       button.classList.add("menu-back", "icon-only");
@@ -8874,6 +9037,99 @@ function attachButtonFeedback(button) {
   button.addEventListener("animationend", (event) => {
     if (event.animationName === "buttonShockwave") button.classList.remove("click-feedback");
   });
+}
+
+const MENU_TOUR_STEPS = [
+  { target: '[data-onboarding-target="play"]', title: "JOGAR", text: "Escolha seu modo e entre em combate." },
+  { target: '[data-onboarding-target="store"]', title: "LOJA", text: "Use Core para adquirir novas skins." },
+  { target: "#menuTutorialButton", title: "AJUDA", text: "Consulte as regras ou inicie o tutorial." },
+];
+
+function hideMenuTour() {
+  window.clearTimeout(menuTourTimer);
+  ui.menuTourLayer?.classList.add("hidden");
+  ui.menuTourLayer?.setAttribute("aria-hidden", "true");
+  if (ui.menuTourFeedback) ui.menuTourFeedback.textContent = "";
+}
+
+function positionMenuTour(target) {
+  if (!target || !ui.menuTourSpotlight || !ui.menuTourBubble) return;
+  const rect = target.getBoundingClientRect();
+  const padding = 6;
+  Object.assign(ui.menuTourSpotlight.style, {
+    left: `${Math.max(4, rect.left - padding)}px`,
+    top: `${Math.max(4, rect.top - padding)}px`,
+    width: `${Math.max(24, rect.width + padding * 2)}px`,
+    height: `${Math.max(24, rect.height + padding * 2)}px`,
+  });
+
+  const bubbleWidth = Math.min(280, window.innerWidth - 24);
+  const bubbleHeight = ui.menuTourBubble.offsetHeight || 170;
+  const gap = 18;
+  let left = rect.right + gap;
+  let top = rect.top + rect.height / 2 - bubbleHeight / 2;
+  if (left + bubbleWidth > window.innerWidth - 12) left = rect.left - bubbleWidth - gap;
+  if (left < 12) {
+    left = Math.max(12, Math.min(window.innerWidth - bubbleWidth - 12, rect.left + rect.width / 2 - bubbleWidth / 2));
+    top = rect.bottom + gap;
+    if (top + bubbleHeight > window.innerHeight - 12) top = rect.top - bubbleHeight - gap;
+  }
+  top = Math.max(12, Math.min(window.innerHeight - bubbleHeight - 12, top));
+  Object.assign(ui.menuTourBubble.style, { left: `${left}px`, top: `${top}px` });
+}
+
+function renderMenuTourStep() {
+  const step = MENU_TOUR_STEPS[menuTourIndex];
+  if (!step || !ui.menuTourLayer) return;
+  const target = document.querySelector(step.target);
+  if (!target) {
+    hideMenuTour();
+    return;
+  }
+  if (ui.menuTourStep) ui.menuTourStep.textContent = `${menuTourIndex + 1}/${MENU_TOUR_STEPS.length}`;
+  if (ui.menuTourTitle) ui.menuTourTitle.textContent = step.title;
+  if (ui.menuTourText) ui.menuTourText.textContent = step.text;
+  if (ui.menuTourNextButton) ui.menuTourNextButton.textContent = menuTourIndex === MENU_TOUR_STEPS.length - 1 ? "CONCLUIR" : "PRÓXIMO";
+  if (ui.menuTourFeedback) ui.menuTourFeedback.textContent = "";
+  positionMenuTour(target);
+}
+
+function startMenuTour() {
+  if (game.menuState !== "main" || currentProfile?.isGuest || currentProfile?.menuTourCompleted !== false) return;
+  menuTourIndex = 0;
+  ui.menuTourLayer?.classList.remove("hidden");
+  ui.menuTourLayer?.setAttribute("aria-hidden", "false");
+  renderMenuTourStep();
+  ui.menuTourNextButton?.focus();
+}
+
+function maybeScheduleMenuTour() {
+  window.clearTimeout(menuTourTimer);
+  if (game.menuState !== "main" || currentProfile?.isGuest
+    || currentProfile?.onboardingCompleted !== true || currentProfile?.menuTourCompleted !== false
+    || !ui.welcomeOverlay?.classList.contains("hidden")) return;
+  menuTourTimer = window.setTimeout(startMenuTour, 480);
+}
+
+async function finishMenuTour() {
+  if (ui.menuTourFeedback) ui.menuTourFeedback.textContent = "Salvando...";
+  try {
+    if (!currentProfile?.isGuest && currentProfile?.menuTourCompleted === false) {
+      await persistOnboardingProgress({ menuTourCompleted: true });
+    }
+    hideMenuTour();
+  } catch (error) {
+    if (ui.menuTourFeedback) ui.menuTourFeedback.textContent = error.message;
+  }
+}
+
+function advanceMenuTour() {
+  if (menuTourIndex >= MENU_TOUR_STEPS.length - 1) {
+    void finishMenuTour();
+    return;
+  }
+  menuTourIndex += 1;
+  renderMenuTourStep();
 }
 
 function hideMenuOverlay() {
@@ -9225,12 +9481,13 @@ function showMainMenu() {
   game.pauseReturnState = null;
   fullReset();
   setMenu("Valorant 2D", "", [
-    { label: "JOGAR", icon: "gamepad", action: showModeSelect },
+    { label: "JOGAR", icon: "gamepad", action: showModeSelect, onboardingTarget: "play" },
     { label: "OPÇÕES", icon: "tools", action: showOptionsMenu },
-    { label: "LOJA", icon: "store", action: openCommerceStore },
+    { label: "LOJA", icon: "store", action: openCommerceStore, onboardingTarget: "store" },
     { label: "ESTATÍSTICAS", icon: "stats", action: showStatisticsMenu },
   ], "MENU", "main");
   updateCoreBalances(commerceState.profile?.coreBalance || currentProfile?.coreBalance || 0);
+  maybeScheduleMenuTour();
 }
 
 const PLAY_MODE_OPTIONS = [
@@ -9239,21 +9496,50 @@ const PLAY_MODE_OPTIONS = [
     name: "Default",
     tag: "CLÁSSICO",
     description: "Combate tático e objetivo de Spike.",
+    objective: "Plante a Spike no ataque ou impeça o objetivo na defesa.",
+    howToPlay: "Compre equipamentos, use cobertura e jogue em equipe a cada round.",
+    outcome: "O primeiro time a conquistar 9 pontos vence a partida.",
+    outcomeLabel: "VITÓRIA",
+    note: "Partidas concedem Core e registram sua pontuação global.",
   },
   {
     id: "blackout",
     name: "Blackout",
     tag: "VISÃO LIMITADA",
     description: "Visão restrita e leitura de campo.",
+    objective: "Cumpra o mesmo objetivo de Spike do modo clássico.",
+    howToPlay: "A visão é limitada. Observe sons, sombras e movimentação próxima.",
+    outcome: "Conquiste 9 pontos antes do time adversário.",
+    outcomeLabel: "VITÓRIA",
+    note: "O risco maior concede uma faixa superior de recompensa em Core.",
   },
   {
     id: "outbreak",
     name: "Outbreak",
     tag: "SOBREVIVÊNCIA",
     description: "Sobrevivência em ondas infinitas.",
+    objective: "Sobreviva ao maior número possível de waves inimigas.",
+    howToPlay: "Use med-kits, airdrops, aliados e a loja aberta a cada 10 waves.",
+    outcome: "Sua maior wave define sua posição no ranking.",
+    outcomeLabel: "PROGRESSÃO",
+    note: "Cada wave alcançada concede exatamente 1 Core ao fim da partida.",
   },
-  { id: "sandbox", name: "Sandbox", tag: "LABORATÓRIO", description: "Teste livre de armas, bots e física." },
-  { id: "training", name: "Treino", tag: "AQUECIMENTO", description: "Pratique movimentação, mira e combate." },
+  {
+    id: "sandbox", name: "Sandbox", tag: "LABORATÓRIO", description: "Teste livre de armas, bots e física.",
+    objective: "Experimente livremente os sistemas do jogo.",
+    howToPlay: "Crie bots, altere regras, posicione itens e teste qualquer arma.",
+    outcome: "Não há derrota, limite de tempo ou condição de vitória.",
+    outcomeLabel: "AMBIENTE LIVRE",
+    note: "O Sandbox não concede Core nem altera estatísticas globais.",
+  },
+  {
+    id: "training", name: "Treino", tag: "AQUECIMENTO", description: "Pratique movimentação, mira e combate.",
+    objective: "Aprimore sua mira e movimentação contra alvos de treino.",
+    howToPlay: "Escolha um agente, teste armas e enfrente alvos com respawn.",
+    outcome: "Treine pelo tempo que desejar e volte ao menu quando terminar.",
+    outcomeLabel: "PRÁTICA",
+    note: "O Treino não concede Core nem registra pontuação global.",
+  },
 ];
 
 function playModeIconSvg(modeId) {
@@ -9265,6 +9551,31 @@ function playModeIconSvg(modeId) {
     training: '<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12"></circle><circle cx="16" cy="16" r="6"></circle><path d="M16 2v7M16 23v7M2 16h7M23 16h7"></path></svg>',
   };
   return icons[modeId] || icons.default;
+}
+
+function openModeInfo(option, returnFocus) {
+  if (!option || !ui.modeInfoOverlay) return;
+  modeInfoReturnFocus = returnFocus || null;
+  if (ui.modeInfoIcon) ui.modeInfoIcon.innerHTML = playModeIconSvg(option.id);
+  if (ui.modeInfoTag) ui.modeInfoTag.textContent = option.tag;
+  if (ui.modeInfoTitle) ui.modeInfoTitle.textContent = option.name;
+  if (ui.modeInfoObjective) ui.modeInfoObjective.textContent = option.objective;
+  if (ui.modeInfoHow) ui.modeInfoHow.textContent = option.howToPlay;
+  if (ui.modeInfoOutcomeLabel) ui.modeInfoOutcomeLabel.textContent = option.outcomeLabel;
+  if (ui.modeInfoOutcome) ui.modeInfoOutcome.textContent = option.outcome;
+  if (ui.modeInfoNote) ui.modeInfoNote.textContent = option.note;
+  ui.modeInfoOverlay.classList.remove("hidden");
+  ui.modeInfoOverlay.setAttribute("aria-hidden", "false");
+  window.setTimeout(() => ui.modeInfoCloseButton?.focus(), 25);
+}
+
+function closeModeInfo() {
+  if (!ui.modeInfoOverlay || ui.modeInfoOverlay.classList.contains("hidden")) return;
+  ui.modeInfoOverlay.classList.add("hidden");
+  ui.modeInfoOverlay.setAttribute("aria-hidden", "true");
+  const target = modeInfoReturnFocus;
+  modeInfoReturnFocus = null;
+  target?.focus?.();
 }
 
 function showModeSelect(immediate = false) {
@@ -9293,16 +9604,22 @@ function renderModeSelect() {
     </footer>`;
   const grid = ui.menuButtons.querySelector(".mode-select-grid");
   PLAY_MODE_OPTIONS.forEach((option, index) => {
-    const card = document.createElement("button");
-    card.type = "button";
+    const card = document.createElement("article");
     card.className = `mode-card mode-card-${option.id}`;
     card.innerHTML = `
-      <span class="mode-card-index" aria-hidden="true">0${index + 1}</span>
-      <span class="mode-card-icon" aria-hidden="true">${playModeIconSvg(option.id)}</span>
-      <span class="mode-card-copy"><small>${option.tag}</small><strong>${option.name}</strong><em>${option.description}</em></span>
-      <span class="mode-card-arrow" aria-hidden="true">›</span>`;
-    card.addEventListener("click", () => selectPlayMode(option.id));
-    attachButtonFeedback(card);
+      <button type="button" class="mode-card-select" aria-label="Jogar ${option.name}">
+        <span class="mode-card-index" aria-hidden="true">0${index + 1}</span>
+        <span class="mode-card-icon" aria-hidden="true">${playModeIconSvg(option.id)}</span>
+        <span class="mode-card-copy"><small>${option.tag}</small><strong>${option.name}</strong><em>${option.description}</em></span>
+        <span class="mode-card-arrow" aria-hidden="true">›</span>
+      </button>
+      <button type="button" class="mode-info-button" aria-label="Como jogar ${option.name}" title="Como jogar ${option.name}">i</button>`;
+    const selectButton = card.querySelector(".mode-card-select");
+    const infoButton = card.querySelector(".mode-info-button");
+    selectButton.addEventListener("click", () => selectPlayMode(option.id));
+    infoButton.addEventListener("click", () => openModeInfo(option, infoButton));
+    attachButtonFeedback(selectButton);
+    attachButtonFeedback(infoButton);
     grid.appendChild(card);
   });
   const backButton = ui.menuButtons.querySelector(".mode-select-back");
@@ -11077,6 +11394,12 @@ loop.last = performance.now();
 // Ouvintes de eventos com checagem de seguranca contra valores nulos.
 if (window) window.addEventListener("keydown", (event) => {
   initAudio();
+  const guidanceDialog = activeGuidanceDialog();
+  if (guidanceDialog) {
+    trapGuidanceFocus(event, guidanceDialog);
+    if (event.key === "Escape") handleEscape();
+    return;
+  }
   if (handleOptionsKeyCapture(event)) return;
   if (event.key === "Tab" && game.menuState === "none" && ["buy", "action", "ended"].includes(game.phase) && ui.shop?.classList?.contains("hidden")) {
     event.preventDefault();
@@ -11119,7 +11442,10 @@ if (window) window.addEventListener("keyup", (event) => {
   keys.delete(event.key.toLowerCase());
 });
 
-if (window) window.addEventListener("resize", escalarViewport);
+if (window) window.addEventListener("resize", () => {
+  escalarViewport();
+  if (!ui.menuTourLayer?.classList.contains("hidden")) renderMenuTourStep();
+});
 if (document) document.addEventListener("fullscreenchange", escalarViewport);
 
 if (canvas) canvas.addEventListener("mousemove", (event) => {
@@ -11328,7 +11654,17 @@ document.querySelectorAll("[data-password-toggle]").forEach((button) => {
 });
 ui.guestButton?.addEventListener("click", enterAsGuest);
 ui.logoutButton?.addEventListener("click", logoutCurrentProfile);
-ui.menuTutorialButton?.addEventListener("click", startTutorialMode);
+ui.menuTutorialButton?.addEventListener("click", () => showWelcomeScreen({ firstAccess: false }));
+ui.welcomeTutorialButton?.addEventListener("click", () => void leaveWelcomeScreen("tutorial"));
+ui.welcomeMenuButton?.addEventListener("click", () => void leaveWelcomeScreen("menu"));
+ui.welcomeCloseButton?.addEventListener("click", closeWelcomeReview);
+ui.modeInfoCloseButton?.addEventListener("click", closeModeInfo);
+ui.modeInfoConfirmButton?.addEventListener("click", closeModeInfo);
+ui.modeInfoOverlay?.addEventListener("pointerdown", (event) => {
+  if (event.target === ui.modeInfoOverlay) closeModeInfo();
+});
+ui.menuTourNextButton?.addEventListener("click", advanceMenuTour);
+ui.menuTourSkipButton?.addEventListener("click", () => void finishMenuTour());
 ui.commerceCloseButton?.addEventListener("click", closeCommerceStore);
 ui.commerceTabs?.querySelectorAll("[data-commerce-tab]").forEach((button) => {
   button.addEventListener("click", () => {

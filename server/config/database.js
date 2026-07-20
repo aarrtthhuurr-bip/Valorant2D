@@ -97,6 +97,8 @@ async function initializeDatabase() {
         preferencias_json JSONB NOT NULL DEFAULT '{}'::jsonb,
         core_balance INTEGER NOT NULL DEFAULT 300 CHECK (core_balance >= 0),
         is_admin BOOLEAN NOT NULL DEFAULT FALSE,
+        onboarding_completed BOOLEAN NOT NULL DEFAULT TRUE,
+        menu_tour_completed BOOLEAN NOT NULL DEFAULT TRUE,
         data_criacao TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -116,6 +118,9 @@ async function initializeDatabase() {
       'ADD COLUMN IF NOT EXISTS ultimo_login TIMESTAMPTZ',
       'ADD COLUMN IF NOT EXISTS core_balance INTEGER NOT NULL DEFAULT 300',
       'ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE',
+      // TRUE preserva o fluxo das contas anteriores a esta funcionalidade.
+      'ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN NOT NULL DEFAULT TRUE',
+      'ADD COLUMN IF NOT EXISTS menu_tour_completed BOOLEAN NOT NULL DEFAULT TRUE',
     ];
     for (const migration of userMigrations) {
       await client.query(`ALTER TABLE users ${migration}`);

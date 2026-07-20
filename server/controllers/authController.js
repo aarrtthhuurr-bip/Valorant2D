@@ -27,6 +27,8 @@ function publicUser(user) {
     username: user.username,
     coreBalance: Number(user.core_balance) || 0,
     isAdmin: Boolean(user.is_admin),
+    onboardingCompleted: Boolean(user.onboarding_completed),
+    menuTourCompleted: Boolean(user.menu_tour_completed),
     createdAt: user.data_criacao,
   };
 }
@@ -285,5 +287,5 @@ module.exports = {
   register,
   resetPassword,
   verify,
-  _test: { hashSecret, normalizeSecurityAnswer, validateCredentials, verifySecret },
+  _test: { hashSecret, normalizeSecurityAnswer, publicUser, validateCredentials, verifySecret },
 };

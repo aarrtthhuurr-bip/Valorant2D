@@ -8,16 +8,20 @@ class User {
   static async create(username, senhaHash, perguntaSeguranca, respostaSegurancaHash) {
     return database.get(
       `INSERT INTO users
-       (username, senha_hash, pergunta_seguranca, resposta_seguranca)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, username, core_balance, is_admin, data_criacao`,
+       (username, senha_hash, pergunta_seguranca, resposta_seguranca,
+        onboarding_completed, menu_tour_completed)
+       VALUES ($1, $2, $3, $4, FALSE, FALSE)
+       RETURNING id, username, core_balance, is_admin,
+                 onboarding_completed, menu_tour_completed, data_criacao`,
       [username, senhaHash, perguntaSeguranca, respostaSegurancaHash],
     );
   }
 
   static findById(id) {
     return database.get(
-      'SELECT id, username, core_balance, is_admin, data_criacao FROM users WHERE id = $1',
+      `SELECT id, username, core_balance, is_admin,
+              onboarding_completed, menu_tour_completed, data_criacao
+       FROM users WHERE id = $1`,
       [id],
     );
   }
@@ -31,13 +35,30 @@ class User {
 
   static findPublicById(id) {
     return database.get(
-      'SELECT id, username, core_balance, is_admin, data_criacao FROM users WHERE id = $1',
+      `SELECT id, username, core_balance, is_admin,
+              onboarding_completed, menu_tour_completed, data_criacao
+       FROM users WHERE id = $1`,
       [id],
     );
   }
 
   static updatePassword(id, senhaHash) {
     return database.run('UPDATE users SET senha_hash = $1 WHERE id = $2', [senhaHash, id]);
+  }
+
+  /**
+   * O estado só avança. Uma requisição repetida nunca reabre nem regride
+   * etapas concluídas, tornando o endpoint seguro e idempotente.
+   */
+  static completeOnboarding(id, { welcomeCompleted, menuTourCompleted }) {
+    return database.get(
+      `UPDATE users
+       SET onboarding_completed = onboarding_completed OR $2,
+           menu_tour_completed = menu_tour_completed OR $3
+       WHERE id = $1
+       RETURNING onboarding_completed, menu_tour_completed`,
+      [id, Boolean(welcomeCompleted), Boolean(menuTourCompleted)],
+    );
   }
 
   static registerFailedLogin(id) {
