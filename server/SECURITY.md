@@ -14,6 +14,10 @@
   verificações de duração, reutilização, abates e pontuação plausível.
 - Pontuações da leaderboard usam o nome da sessão autenticada, consomem o mesmo
   comprovante descartável e são gravadas junto das estatísticas em uma transação.
+- Recompensas de Core são calculadas no servidor e creditadas na mesma transação
+  que consome o comprovante, impedindo resgates repetidos por recarregamento.
+- Compras, missões e códigos promocionais bloqueiam ou validam os registros no
+  PostgreSQL; o navegador nunca informa o saldo final de uma transação.
 - Logs de auditoria não incluem senha, resposta de segurança ou token.
 
 ## Configuração obrigatória no Render

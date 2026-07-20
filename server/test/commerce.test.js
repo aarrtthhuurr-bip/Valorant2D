@@ -52,7 +52,16 @@ test('API comercial entrega somente o saldo retornado pelo servidor', async () =
   const originalSession = Session.findValid;
   const originalProfile = Commerce.profile;
   Session.findValid = async () => ({ id: 7, username: 'agente' });
-  Commerce.profile = async () => ({ coreBalance: 345, isAdmin: false, catalog: [], dailyOffers: [], ownedSkinIds: [], equippedSkins: {}, missions: [] });
+  Commerce.profile = async () => ({
+    coreBalance: 345,
+    isAdmin: false,
+    catalog: [],
+    dailyOffers: [],
+    ownedSkinIds: [],
+    equippedSkins: {},
+    missions: [],
+    easterEggCodes: ['CODIGO_OCULTO'],
+  });
   try {
     const response = await request(app)
       .get('/api/commerce')
@@ -60,6 +69,7 @@ test('API comercial entrega somente o saldo retornado pelo servidor', async () =
       .expect(200);
     assert.equal(response.body.coreBalance, 345);
     assert.equal(response.body.isAdmin, false);
+    assert.deepEqual(response.body.easterEggCodes, ['CODIGO_OCULTO']);
   } finally {
     Session.findValid = originalSession;
     Commerce.profile = originalProfile;

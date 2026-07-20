@@ -308,6 +308,8 @@ test('leaderboard salva pontuação autenticada com comprovante e nome da sessã
     return {
       entry: { id: 8, player_name: payload.playerName, score: payload.score, game_mode: payload.gameMode },
       statistics: { partidas_jogadas: 1, vitorias: 1, abates_totais: 8, pontuacao_maxima: 1800 },
+      coreReward: payload.gameMode === 'blackout' ? 14 : payload.gameMode === 'outbreak' ? payload.maxWave : 9,
+      coreBalance: 309,
     };
   };
   try {
@@ -326,6 +328,7 @@ test('leaderboard salva pontuação autenticada com comprovante e nome da sessã
       .expect(201);
     assert.equal(recordedPayload.playerName, 'usuario_teste');
     assert.equal(accepted.body.entry.player_name, 'usuario_teste');
+    assert.equal(accepted.body.coreReward, 9);
 
     MatchSubmission.findValid = async () => ({ id: 18, duracao_segundos: 90, modo: 'blackout' });
     const mismatchedMode = await request(app)
@@ -358,4 +361,13 @@ test('leaderboard salva pontuação autenticada com comprovante e nome da sessã
     MatchSubmission.findValid = originals.match;
     Leaderboard.recordCompletedMatch = originals.record;
   }
+});
+
+test('recompensa Core respeita as faixas de cada modo e as waves do Outbreak', () => {
+  const reward = Leaderboard._test.coreRewardForMatch;
+  assert.equal(reward('default', 0, (minimum) => minimum), 5);
+  assert.equal(reward('default', 0, (_minimum, maximum) => maximum - 1), 15);
+  assert.equal(reward('blackout', 0, (minimum) => minimum), 10);
+  assert.equal(reward('blackout', 0, (_minimum, maximum) => maximum - 1), 20);
+  assert.equal(reward('outbreak', 17), 17);
 });

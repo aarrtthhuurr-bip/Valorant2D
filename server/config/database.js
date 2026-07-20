@@ -128,6 +128,7 @@ async function initializeDatabase() {
         player_name VARCHAR(24) NOT NULL,
         score INTEGER NOT NULL CHECK (score >= 0),
         max_wave INTEGER NOT NULL DEFAULT 0 CHECK (max_wave >= 0),
+        core_reward INTEGER NOT NULL DEFAULT 0 CHECK (core_reward >= 0),
         game_mode VARCHAR(24) NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
@@ -136,6 +137,7 @@ async function initializeDatabase() {
     await client.query('ALTER TABLE leaderboard ADD COLUMN IF NOT EXISTS player_name VARCHAR(24)');
     await client.query('ALTER TABLE leaderboard ADD COLUMN IF NOT EXISTS score INTEGER');
     await client.query('ALTER TABLE leaderboard ADD COLUMN IF NOT EXISTS max_wave INTEGER NOT NULL DEFAULT 0');
+    await client.query('ALTER TABLE leaderboard ADD COLUMN IF NOT EXISTS core_reward INTEGER NOT NULL DEFAULT 0');
     await client.query('ALTER TABLE leaderboard ADD COLUMN IF NOT EXISTS game_mode VARCHAR(24)');
     await client.query('ALTER TABLE leaderboard ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ');
     await client.query(`
@@ -194,6 +196,10 @@ async function initializeDatabase() {
         IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'leaderboard_max_wave_nonnegative') THEN
           ALTER TABLE leaderboard
           ADD CONSTRAINT leaderboard_max_wave_nonnegative CHECK (max_wave >= 0);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'leaderboard_core_reward_nonnegative') THEN
+          ALTER TABLE leaderboard
+          ADD CONSTRAINT leaderboard_core_reward_nonnegative CHECK (core_reward >= 0);
         END IF;
       END $$
     `);

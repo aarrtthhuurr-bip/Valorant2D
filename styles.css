@@ -3033,10 +3033,12 @@ button.click-feedback::after {
 }
 .core-wallet strong { font-size: 17px; font-variant-numeric: tabular-nums; }
 .core-wallet em { color: #46a8ff; font-size: 11px; font-style: normal; font-weight: 900; }
-.core-icon { position: relative; width: 25px; height: 25px; border: 1px solid #00f3ff; border-radius: 50%; box-shadow: 0 0 10px rgba(0,243,255,.42); }
-.core-icon::before, .core-icon::after, .core-icon i { content: ""; position: absolute; inset: 5px; border: 1px solid #46a8ff; transform: rotate(45deg) skew(-8deg, -8deg); }
-.core-icon::after { inset: 8px 4px; transform: rotate(-45deg); opacity: .65; }
-.core-icon i { inset: 4px 8px; transform: rotate(45deg); opacity: .5; }
+.core-icon-definitions { position:absolute; width:0; height:0; overflow:hidden; }
+.core-icon { display:inline-grid; place-items:center; width:27px; height:27px; flex:0 0 27px; filter:drop-shadow(0 0 6px rgba(0,243,255,.62)); }
+.core-icon svg { width:100%; height:100%; overflow:visible; }
+.core-icon .core-shell { fill:rgba(0,243,255,.08); stroke:#00f3ff; stroke-width:1.35; stroke-linejoin:round; }
+.core-icon .core-faces { fill:none; stroke:#46a8ff; stroke-width:.72; stroke-linecap:round; opacity:.88; }
+.core-icon .core-vertices { fill:#bffcff; stroke:#00f3ff; stroke-width:.35; }
 .main-core-wallet { position: absolute; z-index: 8; top: 22px; right: 24px; }
 .menu-tutorial-shortcut { position: absolute; z-index: 8; left: 22px; bottom: 22px; width: 46px; height: 46px; padding: 0; border: 1px solid rgba(0,243,255,.45); border-radius: 50%; background: rgba(8,20,31,.9); color: #8bf9ff; font: 800 21px Rajdhani, Arial; box-shadow: 0 0 22px rgba(0,243,255,.14); }
 .menu-tutorial-shortcut:hover { border-color: #00f3ff; transform: translateY(-2px); }
@@ -3662,6 +3664,12 @@ button.click-feedback::after {
 .match-result-line i { height:1px; flex:1; background:linear-gradient(90deg,transparent,rgba(125,249,255,.58)); }
 .match-result-line i:last-child { transform:scaleX(-1); }
 .match-result-line b { width:8px; height:8px; border:2px solid #00d9ff; transform:rotate(45deg); }
+.match-core-reward { display:inline-flex; align-items:center; justify-content:center; gap:10px; min-height:44px; margin:0 auto 18px; padding:8px 15px; border:1px solid rgba(0,243,255,.24); clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px); background:linear-gradient(100deg,rgba(0,243,255,.08),rgba(70,168,255,.03)); box-shadow:inset 0 0 20px rgba(0,243,255,.035),0 0 20px rgba(0,243,255,.06); }
+.match-core-reward.hidden { display:none; }
+.match-core-reward strong { color:#aefbff; font-size:14px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
+.match-core-reward.is-confirmed { border-color:rgba(0,243,255,.5); animation:coreRewardConfirmed .55s ease both; }
+.match-core-reward.is-error { border-color:rgba(255,70,85,.42); background:rgba(255,70,85,.06); }
+.match-core-reward.is-error strong { color:#ff9ba4; }
 .match-stats { display:grid; grid-template-columns:1.35fr repeat(2,1fr); gap:10px; }
 .match-stats article { min-width:0; padding:18px 12px; border:1px solid rgba(215,237,255,.12); background:rgba(255,255,255,.035); }
 .match-stats span { display:block; color:rgba(210,231,238,.58); font-size:10px; font-weight:800; letter-spacing:.16em; }
@@ -3681,9 +3689,20 @@ button.click-feedback::after {
 @keyframes matchOverlayIn { from { opacity:0; } }
 @keyframes matchCardIn { from { opacity:0; transform:translateY(28px) scale(.94); filter:blur(8px); } }
 @keyframes victoryPulse { from { filter:brightness(.92); } to { filter:brightness(1.22); } }
+@keyframes coreRewardConfirmed { 50% { transform:scale(1.035); filter:brightness(1.35); } }
 @keyframes confettiFall { to { transform:translate3d(var(--drift),850px,0) rotate(680deg); } }
 @media (max-width:620px) { .match-card{padding:26px 18px}.match-stats{grid-template-columns:1fr 1fr}.match-stats .match-mvp{grid-column:1/-1} }
 @media (prefers-reduced-motion:reduce) { .match-overlay,.match-card,.match-card h2,.match-confetti i{animation:none!important} }
+
+/* Cinco pontos fixos do HUD reservados aos códigos escondidos. */
+.easter-egg-codes { position:absolute; inset:0; z-index:3; pointer-events:none; overflow:hidden; }
+.easter-egg-codes.hidden { display:none; }
+.easter-egg-code { position:absolute; max-width:180px; overflow:hidden; color:rgba(118,147,158,.105); font-size:8px; font-weight:700; letter-spacing:.12em; line-height:1; text-overflow:ellipsis; text-transform:uppercase; white-space:nowrap; text-shadow:0 0 1px rgba(0,243,255,.06); user-select:none; }
+.easter-egg-code:nth-child(1) { top:17%; left:8%; transform:rotate(-2deg); }
+.easter-egg-code:nth-child(2) { top:31%; right:6%; transform:rotate(1deg); }
+.easter-egg-code:nth-child(3) { bottom:18%; left:15%; transform:rotate(2deg); }
+.easter-egg-code:nth-child(4) { right:18%; bottom:32%; transform:rotate(-1deg); }
+.easter-egg-code:nth-child(5) { top:55%; left:46%; transform:rotate(.5deg); }
 
 /* Seleção de modos alinhada aos demais submenus. */
 .menu-state-mode-select {

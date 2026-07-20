@@ -1,5 +1,12 @@
+const crypto = require('crypto');
 const database = require('../config/database');
 const Commerce = require('./Commerce');
+
+function coreRewardForMatch(gameMode, maxWave = 0, randomInt = crypto.randomInt) {
+  if (gameMode === 'outbreak') return Math.max(1, Math.trunc(Number(maxWave) || 1));
+  if (gameMode === 'blackout') return randomInt(10, 21);
+  return randomInt(5, 16);
+}
 
 class Leaderboard {
   /** Retorna apenas o melhor resultado de cada conta no modo solicitado. */
@@ -96,25 +103,34 @@ class Leaderboard {
         error.code = 'MATCH_ALREADY_RECORDED';
         throw error;
       }
+      // A recompensa nasce somente depois que o comprovante descartável foi
+      // consumido e dentro da mesma transação das estatísticas da partida.
+      const coreReward = coreRewardForMatch(gameMode, maxWave);
       const statisticsResult = await client.query(
         `UPDATE users
          SET partidas_jogadas = partidas_jogadas + 1,
              vitorias = vitorias + $1,
              abates_totais = abates_totais + $2,
-             pontuacao_maxima = GREATEST(pontuacao_maxima, $3)
-         WHERE id = $4
-         RETURNING partidas_jogadas, vitorias, abates_totais, pontuacao_maxima`,
-        [victory ? 1 : 0, kills, score, userId],
+             pontuacao_maxima = GREATEST(pontuacao_maxima, $3),
+             core_balance = core_balance + $4
+         WHERE id = $5
+         RETURNING partidas_jogadas, vitorias, abates_totais, pontuacao_maxima, core_balance`,
+        [victory ? 1 : 0, kills, score, coreReward, userId],
       );
       const entryResult = await client.query(
-        `INSERT INTO leaderboard (user_id, player_name, score, max_wave, game_mode)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING id, player_name, score, max_wave, game_mode, created_at`,
-        [userId, playerName, score, maxWave, gameMode],
+        `INSERT INTO leaderboard (user_id, player_name, score, max_wave, core_reward, game_mode)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id, player_name, score, max_wave, core_reward, game_mode, created_at`,
+        [userId, playerName, score, maxWave, coreReward, gameMode],
       );
       await Commerce.updateMissionProgress(client, userId, { victory, kills, score, maxWave, gameMode });
       await client.query('COMMIT');
-      return { entry: entryResult.rows[0], statistics: statisticsResult.rows[0] };
+      return {
+        entry: entryResult.rows[0],
+        statistics: statisticsResult.rows[0],
+        coreReward,
+        coreBalance: Number(statisticsResult.rows[0].core_balance),
+      };
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
@@ -125,3 +141,4 @@ class Leaderboard {
 }
 
 module.exports = Leaderboard;
+module.exports._test = { coreRewardForMatch };

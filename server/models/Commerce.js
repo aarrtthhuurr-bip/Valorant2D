@@ -47,7 +47,7 @@ class Commerce {
     try {
       await client.query('BEGIN');
       await ensureDailyMissions(client, userId);
-      const [userResult, ownedResult, equippedResult, missionResult] = await Promise.all([
+      const [userResult, ownedResult, equippedResult, missionResult, easterEggResult] = await Promise.all([
         client.query('SELECT core_balance, is_admin FROM users WHERE id = $1', [userId]),
         client.query('SELECT skin_id, acquired_at FROM user_skins WHERE user_id = $1 ORDER BY acquired_at DESC', [userId]),
         client.query('SELECT weapon_id, skin_id FROM equipped_skins WHERE user_id = $1', [userId]),
@@ -55,6 +55,10 @@ class Commerce {
           `SELECT id, mission_id, progress, claimed_at
            FROM daily_mission_progress WHERE user_id = $1 AND mission_date = CURRENT_DATE ORDER BY id`,
           [userId],
+        ),
+        client.query(
+          `SELECT code_display FROM promo_codes
+           WHERE active = TRUE ORDER BY created_at DESC, id DESC LIMIT 5`,
         ),
       ]);
       await client.query('COMMIT');
@@ -67,6 +71,7 @@ class Commerce {
         ownedSkinIds: ownedResult.rows.map((row) => row.skin_id),
         equippedSkins: Object.fromEntries(equippedResult.rows.map((row) => [row.weapon_id, row.skin_id])),
         missions: missionResult.rows.map(serializeMission).filter(Boolean),
+        easterEggCodes: easterEggResult.rows.map((row) => row.code_display),
         nextRotationAt: `${new Date(Date.now() + 86400000).toISOString().slice(0, 10)}T00:00:00.000Z`,
       };
     } catch (error) {

@@ -45,6 +45,8 @@ const ui = {
   matchScore: document.getElementById("matchScore"),
   matchSecondaryLabel: document.getElementById("matchSecondaryLabel"),
   matchSyncStatus: document.getElementById("matchSyncStatus"),
+  matchCoreReward: document.getElementById("matchCoreReward"),
+  matchCoreRewardText: document.getElementById("matchCoreRewardText"),
   newGameButton: document.getElementById("newGameButton"),
   outbreakMenuButton: document.getElementById("outbreakMenuButton"),
   vitalsPanel: document.getElementById("hud-player-info"),
@@ -166,6 +168,7 @@ const ui = {
   commerceFeedback: document.getElementById("commerceFeedback"),
   commerceCloseButton: document.getElementById("commerceCloseButton"),
   storeCoreBalance: document.getElementById("storeCoreBalance"),
+  easterEggCodes: document.getElementById("easterEggCodes"),
 };
 
 /**
@@ -227,6 +230,7 @@ function clearStoredSession() {
   localStorage.removeItem(AUTH_STORAGE_KEY);
   commerceState.profile = null;
   equippedWeaponSkinPaths = {};
+  renderEasterEggCodes([]);
 }
 
 async function requestApi(path, options = {}) {
@@ -274,6 +278,18 @@ async function requestApi(path, options = {}) {
 const commerceState = { tab: "skins", profile: null, weaponId: "pistol", busy: false };
 let equippedWeaponSkinPaths = {};
 
+function renderEasterEggCodes(codes = []) {
+  if (!ui.easterEggCodes) return;
+  ui.easterEggCodes.replaceChildren();
+  for (const code of codes.slice(0, 5)) {
+    if (typeof code !== "string" || !code.trim()) continue;
+    const marker = document.createElement("span");
+    marker.className = "easter-egg-code";
+    marker.textContent = code.trim();
+    ui.easterEggCodes.appendChild(marker);
+  }
+}
+
 function commerceAuthorization() {
   const session = readStoredSession();
   return session?.token && !currentProfile?.isGuest ? { Authorization: `Bearer ${session.token}` } : null;
@@ -295,6 +311,7 @@ function applyCommerceProfile(profile) {
     if (skin?.imagePath) getWeaponSprite({ id: weaponId }, skin.imagePath);
     return [weaponId, skin?.imagePath || ""];
   }).filter(([, path]) => path));
+  renderEasterEggCodes(profile?.easterEggCodes || []);
 }
 
 async function refreshCommerceProfile({ render = false } = {}) {
@@ -303,6 +320,7 @@ async function refreshCommerceProfile({ render = false } = {}) {
     commerceState.profile = null;
     equippedWeaponSkinPaths = {};
     updateCoreBalances(0);
+    renderEasterEggCodes([]);
     if (render) renderCommerceTab();
     return null;
   }
@@ -2806,6 +2824,34 @@ async function beginTrackedMatch() {
   }
 }
 
+function prepareMatchCoreReward() {
+  if (!ui.matchCoreReward || !ui.matchCoreRewardText) return;
+  const eligible = !currentProfile?.isGuest && !game.sandbox && !game.training && !game.tutorial;
+  ui.matchCoreReward.classList.toggle("hidden", !eligible);
+  ui.matchCoreReward.classList.remove("is-confirmed", "is-error");
+  ui.matchCoreRewardText.textContent = eligible ? "Validando recompensa no servidor..." : "";
+}
+
+function confirmMatchCoreReward(payload) {
+  const reward = Number(payload?.coreReward);
+  const balance = Number(payload?.coreBalance);
+  if (!Number.isInteger(reward) || reward < 0 || !Number.isFinite(balance)) return false;
+  const label = reward === 1 ? "Core obtido" : "Cores obtidos";
+  ui.matchCoreReward?.classList.remove("hidden", "is-error");
+  ui.matchCoreReward?.classList.add("is-confirmed");
+  if (ui.matchCoreRewardText) ui.matchCoreRewardText.textContent = `+${reward} ${label}`;
+  // O valor exibido vem diretamente da transação concluída no servidor.
+  updateCoreBalances(balance);
+  return true;
+}
+
+function failMatchCoreReward(message) {
+  if (!ui.matchCoreReward || ui.matchCoreReward.classList.contains("hidden")) return;
+  ui.matchCoreReward.classList.remove("is-confirmed");
+  ui.matchCoreReward.classList.add("is-error");
+  if (ui.matchCoreRewardText) ui.matchCoreRewardText.textContent = message;
+}
+
 function showMatchResult() {
   const won = game.playerScore > game.enemyScore;
   const kills = Math.max(0, Math.round(game.stats?.kills || 0));
@@ -2826,6 +2872,7 @@ function showMatchResult() {
   if (ui.matchScore) ui.matchScore.textContent = score.toLocaleString("pt-BR");
   if (ui.matchSecondaryLabel) ui.matchSecondaryLabel.textContent = "PONTUAÇÃO";
   if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = currentProfile?.isGuest ? "Partida local: entre com uma conta para salvar o desempenho." : "Sincronizando desempenho...";
+  prepareMatchCoreReward();
   renderMatchConfetti(won);
   ui.newGameButton.style.display = "";
   ui.newGameButton.querySelector("span").textContent = "CONTINUAR";
@@ -2859,6 +2906,7 @@ function showOutbreakGameOver(reason = "Sinal vital perdido") {
   if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = currentProfile?.isGuest
     ? "Partida local: entre com uma conta para salvar sua pontuação global."
     : "Sincronizando pontuação global...";
+  prepareMatchCoreReward();
   ui.matchConfetti?.replaceChildren();
   if (ui.newGameButton) {
     ui.newGameButton.style.display = "";
@@ -2892,10 +2940,12 @@ async function recordCompletedMatch() {
   const session = readStoredSession();
   if (!session?.token) {
     if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = "Sessão indisponível; desempenho salvo apenas nesta partida.";
+    failMatchCoreReward("Recompensa não sincronizada");
     return;
   }
   if (!game.matchSubmissionToken) {
     if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = "Partida sem comprovante de integridade; estatísticas não enviadas.";
+    failMatchCoreReward("Partida sem comprovante de recompensa");
     return;
   }
   game.statisticsRecorded = true;
@@ -2920,11 +2970,15 @@ async function recordCompletedMatch() {
         matchToken: game.matchSubmissionToken,
       }),
     });
-    if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = "Pontuação salva na leaderboard global.";
+    const rewardConfirmed = confirmMatchCoreReward(payload);
+    if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = rewardConfirmed
+      ? "Pontuação e recompensa sincronizadas."
+      : "Pontuação salva; resposta de recompensa inválida.";
   } catch (error) {
     // A partida permanece jogável mesmo se a sincronização estiver indisponível.
     console.warn("Não foi possível sincronizar as estatísticas:", error.message);
     if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = "A partida foi concluída, mas a sincronização está indisponível.";
+    failMatchCoreReward("Recompensa não sincronizada");
   }
 }
 
@@ -8462,6 +8516,7 @@ function updateUi() {
   const tutorialActive = game.tutorial && game.menuState === "none";
   const shopOpen = isShopOpen();
   toggleClass(ui.topHud, "hidden", !gameplayHudVisible || tutorialActive || shopOpen);
+  toggleClass(ui.easterEggCodes, "hidden", !gameplayHudVisible || tutorialActive || shopOpen || !ui.easterEggCodes?.childElementCount);
   toggleClass(ui.message, "hidden", !gameplayHudVisible || tutorialActive || shopOpen || !settings.showTips || game.messageTimer <= 0);
   toggleClass(ui.killFeed, "hidden", shopOpen || !settings.showKillFeed);
   setStyle(ui.killFeed, "transform", `scale(${Math.max(0.5, Math.min(2, (settings.killFeedScale || 100) / 100))})`);
