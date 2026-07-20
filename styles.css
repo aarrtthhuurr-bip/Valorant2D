@@ -5056,6 +5056,171 @@ button.click-feedback::after {
   .welcome-controls { margin-top:10px; padding:7px; }
 }
 
+/* Camada unificada de feedback e acessibilidade. */
+.ux-toast-region {
+  position: fixed;
+  top: max(16px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  z-index: 600;
+  display: grid;
+  width: min(360px, calc(100vw - 32px));
+  gap: 8px;
+  pointer-events: none;
+}
+
+.ux-toast {
+  position: relative;
+  display: grid;
+  min-height: 66px;
+  padding: 12px 42px 12px 14px;
+  grid-template-columns: 4px minmax(0, 1fr);
+  gap: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(129, 164, 181, .26);
+  border-radius: 6px;
+  background: rgba(7, 16, 24, .97);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .52);
+  pointer-events: auto;
+  animation: uxToastIn .28s cubic-bezier(.2, .85, .3, 1) both;
+}
+
+.ux-toast.is-leaving { animation: uxToastOut .18s ease both; }
+.ux-toast-mark { width: 4px; border-radius: 2px; background: #31c8e8; box-shadow: 0 0 14px currentColor; }
+.ux-toast.is-success .ux-toast-mark { background: #62e6a0; }
+.ux-toast.is-warning .ux-toast-mark { background: #ff5b69; }
+.ux-toast strong { color: #eaf3f6; font-size: 10px; letter-spacing: .15em; }
+.ux-toast p { margin: 4px 0 0; color: #91a4ae; font-size: 12px; line-height: 1.35; }
+.ux-toast button { position: absolute; top: 8px; right: 8px; width: 28px; min-height: 28px; padding: 0; border: 0; background: transparent; color: #718692; font-size: 18px; }
+
+.server-status {
+  display: grid;
+  min-height: 50px;
+  margin: -3px 0 11px;
+  padding: 9px 10px;
+  grid-template-columns: 9px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid rgba(91, 137, 157, .18);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, .025);
+}
+
+.server-status-dot { width: 7px; height: 7px; border-radius: 50%; background: #f0c75e; box-shadow: 0 0 10px currentColor; animation: serverStatusPulse 1s ease-in-out infinite alternate; }
+.server-status.is-online .server-status-dot { background: #62e6a0; animation: none; }
+.server-status.is-offline .server-status-dot { background: #ff5b69; animation: none; }
+.server-status.is-online { min-height: 38px; padding-block: 6px; }
+.server-status.is-online small { display: none; }
+.server-status strong, .server-status small { display: block; }
+.server-status strong { color: #dce8ec; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+.server-status small { margin-top: 2px; color: #718692; font-size: 9px; }
+.server-status button { min-height: 29px; padding: 5px 8px; border-color: rgba(255, 91, 105, .42); color: #ff9099; font-size: 8px; }
+
+/* HUD contextual: apenas informações necessárias ao Outbreak. */
+.outbreak-context-hud {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  display: flex;
+  min-height: 58px;
+  padding: 8px 12px;
+  align-items: stretch;
+  gap: 5px;
+  border-radius: 8px 8px 0 0;
+  background: rgba(12, 20, 28, .91);
+  transform: translateX(-50%);
+}
+
+.outbreak-context-hud.hidden { display: none; }
+.outbreak-context-hud > div { display: grid; min-width: 76px; padding: 5px 10px; align-content: center; border-left: 1px solid rgba(132, 170, 188, .13); }
+.outbreak-context-hud > div:first-child { border-left: 0; }
+.outbreak-context-hud span { color: #718692; font-size: 7px; font-weight: 900; letter-spacing: .15em; }
+.outbreak-context-hud strong { margin-top: 2px; color: #f2f7f8; font-size: 16px; line-height: 1; }
+.outbreak-context-hud .outbreak-hud-effect { min-width: 150px; }
+.outbreak-context-hud .outbreak-hud-effect.hidden { display: none; }
+.outbreak-context-hud .outbreak-hud-effect strong { font-size: 11px; text-transform: uppercase; }
+
+/* Resumo curto entre ondas, sem criar uma nova tela de bloqueio. */
+.round-banner:has(.round-summary:not(.hidden)) { min-width: min(480px, calc(100% - 32px)); padding: 13px 16px; }
+.round-summary { display: grid; margin-top: 10px; padding-top: 9px; grid-template-columns: repeat(3, 1fr); gap: 7px; border-top: 1px solid rgba(139, 173, 190, .15); }
+.round-summary.hidden { display: none; }
+.round-summary span { display: grid; gap: 2px; }
+.round-summary small { color: #718692; font-size: 7px; font-weight: 900; letter-spacing: .12em; }
+.round-summary b { color: #e8f2f5; font-size: 12px; }
+.round-summary span:nth-child(2) b { color: #e4bc59; }
+.round-summary span:nth-child(3) b { color: #ff7985; }
+
+/* Loja: explica estados, duração e falhas sem depender somente de cor. */
+.shop-feedback { min-height: 24px; margin: -2px 0 6px; padding: 5px 9px; border-left: 2px solid #31c8e8; background: rgba(49, 200, 232, .045); color: #8297a2; font-size: 10px; line-height: 1.35; }
+.shop-feedback.is-success { border-color: #62e6a0; color: #9edec0; background: rgba(98, 230, 160, .05); }
+.shop-feedback.is-warning { border-color: #ff5b69; color: #e29aa1; background: rgba(255, 91, 105, .055); }
+.equip-duration { color: #6f8490; font-size: 8px; font-weight: 800; letter-spacing: .08em; }
+.equip-card-action { display: flex !important; width: 100%; align-items: center; justify-content: space-between; gap: 8px; color: inherit !important; }
+.equip-card-action strong { color: #91a7b3; font-size: 8px; letter-spacing: .08em; }
+.equip-card-action em { font-size: 12px; }
+.equip-card.owned .equip-card-state { color: #62e6a0; }
+.equip-card.cant-afford .equip-card-state { color: #d8878e; }
+.shop-outbreak .equip-card { min-height: 126px; padding: 8px 7px; gap: 4px; }
+.shop-outbreak .equip-card .equip-icon { min-height: 29px; transform: scale(.84); }
+.shop-outbreak .equip-card > b { font-size: 10px; }
+.shop-outbreak .equip-card > span:not(.equip-icon):not(.equip-owned-badge):not(.equip-card-action) {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 9px;
+  line-height: 1.2;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.shop-outbreak .equip-duration { font-size: 7px; }
+
+.menu-button-copy { position: relative; z-index: 1; display: grid; min-width: 0; gap: 2px; }
+.menu-state-main .menu-button-copy small { color: #657a89; font-size: 8px; font-weight: 800; letter-spacing: .1em; }
+.menu-state-main .menu-button:first-child { border-color: rgba(255, 70, 85, .38); background: linear-gradient(90deg, rgba(255, 70, 85, .09), #1a2535 58%); }
+
+.match-stats { grid-template-columns: 1.3fr repeat(4, minmax(0, .8fr)); }
+.match-personal-best { display: inline-flex; margin: 12px auto 0; padding: 5px 10px; border: 1px solid rgba(240, 199, 94, .38); background: rgba(240, 199, 94, .07); color: #f0c75e; font-size: 9px; font-weight: 900; letter-spacing: .13em; }
+.match-personal-best.hidden { display: none; }
+
+/* Preferências de acessibilidade aplicadas a toda a interface HTML. */
+.ux-high-contrast { --muted: #a9bbc5; --line: rgba(215, 237, 255, .28); }
+.ux-high-contrast button, .ux-high-contrast .glass, .ux-high-contrast .panel { border-color: rgba(220, 239, 247, .3); }
+.ux-large-text .menu-button b, .ux-large-text .shop button, .ux-large-text .options-panel { font-size: 1.08em; }
+.ux-large-text .message span, .ux-large-text .shop p, .ux-large-text .option-row-copy small { font-size: 12px; }
+.ux-reduced-motion *, .ux-reduced-motion *::before, .ux-reduced-motion *::after { scroll-behavior: auto !important; animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+:where(button, input, select):focus-visible { outline: 2px solid #7df9ff; outline-offset: 2px; }
+
+@keyframes uxToastIn { from { opacity: 0; transform: translateX(24px); } }
+@keyframes uxToastOut { to { opacity: 0; transform: translateX(18px); } }
+@keyframes serverStatusPulse { to { opacity: .42; transform: scale(.8); } }
+
+@media (max-width: 720px) {
+  .ux-toast-region { top: 10px; right: 10px; width: calc(100vw - 20px); }
+  .server-status { grid-template-columns: 8px minmax(0, 1fr); }
+  .server-status button { grid-column: 2; justify-self: start; }
+  .match-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .match-stats .match-mvp { grid-column: 1 / -1; }
+  .match-card { max-height: calc(100dvh - 20px); padding: 22px 16px; overflow-y: auto; scrollbar-width: none; }
+  .match-card::-webkit-scrollbar { display: none; }
+  .match-card h2, .match-overlay.is-outbreak .match-card h2 { font-size: clamp(42px, 16vw, 64px); }
+  .match-score { margin-block: 14px 8px; }
+  .match-result-line { margin-bottom: 14px; }
+  .match-stats article { padding: 10px 8px; }
+  .match-card button { min-width: 0; margin-top: 8px; padding: 11px 16px; }
+  .outbreak-context-hud { left: 12px; max-width: calc(100% - 320px); transform: none; }
+  .outbreak-context-hud > div { min-width: 62px; padding-inline: 6px; }
+  .outbreak-context-hud .outbreak-hud-effect { display: none; }
+}
+
+@media (max-height: 650px) {
+  .auth-brand-logo { width: 32px; height: 22px; }
+  .auth-brand { font-size: 9px; }
+  .auth-heading { margin-block: 6px; }
+  .auth-heading h1 { margin-block: 4px 6px; font-size: 24px; }
+  .auth-heading p, .auth-guest-note { display: none; }
+  .server-status { min-height: 34px; margin-bottom: 7px; padding-block: 5px; }
+  .server-status small { display: none; }
+  .auth-divider { margin-block: 7px; }
+}
+
 /* ── Opacidade do HUD (controlado nas Opções) ── */
 .top-hud,
 .status-card,

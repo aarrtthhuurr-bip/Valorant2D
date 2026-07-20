@@ -8,11 +8,12 @@
   <!-- Altere apenas este valor caso o endereço definitivo do Render mude. -->
   <meta name="valorant2d-api-url" content="https://valorant2d.onrender.com">
   <title>Valorant2D</title>
-  <link rel="stylesheet" href="./styles.css?v=20260720-onboarding">
+  <link rel="stylesheet" href="./styles.css?v=20260720-ux-pass">
   <script src="https://unpkg.com/lucide@1.24.0" integrity="sha384-mooE85Luwgx+AyykX7e90VcN8/QCFTSIwPuHLmvcsLVoA0en7lKYb9XlOzn5G2co" crossorigin="anonymous"></script>
   <link rel="shortcut icon" href="./assets/Favicon/favicon.ico" type="image/x-icon">
 </head>
 <body>
+  <div class="ux-toast-region" id="uxToastRegion" role="status" aria-live="polite" aria-atomic="false"></div>
   <svg class="core-icon-definitions" aria-hidden="true" focusable="false">
     <symbol id="coreIcosahedron" viewBox="0 0 32 32">
       <path class="core-shell" fill="#061f28" stroke="#00f3ff" stroke-width="1.35" stroke-linejoin="round" d="M16 1 27 7 30 18 25 26 16 31 7 26 2 18 5 7Z"></path>
@@ -48,6 +49,12 @@
       <div class="fps-counter hidden" id="fpsCounter">0 FPS</div>
       <div class="audio-debug-label hidden" id="audioDebugLabel"></div>
       <div class="status-card">
+        <div class="outbreak-context-hud glass hidden" id="outbreakContextHud" aria-label="Estado da onda Outbreak">
+          <div><span>ONDA</span><strong id="outbreakHudWave">1</strong></div>
+          <div><span>AMEAÇAS</span><strong id="outbreakHudEnemies">0</strong></div>
+          <div><span>CRÉDITOS</span><strong id="outbreakHudCredits">0</strong></div>
+          <div class="outbreak-hud-effect hidden" id="outbreakHudEffect"><span>MODIFICADOR</span><strong id="outbreakHudEffectText">ATIVO</strong></div>
+        </div>
         <div class="vitals-panel glass" id="hud-player-info">
           <div class="status-main">
             <div class="agent-dot" id="agentDot"></div>
@@ -93,12 +100,13 @@
         </header>
 
         <div class="shop-inner-scroll">
-          <div class="shop-tabs" id="shopTabs">
-            <button type="button" data-shop-tab="weapons">Armas</button>
-            <button type="button" data-shop-tab="equipment">Equip.</button>
-            <button type="button" data-shop-tab="allies" id="alliesTab">Aliados</button>
-            <button type="button" data-shop-tab="ults" id="ultsTab">Ults</button>
+          <div class="shop-tabs" id="shopTabs" role="tablist" aria-label="Categorias da loja">
+            <button type="button" role="tab" data-shop-tab="weapons">Armas</button>
+            <button type="button" role="tab" data-shop-tab="equipment">Equip.</button>
+            <button type="button" role="tab" data-shop-tab="allies" id="alliesTab">Aliados</button>
+            <button type="button" role="tab" data-shop-tab="ults" id="ultsTab">Ults</button>
           </div>
+          <div class="shop-feedback" id="shopFeedback" role="status" aria-live="polite">Selecione um item para ver seu estado.</div>
 
           <div class="panel shop-panel" data-shop-panel="weapons">
             <h2>Armas</h2>
@@ -138,6 +146,11 @@
         <span class="label" id="roundKicker">Round</span>
         <strong id="roundTitle">Compra</strong>
         <p id="roundText">Prepare sua equipe.</p>
+        <div class="round-summary hidden" id="roundSummary">
+          <span><small>ELIMINAÇÕES</small><b id="roundSummaryKills">0</b></span>
+          <span><small>CRÉDITOS</small><b id="roundSummaryCredits">+0</b></span>
+          <span><small>PRÓXIMA ONDA</small><b id="roundSummaryThreat">ESTÁVEL</b></span>
+        </div>
       </div>
 
       <div class="scoreboard hidden glass" id="scoreboard">
@@ -243,7 +256,10 @@
             <article class="match-mvp"><span id="matchPrimaryLabel">MVP DA PARTIDA</span><strong id="matchMvp">Jogador</strong></article>
             <article><span>ABATES</span><strong id="matchKills">0</strong></article>
             <article><span id="matchSecondaryLabel">PONTUAÇÃO</span><strong id="matchScore">0</strong></article>
+            <article><span>DANO</span><strong id="matchDamage">0</strong></article>
+            <article><span>HEADSHOTS</span><strong id="matchHeadshots">0</strong></article>
           </div>
+          <p class="match-personal-best hidden" id="matchPersonalBest">NOVO RECORDE PESSOAL</p>
           <p class="match-sync-status" id="matchSyncStatus" aria-live="polite"></p>
           <div class="match-actions">
             <button id="newGameButton" type="button"><span>CONTINUAR</span></button>
@@ -352,6 +368,12 @@
             <span class="auth-kicker">Valorant 2D</span>
             <h1 id="authTitle">Acesse o campo de batalha</h1>
             <p>Entre para sincronizar seu perfil e seus futuros recordes globais.</p>
+          </div>
+
+          <div class="server-status is-connecting" id="serverStatus" role="status" aria-live="polite">
+            <span class="server-status-dot" aria-hidden="true"></span>
+            <div><strong id="serverStatusTitle">Conectando ao servidor</strong><small id="serverStatusText">Preparando sua sessão online.</small></div>
+            <button type="button" class="hidden" id="serverRetryButton">Tentar novamente</button>
           </div>
 
           <form class="auth-form" id="authForm" novalidate>
@@ -501,6 +523,6 @@
     </div>
   </main>
 
-  <script src="./game.js?v=20260720-onboarding"></script>
+  <script src="./game.js?v=20260720-ux-pass"></script>
 </body>
 </html>

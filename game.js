@@ -31,6 +31,12 @@ const ui = {
   ultButtons: document.getElementById("ultButtons"),
   outbreakUltStock: document.getElementById("outbreakUltStock"),
   outbreakEffectStock: document.getElementById("outbreakEffectStock"),
+  outbreakContextHud: document.getElementById("outbreakContextHud"),
+  outbreakHudWave: document.getElementById("outbreakHudWave"),
+  outbreakHudEnemies: document.getElementById("outbreakHudEnemies"),
+  outbreakHudCredits: document.getElementById("outbreakHudCredits"),
+  outbreakHudEffect: document.getElementById("outbreakHudEffect"),
+  outbreakHudEffectText: document.getElementById("outbreakHudEffectText"),
   hpBar: document.getElementById("hpBar"),
   ammoBar: document.getElementById("ammoBar"),
   shopBackdrop: document.getElementById("shopBackdrop"),
@@ -44,6 +50,9 @@ const ui = {
   matchKills: document.getElementById("matchKills"),
   matchScore: document.getElementById("matchScore"),
   matchSecondaryLabel: document.getElementById("matchSecondaryLabel"),
+  matchDamage: document.getElementById("matchDamage"),
+  matchHeadshots: document.getElementById("matchHeadshots"),
+  matchPersonalBest: document.getElementById("matchPersonalBest"),
   matchSyncStatus: document.getElementById("matchSyncStatus"),
   matchCoreReward: document.getElementById("matchCoreReward"),
   matchCoreRewardText: document.getElementById("matchCoreRewardText"),
@@ -70,6 +79,10 @@ const ui = {
   roundKicker: document.getElementById("roundKicker"),
   roundTitle: document.getElementById("roundTitle"),
   roundText: document.getElementById("roundText"),
+  roundSummary: document.getElementById("roundSummary"),
+  roundSummaryKills: document.getElementById("roundSummaryKills"),
+  roundSummaryCredits: document.getElementById("roundSummaryCredits"),
+  roundSummaryThreat: document.getElementById("roundSummaryThreat"),
   scoreboard: document.getElementById("scoreboard"),
   scoreboardTitle: document.getElementById("scoreboardTitle"),
   sandboxTools: document.getElementById("sandboxTools"),
@@ -135,6 +148,10 @@ const ui = {
   audioDebugLabel: document.getElementById("audioDebugLabel"),
   authOverlay: document.getElementById("authOverlay"),
   authSessionCheck: document.getElementById("authSessionCheck"),
+  serverStatus: document.getElementById("serverStatus"),
+  serverStatusTitle: document.getElementById("serverStatusTitle"),
+  serverStatusText: document.getElementById("serverStatusText"),
+  serverRetryButton: document.getElementById("serverRetryButton"),
   authForm: document.getElementById("authForm"),
   authUsername: document.getElementById("authUsername"),
   authPassword: document.getElementById("authPassword"),
@@ -169,6 +186,8 @@ const ui = {
   commerceCloseButton: document.getElementById("commerceCloseButton"),
   storeCoreBalance: document.getElementById("storeCoreBalance"),
   easterEggCodes: document.getElementById("easterEggCodes"),
+  uxToastRegion: document.getElementById("uxToastRegion"),
+  shopFeedback: document.getElementById("shopFeedback"),
   welcomeOverlay: document.getElementById("welcomeOverlay"),
   welcomeKicker: document.getElementById("welcomeKicker"),
   welcomePlayerName: document.getElementById("welcomePlayerName"),
@@ -204,7 +223,7 @@ const ui = {
  * aplicada ao Canvas de 1280 x 720. Isso preserva a leitura em telas estreitas.
  */
 function mountViewportOverlays() {
-  for (const overlay of [ui.authOverlay, ui.welcomeOverlay, ui.modeInfoOverlay, ui.menuTourLayer]) {
+  for (const overlay of [ui.authOverlay, ui.welcomeOverlay, ui.modeInfoOverlay, ui.menuTourLayer, ui.matchOverlay, ui.pauseOverlay]) {
     if (overlay && ui.gameRoot && overlay.parentElement !== ui.gameRoot) ui.gameRoot.appendChild(overlay);
   }
 }
@@ -222,13 +241,6 @@ const API_BASE_URL = (configuredApiUrl || "https://valorant2d.onrender.com").rep
 // O Render pode precisar de alguns segundos extras para sair do estado de suspensão.
 const API_REQUEST_TIMEOUT = 45000;
 
-// Dispara o despertar do Render antes de o jogador enviar o formulário.
-function wakeRenderServer() {
-  return fetch(`${API_BASE_URL}/`, { cache: "no-store", mode: "cors" }).catch(() => null);
-}
-
-void wakeRenderServer();
-
 let currentProfile = null;
 let authMode = "login";
 let recoveryQuestionLoaded = false;
@@ -238,6 +250,68 @@ let welcomeBusy = false;
 let menuTourIndex = 0;
 let menuTourTimer = 0;
 let modeInfoReturnFocus = null;
+let serverWakePromise = null;
+let serverWakeDelayTimer = 0;
+const shownContextTips = new Set();
+
+function showUxToast(message, { title = "INFORMAÇÃO", tone = "info", duration = 2800 } = {}) {
+  if (!ui.uxToastRegion || !message) return;
+  const toast = document.createElement("article");
+  toast.className = `ux-toast is-${tone}`;
+  toast.innerHTML = '<span class="ux-toast-mark" aria-hidden="true"></span><div><strong></strong><p></p></div><button type="button" aria-label="Fechar mensagem">×</button>';
+  toast.querySelector("strong").textContent = title;
+  toast.querySelector("p").textContent = message;
+  const remove = () => {
+    if (toast.classList.contains("is-leaving")) return;
+    toast.classList.add("is-leaving");
+    window.setTimeout(() => toast.remove(), 180);
+  };
+  toast.querySelector("button").addEventListener("click", remove);
+  ui.uxToastRegion.appendChild(toast);
+  while (ui.uxToastRegion.children.length > 3) ui.uxToastRegion.firstElementChild?.remove();
+  window.setTimeout(remove, Math.max(1200, duration));
+}
+
+function updateServerConnectionState(state, detail = "") {
+  if (!ui.serverStatus) return;
+  ui.serverStatus.classList.remove("is-connecting", "is-waking", "is-online", "is-offline");
+  ui.serverStatus.classList.add(`is-${state}`);
+  const content = {
+    connecting: ["Conectando ao servidor", "Preparando sua sessão online."],
+    waking: ["Servidor iniciando", "A primeira conexão pode levar alguns segundos."],
+    online: ["Servidor disponível", "Conta, progresso e ranking podem ser sincronizados."],
+    offline: ["Servidor indisponível", "Você ainda pode jogar como convidado."],
+  }[state] || ["Estado do servidor", ""];
+  if (ui.serverStatusTitle) ui.serverStatusTitle.textContent = content[0];
+  if (ui.serverStatusText) ui.serverStatusText.textContent = detail || content[1];
+  ui.serverRetryButton?.classList.toggle("hidden", state !== "offline");
+}
+
+// Dispara o despertar do Render antes de o jogador enviar o formulário e
+// torna a espera explícita, evitando que o carregamento pareça um travamento.
+function wakeRenderServer({ force = false } = {}) {
+  if (serverWakePromise && !force) return serverWakePromise;
+  window.clearTimeout(serverWakeDelayTimer);
+  updateServerConnectionState("connecting");
+  serverWakeDelayTimer = window.setTimeout(() => updateServerConnectionState("waking"), 2200);
+  serverWakePromise = fetch(`${API_BASE_URL}/`, { cache: "no-store", mode: "cors" })
+    .then((response) => {
+      if (!response.ok) throw new Error("Servidor respondeu com erro.");
+      updateServerConnectionState("online");
+      return true;
+    })
+    .catch(() => {
+      updateServerConnectionState("offline");
+      return false;
+    })
+    .finally(() => {
+      window.clearTimeout(serverWakeDelayTimer);
+      serverWakePromise = null;
+    });
+  return serverWakePromise;
+}
+
+void wakeRenderServer();
 
 function readStoredSession() {
   try {
@@ -278,6 +352,7 @@ async function requestApi(path, options = {}) {
       },
       signal: controller.signal,
     });
+    updateServerConnectionState("online");
 
     let payload = {};
     try {
@@ -297,6 +372,7 @@ async function requestApi(path, options = {}) {
     return payload;
   } catch (error) {
     if (error.name === "AbortError" || error instanceof TypeError) {
+      updateServerConnectionState("offline");
       const offlineError = new Error("Servidor offline. Tente novamente em alguns instantes.");
       offlineError.code = "SERVER_OFFLINE";
       throw offlineError;
@@ -711,8 +787,13 @@ async function submitAuthentication(action) {
     saveSession(payload);
     setAuthFeedback(payload.message || "Acesso autorizado.", "success");
     enterGameWithProfile({ ...payload.user, isGuest: false, token: payload.token });
+    showUxToast(action === "register" ? "Conta criada e perfil online ativado." : `Bem-vindo de volta, ${payload.user?.username || "agente"}.`, {
+      title: action === "register" ? "CONTA CRIADA" : "SESSÃO CONECTADA",
+      tone: "success",
+    });
   } catch (error) {
     setAuthFeedback(error.message, "error");
+    showUxToast(error.message, { title: error.code === "SERVER_OFFLINE" ? "SERVIDOR INDISPONÍVEL" : "ACESSO NÃO CONCLUÍDO", tone: "warning", duration: 3800 });
   } finally {
     setAuthBusy(false);
   }
@@ -958,6 +1039,7 @@ const AUDIO_MIX = {
   ability: 0.3,
   pickup: 0.32,
   denied: 0.24,
+  purchase: 0.32,
 };
 const AUDIO_THROTTLE_MS = {
   shot: 24,
@@ -966,6 +1048,7 @@ const AUDIO_THROTTLE_MS = {
   headshot: 48,
   pickup: 70,
   denied: 90,
+  purchase: 100,
 };
 const AUDIO_NAMES = {
   shot: "Tiro",
@@ -1744,6 +1827,7 @@ function playSound(name) {
   if (name === "ability") playTone(620, 0.14, "triangle",  0.11 * mix);
   if (name === "pickup")  { playTone(760, 0.06, "sine", 0.12 * mix); playTone(1040, 0.08, "sine", 0.09 * mix); }
   if (name === "denied")  { playTone(180, 0.08, "sawtooth", 0.11 * mix); playTone(120, 0.12, "sawtooth", 0.08 * mix); }
+  if (name === "purchase"){ playTone(520, 0.06, "sine", 0.1 * mix); playTone(780, 0.1, "triangle", 0.11 * mix); }
 }
 
 const DEFAULT_MAP = {
@@ -2118,6 +2202,8 @@ const game = {
   playMode: "default",
   outbreak: false,
   outbreakWave: 1,
+  outbreakWaveStartKills: 0,
+  outbreakWaveCredits: 0,
   outbreakElapsed: 0,
   outbreakLastDamageAt: 0,
   outbreakWaveDelay: 0,
@@ -2811,6 +2897,9 @@ function startActionRound() {
   setMessage(game.playerSide === "attackers"
     ? "Ataque: plante a spike em A ou B."
     : "Defesa: impeca o plant. Se plantarem, desarme com F.");
+  showContextTipOnce(`objective-${game.playerSide}`, game.playerSide === "attackers"
+    ? "Leve a Spike até A ou B e segure F para plantar. Depois, proteja o local."
+    : "Impeça o plant. Se a Spike for armada, aproxime-se e segure F para desarmar.");
 }
 
 let shopKeyHandler = null;
@@ -2821,6 +2910,34 @@ function isShopOpen() {
 
 function canUseShop() {
   return !!game.player?.alive && (game.phase === "buy" || game.sandbox);
+}
+
+function setShopFeedback(text, tone = "info") {
+  if (!ui.shopFeedback) return;
+  ui.shopFeedback.textContent = text;
+  ui.shopFeedback.className = `shop-feedback is-${tone}`;
+}
+
+function announceShopResult(text, { success = false, title = "ARSENAL" } = {}) {
+  setMessage(text);
+  setShopFeedback(text, success ? "success" : "warning");
+  showUxToast(text, { title, tone: success ? "success" : "warning", duration: success ? 2200 : 3200 });
+  playSound(success ? "purchase" : "denied");
+}
+
+function showContextTipOnce(id, message) {
+  if (!settings?.showTips) return;
+  if (shownContextTips.has(id)) return;
+  const key = `valorant2d-context-tip-${id}`;
+  try {
+    if (localStorage.getItem(key) === "seen") {
+      shownContextTips.add(id);
+      return;
+    }
+    localStorage.setItem(key, "seen");
+  } catch {}
+  shownContextTips.add(id);
+  showUxToast(message, { title: "DICA RÁPIDA", tone: "info", duration: 5200 });
 }
 
 function attachShopKeyboard() {
@@ -2854,15 +2971,21 @@ function detachShopKeyboard() {
 
 function openShop() {
   if (!canUseShop()) {
-    setMessage(game.player?.alive ? "A loja so abre na fase de compra." : "Voce precisa estar vivo para comprar.");
+    announceShopResult(game.player?.alive ? "A loja só abre na fase de compra." : "Você precisa estar vivo para comprar.");
     updateUi();
     return false;
   }
   updateShopState();
+  setShopFeedback(game.outbreak
+    ? "Prepare a próxima onda. Efeitos temporários mostram sua duração no card."
+    : "Compare dano, munição e preço antes de escolher seu equipamento.");
   ui.shop?.classList.remove("hidden");
   ui.shopBackdrop?.classList.remove("hidden");
   attachShopKeyboard();
   updateUi();
+  showContextTipOnce(game.outbreak ? "outbreak-shop" : "standard-shop", game.outbreak
+    ? "Os efeitos temporários duram por ondas. Confira o estado ATIVO antes de comprar novamente."
+    : "Uma arma comprada pode ser reequipada sem custo durante a fase de compra.");
   return true;
 }
 
@@ -2978,6 +3101,21 @@ function failMatchCoreReward(message) {
   if (ui.matchCoreRewardText) ui.matchCoreRewardText.textContent = message;
 }
 
+function updatePersonalBestBadge(mode, value) {
+  if (!ui.matchPersonalBest) return;
+  const profileKey = currentProfile?.id || currentProfile?.username || "guest";
+  const storageKey = `valorant2d-best-${profileKey}-${mode}`;
+  let previous = 0;
+  try { previous = Math.max(0, Number(localStorage.getItem(storageKey)) || 0); } catch {}
+  const isFirst = previous === 0;
+  const isRecord = value > previous;
+  ui.matchPersonalBest.classList.toggle("hidden", !isRecord);
+  ui.matchPersonalBest.textContent = isFirst ? "PRIMEIRO RECORDE REGISTRADO" : "NOVO RECORDE PESSOAL";
+  if (isRecord) {
+    try { localStorage.setItem(storageKey, String(value)); } catch {}
+  }
+}
+
 function showMatchResult() {
   const won = game.playerScore > game.enemyScore;
   const kills = Math.max(0, Math.round(game.stats?.kills || 0));
@@ -2996,7 +3134,10 @@ function showMatchResult() {
   if (ui.matchPrimaryLabel) ui.matchPrimaryLabel.textContent = "MVP DA PARTIDA";
   if (ui.matchKills) ui.matchKills.textContent = String(kills);
   if (ui.matchScore) ui.matchScore.textContent = score.toLocaleString("pt-BR");
+  if (ui.matchDamage) ui.matchDamage.textContent = Math.max(0, Math.round(game.stats?.damage || 0)).toLocaleString("pt-BR");
+  if (ui.matchHeadshots) ui.matchHeadshots.textContent = String(Math.max(0, game.stats?.headshots || 0));
   if (ui.matchSecondaryLabel) ui.matchSecondaryLabel.textContent = "PONTUAÇÃO";
+  updatePersonalBestBadge(game.playMode === "blackout" ? "blackout" : "default", score);
   if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = currentProfile?.isGuest ? "Partida local: entre com uma conta para salvar o desempenho." : "Sincronizando desempenho...";
   prepareMatchCoreReward();
   renderMatchConfetti(won);
@@ -3027,8 +3168,11 @@ function showOutbreakGameOver(reason = "Sinal vital perdido") {
   if (ui.matchPrimaryLabel) ui.matchPrimaryLabel.textContent = "ONDA ALCANÇADA";
   if (ui.matchMvp) ui.matchMvp.textContent = String(game.outbreakWave);
   if (ui.matchKills) ui.matchKills.textContent = String(Math.max(0, game.stats?.kills || 0));
+  if (ui.matchDamage) ui.matchDamage.textContent = Math.max(0, Math.round(game.stats?.damage || 0)).toLocaleString("pt-BR");
+  if (ui.matchHeadshots) ui.matchHeadshots.textContent = String(Math.max(0, game.stats?.headshots || 0));
   if (ui.matchSecondaryLabel) ui.matchSecondaryLabel.textContent = "SOBREVIVÊNCIA";
   if (ui.matchScore) ui.matchScore.textContent = formatSurvivalTime(game.outbreakElapsed);
+  updatePersonalBestBadge("outbreak", Math.max(1, game.outbreakWave || 1));
   if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = currentProfile?.isGuest
     ? "Partida local: entre com uma conta para salvar sua pontuação global."
     : "Sincronizando pontuação global...";
@@ -3046,7 +3190,7 @@ function showOutbreakGameOver(reason = "Sinal vital perdido") {
 function renderMatchConfetti(won) {
   if (!ui.matchConfetti) return;
   ui.matchConfetti.replaceChildren();
-  if (!won || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+  if (!won || settings?.reduceMotion || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
   const colors = ["#00d9ff", "#7df9ff", "#ff4655", "#ffffff", "#62e6a0"];
   const fragment = document.createDocumentFragment();
   for (let index = 0; index < 46; index += 1) {
@@ -3100,11 +3244,13 @@ async function recordCompletedMatch() {
     if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = rewardConfirmed
       ? "Pontuação e recompensa sincronizadas."
       : "Pontuação salva; resposta de recompensa inválida.";
+    if (rewardConfirmed) showUxToast("Pontuação, estatísticas e recompensa foram salvas.", { title: "SINCRONIZAÇÃO CONCLUÍDA", tone: "success" });
   } catch (error) {
     // A partida permanece jogável mesmo se a sincronização estiver indisponível.
     console.warn("Não foi possível sincronizar as estatísticas:", error.message);
     if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = "A partida foi concluída, mas a sincronização está indisponível.";
     failMatchCoreReward("Recompensa não sincronizada");
+    showUxToast("A partida terminou normalmente, mas os dados não puderam ser enviados agora.", { title: "SINCRONIZAÇÃO PENDENTE", tone: "warning", duration: 4200 });
   }
 }
 
@@ -3304,6 +3450,7 @@ function safeDisplaceEntity(entity, dx, dy, stepSize = 10) {
 }
 
 function spawnParticles(x, y, color, count = 8, power = 120) {
+  if (settings?.particles === false) return;
   for (let i = 0; i < count; i++) {
     const angle = Math.random() * Math.PI * 2;
     const speed = power * (0.35 + Math.random() * 0.9);
@@ -3321,6 +3468,7 @@ function spawnParticles(x, y, color, count = 8, power = 120) {
 }
 
 function spawnWallImpact(x, y, oldX, oldY) {
+  if (settings?.impactEffects === false) return;
   const angle = Math.atan2(y - oldY, x - oldX) + Math.PI;
   for (let i = 0; i < 9; i++) {
     const spread = (Math.random() - 0.5) * 1.4;
@@ -3542,13 +3690,35 @@ function setMessage(text) {
   ui.message.classList.add("pulse");
 }
 
-function showRoundBanner(title, text, kicker = `Round ${game.roundNumber}`, duration = 2.2) {
+function showRoundBanner(title, text, kicker = `Round ${game.roundNumber}`, duration = 2.2, summary = null) {
   ui.roundKicker.textContent = kicker;
   ui.roundTitle.textContent = title;
   ui.roundText.textContent = text;
+  ui.roundSummary?.classList.toggle("hidden", !summary);
+  if (summary) {
+    if (ui.roundSummaryKills) ui.roundSummaryKills.textContent = String(Math.max(0, summary.kills || 0));
+    if (ui.roundSummaryCredits) ui.roundSummaryCredits.textContent = `+${Math.max(0, summary.credits || 0).toLocaleString("pt-BR")}`;
+    if (ui.roundSummaryThreat) ui.roundSummaryThreat.textContent = summary.threat || "ESTÁVEL";
+  }
   ui.roundBanner.classList.remove("hidden");
   ui.roundBanner.classList.toggle("spike-alert", title.toLowerCase().includes("spike") || text.toLowerCase().includes("spike plant"));
   game.roundBannerTimer = duration;
+}
+
+function outbreakNextThreatLabel(nextWave) {
+  if (nextWave === 11) return "ESCUDOS ATIVOS";
+  if (nextWave === 21) return "OPERATOR LIBERADA";
+  if (nextWave % 10 === 0) return "ONDA CRÍTICA";
+  if (nextWave > 11 && nextWave % 3 === 0) return "MAIS AMEAÇAS";
+  return nextWave <= 10 ? "ESCALADA LEVE" : "PRESSÃO CRESCENTE";
+}
+
+function outbreakWaveSummary() {
+  return {
+    kills: Math.max(0, (game.stats?.kills || 0) - (game.outbreakWaveStartKills || 0)),
+    credits: Math.max(0, game.outbreakWaveCredits || 0),
+    threat: outbreakNextThreatLabel(game.outbreakWave + 1),
+  };
 }
 
 function updateScoreboard() {
@@ -6089,7 +6259,9 @@ function eliminateBot(bot, { playerCredit = false, weaponName = "Poison Cloud", 
      }
    }
    if (!game.sandbox) {
-     game.money += botEliminationCredits({ headshot: playerCredit && headshot });
+     const reward = botEliminationCredits({ headshot: playerCredit && headshot });
+     game.money += reward;
+     if (game.outbreak) game.outbreakWaveCredits += reward;
      if (!game.training) game.money = Math.min(game.money, ECONOMY.cap);
    }
    if (game.spike.defuserId === bot.id) resetPartialDefuse();
@@ -6609,7 +6781,7 @@ function checkWinConditions() {
       }
       game.outbreakWaveDelay = 2.4;
       game.bullets = [];
-      showRoundBanner("SETOR LIMPO", "Próxima onda se aproximando", `ONDA ${game.outbreakWave}`, 2.2);
+      showRoundBanner("SETOR LIMPO", "Próxima onda se aproximando", `ONDA ${game.outbreakWave}`, 2.2, outbreakWaveSummary());
       setMessage("Outbreak: leitura sísmica detectada. Prepare-se para a próxima onda.");
     }
     return;
@@ -8585,6 +8757,9 @@ function updateUi() {
   toggleClass(ui.ultCounter, "ready", game.sandbox || ultReady);
   toggleClass(ui.ultCounter, "warning", game.ultFlashTimer > 0 && !ultReady);
   toggleClass(ui.ultCounter, "pulse", game.ultFlashTimer > 0);
+  if (ultReady && !game.tutorial && !game.sandbox) {
+    showContextTipOnce("ultimate-ready", `Ultimate de ${game.selectedAgent?.name || "agente"} pronta. Pressione ${settings.keys?.ability2 || "Q"} para usar.`);
+  }
   const ultimateAmmo = game.player.ultimate?.type === "jett"
     ? `${game.player.ultimate.knives || 0}/${game.player.ultimate.maxKnives || 6} dardos`
     : game.player.ultimate?.type === "raze"
@@ -8616,10 +8791,22 @@ function updateUi() {
       ? [game.outbreakEffects.lastModifierId, game.outbreakEffects.lastModifierUntil]
       : null));
   toggleClass(ui.outbreakEffectStock, "hidden", !activeModifier);
+  toggleClass(ui.outbreakContextHud, "hidden", !game.outbreak);
+  if (game.outbreak) {
+    setText(ui.outbreakHudWave, game.outbreakWave);
+    setText(ui.outbreakHudEnemies, game.bots.filter((bot) => bot.alive).length);
+    setText(ui.outbreakHudCredits, Math.max(0, game.money || 0).toLocaleString("pt-BR"));
+    toggleClass(ui.outbreakHudEffect, "hidden", !activeModifier);
+  }
   if (activeModifier) {
     const modifier = AIRDROP_MODIFIERS.find((item) => item.id === activeModifier[0]);
-    setText(ui.outbreakEffectStock, `${modifier.icon} ${modifier.name}`);
-    setStyle(ui.outbreakEffectStock, "color", modifier.color);
+    if (modifier) {
+      const remaining = Math.max(0, Math.ceil((activeModifier[1] - now) / 1000));
+      setText(ui.outbreakEffectStock, `${modifier.icon} ${modifier.name}`);
+      setStyle(ui.outbreakEffectStock, "color", modifier.color);
+      setText(ui.outbreakHudEffectText, `${modifier.name} ${remaining}s`);
+      setStyle(ui.outbreakHudEffectText, "color", modifier.color);
+    }
   }
   toggleClass(ui.spike, "planted", spikePlanted);
   toggleClass(ui.vitalsPanel, "hidden", game.outbreak);
@@ -8686,7 +8873,7 @@ function toggleShop() {
   }
 }
 
-function setShopTab(tab) {
+function setShopTab(tab, { preserveFeedback = false } = {}) {
   const hasAllies = game.outbreak || game.allyCount > 0 || game.sandbox || game.training;
   const hasUlts = game.outbreak;
   let nextTab = !hasAllies && tab === "allies" ? "weapons" : tab;
@@ -8703,10 +8890,20 @@ function setShopTab(tab) {
   });
   if (ui.shopTabs) {
     ui.shopTabs.querySelectorAll("[data-shop-tab]").forEach((button) => {
-      button.classList.toggle("active", button.dataset.shopTab === nextTab);
+      const selected = button.dataset.shopTab === nextTab;
+      button.classList.toggle("active", selected);
+      button.setAttribute("aria-selected", String(selected));
+      button.tabIndex = selected ? 0 : -1;
     });
   }
   game.shopTab = nextTab;
+  const descriptions = {
+    weapons: "Armas compradas podem ser reequipadas sem custo nesta partida.",
+    equipment: "Confira o tipo e a duração de cada melhoria antes de comprar.",
+    allies: game.outbreak ? "Recrute a unidade antes de liberar armas e sistemas de suporte." : "Personalize somente o equipamento dos aliados em campo.",
+    ults: "Esgote as cargas da Ultimate atual antes de trocar de agente.",
+  };
+  if (!preserveFeedback) setShopFeedback(descriptions[nextTab] || "Selecione um item para ver seu estado.");
 }
 
 function setSandboxTab(tab) {
@@ -8968,7 +9165,7 @@ function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
       button.title = item.label;
       button.innerHTML = "";
     } else if (state === "main") {
-      button.innerHTML = `${mainMenuIconSvg(item.icon || "star")}<b>${item.label}</b>`;
+      button.innerHTML = `${mainMenuIconSvg(item.icon || "star")}<span class="menu-button-copy"><b>${item.label}</b>${item.description ? `<small>${item.description}</small>` : ""}</span>`;
     } else if (state === "difficulty") {
       const stars = Math.max(1, item.stars || 1);
       button.classList.add("difficulty-button", `difficulty-button-${stars}`);
@@ -9480,8 +9677,11 @@ function showMainMenu() {
   game.menuMapTimer = 0;
   game.pauseReturnState = null;
   fullReset();
+  let lastMode = "";
+  try { lastMode = localStorage.getItem("valorant2d-last-mode") || ""; } catch {}
+  const lastModeLabel = ({ default: "DEFAULT", blackout: "BLACKOUT", outbreak: "OUTBREAK", sandbox: "SANDBOX", training: "TREINO" })[lastMode];
   setMenu("Valorant 2D", "", [
-    { label: "JOGAR", icon: "gamepad", action: showModeSelect, onboardingTarget: "play" },
+    { label: "JOGAR", description: lastModeLabel ? `ÚLTIMO: ${lastModeLabel}` : "ESCOLHA SEU MODO", icon: "gamepad", action: showModeSelect, onboardingTarget: "play" },
     { label: "OPÇÕES", icon: "tools", action: showOptionsMenu },
     { label: "LOJA", icon: "store", action: openCommerceStore, onboardingTarget: "store" },
     { label: "ESTATÍSTICAS", icon: "stats", action: showStatisticsMenu },
@@ -9629,6 +9829,7 @@ function renderModeSelect() {
 
 function selectPlayMode(modeId) {
   game.playMode = modeId;
+  try { localStorage.setItem("valorant2d-last-mode", modeId); } catch {}
   if (modeId === "sandbox") { startSandboxMode(); return; }
   if (modeId === "training") { startTrainingMode(); return; }
   if (modeId === "outbreak") {
@@ -9888,6 +10089,7 @@ const OPTIONS_TABS = [
   { id: "crosshair", label: "MIRA" },
   { id: "audio", label: "ÁUDIO" },
   { id: "video", label: "VÍDEO" },
+  { id: "accessibility", label: "ACESS." },
   { id: "developer", label: "DESENVOLVEDOR", adminOnly: true },
 ];
 
@@ -9901,6 +10103,9 @@ const OPTIONS_DEFAULTS = {
   showTips: true,
   showKillFeed: true,
   showMoneyDelta: true,
+  reduceMotion: false,
+  highContrast: false,
+  largeText: false,
   killFeedScale: 100,
   messageDuration: 3,
   movementScheme: "wasd",
@@ -9952,6 +10157,9 @@ game.showPing = Boolean(settings.showPing);
 game.arrowKeys = settings.movementScheme === "arrows";
 game.crosshairScale = (Number(settings.crosshairSize) || 100) / 100;
 document.documentElement.style.setProperty("--kill-feed-scale", String((Number(settings.killFeedScale) || 100) / 100));
+document.documentElement.classList.toggle("ux-reduced-motion", Boolean(settings.reduceMotion));
+document.documentElement.classList.toggle("ux-high-contrast", Boolean(settings.highContrast));
+document.documentElement.classList.toggle("ux-large-text", Boolean(settings.largeText));
 let activeOptionsTab = "general";
 let pendingKeyBind = null;
 let optionsFeedback = "";
@@ -10030,6 +10238,9 @@ function applyOptionsRuntime(source) {
   audio.enabled = !next.muted;
   setMasterAudioVolume((Number(next.masterVolume) || 0) / 100);
   document.documentElement.style.setProperty("--kill-feed-scale", String((Number(next.killFeedScale) || 100) / 100));
+  document.documentElement.classList.toggle("ux-reduced-motion", Boolean(next.reduceMotion));
+  document.documentElement.classList.toggle("ux-high-contrast", Boolean(next.highContrast));
+  document.documentElement.classList.toggle("ux-large-text", Boolean(next.largeText));
   try { localStorage.setItem(OPTIONS_STORAGE_KEY, JSON.stringify(next)); } catch {}
   updateUi();
 }
@@ -10168,10 +10379,16 @@ function handleOptionsKeyCapture(event) {
   if (!pendingKeyBind || game.menuState !== "options") return false;
   event.preventDefault();
   event.stopPropagation();
-  optionsSettings.keys[pendingKeyBind] = event.key === " " ? "SPACE" : event.key.toUpperCase();
+  const action = pendingKeyBind;
+  const previousKey = optionsSettings.keys[action];
+  const nextKey = event.key === " " ? "SPACE" : event.key.toUpperCase();
+  const conflictingAction = Object.entries(optionsSettings.keys)
+    .find(([key, value]) => key !== action && normalizeKeyLabel(value) === normalizeKeyLabel(nextKey))?.[0];
+  optionsSettings.keys[action] = nextKey;
+  if (conflictingAction) optionsSettings.keys[conflictingAction] = previousKey;
   pendingKeyBind = null;
   queuePreferencesSync();
-  renderOptionsMenu();
+  showOptionsFeedback(conflictingAction ? "Atalhos trocados para evitar conflito" : "Atalho atualizado");
   return true;
 }
 
@@ -10260,13 +10477,37 @@ function renderGeneralOptions() {
       })()),
       ToggleSwitch("Mostrar FPS", "showFps"),
       ToggleSwitch("Mostrar Ping", "showPing"),
-      ToggleSwitch("Mostrar dicas", "showTips"),
     ]),
     optionSection("INTERFACE", [
       ToggleSwitch("Mostrar Kill Feed", "showKillFeed"),
       ToggleSwitch("Mostrar dinheiro ganho", "showMoneyDelta"),
       SettingSlider("Tamanho do Kill Feed", "killFeedScale", 50, 200, 5, "%"),
       SettingSlider("Duração das mensagens", "messageDuration", 1, 5, 0.5, "s"),
+    ]),
+  ];
+}
+
+function renderAccessibilityOptions() {
+  const resetTipsButton = createOptionElement("button", "option-keybind", "MOSTRAR NOVAMENTE");
+  resetTipsButton.type = "button";
+  resetTipsButton.addEventListener("click", () => {
+    for (const id of ["outbreak-shop", "standard-shop", "objective-attackers", "objective-defenders", "ultimate-ready", "outbreak-start"]) {
+      try { localStorage.removeItem(`valorant2d-context-tip-${id}`); } catch {}
+      shownContextTips.delete(id);
+    }
+    showOptionsFeedback("Dicas contextuais reativadas");
+  });
+  attachButtonFeedback(resetTipsButton);
+  return [
+    optionSection("LEITURA E MOVIMENTO", [
+      ToggleSwitch("Reduzir animações", "reduceMotion"),
+      ToggleSwitch("Alto contraste", "highContrast"),
+      ToggleSwitch("Texto ampliado", "largeText"),
+    ]),
+    optionSection("ASSISTÊNCIA", [
+      ToggleSwitch("Mostrar dicas", "showTips"),
+      ToggleSwitch("Destacar passos", "highlightSteps"),
+      optionRow("Dicas contextuais", resetTipsButton, "Permite rever instruções exibidas apenas na primeira utilização."),
     ]),
   ];
 }
@@ -10322,14 +10563,13 @@ function renderCrosshairOptions() {
 function renderAudioOptions() {
   return [
     optionSection("VOLUME", [
-      SettingSlider("🔊 Volume Geral", "masterVolume", 0, 100, 1, "%"),
+      SettingSlider("Volume Geral", "masterVolume", 0, 100, 1, "%"),
       SettingSlider("Música", "musicVolume", 0, 100, 1, "%"),
       SettingSlider("Efeitos de Som", "sfxVolume", 0, 100, 1, "%"),
       SettingSlider("Comunicação/Voz", "voiceVolume", 0, 100, 1, "%"),
     ]),
     optionSection("OPÇÕES", [
       ToggleSwitch("Som Mudo", "muted"),
-      ToggleSwitch("Destacar passos de inimigos", "highlightSteps"),
       ToggleSwitch("Efeitos de impacto", "impactEffects"),
     ]),
   ];
@@ -10497,6 +10737,7 @@ function renderOptionsContent() {
   if (activeOptionsTab === "crosshair") return renderCrosshairOptions();
   if (activeOptionsTab === "audio") return renderAudioOptions();
   if (activeOptionsTab === "video") return renderVideoOptions();
+  if (activeOptionsTab === "accessibility") return renderAccessibilityOptions();
   if (activeOptionsTab === "developer") return renderDeveloperOptions();
   return renderGeneralOptions();
 }
@@ -10520,6 +10761,9 @@ function applyOptionsSettings() {
   game.showPing = Boolean(settings.showPing);
   game.messageTimer = Math.max(game.messageTimer || 0, settings.messageDuration);
   document.documentElement.style.setProperty("--kill-feed-scale", String(settings.killFeedScale / 100));
+  document.documentElement.classList.toggle("ux-reduced-motion", Boolean(settings.reduceMotion));
+  document.documentElement.classList.toggle("ux-high-contrast", Boolean(settings.highContrast));
+  document.documentElement.classList.toggle("ux-large-text", Boolean(settings.largeText));
   game.hudOpacity = Math.max(0.5, Math.min(1.5, settings.brightness / 100));
   audio.enabled = !settings.muted;
   setMasterAudioVolume(settings.masterVolume / 100);
@@ -10540,11 +10784,12 @@ function applyOptionsSettings() {
 
 function resetOptionsSettings() {
   const tabDefaults = {
-    general: ["language", "playerName", "showFps", "showPing", "showTips"],
+    general: ["language", "playerName", "showFps", "showPing"],
     controls: ["movementScheme", "mouseSensitivity", "adsSensitivity", "invertY", "keys"],
     crosshair: ["crosshairType", "crosshairColor", "crosshairCustomColor", "crosshairSize", "crosshairThickness", "crosshairOpacity", "crosshairGap"],
-    audio: ["masterVolume", "musicVolume", "sfxVolume", "voiceVolume", "muted", "highlightSteps", "impactEffects"],
+    audio: ["masterVolume", "musicVolume", "sfxVolume", "voiceVolume", "muted", "impactEffects"],
     video: ["displayMode", "resolution", "fpsLimit", "vsync", "quality", "brightness", "particles", "bloodEffects", "shadows"],
+    accessibility: ["reduceMotion", "highContrast", "largeText", "showTips", "highlightSteps"],
   };
   for (const key of tabDefaults[activeOptionsTab] || []) {
     optionsSettings[key] = cloneOptions(OPTIONS_DEFAULTS[key]);
@@ -10699,6 +10944,8 @@ function deployOutbreakWave(wave) {
   game.outbreakAdminShopResume = false;
   ui.outbreakShopFooter?.classList.add("hidden");
   game.outbreakWave = wave;
+  game.outbreakWaveStartKills = Math.max(0, game.stats?.kills || 0);
+  game.outbreakWaveCredits = 0;
   game.roundNumber = wave;
   synchronizePlayerEquipment();
   game.bots = createOutbreakWave(wave);
@@ -10710,6 +10957,7 @@ function deployOutbreakWave(wave) {
   game.outbreakWaveDelay = 0;
   showRoundBanner(`ONDA ${wave}`, `${game.bots.length} ameaças detectadas`, "OUTBREAK", 2.4);
   setMessage(`Outbreak: onda ${wave} iniciada. Elimine todas as ameaças.`);
+  if (wave === 1) showContextTipOnce("outbreak-start", "Med-kits restauram vida. Airdrops concedem modificadores temporários e mostram seu efeito antes da coleta.");
 }
 
 /**
@@ -10736,6 +10984,7 @@ function openOutbreakShopBreak({ resumeCurrentWave = false } = {}) {
     "Equipe-se antes de continuar",
     resumeCurrentWave ? `ONDA ${game.outbreakWave} PAUSADA` : `ONDA ${game.outbreakWave} CONCLUÍDA`,
     3,
+    resumeCurrentWave ? null : outbreakWaveSummary(),
   );
   setMessage(resumeCurrentWave
     ? "Admin: combate pausado. Clique em Continuar para retomar a wave atual."
@@ -10779,6 +11028,8 @@ function startOutbreakMode() {
   hideMenuOverlay();
   startNewMatch();
   game.outbreakWave = 1;
+  game.outbreakWaveStartKills = 0;
+  game.outbreakWaveCredits = 0;
   game.outbreakElapsed = 0;
   game.outbreakLastDamageAt = -5;
   game.outbreakWaveDelay = 0;
@@ -10968,6 +11219,16 @@ function equipmentIconSvg(itemId) {
   return icons[itemId] || icons.reloadKit;
 }
 
+function equipmentDurationLabel(item) {
+  if (!item) return "";
+  if (item.id === "fullRecovery") return "EFEITO IMEDIATO";
+  if (item.id === "superShield") return "EFEITO PERMANENTE";
+  if (["magazine", "ultraShield", "blasterShield", "adrenaline"].includes(item.id) && game.outbreak) {
+    return `ATÉ A ONDA ${game.outbreakWave + 10}`;
+  }
+  return item.outbreakOnly ? "VÁLIDO NO OUTBREAK" : "VÁLIDO NA PARTIDA";
+}
+
 function buildShop() {
   renderWeaponCategoryTabs();
   renderWeaponCards();
@@ -10982,17 +11243,18 @@ function buildShop() {
       <span class="equip-icon">${equipmentIconSvg(item.id)}</span>
       <b>${item.name}</b>
       <span>${kind}. ${item.desc}</span>
-      <em>$${item.price}</em>
+      <small class="equip-duration">${equipmentDurationLabel(item)}</small>
+      <span class="equip-card-action"><strong class="equip-card-state">COMPRAR</strong><em>$${item.price}</em></span>
     `;
     button.addEventListener("click", () => {
       if (game.phase !== "buy" && !game.sandbox) return;
       if (equipmentOwned(item)) {
-        setMessage("Esse equipamento ja esta ativo.");
+        announceShopResult("Esse equipamento já está ativo.");
         updateUi();
         return;
       }
       if (game.money < item.price) {
-        setMessage("Creditos insuficientes.");
+        announceShopResult(`Faltam $${item.price - game.money} para comprar ${item.name}.`);
         updateUi();
         return;
       }
@@ -11000,7 +11262,7 @@ function buildShop() {
       item.apply();
       synchronizePlayerEquipment();
       game.player.ammo = Math.min(currentMagSize(), Math.max(game.player.ammo, currentMagSize()));
-      setMessage(`${item.name} comprado.`);
+      announceShopResult(`${item.name} comprado e aplicado.`, { success: true, title: "COMPRA CONCLUÍDA" });
       updateShopState();
       updateUi();
     });
@@ -11108,7 +11370,7 @@ function renderAllyShop() {
 function buyAllyItem(item) {
   if (!item || (game.phase !== "buy" && !game.sandbox)) return;
   if (game.outbreak && item.id !== "allyUnit" && !game.allyLoadout.recruited) {
-    setMessage("Recrute o aliado antes de adquirir armas ou acessórios.");
+    announceShopResult("Recrute o aliado antes de adquirir armas ou acessórios.", { title: "ITEM BLOQUEADO" });
     updateUi();
     return;
   }
@@ -11117,12 +11379,12 @@ function buyAllyItem(item) {
     game.allyLoadout.weaponId = item.weaponId;
   } else {
     if (allyItemOwned(item)) {
-      setMessage("Esse sistema aliado já está ativo.");
+      announceShopResult("Esse sistema aliado já está ativo.");
       updateUi();
       return;
     }
     if (game.money < item.price) {
-      setMessage("Créditos insuficientes.");
+      announceShopResult(`Faltam $${item.price - game.money} para adquirir ${item.name}.`);
       updateUi();
       return;
     }
@@ -11138,7 +11400,7 @@ function buyAllyItem(item) {
       ally.armor = game.allyLoadout.armor || 0;
     }
   }
-  setMessage(weaponOwned ? `${item.name} equipado no aliado.` : `${item.name} adquirido para o aliado.`);
+  announceShopResult(weaponOwned ? `${item.name} equipado no aliado.` : `${item.name} adquirido para o aliado.`, { success: true, title: weaponOwned ? "EQUIPAMENTO ALTERADO" : "COMPRA CONCLUÍDA" });
   updateShopState();
   updateUi();
 }
@@ -11147,17 +11409,17 @@ function buyOutbreakUlt(item) {
   if (!game.outbreak || !canUseShop()) return;
   const inventory = game.outbreakUltInventory;
   if (inventory.charges > 0 && inventory.agentId !== item.id) {
-    setMessage(`Use todas as cargas de ${agentById(inventory.agentId)?.name || "sua Ult"} antes de trocar.`);
+    announceShopResult(`Use todas as cargas de ${agentById(inventory.agentId)?.name || "sua Ult"} antes de trocar.`, { title: "ULTIMATE BLOQUEADA" });
     return;
   }
   if (game.money < item.price) {
-    setMessage("Créditos insuficientes.");
+    announceShopResult(`Faltam $${item.price - game.money} para comprar esta Ultimate.`);
     return;
   }
   game.money -= item.price;
   inventory.agentId = item.id;
   inventory.charges += 1;
-  setMessage(`Ultimate de ${item.name}: ${inventory.charges} carga(s).`);
+  announceShopResult(`Ultimate de ${item.name}: ${inventory.charges} carga(s).`, { success: true, title: "ULTIMATE ADQUIRIDA" });
   updateShopState();
   updateUi();
 }
@@ -11169,6 +11431,17 @@ function updateEquipmentCardState(button, item) {
   button.classList.toggle("owned", owned);
   button.classList.toggle("cant-afford", cantAfford);
   button.disabled = !canUseShop() || owned;
+  const state = button.querySelector(".equip-card-state");
+  const price = button.querySelector(".equip-card-action em");
+  if (state) state.textContent = owned ? "ATIVO" : cantAfford ? `FALTAM $${item.price - game.money}` : "COMPRAR";
+  if (price) price.textContent = owned ? "OBTIDO" : `$${item.price}`;
+  const explanation = owned
+    ? `${item.name} já está ativo.`
+    : cantAfford
+      ? `Faltam ${item.price - game.money} créditos.`
+      : `${item.name} disponível por ${item.price} créditos.`;
+  button.title = explanation;
+  button.setAttribute("aria-label", explanation);
 }
 
 function renderWeaponCategoryTabs() {
@@ -11249,6 +11522,14 @@ function updateWeaponCardState(button, weapon) {
         ? "Comprada"
         : `$${weapon.price}`;
   }
+  button.title = weapon === game.selectedWeapon
+    ? `${weapon.name} está equipada.`
+    : owned
+      ? `Equipar ${weapon.name} sem custo.`
+      : canBuy
+        ? `Comprar ${weapon.name} por ${weapon.price} créditos.`
+        : `Faltam ${weapon.price - game.money} créditos para ${weapon.name}.`;
+  button.setAttribute("aria-label", button.title);
 }
 
 function buyWeapon(weapon) {
@@ -11256,7 +11537,7 @@ function buyWeapon(weapon) {
   game.shopTransactionLocked = true;
   const alreadyOwned = game.ownedWeapons.has(weapon.id);
   if (!alreadyOwned && game.money < weapon.price) {
-    setMessage("Creditos insuficientes.");
+    announceShopResult(`Faltam $${weapon.price - game.money} para comprar ${weapon.name}.`);
     game.shopTransactionLocked = false;
     updateShopState();
     updateUi();
@@ -11269,7 +11550,7 @@ function buyWeapon(weapon) {
   game.selectedWeapon = weapon;
   game.player.weapon = weapon;
   game.player.ammo = currentMagSize();
-  setMessage(alreadyOwned ? `${weapon.name} equipada.` : `${weapon.name} comprada e equipada.`);
+  announceShopResult(alreadyOwned ? `${weapon.name} equipada.` : `${weapon.name} comprada e equipada.`, { success: true, title: alreadyOwned ? "ARMA EQUIPADA" : "COMPRA CONCLUÍDA" });
   updateShopState();
   updateUi();
   window.setTimeout(() => {
@@ -11323,7 +11604,7 @@ function updateShopState() {
   alliesPanel?.classList.toggle("disabled", !hasAllies);
   if (!hasAllies && game.shopTab === "allies") game.shopTab = "weapons";
   if (!game.outbreak && game.shopTab === "ults") game.shopTab = "weapons";
-  setShopTab(game.shopTab);
+  setShopTab(game.shopTab, { preserveFeedback: true });
   renderWeaponCategoryTabs();
   [...(ui.weaponButtons?.children || [])].forEach((button, i) => {
     const weapon = weaponsForCurrentCategory()[i];
@@ -11347,6 +11628,16 @@ function updateShopState() {
     const price = button.querySelector(".ally-card-price");
     if (status) status.textContent = active ? "ATIVO" : owned ? "EQUIPAR" : locked ? "BLOQUEADO" : item.id === "allyUnit" ? "RECRUTAR" : "ADQUIRIR";
     if (price) price.textContent = owned ? "OBTIDO" : `$${item.price}`;
+    button.title = locked
+      ? "Recrute primeiro uma unidade aliada."
+      : active
+        ? `${item.name} está ativo.`
+        : owned
+          ? `Equipar ${item.name} sem custo.`
+          : game.money < item.price
+            ? `Faltam ${item.price - game.money} créditos.`
+            : `Adquirir ${item.name} por ${item.price} créditos.`;
+    button.setAttribute("aria-label", button.title);
   });
   [...(ui.ultButtons?.children || [])].forEach((card, i) => {
     const item = purchasableUlts[i];
@@ -11355,7 +11646,16 @@ function updateShopState() {
     card.classList.toggle("is-selected", inventory.agentId === item?.id && inventory.charges > 0);
     card.classList.toggle("is-locked", locked);
     const buy = card.querySelector(".ult-buy-button");
-    if (buy) buy.disabled = !canUseShop() || locked || game.money < item.price;
+    if (buy) {
+      const cantAfford = game.money < item.price;
+      buy.disabled = !canUseShop() || locked || cantAfford;
+      buy.innerHTML = locked
+        ? "USE A ULT ATUAL"
+        : cantAfford
+          ? `FALTAM <em>$${item.price - game.money}</em>`
+          : `COMPRAR <em>$${item.price}</em>`;
+      buy.title = locked ? "Esgote as cargas atuais antes de trocar." : cantAfford ? `Faltam ${item.price - game.money} créditos.` : "Comprar uma carga de Ultimate.";
+    }
   });
 }
 
@@ -11653,6 +11953,7 @@ document.querySelectorAll("[data-password-toggle]").forEach((button) => {
   });
 });
 ui.guestButton?.addEventListener("click", enterAsGuest);
+ui.serverRetryButton?.addEventListener("click", () => void wakeRenderServer({ force: true }));
 ui.logoutButton?.addEventListener("click", logoutCurrentProfile);
 ui.menuTutorialButton?.addEventListener("click", () => showWelcomeScreen({ firstAccess: false }));
 ui.welcomeTutorialButton?.addEventListener("click", () => void leaveWelcomeScreen("tutorial"));
