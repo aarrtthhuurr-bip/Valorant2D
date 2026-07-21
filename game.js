@@ -7439,13 +7439,6 @@ function drawEntity(entity, color, label, kind = "bot") {
     ctx.arc(0, 0, entity.r + 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * armorRatio);
     ctx.stroke();
   }
-  ctx.fillStyle = kind === "player" ? "#101820" : "#0b1115";
-  ctx.beginPath();
-  ctx.moveTo(entity.r + 14, 0);
-  ctx.lineTo(2, -7);
-  ctx.lineTo(2, 7);
-  ctx.closePath();
-  ctx.fill();
   drawHeldWeapon(entity, weapon, kind);
   ctx.fillStyle = "#0b1115";
   ctx.fillRect(-8, -entity.r - 2, 16, 5);
