@@ -1445,17 +1445,18 @@ const weaponSpriteFiles = {
 
 const weaponSpriteVisuals = {
   // Escala relativa inspirada no porte das armas no Valorant. Esta tabela é
-  // aplicada tanto ao modelo padrão quanto a qualquer skin equipada.
-  pistol: { width: 32, gripX: -5, gripY: 1 },
-  "light-pistol": { width: 30, gripX: -5, gripY: 1 },
-  revolver: { width: 38, gripX: -6, gripY: 1 },
-  smg: { width: 47, gripX: -7, gripY: 1 },
-  shotgun: { width: 56, gripX: -8, gripY: 1 },
-  carbine: { width: 53, gripX: -8, gripY: 1 },
-  rifle: { width: 56, gripX: -8, gripY: 1 },
-  dmr: { width: 60, gripX: -9, gripY: 1 },
-  lmg: { width: 66, gripX: -10, gripY: 2 },
-  sniper: { width: 69, gripX: -10, gripY: 1 },
+  // aplicada tanto ao modelo padrão quanto a qualquer skin equipada. gripRatio
+  // indica onde o cabo está dentro da imagem já espelhada para a direita.
+  pistol: { width: 44, gripRatio: 0.26, handInset: 4, gripY: 1 },
+  "light-pistol": { width: 40, gripRatio: 0.13, handInset: 4, gripY: 1 },
+  revolver: { width: 51, gripRatio: 0.24, handInset: 4, gripY: 1 },
+  smg: { width: 64, gripRatio: 0.38, handInset: 4, gripY: 1 },
+  shotgun: { width: 76, gripRatio: 0.34, handInset: 4, gripY: 1 },
+  carbine: { width: 72, gripRatio: 0.36, handInset: 4, gripY: 1 },
+  rifle: { width: 76, gripRatio: 0.38, handInset: 4, gripY: 1 },
+  dmr: { width: 81, gripRatio: 0.36, handInset: 4, gripY: 1 },
+  lmg: { width: 90, gripRatio: 0.37, handInset: 5, gripY: 2 },
+  sniper: { width: 96, gripRatio: 0.34, handInset: 5, gripY: 1 },
 };
 
 const weaponSpriteCache = new Map();
@@ -7405,9 +7406,10 @@ function drawHeldWeapon(entity, weapon, kind) {
     const width = config.width;
     const height = Math.max(8, width * (image.naturalHeight / image.naturalWidth));
     const leftFacing = Math.cos(entity.angle || 0) < 0;
-    const gripX = entity.r + config.gripX;
+    const handX = entity.r - config.handInset;
+    const spriteLeft = handX - width * config.gripRatio;
     const gripY = config.gripY - height / 2;
-    const drawX = -gripX - width;
+    const drawX = -spriteLeft - width;
     const drawY = leftFacing ? -gripY - height : gripY;
 
     ctx.save();
@@ -7426,7 +7428,7 @@ function drawHeldWeapon(entity, weapon, kind) {
   const width = visual.width * scale;
   const barrel = visual.barrel * scale;
   const stock = visual.stock * scale;
-  const grip = entity.r + config.gripX;
+  const grip = entity.r - config.handInset;
   ctx.fillStyle = "rgba(0,0,0,0.42)";
   ctx.fillRect(grip - 1, -width / 2 - 1, length, width + 2);
   ctx.fillStyle = visual.color;
