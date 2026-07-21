@@ -7361,15 +7361,9 @@ function drawHeldWeapon(entity, weapon, kind) {
 
     ctx.save();
     ctx.scale(-1, leftFacing ? -1 : 1);
-    ctx.shadowColor = kind === "player" ? "rgba(225,250,255,0.82)" : "rgba(120,220,255,0.68)";
-    ctx.shadowBlur = kind === "player" ? 7 : 6;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
+    // Durante a partida, o sprite deve preservar seus pixels e transparência
+    // originais, sem halo que suavize as bordas ou altere a leitura da arma.
     ctx.drawImage(image, drawX, drawY, width, height);
-    ctx.shadowColor = "transparent";
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
     ctx.restore();
     return;
   }
