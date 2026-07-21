@@ -1446,16 +1446,16 @@ const weaponSpriteFiles = {
 const weaponSpriteVisuals = {
   // Escala relativa inspirada no porte das armas no Valorant. Esta tabela é
   // aplicada tanto ao modelo padrão quanto a qualquer skin equipada.
-  pistol: { width: 29, gripX: -3, gripY: 1 },
-  "light-pistol": { width: 27, gripX: -3, gripY: 1 },
-  revolver: { width: 35, gripX: -4, gripY: 1 },
-  smg: { width: 43, gripX: -5, gripY: 1 },
-  shotgun: { width: 52, gripX: -6, gripY: 1 },
-  carbine: { width: 49, gripX: -6, gripY: 1 },
-  rifle: { width: 52, gripX: -6, gripY: 1 },
-  dmr: { width: 56, gripX: -7, gripY: 1 },
-  lmg: { width: 61, gripX: -8, gripY: 2 },
-  sniper: { width: 64, gripX: -8, gripY: 1 },
+  pistol: { width: 32, gripX: -5, gripY: 1 },
+  "light-pistol": { width: 30, gripX: -5, gripY: 1 },
+  revolver: { width: 38, gripX: -6, gripY: 1 },
+  smg: { width: 47, gripX: -7, gripY: 1 },
+  shotgun: { width: 56, gripX: -8, gripY: 1 },
+  carbine: { width: 53, gripX: -8, gripY: 1 },
+  rifle: { width: 56, gripX: -8, gripY: 1 },
+  dmr: { width: 60, gripX: -9, gripY: 1 },
+  lmg: { width: 66, gripX: -10, gripY: 2 },
+  sniper: { width: 69, gripX: -10, gripY: 1 },
 };
 
 const weaponSpriteCache = new Map();
@@ -7426,22 +7426,23 @@ function drawHeldWeapon(entity, weapon, kind) {
   const width = visual.width * scale;
   const barrel = visual.barrel * scale;
   const stock = visual.stock * scale;
+  const grip = entity.r + config.gripX;
   ctx.fillStyle = "rgba(0,0,0,0.42)";
-  ctx.fillRect(entity.r - 1, -width / 2 - 1, length, width + 2);
+  ctx.fillRect(grip - 1, -width / 2 - 1, length, width + 2);
   ctx.fillStyle = visual.color;
-  ctx.fillRect(entity.r, -width / 2, length, width);
+  ctx.fillRect(grip, -width / 2, length, width);
   ctx.fillStyle = "#101820";
-  ctx.fillRect(entity.r + length - 1, -1.2, barrel, 2.4);
-  ctx.fillRect(entity.r - stock, -width / 2 + 1, stock, Math.max(2, width - 2));
+  ctx.fillRect(grip + length - 1, -1.2, barrel, 2.4);
+  ctx.fillRect(grip - stock, -width / 2 + 1, stock, Math.max(2, width - 2));
   if (weapon?.id === "lmg") {
     ctx.fillStyle = "#596875";
-    ctx.fillRect(entity.r + 6, width / 2, 8, 5);
+    ctx.fillRect(grip + 6, width / 2, 8, 5);
   }
   if (weapon?.id === "sniper") {
     ctx.strokeStyle = kind === "player" ? "#ffd166" : "#9bd4ff";
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(entity.r + 11, -width, 3, 0, Math.PI * 2);
+    ctx.arc(grip + 11, -width, 3, 0, Math.PI * 2);
     ctx.stroke();
   }
 }
