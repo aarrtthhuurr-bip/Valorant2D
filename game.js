@@ -2625,6 +2625,41 @@ function makePlayer() {
   };
 }
 
+/**
+ * Recoloca imediatamente o jogador eliminado no spawn do lado atual sem
+ * reconstruir o Sandbox. Bots, paredes, itens e ajustes do painel permanecem.
+ */
+function respawnSandboxPlayer() {
+  if (!game.sandbox || !game.player) return false;
+  const spawn = game.playerSide === "attackers"
+    ? map.attackersSpawn
+    : map.playerDefenderSpawn || map.defendersSpawn?.[0];
+  if (!spawn) return false;
+
+  const player = game.player;
+  player.x = spawn.x;
+  player.y = spawn.y;
+  player.lastX = spawn.x;
+  player.lastY = spawn.y;
+  player.hp = player.maxHp || 100;
+  player.armor = player.maxArmor || 0;
+  player.alive = true;
+  player.ammo = currentMagSize();
+  player.orbChannel = null;
+  player.orbAssignment = null;
+  game.armor = player.armor;
+  game.reloadTimer = 0;
+  game.damageFlash = 0;
+  game.damageIndicator = null;
+  game.neonSpeedHeld = false;
+  game.neonSpeedActive = false;
+  resetPartialDefuse();
+  sanitizeEntityPosition(player);
+  spawnParticles(player.x, player.y, game.playerSide === "attackers" ? "#ff6b74" : "#55b9ff", 18, 135);
+  setMessage(`Sandbox: respawn imediato no Spawn ${game.playerSide === "attackers" ? "ATK" : "DEF"}.`);
+  return true;
+}
+
 function botWeaponForRound(index) {
   const r = game.roundNumber;
   if (r >= 13) return [weapons[7], weapons[8], weapons[9]][index % 3];
@@ -6715,6 +6750,7 @@ function updateBullets(dt) {
               game.player.y = map.attackersSpawn.y;
               break;
             }
+            if (respawnSandboxPlayer()) break;
             if (game.outbreak) {
               showOutbreakGameOver("AGENTE ELIMINADO");
             } else {
@@ -6765,6 +6801,18 @@ function updateSpike(dt) {
         game.player.hp = 0;
         game.player.alive = false;
         game.stats.deaths += 1;
+      }
+      if (game.sandbox) {
+        if (playerCaught) respawnSandboxPlayer();
+        game.spike.state = "dropped";
+        game.spike.owner = null;
+        game.spike.timer = 0;
+        game.spike.plantProgress = 0;
+        game.spike.defuseProgress = 0;
+        setMessage(playerCaught
+          ? `Sandbox: explosão concluída e respawn no Spawn ${game.playerSide === "attackers" ? "ATK" : "DEF"}.`
+          : "Sandbox: explosão concluída.");
+        return;
       }
       endRound(
         "attackers",
@@ -6952,6 +7000,7 @@ function updateTimers(dt) {
           target.alive = false;
           if (target.id === "player") {
             game.stats.deaths += 1;
+            if (respawnSandboxPlayer()) continue;
             if (game.outbreak) showOutbreakGameOver("CONTAMINAÇÃO CRÍTICA");
             else endRound(opposingSide(game.playerSide), "A névoa química eliminou você.");
           }
