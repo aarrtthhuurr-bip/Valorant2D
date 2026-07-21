@@ -1444,16 +1444,18 @@ const weaponSpriteFiles = {
 };
 
 const weaponSpriteVisuals = {
-  pistol: { width: 32, gripX: -3, gripY: 1 },
-  "light-pistol": { width: 30, gripX: -3, gripY: 1 },
-  revolver: { width: 34, gripX: -3, gripY: 1 },
-  smg: { width: 40, gripX: -4, gripY: 1 },
-  shotgun: { width: 45, gripX: -5, gripY: 1 },
-  carbine: { width: 45, gripX: -5, gripY: 1 },
-  rifle: { width: 47, gripX: -5, gripY: 1 },
-  dmr: { width: 47, gripX: -5, gripY: 1 },
-  lmg: { width: 50, gripX: -6, gripY: 2 },
-  sniper: { width: 54, gripX: -6, gripY: 1 },
+  // Escala relativa inspirada no porte das armas no Valorant. Esta tabela é
+  // aplicada tanto ao modelo padrão quanto a qualquer skin equipada.
+  pistol: { width: 29, gripX: -3, gripY: 1 },
+  "light-pistol": { width: 27, gripX: -3, gripY: 1 },
+  revolver: { width: 35, gripX: -4, gripY: 1 },
+  smg: { width: 43, gripX: -5, gripY: 1 },
+  shotgun: { width: 52, gripX: -6, gripY: 1 },
+  carbine: { width: 49, gripX: -6, gripY: 1 },
+  rifle: { width: 52, gripX: -6, gripY: 1 },
+  dmr: { width: 56, gripX: -7, gripY: 1 },
+  lmg: { width: 61, gripX: -8, gripY: 2 },
+  sniper: { width: 64, gripX: -8, gripY: 1 },
 };
 
 const weaponSpriteCache = new Map();
@@ -7395,10 +7397,10 @@ function drawHeldWeapon(entity, weapon, kind) {
     ctx.fillRect(entity.r + 26, -4, 10, 8);
     return;
   }
+  const config = weaponSpriteVisuals[weapon?.id] || weaponSpriteVisuals.pistol;
   const equippedSkin = kind === "player" ? equippedWeaponSkinPaths[weapon?.id] : "";
   const sprite = getWeaponSprite(weapon, equippedSkin);
   if (sprite?.ready && !sprite.failed) {
-    const config = weaponSpriteVisuals[weapon?.id] || weaponSpriteVisuals.pistol;
     const image = sprite.image;
     const width = config.width;
     const height = Math.max(8, width * (image.naturalHeight / image.naturalWidth));
@@ -7417,7 +7419,9 @@ function drawHeldWeapon(entity, weapon, kind) {
     return;
   }
   const visual = weaponVisual(weapon);
-  const scale = 0.72;
+  // O desenho vetorial de contingência conserva o mesmo comprimento visual
+  // do sprite, evitando um salto de tamanho enquanto a imagem está carregando.
+  const scale = config.width / Math.max(1, visual.length + visual.barrel);
   const length = visual.length * scale;
   const width = visual.width * scale;
   const barrel = visual.barrel * scale;
