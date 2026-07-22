@@ -1143,7 +1143,8 @@ const AUDIO_MIX = {
   round_end_win: 0.36,
   round_end_lose: 0.34,
   spike: 0.44,
-  ability: 0.3,
+  ability: 0.36,
+  ultimate: 0.5,
   pickup: 0.32,
   denied: 0.24,
   ingame_purchase: 0.36,
@@ -1164,6 +1165,8 @@ const AUDIO_THROTTLE_MS = {
   bot_hit: 28,
   bot_headshot: 42,
   bot_kill: 70,
+  ability: 90,
+  ultimate: 650,
   pickup: 70,
   denied: 90,
   ingame_purchase: 100,
@@ -1193,6 +1196,7 @@ const AUDIO_NAMES = {
   round_end_lose: "Round perdido",
   spike: "Explos\u00e3o da Spike",
   ability: "Habilidade",
+  ultimate: "Ultimate",
 };
 let audioDebugTimeoutId = null;
 function announceAudioDebug(label) {
@@ -1806,6 +1810,29 @@ function playTone(freq, duration = 0.06, type = "square", gain = 0.035, delay = 
   osc.stop(now + duration + 0.02);
 }
 
+/** Cria uma carga/queda contínua sem depender de arquivos de áudio externos. */
+function playFrequencySweep(startFreq, endFreq, duration = 0.2, type = "sawtooth", gain = 0.03, delay = 0) {
+  if (!audio.enabled) return;
+  initAudio();
+  if (!audio.ctx) return;
+  const output = audioOutputNode();
+  if (!output) return;
+  const now = audio.ctx.currentTime + Math.max(0, delay);
+  const end = now + Math.max(0.03, duration);
+  const osc = audio.ctx.createOscillator();
+  const amp = audio.ctx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(Math.max(1, startFreq), now);
+  osc.frequency.exponentialRampToValueAtTime(Math.max(1, endFreq), end);
+  amp.gain.setValueAtTime(0.0001, now);
+  amp.gain.exponentialRampToValueAtTime(Math.max(0.0001, gain), now + Math.min(0.035, duration * 0.25));
+  amp.gain.exponentialRampToValueAtTime(0.0001, end);
+  osc.connect(amp);
+  amp.connect(output);
+  osc.start(now);
+  osc.stop(end + 0.025);
+}
+
 function randomAudioPath(paths) {
   if (!Array.isArray(paths) || paths.length === 0) return null;
   return paths[Math.floor(Math.random() * paths.length)];
@@ -2053,6 +2080,104 @@ function playSound(name) {
     playTone(262, 0.12, "square", 0.09 * mix, 0.22);
     playTone(131, 0.28, "sawtooth", 0.075 * mix, 0.36);
   }
+}
+
+/** Feedback curto e temático para a habilidade básica de cada agente. */
+function playAgentAbilitySound(agentId) {
+  if (shouldThrottleAudio("ability")) return;
+  const mix = soundMix("ability");
+  const sounds = {
+    neon() {
+      playFrequencySweep(180, 920, 0.11, "square", 0.07 * mix);
+      playTone(1320, 0.035, "square", 0.085 * mix, 0.085);
+    },
+    viper() {
+      playFrequencySweep(240, 72, 0.2, "sawtooth", 0.07 * mix);
+      playTone(110, 0.13, "triangle", 0.06 * mix, 0.06);
+    },
+    sage() {
+      playTone(523, 0.07, "sine", 0.075 * mix);
+      playTone(784, 0.11, "triangle", 0.08 * mix, 0.05);
+      playTone(1047, 0.09, "sine", 0.06 * mix, 0.12);
+    },
+    omen() {
+      playFrequencySweep(210, 58, 0.22, "triangle", 0.075 * mix);
+      playTone(92, 0.16, "sawtooth", 0.05 * mix, 0.04);
+    },
+    jett() {
+      playFrequencySweep(280, 1480, 0.14, "triangle", 0.065 * mix);
+      playTone(1760, 0.035, "sine", 0.06 * mix, 0.105);
+    },
+    killjoy() {
+      playTone(330, 0.035, "square", 0.07 * mix);
+      playTone(660, 0.035, "square", 0.075 * mix, 0.045);
+      playTone(990, 0.065, "square", 0.065 * mix, 0.09);
+    },
+    raze() {
+      playTone(120, 0.055, "square", 0.085 * mix);
+      playFrequencySweep(180, 520, 0.13, "sawtooth", 0.075 * mix, 0.035);
+    },
+    yoru() {
+      playFrequencySweep(760, 105, 0.16, "square", 0.065 * mix);
+      playFrequencySweep(130, 820, 0.15, "triangle", 0.055 * mix, 0.035);
+    },
+  };
+  (sounds[agentId] || sounds.neon)();
+}
+
+/**
+ * Sobrecarga original em camadas: cada agente possui ritmo, direção tonal e
+ * textura próprios, mantendo uma base energética comum às Ultimates.
+ */
+function playAgentUltimateSound(agentId) {
+  if (shouldThrottleAudio("ultimate")) return;
+  const mix = soundMix("ultimate");
+  const sounds = {
+    neon() {
+      playFrequencySweep(110, 1760, 0.28, "square", 0.085 * mix);
+      playTone(880, 0.05, "square", 0.09 * mix, 0.12);
+      playTone(1320, 0.05, "square", 0.1 * mix, 0.19);
+      playTone(2093, 0.13, "triangle", 0.085 * mix, 0.27);
+    },
+    viper() {
+      playFrequencySweep(340, 52, 0.36, "sawtooth", 0.09 * mix);
+      playTone(78, 0.28, "triangle", 0.085 * mix, 0.1);
+      playTone(117, 0.2, "square", 0.055 * mix, 0.25);
+    },
+    sage() {
+      playFrequencySweep(260, 1047, 0.3, "sine", 0.075 * mix);
+      playTone(523, 0.18, "sine", 0.075 * mix, 0.12);
+      playTone(784, 0.18, "triangle", 0.085 * mix, 0.2);
+      playTone(1175, 0.2, "sine", 0.075 * mix, 0.3);
+    },
+    omen() {
+      playFrequencySweep(260, 42, 0.42, "sawtooth", 0.085 * mix);
+      playTone(65, 0.34, "triangle", 0.08 * mix, 0.08);
+      playFrequencySweep(82, 330, 0.22, "square", 0.05 * mix, 0.24);
+    },
+    jett() {
+      playFrequencySweep(180, 1900, 0.3, "triangle", 0.08 * mix);
+      playFrequencySweep(620, 2480, 0.16, "sine", 0.06 * mix, 0.16);
+      playTone(1568, 0.13, "square", 0.08 * mix, 0.3);
+    },
+    killjoy() {
+      [220, 330, 440, 660, 880].forEach((freq, index) => playTone(freq, 0.055, "square", (0.065 + index * 0.006) * mix, index * 0.055));
+      playTone(1175, 0.16, "square", 0.09 * mix, 0.3);
+    },
+    raze() {
+      playFrequencySweep(80, 420, 0.25, "sawtooth", 0.095 * mix);
+      playTone(110, 0.1, "square", 0.1 * mix, 0.18);
+      playTone(220, 0.08, "square", 0.1 * mix, 0.25);
+      playFrequencySweep(520, 1040, 0.15, "square", 0.075 * mix, 0.31);
+    },
+    yoru() {
+      playFrequencySweep(1200, 75, 0.34, "square", 0.075 * mix);
+      playFrequencySweep(90, 1350, 0.3, "triangle", 0.07 * mix, 0.07);
+      playTone(185, 0.2, "sawtooth", 0.07 * mix, 0.27);
+      playTone(1480, 0.08, "square", 0.07 * mix, 0.38);
+    },
+  };
+  (sounds[agentId] || sounds.neon)();
 }
 
 const DEFAULT_MAP = {
@@ -5176,7 +5301,7 @@ function activateUltimate(entity) {
     addUltimateEffect("healing-beam", entity, "#62e6a0", 0.9);
   } else {
     if (agent.id === "omen" && entity.id === "player" && beginOmenUltimate(entity)) {
-      playSound("ability");
+      playAgentUltimateSound(agent.id);
       return true;
     }
     entity.ultimate = { type: "omen", life: 9, maxLife: 9 };
@@ -5198,7 +5323,7 @@ function activateUltimate(entity) {
     addUltimateEffect("shadow-field", entity, "#7650b8", 9);
   }
   setMessage(`${agent.name} ativou a Ultimate!`);
-  playSound("ability");
+  if (entity.id === "player") playAgentUltimateSound(agent.id);
   return true;
 }
 
@@ -5442,7 +5567,7 @@ function updatePlayer(dt) {
         game.tutorialAbilityUsed = true;
         game.tutorialTimer = 0;
       }
-      playSound("ability");
+      playAgentAbilitySound(game.selectedAgent.id);
       setMessage(game.sandbox
         ? `${game.selectedAgent.ability} usada. Sandbox: habilidade sem recarga.`
         : `${game.selectedAgent.ability} usada. Recarga iniciada.`);
