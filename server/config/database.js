@@ -109,6 +109,12 @@ async function applySqlMigrations(client) {
       console.warn(`[PostgreSQL] Migração pendente: ${migrationName}.`);
       continue;
     }
+    if (Number.isInteger(lastResult?.rows?.[0]?.refunded_purchases)) {
+      console.log(
+        `[PostgreSQL] Skins aposentadas: ${lastResult.rows[0].refunded_purchases} compra(s) `
+        + `reembolsada(s), ${lastResult.rows[0].refunded_core} Core devolvidos.`,
+      );
+    }
     await client.query(
       'INSERT INTO schema_migrations (migration_name) VALUES ($1)',
       [migrationName],
@@ -362,6 +368,8 @@ async function initializeDatabase() {
       CREATE TABLE IF NOT EXISTS user_skins (
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         skin_id VARCHAR(100) NOT NULL,
+        paid_price INTEGER CONSTRAINT user_skins_paid_price_valid
+          CHECK (paid_price IS NULL OR paid_price BETWEEN 1 AND 10000),
         acquired_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (user_id, skin_id)
       )

@@ -1,16 +1,16 @@
 const crypto = require('crypto');
 
 const SKIN_GROUPS = {
-  Bulldog: ['Araxys', 'Aristocrat', 'Convex', 'Protocol 781-A'],
-  Classic: ['Cryostasis', 'VCT25 x 100T', 'VCT25 x BBL', 'VCT25 x FUT'],
-  Guardian: ['CYRAX', 'Fortunes Hand', 'Kuronami', 'Reverie'],
-  Judge: ['ChronoVoid', 'Doombringer', 'Holo Meridian', 'Smite'],
-  Odin: ['Comet', 'EXE', 'Evori Dreamwings', 'Solarex'],
-  Operator: ['Endeavour', 'Haloform', 'Luxe', 'ORA by OneTap'],
-  Phantom: ['Doombringer', 'ORA by OneTap', 'Ruination', 'Winterwunderland'],
-  Sheriff: ['Doombringer', 'Ion', 'Kuronami', 'Protocol 781-A'],
-  Shorty: ['Aquatica', 'Gaias Vengeance', 'Genesis', 'Guardrail'],
-  Spectre: ['Horizon', 'NO LIMITS', 'Prism', 'Singularity'],
+  Bulldog: ['Araxys', 'Aristocrat', 'Protocol 781-A', 'Bumble Brigade', 'NO LIMITS', 'Radiant Entertainment System', 'Soulburst', 'Spectrum'],
+  Classic: ['VCT25 x 100T', 'VCT25 x BBL', 'VCT25 x FUT', 'Spectrum', 'VCT25 x KOI', 'VCT25 x LOUD', 'VCT25 x TH', 'VCT25 x TS', 'VCT x FPX', 'VCT x TE'],
+  Guardian: ['CYRAX', 'Fortunes Hand', 'Kuronami', 'Reverie', 'Gaias Vengeance', 'Paceline', 'Reaver', 'Space Piercer'],
+  Judge: ['Doombringer', 'Smite', 'Divergence', 'EXE', 'Interhelm', 'Luxe', 'Sovereign', 'Tilde'],
+  Odin: ['Comet', 'EXE', 'Evori Dreamwings', 'Solarex', 'Fortunes Hand', 'Nanobreak', 'Orion', 'Sovereign'],
+  Operator: ['Endeavour', 'Haloform', 'Luxe', 'ORA by OneTap', 'Bubblegum Deathwish', 'Mystbloom', 'Radiant Entertainment System', 'SplashX', 'Spline'],
+  Phantom: ['Doombringer', 'ORA by OneTap', 'Ruination', 'Winterwunderland', 'Champions 2022', 'Magepunk', 'Radiant Entertainment System', 'Rush'],
+  Sheriff: ['Ion', 'Kuronami', 'Cloudweaver', 'Imperium', 'Keys to Elysium', 'ORA by OneTap', 'SYS', 'Sentinels of Light'],
+  Shorty: ['Aquatica', 'Gaias Vengeance', 'Genesis', 'Guardrail', 'Cloudweaver', 'Doom Wing', 'Sentinels of Light', 'Tilde'],
+  Spectre: ['Horizon', 'NO LIMITS', 'Prism', 'Singularity', 'Aero', 'Avalanche', 'Evori Dreamwings', 'Kuronami'],
 };
 
 const WEAPON_IDS = {
@@ -18,9 +18,21 @@ const WEAPON_IDS = {
   Operator: 'sniper', Phantom: 'rifle', Sheriff: 'revolver', Shorty: 'light-pistol', Spectre: 'smg',
 };
 
-const EXCLUSIVE = new Set(['Araxys', 'Protocol 781-A', 'Kuronami', 'ChronoVoid', 'Evori Dreamwings', 'Haloform', 'Ruination', 'Singularity']);
-const PREMIUM = new Set(['Cryostasis', 'CYRAX', 'Doombringer', 'Ion', 'ORA by OneTap', 'Gaias Vengeance']);
-const DELUXE = new Set(['Aristocrat', 'Comet', 'Endeavour', 'Holo Meridian', 'Luxe', 'Prism', 'Solarex', 'VCT25 x 100T', 'VCT25 x BBL', 'VCT25 x FUT']);
+const EXCLUSIVE = new Set([
+  'Araxys', 'Bubblegum Deathwish', 'Champions 2022', 'Evori Dreamwings', 'Haloform',
+  'Keys to Elysium', 'Kuronami', 'Mystbloom', 'Protocol 781-A',
+  'Radiant Entertainment System', 'Ruination', 'Singularity', 'Spectrum', 'SplashX',
+]);
+const PREMIUM = new Set([
+  'Cloudweaver', 'CYRAX', 'Doom Wing', 'Doombringer', 'Gaias Vengeance', 'Imperium',
+  'Ion', 'Magepunk', 'ORA by OneTap', 'Reaver', 'Sentinels of Light', 'Sovereign',
+]);
+const DELUXE = new Set([
+  'Aristocrat', 'Avalanche', 'Comet', 'Divergence', 'Endeavour', 'Luxe',
+  'Nanobreak', 'NO LIMITS', 'Orion', 'Prism', 'Solarex', 'Spline', 'SYS', 'Tilde',
+  'VCT25 x 100T', 'VCT25 x BBL', 'VCT25 x FUT', 'VCT25 x KOI', 'VCT25 x LOUD',
+  'VCT25 x TH', 'VCT25 x TS', 'VCT x FPX', 'VCT x TE',
+]);
 
 function rarityFor(name) {
   if (EXCLUSIVE.has(name)) return 'exclusive';
@@ -32,7 +44,7 @@ function rarityFor(name) {
 const PRICE_BY_RARITY = { select: 80, deluxe: 125, premium: 180, exclusive: 230 };
 
 function fileName(name, weapon) {
-  return `${name.replaceAll(' ', '_')}_${weapon}.webp`;
+  return `${name.replaceAll("'", '').replaceAll(' ', '_')}_${weapon}.webp`;
 }
 
 const SKIN_CATALOG = Object.entries(SKIN_GROUPS).flatMap(([weapon, names]) => names.map((name, index) => {

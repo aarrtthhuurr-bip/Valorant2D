@@ -1,5 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
+const fs = require('node:fs');
+const path = require('node:path');
 const request = require('supertest');
 
 process.env.NODE_ENV = 'test';
@@ -12,9 +14,31 @@ const Commerce = require('../models/Commerce');
 const Session = require('../models/Session');
 
 test('catálogo contém skins únicas e respeita o teto de 240 Core', () => {
-  assert.equal(SKIN_CATALOG.length, 40);
+  assert.equal(SKIN_CATALOG.length, 83);
   assert.equal(new Set(SKIN_CATALOG.map((skin) => skin.id)).size, SKIN_CATALOG.length);
   assert.ok(SKIN_CATALOG.every((skin) => skin.price > 0 && skin.price <= 240));
+});
+
+test('todas as skins do catálogo possuem arquivo de imagem publicado', () => {
+  for (const skin of SKIN_CATALOG) {
+    const imagePath = path.resolve(__dirname, '..', '..', skin.imagePath.replace(/^\.\//, ''));
+    assert.equal(fs.existsSync(imagePath), true, `Imagem ausente para ${skin.id}: ${skin.imagePath}`);
+    assert.ok(fs.statSync(imagePath).size > 0, `Imagem vazia para ${skin.id}: ${skin.imagePath}`);
+  }
+});
+
+test('skins aposentadas não permanecem disponíveis para novas compras', () => {
+  const catalogIds = new Set(SKIN_CATALOG.map((skin) => skin.id));
+  for (const retiredId of [
+    'carbine:convex',
+    'pistol:cryostasis',
+    'shotgun:chronovoid',
+    'shotgun:holo-meridian',
+    'revolver:doombringer',
+    'revolver:protocol-781-a',
+  ]) {
+    assert.equal(catalogIds.has(retiredId), false, `${retiredId} ainda está no catálogo`);
+  }
 });
 
 test('ofertas permanecem estáveis no dia e sempre aplicam desconto', () => {

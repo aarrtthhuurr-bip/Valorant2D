@@ -95,7 +95,10 @@ class Commerce {
       const owned = await client.query('SELECT 1 FROM user_skins WHERE user_id = $1 AND skin_id = $2', [userId, skinId]);
       if (owned.rowCount) { await client.query('ROLLBACK'); return { error: 'SKIN_ALREADY_OWNED' }; }
       if (balance < price) { await client.query('ROLLBACK'); return { error: 'INSUFFICIENT_CORE', coreBalance: balance }; }
-      await client.query('INSERT INTO user_skins (user_id, skin_id) VALUES ($1, $2)', [userId, skinId]);
+      await client.query(
+        'INSERT INTO user_skins (user_id, skin_id, paid_price) VALUES ($1, $2, $3)',
+        [userId, skinId, price],
+      );
       const updated = await client.query(
         'UPDATE users SET core_balance = core_balance - $1 WHERE id = $2 RETURNING core_balance',
         [price, userId],
