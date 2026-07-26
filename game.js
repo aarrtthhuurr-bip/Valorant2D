@@ -551,6 +551,36 @@ function setCommerceFeedback(message = "", type = "") {
   ui.commerceFeedback.className = `commerce-feedback${type ? ` is-${type}` : ""}`;
 }
 
+function attachSkinPreviewMotion(card) {
+  const artwork = card.querySelector(".skin-card-art");
+  if (!artwork || !window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+
+  let animationFrame = 0;
+
+  const resetRotation = () => {
+    if (animationFrame) cancelAnimationFrame(animationFrame);
+    animationFrame = 0;
+    card.style.setProperty("--skin-rotate-x", "0deg");
+    card.style.setProperty("--skin-rotate-y", "0deg");
+    card.style.setProperty("--skin-roll", "0deg");
+  };
+
+  card.addEventListener("pointermove", (event) => {
+    if (animationFrame) cancelAnimationFrame(animationFrame);
+    animationFrame = requestAnimationFrame(() => {
+      const bounds = artwork.getBoundingClientRect();
+      const normalizedX = Math.max(-1, Math.min(1, ((event.clientX - bounds.left) / bounds.width - 0.5) * 2));
+      const normalizedY = Math.max(-1, Math.min(1, ((event.clientY - bounds.top) / bounds.height - 0.5) * 2));
+
+      card.style.setProperty("--skin-rotate-x", `${(-normalizedY * 3.5).toFixed(2)}deg`);
+      card.style.setProperty("--skin-rotate-y", `${(normalizedX * 8).toFixed(2)}deg`);
+      card.style.setProperty("--skin-roll", `${(normalizedX * 1.15).toFixed(2)}deg`);
+      animationFrame = 0;
+    });
+  });
+  card.addEventListener("pointerleave", resetRotation);
+}
+
 function commerceSkinCard(skin, { offer = false, inventory = false } = {}) {
   const owned = commerceState.profile?.ownedSkinIds?.includes(skin.id);
   const equipped = commerceState.profile?.equippedSkins?.[skin.weaponId] === skin.id;
@@ -575,6 +605,7 @@ function commerceSkinCard(skin, { offer = false, inventory = false } = {}) {
     action.addEventListener("click", () => purchaseCommerceSkin(skin.id));
   }
   card.appendChild(action);
+  attachSkinPreviewMotion(card);
   return card;
 }
 
