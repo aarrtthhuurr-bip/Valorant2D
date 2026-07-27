@@ -115,6 +115,7 @@ const ui = {
   sandboxClearItemsButton: document.getElementById("sandboxClearItemsButton"),
   sandboxPierceWallsToggle: document.getElementById("sandboxPierceWallsToggle"),
   sandboxGodToggle: document.getElementById("sandboxGodToggle"),
+  sandboxInfiniteAmmoToggle: document.getElementById("sandboxInfiniteAmmoToggle"),
   sandboxBlackoutToggle: document.getElementById("sandboxBlackoutToggle"),
   sandboxSaveButton: document.getElementById("sandboxSaveButton"),
   sandboxLoadButton: document.getElementById("sandboxLoadButton"),
@@ -2675,6 +2676,7 @@ const game = {
   sandboxPlacement: null,
   sandboxBotLimit: 18,
   sandboxBulletsPierceWalls: false,
+  sandboxInfiniteAmmo: false,
   sandboxCustomWalls: [],
   allyCount: 0,
   enemyFireMultiplier: 1.25,
@@ -5021,19 +5023,20 @@ function shoot(owner, targetX, targetY, weapon, team) {
   }
   if (team === "player") {
     if (game.phase !== "action" || game.reloadTimer > 0 || now - game.lastShot < weapon.fireRate) return;
-    if (owner.ammo <= 0) {
+    const infiniteAmmo = game.sandbox && game.sandboxInfiniteAmmo;
+    if (!infiniteAmmo && owner.ammo <= 0) {
       reload();
       return;
     }
     game.lastShot = now;
-    owner.ammo -= 1;
+    if (!infiniteAmmo) owner.ammo -= 1;
     game.shotChain += 1;
     const recoilGain = weapon.id === "sniper" ? 0.5 : weapon.id === "lmg" ? 0.26 : weapon.id === "smg" ? 0.22 : 0.18;
     game.recoilHeat = Math.min(2.6, game.recoilHeat + recoilGain);
     game.shake = Math.max(game.shake, shakeForWeapon(weapon));
     playWeaponSound(weapon, "shot", owner);
     spawnParticles(owner.x + Math.cos(owner.angle) * 24, owner.y + Math.sin(owner.angle) * 24, "#ffe6a8", 5, 90);
-    if (owner.ammo <= 0) reload();
+    if (!infiniteAmmo && owner.ammo <= 0) reload();
   }
   const count = weapon.pellets || 1;
   for (let i = 0; i < count; i++) {
@@ -5062,6 +5065,11 @@ function shoot(owner, targetX, targetY, weapon, team) {
 }
 
 function reload() {
+  if (game.sandbox && game.sandboxInfiniteAmmo) {
+    game.reloadTimer = 0;
+    game.player.ammo = currentMagSize();
+    return;
+  }
   if (game.reloadTimer > 0) return;
   if (game.player.ammo >= currentMagSize()) return;
   game.reloadTimer = currentReloadTime();
@@ -7154,6 +7162,10 @@ function updateTimers(dt) {
   }
   if (game.clockActive && !game.sandbox && !game.training && !game.outbreak) game.phaseTime -= dt;
   if (game.sandbox || game.training) game.money = 99999;
+  if (game.sandbox && game.sandboxInfiniteAmmo && game.player) {
+    game.reloadTimer = 0;
+    game.player.ammo = currentMagSize();
+  }
   game.recoilHeat = Math.max(0, game.recoilHeat - dt * (game.player?.moving ? 0.9 : 1.8));
   if (game.recoilHeat === 0) game.shotChain = 0;
   if (game.roundBannerTimer > 0) {
@@ -9311,7 +9323,9 @@ function updateUi() {
     : game.player.ultimate?.type === "raze"
       ? (game.player.ultimate.fired ? "Foguete usado" : "Foguete pronto")
       : null;
-  setText(ui.ammo, ultimateAmmo || (game.reloadTimer > 0 ? "Recarregando" : `${game.player.ammo}`));
+  setText(ui.ammo, ultimateAmmo || (game.sandbox && game.sandboxInfiniteAmmo
+    ? "∞"
+    : game.reloadTimer > 0 ? "Recarregando" : `${game.player.ammo}`));
   setText(ui.spike, game.outbreak ? `Onda ${game.outbreakWave}` : game.spike.state === "carried"
     ? game.spike.owner === "player" ? "Com você" : "Em transporte"
     : game.spike.state === "dropped"
@@ -9357,7 +9371,9 @@ function updateUi() {
   toggleClass(ui.spike, "planted", spikePlanted);
   toggleClass(ui.vitalsPanel, "hidden", game.outbreak);
   setStyle(ui.hpBar, "transform", `scaleX(${Math.max(0, game.player.hp) / game.player.maxHp})`);
-  setStyle(ui.ammoBar, "transform", `scaleX(${game.reloadTimer > 0 ? 1 - game.reloadTimer / currentReloadTime() : game.player.ammo / currentMagSize()})`);
+  setStyle(ui.ammoBar, "transform", `scaleX(${game.sandbox && game.sandboxInfiniteAmmo
+    ? 1
+    : game.reloadTimer > 0 ? 1 - game.reloadTimer / currentReloadTime() : game.player.ammo / currentMagSize()})`);
   setText(ui.message?.querySelector?.("strong"), game.message);
   setText(ui.message?.querySelector?.("span"), game.paused
     ? (game.menuState === "pause" ? "Jogo pausado. Aperte Esc ou P para continuar." : "Escolha uma opção no menu.")
@@ -9370,6 +9386,7 @@ function updateUi() {
   setText(ui.godModeButton, `God: ${game.godMode ? "ON" : "OFF"}`);
   setSwitch(ui.sandboxGodToggle, game.godMode);
   setSwitch(ui.sandboxPierceWallsToggle, game.sandboxBulletsPierceWalls);
+  setSwitch(ui.sandboxInfiniteAmmoToggle, game.sandboxInfiniteAmmo);
   updateScoreboard();
   const gameplayHudVisible = game.menuState === "none" && ["buy", "action", "ended"].includes(game.phase);
   const tutorialActive = game.tutorial && game.menuState === "none";
@@ -9525,6 +9542,7 @@ function renderSandboxPanel() {
   setSandboxTab(game.sandboxTab);
   setSwitch(ui.sandboxPierceWallsToggle, game.sandboxBulletsPierceWalls);
   setSwitch(ui.sandboxGodToggle, game.godMode);
+  setSwitch(ui.sandboxInfiniteAmmoToggle, game.sandboxInfiniteAmmo);
   setSwitch(ui.sandboxBlackoutToggle, game.fovMode);
   renderSandboxBotList();
 }
@@ -9574,6 +9592,7 @@ function saveSandboxConfig() {
     mapName: game.mapName,
     pierce: game.sandboxBulletsPierceWalls,
     god: game.godMode,
+    infiniteAmmo: game.sandboxInfiniteAmmo,
     walls: game.sandboxCustomWalls,
     medkits: game.medkits,
     ultOrbs: game.ultOrbs,
@@ -9594,6 +9613,11 @@ function loadSandboxConfig() {
     if (index >= 0) loadSandboxMap(index);
     game.sandboxBulletsPierceWalls = !!payload.pierce;
     game.godMode = !!payload.god;
+    game.sandboxInfiniteAmmo = !!payload.infiniteAmmo;
+    if (game.sandboxInfiniteAmmo && game.player) {
+      game.reloadTimer = 0;
+      game.player.ammo = currentMagSize();
+    }
     game.sandboxCustomWalls = cloneRects(payload.walls || []);
     game.destructibles = [...cloneRects(map.destructibles || []), ...game.sandboxCustomWalls];
     game.medkits = (payload.medkits || []).map((item) => ({ ...item }));
@@ -11937,6 +11961,7 @@ function startSandboxMode() {
   game.sandboxPanelOpen = false;
   game.sandboxPlacement = null;
   game.sandboxBulletsPierceWalls = false;
+  game.sandboxInfiniteAmmo = false;
   game.sandboxCustomWalls = [];
   game.allyCount = 2;
   game.enemyFireMultiplier = 1.2;
@@ -12803,6 +12828,15 @@ ui.sandboxPierceWallsToggle?.addEventListener("click", () => {
 ui.sandboxGodToggle?.addEventListener("click", () => {
   game.godMode = !game.godMode;
   renderSandboxPanel();
+});
+ui.sandboxInfiniteAmmoToggle?.addEventListener("click", () => {
+  game.sandboxInfiniteAmmo = !game.sandboxInfiniteAmmo;
+  if (game.sandboxInfiniteAmmo && game.player) {
+    game.reloadTimer = 0;
+    game.player.ammo = currentMagSize();
+  }
+  renderSandboxPanel();
+  setMessage(`Sandbox: munição infinita ${game.sandboxInfiniteAmmo ? "ON" : "OFF"}.`);
 });
 ui.sandboxBlackoutToggle?.addEventListener("click", () => {
   setFovMode(!game.fovMode);
