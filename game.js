@@ -2515,6 +2515,58 @@ MAPS.splice(0, MAPS.length,
   ]),
 );
 
+/**
+ * Arena vazia disponível exclusivamente pelo painel de cheats do Sandbox.
+ *
+ * Ela não faz parte de MAPS, portanto nunca participa do sorteio usado por
+ * partidas Default ou Blackout. As quatro paredes externas são mantidas apenas
+ * para delimitar a área jogável; não existem coberturas, caixas ou Spike sites.
+ */
+const SANDBOX_BLANK_MAP = {
+  name: "Arena Vazia",
+  vibe: "Sandbox sem estruturas",
+  width: 1280,
+  height: 720,
+  sandboxOnly: true,
+  theme: {
+    ...DEFAULT_MAP.theme,
+    floor: "#10151b",
+    grid: "rgba(126, 151, 168, 0.055)",
+    wall: "#252d35",
+    wallStroke: "#52616d",
+    siteFill: "transparent",
+    siteStroke: "transparent",
+  },
+  sites: [],
+  walls: [
+    { x: 0, y: 0, w: 1280, h: 28 },
+    { x: 0, y: 692, w: 1280, h: 28 },
+    { x: 0, y: 0, w: 28, h: 720 },
+    { x: 1252, y: 0, w: 28, h: 720 },
+  ],
+  destructibles: [],
+  attackersSpawn: { x: 640, y: 610 },
+  playerDefenderSpawn: { x: 640, y: 110 },
+  attackerBotSpawns: [
+    { x: 300, y: 120 },
+    { x: 640, y: 120 },
+    { x: 980, y: 120 },
+  ],
+  defendersSpawn: [
+    { x: 300, y: 600 },
+    { x: 640, y: 600 },
+    { x: 980, y: 600 },
+  ],
+  botRoutes: [
+    [{ x: 300, y: 120 }, { x: 300, y: 360 }, { x: 300, y: 600 }],
+    [{ x: 640, y: 120 }, { x: 640, y: 360 }, { x: 640, y: 600 }],
+    [{ x: 980, y: 120 }, { x: 980, y: 360 }, { x: 980, y: 600 }],
+  ],
+};
+
+// Somente esta lista alimenta o seletor do painel Sandbox.
+const SANDBOX_MAPS = [...MAPS, SANDBOX_BLANK_MAP];
+
 const TRAINING_MAP = {
   ...DEFAULT_MAP,
   name: "Campo de Tiro",
@@ -6553,7 +6605,9 @@ function updateBots(dt) {
     ? closestAliveBotTo(game.spike.x, game.spike.y)
     : null;
   const botPlantSite = map.sites[game.botPlanSiteIndex % map.sites.length] || map.sites[0];
-  const botPlantTarget = siteCenter(botPlantSite);
+  const botPlantTarget = botPlantSite
+    ? siteCenter(botPlantSite)
+    : { x: map.width / 2, y: map.height / 2 };
 
   for (const bot of game.bots) {
     if (!bot.alive) continue;
@@ -9417,7 +9471,9 @@ function populateSandboxSelectors() {
     ui.sandboxBotAgent.innerHTML = agents.map((agent) => `<option value="${agent.id}">${agent.name}</option>`).join("");
   }
   if (ui.sandboxMapSelect && !ui.sandboxMapSelect.children.length) {
-    ui.sandboxMapSelect.innerHTML = MAPS.map((item, index) => `<option value="${index}">${item.name}</option>`).join("");
+    ui.sandboxMapSelect.innerHTML = SANDBOX_MAPS
+      .map((item, index) => `<option value="${index}">${item.name}${item.sandboxOnly ? " (apenas Sandbox)" : ""}</option>`)
+      .join("");
   }
 }
 
@@ -9489,9 +9545,12 @@ function closeSandboxPanel() {
 }
 
 function loadSandboxMap(index) {
-  const next = MAPS[Number(index)] || MAPS[0];
+  if (!game.sandbox) return;
+  const next = SANDBOX_MAPS[Number(index)] || MAPS[0];
   map = next;
-  map.botRoutes = randomizedBotRoutes(map);
+  map.botRoutes = map.sites.length
+    ? randomizedBotRoutes(map)
+    : next.botRoutes.map((route) => route.map((point) => ({ ...point })));
   game.map = map;
   game.mapName = map.name;
   game.bots = [];
@@ -9531,7 +9590,7 @@ function loadSandboxConfig() {
       setMessage("Sandbox: nenhum save encontrado.");
       return;
     }
-    const index = MAPS.findIndex((item) => item.name === payload.mapName);
+    const index = SANDBOX_MAPS.findIndex((item) => item.name === payload.mapName);
     if (index >= 0) loadSandboxMap(index);
     game.sandboxBulletsPierceWalls = !!payload.pierce;
     game.godMode = !!payload.god;
