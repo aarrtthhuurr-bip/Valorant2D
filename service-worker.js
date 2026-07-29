@@ -1,10 +1,10 @@
-const CACHE_VERSION = "valorant2d-shell-20260729-black-market-six";
+const CACHE_VERSION = "valorant2d-shell-20260729-cache-recovery";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest?v=20260729-pwa-install",
-  "./styles.css?v=20260729-black-market-six",
-  "./game.js?v=20260729-black-market-six",
+  "./styles.css?v=20260729-cache-recovery",
+  "./game.js?v=20260729-cache-recovery",
   "./assets/Favicon/android-chrome-192x192.png",
   "./assets/Favicon/android-chrome-512x512.png",
 ];
@@ -53,6 +53,27 @@ self.addEventListener("fetch", (event) => {
           return response;
         })
         .catch(() => caches.match("./index.html")),
+    );
+    return;
+  }
+
+  // Arquivos que controlam toda a aparência e execução usam network-first.
+  // Assim, uma entrada antiga ou incompleta nunca mantém o jogo preso ao HTML.
+  if (request.destination === "style" || request.destination === "script") {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(async () => (
+          (await caches.match(request))
+          || (await caches.match(request, { ignoreSearch: true }))
+          || Response.error()
+        )),
     );
     return;
   }

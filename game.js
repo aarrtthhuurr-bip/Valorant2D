@@ -1,4 +1,5 @@
 const canvas = document.getElementById("game");
+window.__VALORANT2D_BOOTED__ = true;
 const ctx = canvas.getContext("2d");
 const BASE_WIDTH = 1280;
 const BASE_HEIGHT = 720;
