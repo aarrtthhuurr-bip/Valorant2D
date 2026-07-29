@@ -2671,36 +2671,74 @@ const MAPS = [
 function generateOutbreakMap() {
   const width = 1280;
   const height = 720;
-  const jitter = (amount) => (Math.random() - 0.5) * amount;
-  const coverSlots = [
-    { x: 150, y: 135, w: 150, h: 34 }, { x: 480, y: 105, w: 105, h: 34 },
-    { x: 695, y: 105, w: 105, h: 34 }, { x: 980, y: 135, w: 150, h: 34 },
-    { x: 105, y: 300, w: 42, h: 120 }, { x: 1133, y: 300, w: 42, h: 120 },
-    { x: 180, y: 540, w: 150, h: 34 }, { x: 470, y: 580, w: 110, h: 34 },
-    { x: 700, y: 580, w: 110, h: 34 }, { x: 950, y: 540, w: 150, h: 34 },
-  ];
-  const walls = [
-    { x: 0, y: 0, w: width, h: 28 }, { x: 0, y: height - 28, w: width, h: 28 },
-    { x: 0, y: 0, w: 28, h: height }, { x: width - 28, y: 0, w: 28, h: height },
-    ...coverSlots.map((slot) => ({
-      ...slot,
-      x: Math.round(slot.x + jitter(24)),
-      y: Math.round(slot.y + jitter(18)),
-    })),
-  ];
-  const destructibles = [
-    { x: 245 + jitter(20), y: 300 + jitter(24), w: 54, h: 54, hp: 90, maxHp: 90 },
-    { x: 981 + jitter(20), y: 300 + jitter(24), w: 54, h: 54, hp: 90, maxHp: 90 },
-    { x: 365 + jitter(20), y: 465 + jitter(18), w: 58, h: 58, hp: 90, maxHp: 90 },
-    { x: 857 + jitter(20), y: 465 + jitter(18), w: 58, h: 58, hp: 90, maxHp: 90 },
-  ];
   const spawnPoints = [
     { x: 82, y: 82 }, { x: width / 2, y: 72 }, { x: width - 82, y: 82 },
     { x: 82, y: height - 82 }, { x: width / 2, y: height - 72 }, { x: width - 82, y: height - 82 },
   ];
+  const playerSpawn = { x: width / 2, y: height / 2 };
+  const boundaryWalls = [
+    { x: 0, y: 0, w: width, h: 28 }, { x: 0, y: height - 28, w: width, h: 28 },
+    { x: 0, y: 0, w: 28, h: height }, { x: width - 28, y: 0, w: 28, h: height },
+  ];
+  const generatedWalls = [];
+  const rectanglesOverlap = (first, second, padding = 0) => (
+    first.x - padding < second.x + second.w
+    && first.x + first.w + padding > second.x
+    && first.y - padding < second.y + second.h
+    && first.y + first.h + padding > second.y
+  );
+  const wallTouchesSafePoint = (wall, point, radius) => {
+    const closestX = clamp(point.x, wall.x, wall.x + wall.w);
+    const closestY = clamp(point.y, wall.y, wall.y + wall.h);
+    return Math.hypot(point.x - closestX, point.y - closestY) < radius;
+  };
+
+  // Oito coberturas internas com dimensões progressivamente diferentes.
+  // A tentativa é descartada se invadir o centro, um spawn ou outra parede.
+  for (let index = 0; index < 8; index += 1) {
+    let accepted = null;
+    for (let attempt = 0; attempt < 500 && !accepted; attempt += 1) {
+      const horizontal = (index + attempt) % 2 === 0;
+      const longSide = 92 + index * 13 + Math.floor(Math.random() * 42);
+      const shortSide = 24 + (index % 4) * 5;
+      const candidate = {
+        x: 52 + Math.floor(Math.random() * (width - 104 - (horizontal ? longSide : shortSide))),
+        y: 52 + Math.floor(Math.random() * (height - 104 - (horizontal ? shortSide : longSide))),
+        w: horizontal ? longSide : shortSide,
+        h: horizontal ? shortSide : longSide,
+      };
+      const centerSafeArea = { x: playerSpawn.x - 190, y: playerSpawn.y - 145, w: 380, h: 290 };
+      if (rectanglesOverlap(candidate, centerSafeArea, 20)) continue;
+      if (spawnPoints.some((spawn) => wallTouchesSafePoint(candidate, spawn, 105))) continue;
+      if (generatedWalls.some((wall) => rectanglesOverlap(candidate, wall, 42))) continue;
+      accepted = candidate;
+    }
+    if (accepted) generatedWalls.push(accepted);
+  }
+
+  // O espaço disponível comporta oito peças com ampla folga. Este fallback
+  // determinístico só é usado se uma sequência extremamente improvável de
+  // sorteios não conseguir preencher todas as posições.
+  const fallbackSlots = [
+    { x: 145, y: 150, w: 118, h: 28 }, { x: 390, y: 92, w: 32, h: 128 },
+    { x: 855, y: 92, w: 146, h: 34 }, { x: 1080, y: 195, w: 30, h: 154 },
+    { x: 155, y: 510, w: 158, h: 36 }, { x: 390, y: 510, w: 34, h: 170 },
+    { x: 850, y: 535, w: 176, h: 30 }, { x: 1090, y: 430, w: 38, h: 132 },
+  ];
+  for (const fallback of fallbackSlots) {
+    if (generatedWalls.length >= 8) break;
+    if (generatedWalls.some((wall) => rectanglesOverlap(fallback, wall, 30))) continue;
+    generatedWalls.push({ ...fallback });
+  }
+
+  const walls = [...boundaryWalls, ...generatedWalls.slice(0, 8)];
+  const outbreakNames = [
+    "Zona de Contencao", "Perimetro Carmesim", "Setor Ruptura",
+    "Quadrante Infectado", "Nucleo de Quarentena",
+  ];
 
   return {
-    name: "Zona de Contenção",
+    name: outbreakNames[Math.floor(Math.random() * outbreakNames.length)],
     vibe: "Sobrevivência procedural",
     width,
     height,
@@ -2714,10 +2752,10 @@ function generateOutbreakMap() {
     // Outbreak não possui objetivos de Spike.
     sites: [],
     walls,
-    destructibles,
+    destructibles: [],
     botRoutes: spawnPoints.map((spawn) => [spawn, { x: width / 2, y: height / 2 }]),
-    attackersSpawn: { x: width / 2, y: height / 2 },
-    playerDefenderSpawn: { x: width / 2, y: height / 2 },
+    attackersSpawn: { ...playerSpawn },
+    playerDefenderSpawn: { ...playerSpawn },
     defendersSpawn: spawnPoints.slice(0, 3),
     attackerBotSpawns: spawnPoints.slice(3),
   };
@@ -2810,7 +2848,191 @@ MAPS.splice(0, MAPS.length,
     { x: 480, y: 220, w: 42, h: 42, hp: 65 },
     { x: 758, y: 460, w: 42, h: 42, hp: 65 },
   ]),
+  makeMap("Jardins de Zephyr", "Jardins suspensos", {
+    floor: "#14211c",
+    grid: "rgba(105, 224, 171, 0.06)",
+    wall: "#29443a",
+    wallStroke: "#5d9b7c",
+    siteFill: "rgba(118, 235, 174, 0.1)",
+    siteStroke: "#76ebae",
+  }, [
+    { x: 180, y: 205, w: 210, h: 28 },
+    { x: 890, y: 205, w: 210, h: 28 },
+    { x: 510, y: 320, w: 100, h: 145 },
+    { x: 670, y: 255, w: 100, h: 145 },
+    { x: 350, y: 520, w: 210, h: 28 },
+    { x: 720, y: 520, w: 210, h: 28 },
+  ], [
+    { id: "A", x: 145, y: 270, w: 190, h: 140 },
+    { id: "B", x: 945, y: 270, w: 190, h: 140 },
+  ], [
+    { x: 420, y: 285, w: 48, h: 48, hp: 70 },
+    { x: 812, y: 405, w: 48, h: 48, hp: 70 },
+  ]),
+  makeMap("Estacao Boreal", "Complexo glacial", {
+    floor: "#111d27",
+    grid: "rgba(150, 225, 255, 0.075)",
+    wall: "#294350",
+    wallStroke: "#86cce8",
+    siteFill: "rgba(128, 221, 255, 0.1)",
+    siteStroke: "#9ae5ff",
+  }, [
+    { x: 110, y: 235, w: 285, h: 32 },
+    { x: 885, y: 455, w: 285, h: 32 },
+    { x: 490, y: 150, w: 46, h: 180 },
+    { x: 744, y: 390, w: 46, h: 180 },
+    { x: 565, y: 335, w: 150, h: 38 },
+  ], [
+    { id: "A", x: 180, y: 430, w: 205, h: 145 },
+    { id: "B", x: 895, y: 145, w: 205, h: 145 },
+  ], [
+    { x: 600, y: 245, w: 52, h: 52, hp: 80 },
+    { x: 628, y: 435, w: 52, h: 52, hp: 80 },
+  ]),
+  makeMap("Mercado Rubro", "Distrito urbano noturno", {
+    floor: "#21151a",
+    grid: "rgba(255, 86, 105, 0.06)",
+    wall: "#472b34",
+    wallStroke: "#9a4c5d",
+    siteFill: "rgba(255, 70, 85, 0.11)",
+    siteStroke: "#ff6674",
+  }, [
+    { x: 160, y: 170, w: 185, h: 34 },
+    { x: 935, y: 170, w: 185, h: 34 },
+    { x: 300, y: 350, w: 250, h: 34 },
+    { x: 730, y: 350, w: 250, h: 34 },
+    { x: 610, y: 170, w: 60, h: 140 },
+    { x: 610, y: 420, w: 60, h: 140 },
+  ], [
+    { id: "A", x: 145, y: 440, w: 200, h: 135 },
+    { id: "B", x: 935, y: 440, w: 200, h: 135 },
+  ], [
+    { x: 435, y: 435, w: 55, h: 55, hp: 75 },
+    { x: 790, y: 435, w: 55, h: 55, hp: 75 },
+  ]),
+  makeMap("Refinaria Atlas", "Planta petroquimica", {
+    floor: "#1d1b17",
+    grid: "rgba(241, 171, 73, 0.055)",
+    wall: "#454037",
+    wallStroke: "#89785e",
+    siteFill: "rgba(255, 166, 64, 0.1)",
+    siteStroke: "#f5a94f",
+  }, [
+    { x: 205, y: 140, w: 46, h: 250 },
+    { x: 1029, y: 330, w: 46, h: 250 },
+    { x: 370, y: 240, w: 210, h: 32 },
+    { x: 700, y: 450, w: 210, h: 32 },
+    { x: 585, y: 315, w: 110, h: 90 },
+  ], [
+    { id: "A", x: 115, y: 420, w: 215, h: 150 },
+    { id: "B", x: 950, y: 150, w: 215, h: 150 },
+  ], [
+    { x: 445, y: 335, w: 50, h: 50, hp: 90 },
+    { x: 785, y: 335, w: 50, h: 50, hp: 90 },
+  ]),
+  makeMap("Costa Prismatica", "Porto tecnologico", {
+    floor: "#101e24",
+    grid: "rgba(79, 210, 224, 0.065)",
+    wall: "#263e48",
+    wallStroke: "#57a7b3",
+    siteFill: "rgba(81, 223, 214, 0.1)",
+    siteStroke: "#68e0d5",
+  }, [
+    { x: 120, y: 200, w: 260, h: 30 },
+    { x: 900, y: 490, w: 260, h: 30 },
+    { x: 430, y: 420, w: 190, h: 32 },
+    { x: 660, y: 270, w: 190, h: 32 },
+    { x: 610, y: 90, w: 60, h: 150 },
+    { x: 610, y: 500, w: 60, h: 120 },
+  ], [
+    { id: "A", x: 165, y: 285, w: 200, h: 145 },
+    { id: "B", x: 915, y: 285, w: 200, h: 145 },
+  ], [
+    { x: 515, y: 260, w: 48, h: 48, hp: 75 },
+    { x: 717, y: 430, w: 48, h: 48, hp: 75 },
+  ]),
 );
+
+/**
+ * Blackout possui um conjunto próprio. As arenas abaixo nunca participam do
+ * sorteio Default; corredores e coberturas foram pensados para visão limitada.
+ */
+const BLACKOUT_MAP_BLUEPRINTS = [
+  {
+    name: "Catacumbas Vesper", vibe: "Cripta subterranea",
+    colors: ["#111214", "#28292d", "#65616b", "#a98bc4"],
+    sites: [{ id: "A", x: 145, y: 170, w: 190, h: 140 }, { id: "B", x: 945, y: 410, w: 190, h: 140 }],
+    walls: [{ x: 375, y: 170, w: 42, h: 220 }, { x: 863, y: 330, w: 42, h: 220 }, { x: 520, y: 280, w: 240, h: 34 }, { x: 520, y: 445, w: 240, h: 34 }],
+  },
+  {
+    name: "Observatorio Umbra", vibe: "Eclipse astronomico",
+    colors: ["#10131f", "#252b43", "#58658f", "#788cff"],
+    sites: [{ id: "A", x: 170, y: 425, w: 200, h: 140 }, { id: "B", x: 910, y: 155, w: 200, h: 140 }],
+    walls: [{ x: 230, y: 215, w: 270, h: 30 }, { x: 780, y: 475, w: 270, h: 30 }, { x: 585, y: 180, w: 110, h: 115 }, { x: 585, y: 425, w: 110, h: 115 }],
+  },
+  {
+    name: "Subnivel Zero", vibe: "Bunker de contencao",
+    colors: ["#12191b", "#29383b", "#5b7478", "#79d1c5"],
+    sites: [{ id: "A", x: 115, y: 285, w: 210, h: 150 }, { id: "B", x: 955, y: 285, w: 210, h: 150 }],
+    walls: [{ x: 390, y: 125, w: 38, h: 220 }, { x: 852, y: 375, w: 38, h: 220 }, { x: 520, y: 335, w: 240, h: 48 }, { x: 180, y: 505, w: 240, h: 30 }, { x: 860, y: 185, w: 240, h: 30 }],
+  },
+  {
+    name: "Bosque Morto", vibe: "Floresta em nevoa",
+    colors: ["#121913", "#2c3d2d", "#60765e", "#96bf83"],
+    sites: [{ id: "A", x: 165, y: 160, w: 190, h: 145 }, { id: "B", x: 925, y: 415, w: 190, h: 145 }],
+    walls: [{ x: 280, y: 360, w: 65, h: 170 }, { x: 935, y: 190, w: 65, h: 170 }, { x: 455, y: 210, w: 160, h: 34 }, { x: 665, y: 475, w: 160, h: 34 }, { x: 605, y: 310, w: 70, h: 100 }],
+  },
+  {
+    name: "Distrito Fantasma", vibe: "Cidade evacuada",
+    colors: ["#17171b", "#36343c", "#77717f", "#d18d9b"],
+    sites: [{ id: "A", x: 145, y: 430, w: 205, h: 140 }, { id: "B", x: 930, y: 150, w: 205, h: 140 }],
+    walls: [{ x: 150, y: 220, w: 320, h: 34 }, { x: 810, y: 465, w: 320, h: 34 }, { x: 540, y: 170, w: 42, h: 200 }, { x: 698, y: 350, w: 42, h: 200 }],
+  },
+  {
+    name: "Mina Abissal", vibe: "Galeria mineral profunda",
+    colors: ["#171411", "#3b322b", "#7d6756", "#e39b5d"],
+    sites: [{ id: "A", x: 125, y: 190, w: 210, h: 145 }, { id: "B", x: 945, y: 385, w: 210, h: 145 }],
+    walls: [{ x: 360, y: 155, w: 45, h: 245 }, { x: 875, y: 320, w: 45, h: 245 }, { x: 500, y: 275, w: 280, h: 32 }, { x: 500, y: 430, w: 280, h: 32 }],
+  },
+  {
+    name: "Arquivo Onix", vibe: "Cofre de dados proibido",
+    colors: ["#11151c", "#252e3a", "#566579", "#72a7d9"],
+    sites: [{ id: "A", x: 170, y: 405, w: 195, h: 145 }, { id: "B", x: 915, y: 170, w: 195, h: 145 }],
+    walls: [{ x: 240, y: 175, w: 250, h: 30 }, { x: 790, y: 515, w: 250, h: 30 }, { x: 480, y: 310, w: 120, h: 36 }, { x: 680, y: 375, w: 120, h: 36 }, { x: 615, y: 145, w: 50, h: 130 }],
+  },
+  {
+    name: "Pantano Nix", vibe: "Reserva toxica noturna",
+    colors: ["#101714", "#263a31", "#577464", "#76c89a"],
+    sites: [{ id: "A", x: 135, y: 270, w: 205, h: 150 }, { id: "B", x: 940, y: 270, w: 205, h: 150 }],
+    walls: [{ x: 220, y: 150, w: 220, h: 32 }, { x: 840, y: 535, w: 220, h: 32 }, { x: 425, y: 350, w: 180, h: 32 }, { x: 675, y: 350, w: 180, h: 32 }, { x: 610, y: 185, w: 60, h: 110 }],
+  },
+  {
+    name: "Santuario Selene", vibe: "Templo lunar",
+    colors: ["#151522", "#302f4b", "#6d6a98", "#b8a9ff"],
+    sites: [{ id: "A", x: 155, y: 175, w: 195, h: 145 }, { id: "B", x: 930, y: 400, w: 195, h: 145 }],
+    walls: [{ x: 310, y: 360, w: 60, h: 190 }, { x: 910, y: 170, w: 60, h: 190 }, { x: 500, y: 260, w: 280, h: 34 }, { x: 500, y: 455, w: 280, h: 34 }],
+  },
+  {
+    name: "Plataforma Nox", vibe: "Base oceanica sem energia",
+    colors: ["#10191e", "#253a44", "#557987", "#61bad1"],
+    sites: [{ id: "A", x: 145, y: 420, w: 205, h: 145 }, { id: "B", x: 930, y: 155, w: 205, h: 145 }],
+    walls: [{ x: 160, y: 205, w: 300, h: 32 }, { x: 820, y: 485, w: 300, h: 32 }, { x: 520, y: 205, w: 44, h: 180 }, { x: 716, y: 335, w: 44, h: 180 }, { x: 605, y: 325, w: 70, h: 70 }],
+  },
+];
+
+const BLACKOUT_MAPS = BLACKOUT_MAP_BLUEPRINTS.map((blueprint) => {
+  const [floor, wall, wallStroke, accent] = blueprint.colors;
+  const blackoutMap = makeMap(blueprint.name, blueprint.vibe, {
+    floor,
+    grid: `${accent}12`,
+    wall,
+    wallStroke,
+    siteFill: `${accent}18`,
+    siteStroke: accent,
+  }, blueprint.walls, blueprint.sites, []);
+  blackoutMap.blackoutOnly = true;
+  return blackoutMap;
+});
 
 /**
  * Arena vazia disponível exclusivamente pelo painel de cheats do Sandbox.
@@ -3837,7 +4059,12 @@ function startNewMatch() {
   game.outbreakWaveEnemyTotal = 0;
   game.startingSide = game.outbreak ? "attackers" : Math.random() < 0.5 ? "attackers" : "defenders";
   game.playerSide = game.startingSide;
-  map = game.training ? TRAINING_MAP : game.outbreak ? generateOutbreakMap() : MAPS[Math.floor(Math.random() * MAPS.length)];
+  const competitiveMapPool = game.playMode === "blackout" ? BLACKOUT_MAPS : MAPS;
+  map = game.training
+    ? TRAINING_MAP
+    : game.outbreak
+      ? generateOutbreakMap()
+      : competitiveMapPool[Math.floor(Math.random() * competitiveMapPool.length)];
   if (!game.outbreak) map.botRoutes = randomizedBotRoutes(map);
   game.map = map;
   game.mapName = map.name;
@@ -13106,10 +13333,17 @@ function updateShopState() {
 }
 
 function loop(now) {
-  const dt = Math.min(0.033, (now - loop.last) / 1000 || 0);
+  const rawDelta = Math.max(0, (now - loop.last) / 1000 || 0);
+  const dt = Math.min(0.033, rawDelta);
   loop.last = now;
+  loop.fpsFrames += 1;
+  const fpsWindow = now - loop.fpsSampleStartedAt;
+  if (fpsWindow >= 500) {
+    game.currentFps = Math.round((loop.fpsFrames * 1000) / Math.max(1, fpsWindow));
+    loop.fpsFrames = 0;
+    loop.fpsSampleStartedAt = now;
+  }
   try {
-    game.currentFps = Math.round(1 / Math.max(0.001, dt));
     game.pingMs = 28 + Math.round(Math.sin(now / 900) * 5 + Math.random() * 4);
     const tutorialSlowMotion = game.tutorial
       && game.tutorialStage === "defend"
@@ -13137,6 +13371,8 @@ function loop(now) {
   }
 }
 loop.last = performance.now();
+loop.fpsFrames = 0;
+loop.fpsSampleStartedAt = loop.last;
 
 // Ouvintes de eventos com checagem de seguranca contra valores nulos.
 if (window) window.addEventListener("keydown", (event) => {

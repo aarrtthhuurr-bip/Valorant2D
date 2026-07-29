@@ -1,10 +1,10 @@
-const CACHE_VERSION = "valorant2d-shell-20260729-pwa-install";
+const CACHE_VERSION = "valorant2d-shell-20260729-maps-fps";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest?v=20260729-pwa-install",
-  "./styles.css?v=20260729-mobile-pwa-remaster",
-  "./game.js?v=20260729-mobile-pwa-remaster",
+  "./styles.css?v=20260729-maps-fps",
+  "./game.js?v=20260729-maps-fps",
   "./assets/Favicon/android-chrome-192x192.png",
   "./assets/Favicon/android-chrome-512x512.png",
 ];

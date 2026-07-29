@@ -24,20 +24,23 @@ experiência.
 
 O modo tático clássico. No ataque, plante a Spike e proteja-a até a detonação.
 Na defesa, impeça o plant ou desarme o dispositivo. O primeiro time a conquistar
-9 pontos vence.
+9 pontos vence. As partidas sorteiam um conjunto de 10 mapas com temas e
+geometrias próprios.
 
 ### Blackout
 
 Mantém o objetivo do modo Default, mas limita o campo de visão. Paredes,
 distância, movimentação e leitura sonora tornam o posicionamento mais
-importante.
+importante. O modo possui 10 mapas sombrios exclusivos, separados do conjunto
+utilizado no Default.
 
 ### Outbreak
 
 Modo de sobrevivência em ondas com mapa próprio, inimigos progressivamente mais
 fortes, med-kits, airdrops, modificadores, aliados e intervalos de compra.
 Escudo e vida possuem regras próprias, e o ranking considera a maior onda
-alcançada.
+alcançada. A arena é reconstruída a cada partida com oito coberturas aleatórias,
+mantendo o centro e todos os pontos de spawn livres.
 
 ### Sandbox
 
