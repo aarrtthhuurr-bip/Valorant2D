@@ -8,7 +8,7 @@
   <!-- Altere apenas este valor caso o endereço definitivo do Render mude. -->
   <meta name="valorant2d-api-url" content="https://valorant2d.onrender.com">
   <title>Valorant2D</title>
-  <link rel="stylesheet" href="./styles.css?v=20260720-outbreak-balance">
+  <link rel="stylesheet" href="./styles.css?v=20260728-mobile-integration">
   <script src="https://unpkg.com/lucide@1.24.0" integrity="sha384-mooE85Luwgx+AyykX7e90VcN8/QCFTSIwPuHLmvcsLVoA0en7lKYb9XlOzn5G2co" crossorigin="anonymous"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="shortcut icon" href="./assets/Favicon/favicon.ico" type="image/x-icon">
@@ -70,6 +70,51 @@
           <span class="outbreak-ult-stock hidden" id="outbreakUltStock"></span>
           <span class="outbreak-effect-stock hidden" id="outbreakEffectStock"></span>
         </div>
+      </div>
+
+      <div class="mobile-controls" id="mobileControls" aria-hidden="true">
+        <div class="mobile-stick mobile-move-stick" id="mobileMoveStick" aria-label="Controle de movimento">
+          <span class="mobile-stick-ring"></span>
+          <span class="mobile-stick-knob" id="mobileMoveKnob"></span>
+          <small>MOVER</small>
+        </div>
+
+        <div class="mobile-stick mobile-aim-stick" id="mobileAimStick" aria-label="Controle de mira">
+          <span class="mobile-stick-ring"></span>
+          <span class="mobile-stick-knob" id="mobileAimKnob"></span>
+          <small>MIRAR</small>
+        </div>
+
+        <div class="mobile-action-cluster" aria-label="Ações de combate">
+          <button type="button" class="mobile-action mobile-fire" id="mobileFireButton" aria-label="Atirar">
+            <span>TIRO</span>
+          </button>
+          <button type="button" class="mobile-action mobile-ability" data-touch-action="ability1" aria-label="Usar habilidade">
+            <b>E</b><span>HABILIDADE</span>
+          </button>
+          <button type="button" class="mobile-action mobile-ultimate" data-touch-action="ability2" aria-label="Usar ultimate">
+            <b>Q</b><span>ULT</span>
+          </button>
+          <button type="button" class="mobile-action mobile-interact" data-touch-action="interact" data-touch-hold="true" aria-label="Interagir com objetivo">
+            <b>F</b><span>OBJETIVO</span>
+          </button>
+          <button type="button" class="mobile-action mobile-reload" data-touch-action="reload" data-touch-hold="true" aria-label="Recarregar">
+            <b>R</b><span>RECARGA</span>
+          </button>
+        </div>
+
+        <button type="button" class="mobile-utility mobile-shop-button" id="mobileShopButton" aria-label="Abrir loja">
+          <b>B</b><span>LOJA</span>
+        </button>
+        <button type="button" class="mobile-utility mobile-pause-button" id="mobilePauseButton" aria-label="Pausar jogo">
+          <span class="mobile-pause-bars" aria-hidden="true"></span><span>PAUSA</span>
+        </button>
+      </div>
+
+      <div class="mobile-orientation-hint" id="mobileOrientationHint" aria-hidden="true">
+        <span class="mobile-orientation-device" aria-hidden="true"></span>
+        <strong>GIRE O DISPOSITIVO</strong>
+        <small>O campo de batalha funciona melhor na horizontal.</small>
       </div>
 
       <div class="shop-backdrop hidden" id="shopBackdrop"></div>
@@ -562,6 +607,6 @@
     </div>
   </main>
 
-  <script src="./game.js?v=20260722-agent-audio"></script>
+  <script src="./game.js?v=20260728-mobile-integration"></script>
 </body>
 </html>

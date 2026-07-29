@@ -148,6 +148,15 @@ const ui = {
   tutorialAgentGrid: document.getElementById("tutorialAgentGrid"),
   fpsCounter: document.getElementById("fpsCounter"),
   audioDebugLabel: document.getElementById("audioDebugLabel"),
+  mobileControls: document.getElementById("mobileControls"),
+  mobileMoveStick: document.getElementById("mobileMoveStick"),
+  mobileMoveKnob: document.getElementById("mobileMoveKnob"),
+  mobileAimStick: document.getElementById("mobileAimStick"),
+  mobileAimKnob: document.getElementById("mobileAimKnob"),
+  mobileFireButton: document.getElementById("mobileFireButton"),
+  mobileShopButton: document.getElementById("mobileShopButton"),
+  mobilePauseButton: document.getElementById("mobilePauseButton"),
+  mobileOrientationHint: document.getElementById("mobileOrientationHint"),
   authOverlay: document.getElementById("authOverlay"),
   authSessionCheck: document.getElementById("authSessionCheck"),
   serverStatus: document.getElementById("serverStatus"),
@@ -239,7 +248,7 @@ const ui = {
  * aplicada ao Canvas de 1280 x 720. Isso preserva a leitura em telas estreitas.
  */
 function mountViewportOverlays() {
-  for (const overlay of [ui.authOverlay, ui.welcomeOverlay, ui.modeInfoOverlay, ui.menuTourLayer, ui.matchOverlay, ui.pauseOverlay, ui.playerProfileOverlay, ui.globalRankingOverlay]) {
+  for (const overlay of [ui.authOverlay, ui.welcomeOverlay, ui.modeInfoOverlay, ui.menuTourLayer, ui.matchOverlay, ui.pauseOverlay, ui.playerProfileOverlay, ui.globalRankingOverlay, ui.mobileOrientationHint]) {
     if (overlay && ui.gameRoot && overlay.parentElement !== ui.gameRoot) ui.gameRoot.appendChild(overlay);
   }
 }
@@ -1089,12 +1098,206 @@ const keys = new Set();
 const pressed = new Set();
 const mouse = { x: BASE_WIDTH / 2, y: BASE_HEIGHT / 2, down: false, rightDown: false };
 
+const coarsePointerQuery = window.matchMedia?.("(pointer: coarse)");
+const mobileUserAgentQuery = /Android|iPhone|iPad|iPod|Mobile|Tablet|Silk|Kindle/i;
+
+function detectMobileDevice() {
+  const touchPoints = Number(navigator.maxTouchPoints || 0);
+  const hasTouch = touchPoints > 0 || "ontouchstart" in window;
+  const coarsePointer = Boolean(coarsePointerQuery?.matches);
+  const mobileUserAgent = mobileUserAgentQuery.test(navigator.userAgent || "");
+  const compactTouchScreen = hasTouch && Math.min(screen.width || innerWidth, screen.height || innerHeight) <= 1024;
+  return hasTouch && (coarsePointer || mobileUserAgent || compactTouchScreen);
+}
+
+const touchControls = {
+  move: { active: false, x: 0, y: 0, touchId: null },
+  aim: { active: false, x: 0, y: 0, touchId: null },
+  heldActions: new Set(),
+  pressedActions: new Set(),
+  firing: false,
+};
+
+function setMobileStickVisual(element, x = 0, y = 0, active = false) {
+  if (!element) return;
+  element.style.setProperty("--stick-x", String(x));
+  element.style.setProperty("--stick-y", String(y));
+  element.classList.toggle("is-active", active);
+}
+
+function resetMobileStick(kind) {
+  const stick = touchControls[kind];
+  if (!stick) return;
+  stick.active = false;
+  stick.x = 0;
+  stick.y = 0;
+  stick.touchId = null;
+  setMobileStickVisual(kind === "move" ? ui.mobileMoveStick : ui.mobileAimStick);
+}
+
+function resetMobileControls() {
+  resetMobileStick("move");
+  resetMobileStick("aim");
+  touchControls.heldActions.clear();
+  touchControls.pressedActions.clear();
+  touchControls.firing = false;
+  mouse.down = false;
+  ui.mobileControls?.querySelectorAll(".is-pressed").forEach((element) => element.classList.remove("is-pressed"));
+}
+
+function updateMobileStickFromTouch(kind, element, touch) {
+  const stick = touchControls[kind];
+  if (!stick || !element || !touch) return;
+  const bounds = element.getBoundingClientRect();
+  const centerX = bounds.left + bounds.width / 2;
+  const centerY = bounds.top + bounds.height / 2;
+  const rawX = touch.clientX - centerX;
+  const rawY = touch.clientY - centerY;
+  const radius = Math.max(1, bounds.width * 0.31);
+  const distance = Math.hypot(rawX, rawY);
+  const strength = Math.min(1, distance / radius);
+  const angle = distance > 0 ? Math.atan2(rawY, rawX) : 0;
+  stick.x = distance > bounds.width * 0.045 ? Math.cos(angle) * strength : 0;
+  stick.y = distance > bounds.width * 0.045 ? Math.sin(angle) * strength : 0;
+  stick.active = true;
+  setMobileStickVisual(element, stick.x, stick.y, true);
+}
+
+function bindMobileStick(element, kind) {
+  if (!element) return;
+  element.addEventListener("touchstart", (event) => {
+    if (!game.isMobile || touchControls[kind].touchId !== null) return;
+    event.preventDefault();
+    initAudio();
+    const touch = event.changedTouches[0];
+    touchControls[kind].touchId = touch.identifier;
+    updateMobileStickFromTouch(kind, element, touch);
+  }, { passive: false });
+  element.addEventListener("touchmove", (event) => {
+    const touch = [...event.changedTouches].find((item) => item.identifier === touchControls[kind].touchId);
+    if (!touch) return;
+    event.preventDefault();
+    updateMobileStickFromTouch(kind, element, touch);
+  }, { passive: false });
+  const release = (event) => {
+    if (![...event.changedTouches].some((item) => item.identifier === touchControls[kind].touchId)) return;
+    event.preventDefault();
+    resetMobileStick(kind);
+  };
+  element.addEventListener("touchend", release, { passive: false });
+  element.addEventListener("touchcancel", release, { passive: false });
+}
+
+function bindMobileActionButton(button) {
+  const action = button?.dataset?.touchAction;
+  if (!button || !action) return;
+  const hold = button.dataset.touchHold === "true";
+  const touchIds = new Set();
+  button.addEventListener("touchstart", (event) => {
+    if (!game.isMobile) return;
+    event.preventDefault();
+    initAudio();
+    for (const touch of event.changedTouches) touchIds.add(touch.identifier);
+    button.classList.add("is-pressed");
+    touchControls.pressedActions.add(action);
+    if (hold) touchControls.heldActions.add(action);
+  }, { passive: false });
+  const release = (event) => {
+    let changed = false;
+    for (const touch of event.changedTouches) changed = touchIds.delete(touch.identifier) || changed;
+    if (!changed) return;
+    event.preventDefault();
+    if (!touchIds.size) {
+      button.classList.remove("is-pressed");
+      touchControls.heldActions.delete(action);
+    }
+  };
+  button.addEventListener("touchend", release, { passive: false });
+  button.addEventListener("touchcancel", release, { passive: false });
+}
+
+function bindMobileTapButton(button, handler) {
+  if (!button || typeof handler !== "function") return;
+  const touchIds = new Set();
+  button.addEventListener("touchstart", (event) => {
+    if (!game.isMobile) return;
+    event.preventDefault();
+    initAudio();
+    for (const touch of event.changedTouches) touchIds.add(touch.identifier);
+    button.classList.add("is-pressed");
+    handler();
+  }, { passive: false });
+  const release = (event) => {
+    for (const touch of event.changedTouches) touchIds.delete(touch.identifier);
+    if (!touchIds.size) button.classList.remove("is-pressed");
+  };
+  button.addEventListener("touchend", release, { passive: true });
+  button.addEventListener("touchcancel", release, { passive: true });
+}
+
+function bindMobileFireButton(button) {
+  if (!button) return;
+  const touchIds = new Set();
+  button.addEventListener("touchstart", (event) => {
+    if (!game.isMobile || game.phase !== "action") return;
+    event.preventDefault();
+    initAudio();
+    for (const touch of event.changedTouches) touchIds.add(touch.identifier);
+    touchControls.firing = true;
+    mouse.down = true;
+    button.classList.add("is-pressed");
+  }, { passive: false });
+  const release = (event) => {
+    let changed = false;
+    for (const touch of event.changedTouches) changed = touchIds.delete(touch.identifier) || changed;
+    if (!changed) return;
+    event.preventDefault();
+    if (!touchIds.size) {
+      touchControls.firing = false;
+      mouse.down = false;
+      button.classList.remove("is-pressed");
+    }
+  };
+  button.addEventListener("touchend", release, { passive: false });
+  button.addEventListener("touchcancel", release, { passive: false });
+}
+
+function canvasPointFromTouch(touch) {
+  const bounds = canvas.getBoundingClientRect();
+  return {
+    x: ((touch.clientX - bounds.left) / bounds.width) * canvas.width,
+    y: ((touch.clientY - bounds.top) / bounds.height) * canvas.height,
+  };
+}
+
+function handleMobileCanvasTouch(event) {
+  if (!game.isMobile || game.menuState !== "none" || game.phase !== "action") return;
+  const touch = event.changedTouches[0];
+  if (!touch) return;
+  event.preventDefault();
+  const point = canvasPointFromTouch(touch);
+  mouse.x = point.x;
+  mouse.y = point.y;
+  if (game.omenUlt?.state === "select") commitOmenTeleport(point);
+}
+
 function escalarViewport() {
   if (!ui.gameViewport) return;
-  const scaleX = window.innerWidth / BASE_WIDTH;
-  const scaleY = window.innerHeight / BASE_HEIGHT;
+  const viewport = window.visualViewport || window;
+  const viewportWidth = viewport.width || window.innerWidth;
+  const viewportHeight = viewport.height || window.innerHeight;
+  const scaleX = viewportWidth / BASE_WIDTH;
+  const scaleY = viewportHeight / BASE_HEIGHT;
   const scale = Math.min(scaleX, scaleY);
   ui.gameViewport.style.transform = `scale(${scale})`;
+  document.documentElement.style.setProperty("--game-viewport-scale", String(scale));
+  document.documentElement.style.setProperty("--visual-viewport-height", `${viewportHeight}px`);
+}
+
+function escalarViewportAposOrientacao() {
+  escalarViewport();
+  window.setTimeout(escalarViewport, 180);
+  window.setTimeout(escalarViewport, 420);
 }
 
 const SPIKE_DETONATE_TIME = 38;
@@ -2618,6 +2821,7 @@ let map = MAPS[0];
 
 const game = {
   map,
+  isMobile: detectMobileDevice(),
   phase: "buy",
   phaseTime: 8,
   clockActive: false,
@@ -2785,6 +2989,18 @@ const game = {
   optionsReturnState: null,
   agentReturnState: "main",
 };
+
+function applyDeviceMode(forceMobile = detectMobileDevice()) {
+  const nextMobile = Boolean(forceMobile);
+  const changed = game.isMobile !== nextMobile;
+  game.isMobile = nextMobile;
+  document.body?.classList.toggle("is-mobile", nextMobile);
+  ui.mobileControls?.setAttribute("aria-hidden", String(!nextMobile));
+  if (!nextMobile) resetMobileControls();
+  if (changed) escalarViewport();
+}
+
+applyDeviceMode(game.isMobile);
 
 function outbreakEffectActive(untilWave) {
   return game.outbreak && game.outbreakWave > 0 && game.outbreakWave <= (Number(untilWave) || 0);
@@ -5629,11 +5845,16 @@ function updatePlayer(dt) {
    const left = useArrows ? keys.has("arrowleft") : keys.has("a");
    const down = useArrows ? keys.has("arrowdown") : keys.has("s");
    const up = useArrows ? keys.has("arrowup") : keys.has("w");
-   const dx = (right ? 1 : 0) - (left ? 1 : 0);
-   const dy = (down ? 1 : 0) - (up ? 1 : 0);
-   const len = Math.hypot(dx, dy) || 1;
+   const keyboardDx = (right ? 1 : 0) - (left ? 1 : 0);
+   const keyboardDy = (down ? 1 : 0) - (up ? 1 : 0);
+   const joystickActive = game.isMobile
+     && touchControls.move.active
+     && Math.hypot(touchControls.move.x, touchControls.move.y) > 0.08;
+   const dx = joystickActive ? touchControls.move.x : keyboardDx;
+   const dy = joystickActive ? touchControls.move.y : keyboardDy;
+   const len = joystickActive ? 1 : (Math.hypot(dx, dy) || 1);
    const movementLocked = (p.detainedTimer || 0) > 0;
-   p.moving = !movementLocked && (dx !== 0 || dy !== 0);
+   p.moving = !movementLocked && Math.hypot(dx, dy) > 0.08;
   p.moveX = p.moving ? dx / len : 0;
   p.moveY = p.moving ? dy / len : 0;
   const neonSpeed = updateNeonStamina(dt);
@@ -5641,6 +5862,29 @@ function updatePlayer(dt) {
   const shadowSlow = shadowSlowMultiplier(p);
   if (!movementLocked) {
     moveEntity(p, (dx / len) * p.speed * ultimateSpeed * neonSpeed * shadowSlow * dt, (dy / len) * p.speed * ultimateSpeed * neonSpeed * shadowSlow * dt, map.walls);
+  }
+  const aimActive = game.isMobile
+    && touchControls.aim.active
+    && Math.hypot(touchControls.aim.x, touchControls.aim.y) > 0.08;
+  if (aimActive) {
+    mouse.x = p.x + touchControls.aim.x * 520;
+    mouse.y = p.y + touchControls.aim.y * 520;
+  } else if (game.isMobile && touchControls.firing) {
+    let target = null;
+    let closestSquaredDistance = Infinity;
+    for (const bot of game.bots) {
+      if (!bot?.alive || bot.untargetable) continue;
+      const dxToBot = bot.x - p.x;
+      const dyToBot = bot.y - p.y;
+      const squaredDistance = dxToBot * dxToBot + dyToBot * dyToBot;
+      if (squaredDistance >= closestSquaredDistance) continue;
+      closestSquaredDistance = squaredDistance;
+      target = bot;
+    }
+    if (target) {
+      mouse.x = target.x;
+      mouse.y = target.y;
+    }
   }
   p.angle = Math.atan2(mouse.y - p.y, mouse.x - p.x);
   if (game.spike.state === "carried" && game.spike.owner === "player") {
@@ -9377,6 +9621,8 @@ function updateUi() {
   setText(ui.message?.querySelector?.("strong"), game.message);
   setText(ui.message?.querySelector?.("span"), game.paused
     ? (game.menuState === "pause" ? "Jogo pausado. Aperte Esc ou P para continuar." : "Escolha uma opção no menu.")
+    : game.isMobile
+      ? "Use os controles touch para mover, mirar, atirar e interagir."
     : game.playerSide === "attackers"
       ? "WASD move, E habilidade, Q Ultimate, F planta, B loja, Esc pause."
       : "WASD move, E habilidade, Q Ultimate, F desarma, B loja, Esc pause.");
@@ -9391,6 +9637,25 @@ function updateUi() {
   const gameplayHudVisible = game.menuState === "none" && ["buy", "action", "ended"].includes(game.phase);
   const tutorialActive = game.tutorial && game.menuState === "none";
   const shopOpen = isShopOpen();
+  const viewportOverlayOpen = [
+    ui.authOverlay,
+    ui.welcomeOverlay,
+    ui.modeInfoOverlay,
+    ui.playerProfileOverlay,
+    ui.globalRankingOverlay,
+    ui.matchOverlay,
+  ].some((overlay) => overlay && !overlay.classList.contains("hidden"));
+  const mobileControlsVisible = game.isMobile
+    && game.menuState === "none"
+    && ["buy", "action"].includes(game.phase)
+    && !shopOpen
+    && !viewportOverlayOpen;
+  const mobileControlsWereVisible = ui.mobileControls?.classList.contains("is-active");
+  ui.mobileControls?.classList.toggle("is-active", mobileControlsVisible);
+  ui.mobileControls?.classList.toggle("is-action-phase", mobileControlsVisible && game.phase === "action");
+  ui.mobileControls?.setAttribute("aria-hidden", String(!mobileControlsVisible));
+  document.body?.classList.toggle("mobile-gameplay-active", mobileControlsVisible);
+  if (mobileControlsWereVisible && !mobileControlsVisible) resetMobileControls();
   toggleClass(ui.topHud, "hidden", !gameplayHudVisible || tutorialActive || shopOpen);
   toggleClass(ui.easterEggCodes, "hidden", !gameplayHudVisible || tutorialActive || shopOpen || !ui.easterEggCodes?.childElementCount);
   toggleClass(ui.message, "hidden", !gameplayHudVisible || tutorialActive || shopOpen || !settings.showTips || game.messageTimer <= 0);
@@ -11234,12 +11499,14 @@ function settingKey(action) {
 }
 
 function keyHeld(action) {
+  if (game.isMobile && touchControls.heldActions.has(action)) return true;
   const key = settingKey(action);
   if (key === "mouse1") return mouse.down;
   return keys.has(key);
 }
 
 function keyPressed(action) {
+  if (game.isMobile && touchControls.pressedActions.has(action)) return true;
   const key = settingKey(action);
   if (key === "mouse1") return false;
   return pressed.has(key);
@@ -12595,6 +12862,7 @@ function loop(now) {
     }
   } finally {
     pressed.clear();
+    touchControls.pressedActions.clear();
     requestAnimationFrame(loop);
   }
 }
@@ -12655,13 +12923,32 @@ if (window) window.addEventListener("resize", () => {
   escalarViewport();
   if (!ui.menuTourLayer?.classList.contains("hidden")) renderMenuTourStep();
 });
+if (window) window.addEventListener("orientationchange", escalarViewportAposOrientacao);
+if (window.visualViewport) window.visualViewport.addEventListener("resize", escalarViewport);
 if (document) document.addEventListener("fullscreenchange", escalarViewport);
+coarsePointerQuery?.addEventListener?.("change", () => applyDeviceMode());
+if (document) document.addEventListener("visibilitychange", () => {
+  if (document.hidden) resetMobileControls();
+});
+
+bindMobileStick(ui.mobileMoveStick, "move");
+bindMobileStick(ui.mobileAimStick, "aim");
+ui.mobileControls?.querySelectorAll("[data-touch-action]").forEach(bindMobileActionButton);
+bindMobileFireButton(ui.mobileFireButton);
+bindMobileTapButton(ui.mobileShopButton, () => {
+  if (game.menuState === "none") toggleShop();
+});
+bindMobileTapButton(ui.mobilePauseButton, togglePause);
 
 if (canvas) canvas.addEventListener("mousemove", (event) => {
   const rect = canvas.getBoundingClientRect();
   mouse.x = ((event.clientX - rect.left) / rect.width) * canvas.width;
   mouse.y = ((event.clientY - rect.top) / rect.height) * canvas.height;
 });
+if (canvas) {
+  canvas.addEventListener("touchstart", handleMobileCanvasTouch, { passive: false });
+  canvas.addEventListener("touchmove", handleMobileCanvasTouch, { passive: false });
+}
 
 // Um único listener cobre botões estáticos e componentes gerados em tempo
 // de execução, incluindo menus, configurações e todos os módulos da loja.
