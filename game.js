@@ -2440,15 +2440,25 @@ function panForAudioOrigin(origin) {
 }
 
 function initAudio() {
-  if (!audio.enabled) return;
-  if (!audio.ctx) {
+  if (!audio.enabled) return Promise.resolve(false);
+  if (!audio.ctx || audio.ctx.state === "closed") {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (AudioContext) audio.ctx = new AudioContext();
+    audio.outputReady = false;
+    audio.masterGain = null;
+    audio.compressor = null;
   }
-  if (audio.ctx?.state === "suspended") audio.ctx.resume?.()?.catch?.(() => {});
+  if (!audio.ctx) return Promise.resolve(false);
   ensureAudioOutputGraph();
   primeWeaponAudioBuffers();
   primeWeaponAudioCache();
+  if (audio.ctx.state === "running") return Promise.resolve(true);
+  return audio.ctx.resume()
+    .then(() => audio.ctx?.state === "running")
+    .catch((error) => {
+      console.warn("O navegador bloqueou a inicialização do áudio:", error);
+      return false;
+    });
 }
 
 function playTone(freq, duration = 0.06, type = "square", gain = 0.035, delay = 0) {
@@ -14000,9 +14010,13 @@ if (document) document.addEventListener("pointerdown", (event) => {
   const button = event.target?.closest?.("button");
   if (!button || button.disabled) return;
   const cue = button.dataset.audioCue;
+  const audioReady = initAudio();
   if (cue === "handled") return;
-  initAudio();
-  playSound(cue || "menu_click");
+  // O Chrome conclui o desbloqueio do AudioContext de forma assíncrona.
+  // Aguardar o resume evita perder justamente o primeiro som da interface.
+  void audioReady.then((ready) => {
+    if (ready) playSound(cue || "menu_click");
+  });
 }, { passive: true });
 
 if (canvas) canvas.addEventListener("contextmenu", (event) => event.preventDefault());
