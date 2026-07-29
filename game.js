@@ -1099,6 +1099,7 @@ const pressed = new Set();
 const mouse = { x: BASE_WIDTH / 2, y: BASE_HEIGHT / 2, down: false, rightDown: false };
 
 const coarsePointerQuery = window.matchMedia?.("(pointer: coarse)");
+const standaloneDisplayQuery = window.matchMedia?.("(display-mode: standalone)");
 const mobileUserAgentQuery = /Android|iPhone|iPad|iPod|Mobile|Tablet|Silk|Kindle/i;
 
 function detectMobileDevice() {
@@ -1106,8 +1107,9 @@ function detectMobileDevice() {
   const hasTouch = touchPoints > 0 || "ontouchstart" in window;
   const coarsePointer = Boolean(coarsePointerQuery?.matches);
   const mobileUserAgent = mobileUserAgentQuery.test(navigator.userAgent || "");
+  const standalone = Boolean(standaloneDisplayQuery?.matches || navigator.standalone === true);
   const compactTouchScreen = hasTouch && Math.min(screen.width || innerWidth, screen.height || innerHeight) <= 1024;
-  return hasTouch && (coarsePointer || mobileUserAgent || compactTouchScreen);
+  return hasTouch && (coarsePointer || mobileUserAgent || standalone || compactTouchScreen);
 }
 
 const touchControls = {
@@ -1174,13 +1176,13 @@ function bindMobileStick(element, kind) {
     updateMobileStickFromTouch(kind, element, touch);
   }, { passive: false });
   element.addEventListener("touchmove", (event) => {
-    const touch = [...event.changedTouches].find((item) => item.identifier === touchControls[kind].touchId);
+    const touch = Array.from(event.changedTouches || []).find((item) => item.identifier === touchControls[kind].touchId);
     if (!touch) return;
     event.preventDefault();
     updateMobileStickFromTouch(kind, element, touch);
   }, { passive: false });
   const release = (event) => {
-    if (![...event.changedTouches].some((item) => item.identifier === touchControls[kind].touchId)) return;
+    if (!Array.from(event.changedTouches || []).some((item) => item.identifier === touchControls[kind].touchId)) return;
     event.preventDefault();
     resetMobileStick(kind);
   };
@@ -2995,6 +2997,10 @@ function applyDeviceMode(forceMobile = detectMobileDevice()) {
   const changed = game.isMobile !== nextMobile;
   game.isMobile = nextMobile;
   document.body?.classList.toggle("is-mobile", nextMobile);
+  document.body?.classList.toggle(
+    "is-standalone",
+    Boolean(standaloneDisplayQuery?.matches || navigator.standalone === true),
+  );
   ui.mobileControls?.setAttribute("aria-hidden", String(!nextMobile));
   if (!nextMobile) resetMobileControls();
   if (changed) escalarViewport();
@@ -12927,6 +12933,7 @@ if (window) window.addEventListener("orientationchange", escalarViewportAposOrie
 if (window.visualViewport) window.visualViewport.addEventListener("resize", escalarViewport);
 if (document) document.addEventListener("fullscreenchange", escalarViewport);
 coarsePointerQuery?.addEventListener?.("change", () => applyDeviceMode());
+standaloneDisplayQuery?.addEventListener?.("change", () => applyDeviceMode());
 if (document) document.addEventListener("visibilitychange", () => {
   if (document.hidden) resetMobileControls();
 });
@@ -13214,4 +13221,11 @@ game.menuMapTimer = 0;
 startNewMatch();
 initializeGoogleIdentity();
 bootstrapAuthentication();
+if ("serviceWorker" in navigator && (window.isSecureContext || location.hostname === "localhost")) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js").catch((error) => {
+      console.warn("[PWA] Service Worker indisponível:", error?.message || error);
+    });
+  });
+}
 requestAnimationFrame(loop);

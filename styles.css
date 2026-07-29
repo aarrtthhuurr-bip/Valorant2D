@@ -1035,6 +1035,30 @@ body.is-mobile.mobile-gameplay-active canvas {
   touch-action: none;
 }
 
+/* No mobile, os dados vitais ficam acima da área dos joysticks. */
+body.is-mobile.mobile-gameplay-active .vitals-panel {
+  top: 68px;
+  bottom: auto;
+  left: 18px;
+  width: 350px;
+  min-height: 60px;
+  transform: none;
+  border-radius: 0 0 8px 8px;
+}
+
+body.is-mobile.mobile-gameplay-active .weapon-panel {
+  top: 68px;
+  right: 18px;
+  bottom: auto;
+  width: 250px;
+  border-radius: 0 0 8px 8px;
+}
+
+body.is-mobile.mobile-gameplay-active .mobile-shop-button,
+body.is-mobile.mobile-gameplay-active .mobile-pause-button {
+  top: 150px;
+}
+
 .mobile-orientation-hint {
   position: fixed;
   inset: 0;
