@@ -18,6 +18,7 @@ const ui = {
   ultPoints: document.getElementById("ultPointsText"),
   ammo: document.getElementById("ammoText"),
   spike: document.getElementById("spikeText"),
+  weaponPanel: document.getElementById("hud-weapon-info"),
   shop: document.getElementById("shop"),
   outbreakShopFooter: document.getElementById("outbreakShopFooter"),
   outbreakShopWaveText: document.getElementById("outbreakShopWaveText"),
@@ -7866,16 +7867,26 @@ function drawSandboxOverlay() {
 
 function drawMap() {
   const theme = map.theme || DEFAULT_MAP.theme;
-  ctx.fillStyle = theme.floor;
+  const floorGradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+  floorGradient.addColorStop(0, theme.floor);
+  floorGradient.addColorStop(0.52, shadeCanvasColor(theme.floor, 8));
+  floorGradient.addColorStop(1, shadeCanvasColor(theme.floor, -10));
+  ctx.fillStyle = floorGradient;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+  // A malha dupla dá escala ao mapa sem disputar atenção com os personagens.
   ctx.fillStyle = theme.grid;
-  for (let x = 0; x < canvas.width; x += 40) {
+  ctx.globalAlpha = 0.42;
+  for (let x = 0; x < canvas.width; x += 20) {
     ctx.fillRect(x, 0, 1, canvas.height);
   }
-  for (let y = 0; y < canvas.height; y += 40) {
+  for (let y = 0; y < canvas.height; y += 20) {
     ctx.fillRect(0, y, canvas.width, 1);
   }
+  ctx.globalAlpha = 0.72;
+  for (let x = 0; x < canvas.width; x += 80) ctx.fillRect(x, 0, 1, canvas.height);
+  for (let y = 0; y < canvas.height; y += 80) ctx.fillRect(0, y, canvas.width, 1);
+  ctx.globalAlpha = 1;
 
   for (const site of game.training ? [] : map.sites) {
     ctx.fillStyle = theme.siteFill;
@@ -7886,13 +7897,32 @@ function drawMap() {
     ctx.fillStyle = theme.siteStroke;
     ctx.font = "bold 24px Segoe UI";
     ctx.fillText(site.id, site.x + 14, site.y + 32);
+
+    const corner = 18;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(site.x, site.y + corner);
+    ctx.lineTo(site.x, site.y);
+    ctx.lineTo(site.x + corner, site.y);
+    ctx.moveTo(site.x + site.w - corner, site.y + site.h);
+    ctx.lineTo(site.x + site.w, site.y + site.h);
+    ctx.lineTo(site.x + site.w, site.y + site.h - corner);
+    ctx.stroke();
   }
 
-  ctx.fillStyle = theme.wall;
-  ctx.strokeStyle = theme.wallStroke;
   for (const wall of map.walls) {
+    ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+    ctx.fillRect(wall.x + 6, wall.y + 7, wall.w, wall.h);
+    const wallGradient = ctx.createLinearGradient(wall.x, wall.y, wall.x, wall.y + wall.h);
+    wallGradient.addColorStop(0, shadeCanvasColor(theme.wall, 15));
+    wallGradient.addColorStop(1, theme.wall);
+    ctx.fillStyle = wallGradient;
+    ctx.strokeStyle = theme.wallStroke;
+    ctx.lineWidth = 2;
     ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
     ctx.strokeRect(wall.x, wall.y, wall.w, wall.h);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+    ctx.fillRect(wall.x + 2, wall.y + 2, Math.max(0, wall.w - 4), 2);
   }
 
   for (const box of game.destructibles) {
@@ -7922,6 +7952,18 @@ function drawMap() {
     ctx.fillText(callout.text, callout.x, callout.y + 4);
   }
   ctx.textAlign = "left";
+}
+
+function shadeCanvasColor(color, amount = 0) {
+  const value = String(color || "#101820").trim();
+  const match = /^#([\da-f]{3}|[\da-f]{6})$/i.exec(value);
+  if (!match) return value;
+  const source = match[1].length === 3
+    ? match[1].split("").map((part) => part + part).join("")
+    : match[1];
+  const number = Number.parseInt(source, 16);
+  const channel = (shift) => Math.max(0, Math.min(255, ((number >> shift) & 255) + amount));
+  return `rgb(${channel(16)}, ${channel(8)}, ${channel(0)})`;
 }
 
 function weaponVisual(weapon) {
@@ -9482,8 +9524,22 @@ function draw() {
     if (bullet.knife) {
       drawKunaiShape(bullet.x, bullet.y, (bullet.angle ?? Math.atan2(bullet.vy, bullet.vx)) + Math.PI / 2, 0.72, 1);
     } else {
+      const speed = Math.max(1, Math.hypot(bullet.vx || 0, bullet.vy || 0));
+      const trailLength = Math.min(16, speed * 0.014);
+      const trailX = bullet.x - ((bullet.vx || 0) / speed) * trailLength;
+      const trailY = bullet.y - ((bullet.vy || 0) / speed) * trailLength;
+      const trail = ctx.createLinearGradient(trailX, trailY, bullet.x, bullet.y);
+      trail.addColorStop(0, "rgba(248, 250, 252, 0)");
+      trail.addColorStop(1, bullet.team === "player" ? "rgba(117, 226, 239, 0.92)" : "rgba(255, 102, 112, 0.88)");
+      ctx.strokeStyle = trail;
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(bullet.x, bullet.y, 3, 0, Math.PI * 2);
+      ctx.moveTo(trailX, trailY);
+      ctx.lineTo(bullet.x, bullet.y);
+      ctx.stroke();
+      ctx.fillStyle = bullet.team === "player" ? "#d8fbff" : "#ffd9dc";
+      ctx.beginPath();
+      ctx.arc(bullet.x, bullet.y, 2.5, 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -9634,6 +9690,9 @@ function updateUi() {
   setText(ui.agent, `${game.playerName} · ${game.selectedAgent.name} ${game.outbreak ? "OUTBREAK" : atk ? "ATK" : "DEF"} · ${game.sandbox ? "E livre" : game.abilityCooldown > 0 ? `${Math.ceil(game.abilityCooldown)}s` : "E"}`);
   setText(ui.weapon, game.selectedWeapon.name);
   setText(ui.hp, `${Math.max(0, Math.ceil(game.player.hp))}`);
+  const healthRatio = Math.max(0, game.player.hp) / Math.max(1, game.player.maxHp || 100);
+  toggleClass(ui.vitalsPanel, "is-wounded", healthRatio <= 0.5);
+  toggleClass(ui.vitalsPanel, "is-critical", healthRatio <= 0.25);
   const ultCost = getUltCost(game.player);
   const ultReady = getUltimatePoints(game.player) >= ultCost;
   setText(ui.ultPoints, game.sandbox ? "∞" : `${getUltimatePoints(game.player)}/${ultCost}`);
@@ -9651,6 +9710,10 @@ function updateUi() {
   setText(ui.ammo, ultimateAmmo || (game.sandbox && game.sandboxInfiniteAmmo
     ? "∞"
     : game.reloadTimer > 0 ? "Recarregando" : `${game.player.ammo}`));
+  const magazineSize = Math.max(1, game.selectedWeapon.mag || game.selectedWeapon.ammo || 1);
+  const ammoRatio = Math.max(0, game.player.ammo || 0) / magazineSize;
+  toggleClass(ui.weaponPanel, "is-low-ammo", !ultimateAmmo && ammoRatio <= 0.25);
+  toggleClass(ui.weaponPanel, "is-reloading", game.reloadTimer > 0);
   setText(ui.spike, game.outbreak ? `Onda ${game.outbreakWave}` : game.spike.state === "carried"
     ? game.spike.owner === "player" ? "Com você" : "Em transporte"
     : game.spike.state === "dropped"

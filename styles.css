@@ -7111,3 +7111,382 @@ body.is-mobile .menu-state-options .options-footer {
     min-height: 52px;
   }
 }
+
+/* =========================================================================
+ * REMASTER IN-GAME
+ * Uma linguagem tática mais limpa, com leitura imediata dos estados críticos.
+ * As regras abaixo não alteram menus nem a geometria lógica do Canvas.
+ * ====================================================================== */
+.game-stage {
+  --hud-surface: rgba(5, 12, 19, 0.88);
+  --hud-surface-strong: rgba(7, 16, 24, 0.96);
+  --hud-line: rgba(154, 196, 218, 0.2);
+  --hud-cyan: #60dce8;
+  --hud-danger: #ff4655;
+}
+
+.game-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(96, 220, 232, 0.035) 1px, transparent 1px),
+    linear-gradient(rgba(96, 220, 232, 0.025) 1px, transparent 1px);
+  background-size: 80px 80px;
+  mix-blend-mode: screen;
+}
+
+.game-stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  box-shadow: inset 0 0 110px rgba(0, 0, 0, 0.58);
+}
+
+.top-hud {
+  top: 10px;
+  height: 62px;
+  min-width: 390px;
+  padding: 0 8px;
+  gap: 4px;
+  overflow: visible;
+  border: 1px solid var(--hud-line);
+  border-radius: 6px;
+  background:
+    linear-gradient(180deg, rgba(21, 38, 50, 0.94), var(--hud-surface-strong));
+  box-shadow:
+    0 14px 34px rgba(0, 0, 0, 0.42),
+    inset 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.top-hud::before,
+.top-hud::after {
+  content: "";
+  position: absolute;
+  bottom: -5px;
+  width: 36px;
+  height: 5px;
+  background: var(--hud-cyan);
+  opacity: 0.72;
+}
+
+.top-hud::before {
+  left: 18px;
+  clip-path: polygon(0 0, 100% 0, 84% 100%, 0 100%);
+}
+
+.top-hud::after {
+  right: 18px;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 16% 100%);
+}
+
+.hud-pill {
+  min-height: 50px;
+  border-left-color: rgba(183, 219, 235, 0.12);
+}
+
+.top-hud .label {
+  color: rgba(190, 217, 229, 0.64);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+}
+
+.top-hud strong {
+  margin-top: 5px;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+}
+
+.side-pill {
+  min-width: 70px;
+  margin: 5px 2px;
+  min-height: 42px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+}
+
+.side-pill.atk {
+  color: #ff6b70;
+  background: linear-gradient(135deg, rgba(255, 70, 85, 0.24), rgba(255, 70, 85, 0.06));
+}
+
+.side-pill.def {
+  color: #58b9ef;
+  background: linear-gradient(135deg, rgba(70, 168, 255, 0.24), rgba(70, 168, 255, 0.06));
+}
+
+.side-pill.outbreak {
+  color: #ff5361;
+  background: linear-gradient(135deg, rgba(255, 40, 61, 0.28), rgba(57, 6, 15, 0.18));
+}
+
+.vitals-panel,
+.weapon-panel {
+  bottom: 14px;
+  min-height: 82px;
+  border: 1px solid var(--hud-line);
+  border-radius: 5px;
+  background:
+    linear-gradient(135deg, rgba(18, 36, 47, 0.9), var(--hud-surface-strong) 62%);
+  box-shadow:
+    0 15px 38px rgba(0, 0, 0, 0.42),
+    inset 0 1px rgba(255, 255, 255, 0.045);
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+}
+
+.vitals-panel {
+  width: min(590px, calc(100% - 390px));
+  padding: 12px 24px;
+}
+
+.vitals-panel::before,
+.weapon-panel::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 10px;
+  width: 72px;
+  height: 2px;
+  background: var(--hud-cyan);
+}
+
+.vitals-panel.is-wounded::before {
+  background: #ff9b54;
+}
+
+.vitals-panel.is-critical {
+  border-color: rgba(255, 70, 85, 0.56);
+  animation: remasterCritical 0.72s ease-in-out infinite alternate;
+}
+
+.vitals-panel.is-critical::before {
+  width: calc(100% - 20px);
+  background: var(--hud-danger);
+}
+
+.status-main strong,
+.weapon-line strong {
+  color: #f2f8fb;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.agent-dot {
+  width: 7px;
+  height: 18px;
+  margin-right: 5px;
+  border-radius: 1px;
+  transform: skewX(-12deg);
+}
+
+.bars {
+  gap: 4px;
+  margin: 8px 0 6px;
+}
+
+.bar {
+  height: 5px;
+  border-radius: 1px;
+  background:
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.1) 0 24px, transparent 24px 27px);
+}
+
+.bar i {
+  border-radius: 1px;
+}
+
+.bar.hp i {
+  background: linear-gradient(90deg, #36c979, #7bf1ad);
+}
+
+.is-wounded .bar.hp i {
+  background: linear-gradient(90deg, #e78b36, #ffc163);
+}
+
+.is-critical .bar.hp i {
+  background: linear-gradient(90deg, #c91f39, #ff5361);
+}
+
+.status-row {
+  color: rgba(193, 218, 229, 0.68);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.status-row b {
+  color: #f2f8fb;
+  font-size: 13px;
+}
+
+.weapon-panel {
+  right: 18px;
+  width: 310px;
+  padding: 14px 16px 12px;
+}
+
+.weapon-line span {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.weapon-panel.is-low-ammo {
+  border-color: rgba(255, 160, 70, 0.48);
+}
+
+.weapon-panel.is-low-ammo .weapon-line span {
+  color: #ffad5c;
+}
+
+.weapon-panel.is-reloading .ammo i {
+  background: #ffd166;
+  animation: remasterReload 0.62s ease-in-out infinite alternate;
+}
+
+.spike-status {
+  color: rgba(190, 217, 229, 0.58);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.spike-status.planted {
+  padding-right: 9px;
+  border-right: 3px solid var(--hud-danger);
+}
+
+.kill-feed {
+  top: 84px;
+  left: 16px;
+  gap: 6px;
+}
+
+.kill-entry {
+  min-width: 210px;
+  padding: 7px 11px;
+  border: 1px solid rgba(159, 196, 214, 0.17);
+  border-left: 3px solid rgba(96, 220, 232, 0.74);
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgba(7, 17, 25, 0.94), rgba(7, 17, 25, 0.68));
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24);
+}
+
+.round-banner {
+  top: 88px;
+  min-width: min(360px, calc(100% - 32px));
+  padding: 12px 22px;
+  border: 1px solid rgba(96, 220, 232, 0.28);
+  border-radius: 3px;
+  background:
+    linear-gradient(90deg, transparent, rgba(96, 220, 232, 0.06), transparent),
+    rgba(5, 12, 19, 0.9);
+  clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 12px 100%, 0 50%);
+}
+
+.round-banner strong {
+  color: #f2f8fb;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.round-banner p {
+  color: rgba(188, 216, 228, 0.68);
+  letter-spacing: 0.04em;
+}
+
+.message {
+  bottom: 110px;
+  padding: 9px 16px;
+  border: 1px solid rgba(96, 220, 232, 0.2);
+  border-radius: 3px;
+  background: rgba(5, 12, 19, 0.88);
+}
+
+.message strong {
+  color: #eaf7fa;
+  letter-spacing: 0.03em;
+}
+
+.message span {
+  color: rgba(185, 214, 226, 0.62);
+}
+
+.outbreak-context-hud {
+  bottom: 14px;
+  min-height: 72px;
+  border-radius: 5px;
+  border-color: rgba(255, 70, 85, 0.28);
+  background: rgba(9, 15, 22, 0.9);
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+}
+
+@keyframes remasterCritical {
+  from { background-color: rgba(38, 8, 14, 0.12); }
+  to { background-color: rgba(84, 9, 21, 0.34); }
+}
+
+@keyframes remasterReload {
+  from { opacity: 0.55; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vitals-panel.is-critical,
+  .weapon-panel.is-reloading .ammo i {
+    animation: none;
+  }
+}
+
+body.is-mobile .top-hud {
+  top: max(4px, env(safe-area-inset-top));
+  height: 60px;
+  min-width: 350px;
+}
+
+body.is-mobile .vitals-panel,
+body.is-mobile .weapon-panel {
+  bottom: max(8px, env(safe-area-inset-bottom));
+}
+
+body.is-mobile .vitals-panel {
+  width: min(520px, calc(100% - 360px));
+  min-height: 72px;
+  padding: 9px 16px;
+}
+
+body.is-mobile .weapon-panel {
+  right: max(10px, env(safe-area-inset-right));
+  width: 270px;
+  min-height: 72px;
+}
+
+@media (orientation: landscape) and (max-height: 520px) {
+  body.is-mobile .top-hud {
+    height: 52px;
+  }
+
+  body.is-mobile .hud-pill {
+    min-height: 42px;
+  }
+
+  body.is-mobile .vitals-panel,
+  body.is-mobile .weapon-panel {
+    min-height: 62px;
+    padding-block: 7px;
+  }
+
+  body.is-mobile .status-main strong,
+  body.is-mobile .weapon-line strong {
+    font-size: 12px;
+  }
+}
