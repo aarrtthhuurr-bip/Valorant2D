@@ -761,6 +761,7 @@ input {
 #game-root {
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   background: #000;
   display: flex;
   align-items: center;
@@ -769,11 +770,15 @@ input {
 }
 
 #game-viewport {
+  position: absolute;
+  top: 50%;
+  left: 50%;
   width: 1280px;
   height: 720px;
-  position: relative;
   overflow: hidden;
+  transform: translate(-50%, -50%) scale(1);
   transform-origin: center center;
+  will-change: transform;
 }
 
 .shell {
@@ -1035,6 +1040,16 @@ body.is-mobile.mobile-gameplay-active canvas {
   touch-action: none;
 }
 
+/*
+ * A cena mantém sua resolução lógica de 1280 x 720, mas o contêiner externo
+ * ocupa toda a visual viewport. O valor desta variável é calculado em JS para
+ * que 48 px físicos continuem sendo 48 px mesmo após a redução da cena.
+ */
+body.is-mobile #game-viewport button {
+  min-width: var(--mobile-touch-target, 48px);
+  min-height: var(--mobile-touch-target, 48px);
+}
+
 /* No mobile, os dados vitais ficam acima da área dos joysticks. */
 body.is-mobile.mobile-gameplay-active .vitals-panel {
   top: 68px;
@@ -1056,7 +1071,27 @@ body.is-mobile.mobile-gameplay-active .weapon-panel {
 
 body.is-mobile.mobile-gameplay-active .mobile-shop-button,
 body.is-mobile.mobile-gameplay-active .mobile-pause-button {
-  top: 150px;
+  top: 190px;
+}
+
+body.is-mobile .mobile-action {
+  width: max(84px, var(--mobile-touch-target, 48px));
+  height: max(84px, var(--mobile-touch-target, 48px));
+}
+
+body.is-mobile .mobile-fire {
+  width: max(112px, var(--mobile-touch-target, 48px));
+  height: max(112px, var(--mobile-touch-target, 48px));
+}
+
+body.is-mobile .mobile-reload {
+  width: max(76px, var(--mobile-touch-target, 48px));
+  height: max(76px, var(--mobile-touch-target, 48px));
+}
+
+body.is-mobile .mobile-utility {
+  width: max(96px, var(--mobile-touch-target, 48px));
+  height: max(56px, var(--mobile-touch-target, 48px));
 }
 
 .mobile-orientation-hint {
@@ -6723,5 +6758,216 @@ body::-webkit-scrollbar,
 
   .options-footer button {
     flex: 1 1 150px;
+  }
+}
+
+/* -------------------------------------------------------------------------
+ * Adaptação mobile da interface escalada
+ * ---------------------------------------------------------------------- */
+body.is-mobile .menu-overlay {
+  align-items: center;
+  justify-content: center;
+}
+
+body.is-mobile .menu-state-main .menu-card,
+body.is-mobile .menu-state-pause .menu-card {
+  width: min(600px, calc(100% - 32px));
+  max-height: calc(100% - 24px);
+  padding: 28px;
+  border: 1px solid rgba(215, 237, 255, 0.16);
+  border-radius: 10px;
+}
+
+body.is-mobile .menu-state-main .menu-art,
+body.is-mobile .menu-state-pause .menu-art {
+  display: none;
+}
+
+body.is-mobile .menu-grid button,
+body.is-mobile .difficulty-card,
+body.is-mobile .difficulty-back-btn,
+body.is-mobile .difficulty-start-btn {
+  min-height: var(--mobile-touch-target, 72px);
+}
+
+body.is-mobile .menu-button,
+body.is-mobile .difficulty-card,
+body.is-mobile .mode-card-select,
+body.is-mobile .mode-select-back {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Os cinco modos ocupam duas linhas e dispensam qualquer rolagem vertical. */
+body.is-mobile .menu-state-mode-select .menu-card {
+  width: min(1120px, calc(100% - 32px));
+  max-width: 1120px;
+  height: auto;
+  max-height: calc(100% - 24px);
+  padding: 20px 22px;
+  overflow: hidden;
+}
+
+body.is-mobile .menu-state-mode-select .menu-copy {
+  margin-bottom: 12px;
+}
+
+body.is-mobile .menu-state-mode-select .menu-card h2 {
+  margin-top: 4px;
+  font-size: 34px;
+}
+
+body.is-mobile .mode-select-shell {
+  gap: 10px;
+  min-height: 0;
+}
+
+body.is-mobile .mode-select-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+body.is-mobile .mode-card {
+  min-height: 126px;
+}
+
+body.is-mobile .mode-card-select {
+  min-height: 124px;
+  padding: 12px;
+  gap: 10px;
+}
+
+body.is-mobile .mode-card-icon {
+  width: 56px;
+  height: 56px;
+  flex-basis: 56px;
+}
+
+body.is-mobile .mode-card-copy em {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+body.is-mobile .mode-card-index {
+  display: none;
+}
+
+body.is-mobile .mode-card-arrow {
+  display: none;
+}
+
+body.is-mobile .mode-info-button {
+  width: var(--mobile-touch-target, 72px);
+  height: var(--mobile-touch-target, 72px);
+  margin: 0 9px 0 0;
+  flex-basis: var(--mobile-touch-target, 72px);
+  font-size: 20px;
+}
+
+body.is-mobile .mode-select-footer {
+  min-height: var(--mobile-touch-target, 72px);
+  padding-top: 8px;
+}
+
+body.is-mobile .mode-select-back {
+  min-width: 180px;
+  min-height: var(--mobile-touch-target, 72px);
+  font-size: 15px;
+}
+
+body.is-mobile #game-viewport .mode-select-back {
+  min-width: 180px;
+}
+
+/* Dificuldade, opções e seleção de agente usam toda a área útil interna. */
+body.is-mobile .menu-state-difficulty .menu-card,
+body.is-mobile .menu-state-options .menu-card {
+  width: min(1120px, calc(100% - 32px));
+  height: calc(100% - 24px);
+  max-height: none;
+  padding: 18px 22px;
+  overflow: hidden;
+}
+
+body.is-mobile .menu-state-options .options-content {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+body.is-mobile .agent-overlay {
+  padding: 12px;
+}
+
+body.is-mobile .agent-select {
+  width: calc(100% - 24px);
+  height: calc(100% - 20px);
+  max-height: none;
+  padding: 16px;
+  overflow: hidden;
+}
+
+/* A loja preenche a cena, mantendo rolagem somente em sua lista interna. */
+body.is-mobile .shop,
+body.is-mobile .shop.shop-allies-active {
+  top: 12px;
+  right: 12px;
+  bottom: 12px;
+  left: 12px;
+  width: auto;
+  height: auto;
+  max-height: none;
+  transform: none;
+  animation: none;
+}
+
+body.is-mobile .shop-inner-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+body.is-mobile .shop-tabs button {
+  min-height: var(--mobile-touch-target, 72px);
+  font-size: 17px;
+}
+
+body.is-mobile .shop button:not(.shop-close) {
+  touch-action: manipulation;
+}
+
+body.is-mobile .shop p,
+body.is-mobile .shop .equip-card > span:not(.equip-icon):not(.equip-owned-badge):not(.equip-card-action) {
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+body.is-mobile .top-hud {
+  height: 76px;
+}
+
+body.is-mobile .top-hud .label {
+  font-size: 13px;
+}
+
+body.is-mobile .top-hud strong {
+  font-size: 21px;
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  body.is-mobile .auth-panel {
+    max-height: calc(100dvh - 12px);
+    padding-block: 10px;
+  }
+
+  body.is-mobile .auth-heading {
+    margin-block: 6px;
+  }
+
+  body.is-mobile .auth-heading h1 {
+    font-size: 25px;
   }
 }

@@ -1,10 +1,10 @@
-const CACHE_VERSION = "valorant2d-shell-20260728-mobile-qa";
+const CACHE_VERSION = "valorant2d-shell-20260729-mobile-layout";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
-  "./styles.css?v=20260728-mobile-qa",
-  "./game.js?v=20260728-mobile-qa",
+  "./styles.css?v=20260729-mobile-layout",
+  "./game.js?v=20260729-mobile-layout",
   "./assets/Favicon/android-chrome-192x192.png",
   "./assets/Favicon/android-chrome-512x512.png",
 ];

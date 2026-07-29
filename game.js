@@ -1291,9 +1291,13 @@ function escalarViewport() {
   const scaleX = viewportWidth / BASE_WIDTH;
   const scaleY = viewportHeight / BASE_HEIGHT;
   const scale = Math.min(scaleX, scaleY);
-  ui.gameViewport.style.transform = `scale(${scale})`;
+  ui.gameViewport.style.transform = `translate(-50%, -50%) scale(${scale})`;
   document.documentElement.style.setProperty("--game-viewport-scale", String(scale));
   document.documentElement.style.setProperty("--visual-viewport-height", `${viewportHeight}px`);
+  document.documentElement.style.setProperty(
+    "--mobile-touch-target",
+    `${Math.min(104, Math.max(48, Math.ceil(48 / Math.max(scale, 0.01))))}px`,
+  );
 }
 
 function escalarViewportAposOrientacao() {
