@@ -12466,17 +12466,83 @@ function outbreakBotArchetype(wave, index) {
   return "assault";
 }
 
+const OUTBREAK_SPAWN_RULES = Object.freeze({
+  playerClearance: 170,
+  botClearance: 88,
+  wallClearance: 42,
+  boundaryMargin: 54,
+});
+
+function isOutbreakSpawnPointSafe(point, radius = 17, reservedPoints = []) {
+  if (!point) return false;
+  const rules = OUTBREAK_SPAWN_RULES;
+  if (point.x < rules.boundaryMargin + radius
+    || point.y < rules.boundaryMargin + radius
+    || point.x > map.width - rules.boundaryMargin - radius
+    || point.y > map.height - rules.boundaryMargin - radius) return false;
+
+  const player = game.player || map.attackersSpawn;
+  if (player && Math.hypot(point.x - player.x, point.y - player.y) < rules.playerClearance + radius) return false;
+
+  const occupied = [
+    ...game.bots.filter((bot) => bot?.alive),
+    ...reservedPoints,
+  ];
+  if (occupied.some((entity) => (
+    Math.hypot(point.x - entity.x, point.y - entity.y)
+      < rules.botClearance + radius + (entity.r || 17)
+  ))) return false;
+
+  // A margem é propositalmente maior que o raio do bot: ele não nasce apenas
+  // fora da parede, mas também com espaço suficiente para iniciar o pathfinding.
+  return !solidWalls().some((wall) => (
+    rectContainsPadded(wall, point.x, point.y, rules.wallClearance + radius)
+  ));
+}
+
+function randomOutbreakSpawnPoint(radius = 17, reservedPoints = []) {
+  const margin = OUTBREAK_SPAWN_RULES.boundaryMargin + radius;
+  const randomBetween = (minimum, maximum) => minimum + Math.random() * (maximum - minimum);
+
+  // A maior parte dos sorteios vem das faixas periféricas, mas o lado muda a
+  // cada tentativa para que as ondas não tenham uma direção previsível.
+  for (let attempt = 0; attempt < 320; attempt += 1) {
+    const side = Math.floor(Math.random() * 5);
+    const band = randomBetween(margin, Math.min(190, map.height * 0.28));
+    let point;
+    if (side === 0) point = { x: randomBetween(margin, map.width - margin), y: band };
+    else if (side === 1) point = { x: map.width - band, y: randomBetween(margin, map.height - margin) };
+    else if (side === 2) point = { x: randomBetween(margin, map.width - margin), y: map.height - band };
+    else if (side === 3) point = { x: band, y: randomBetween(margin, map.height - margin) };
+    else point = {
+      x: randomBetween(margin, map.width - margin),
+      y: randomBetween(margin, map.height - margin),
+    };
+    if (isOutbreakSpawnPointSafe(point, radius, reservedPoints)) return point;
+  }
+
+  // Busca determinística de contingência para mapas muito congestionados.
+  const candidates = [];
+  for (let y = margin; y <= map.height - margin; y += 54) {
+    for (let x = margin; x <= map.width - margin; x += 54) {
+      const point = { x, y };
+      if (isOutbreakSpawnPointSafe(point, radius, reservedPoints)) candidates.push(point);
+    }
+  }
+  if (candidates.length) return candidates[Math.floor(Math.random() * candidates.length)];
+
+  // Nenhum bot é liberado em um ponto inseguro. Se um mapa futuro ficar
+  // congestionado demais, a fila tentará novamente no próximo ciclo.
+  return null;
+}
+
 function createOutbreakWave(wave) {
   const plan = outbreakWavePlan(wave);
-  const baseSpawns = [...map.defendersSpawn, ...map.attackerBotSpawns];
+  const reservedSpawns = [];
   return Array.from({ length: plan.total }, (_, index) => {
-    const base = baseSpawns[index % baseSpawns.length];
-    const ring = Math.floor(index / baseSpawns.length) + 1;
-    const angle = index * 2.19;
-    const spawn = nearestWalkablePoint({
-      x: base.x + Math.cos(angle) * ring * 34,
-      y: base.y + Math.sin(angle) * ring * 34,
-    }, base);
+    const spawn = randomOutbreakSpawnPoint(21, reservedSpawns)
+      || map.defendersSpawn[index % map.defendersSpawn.length];
+    reservedSpawns.push({ ...spawn, r: 21 });
     const bot = makeBot(spawn, index);
     const archetype = outbreakBotArchetype(wave, index);
     const baseHp = 64 + wave * 7;
@@ -12513,6 +12579,15 @@ function createOutbreakWave(wave) {
 function releaseOutbreakBot() {
   const bot = game.outbreakSpawnQueue.shift();
   if (!bot) return false;
+  const spawn = randomOutbreakSpawnPoint(bot.r || 17);
+  if (!spawn) {
+    game.outbreakSpawnQueue.unshift(bot);
+    return false;
+  }
+  bot.x = spawn.x;
+  bot.y = spawn.y;
+  bot.lastX = spawn.x;
+  bot.lastY = spawn.y;
   sanitizeEntityPosition(bot);
   game.bots.push(bot);
   spawnParticles(bot.x, bot.y, bot.outbreakArchetype === "tank" ? "#ff7d62" : bot.outbreakArchetype === "runner" ? "#ffbf66" : "#ff5364", 12, 90);

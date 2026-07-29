@@ -40,7 +40,8 @@ Modo de sobrevivência em ondas com mapa próprio, inimigos progressivamente mai
 fortes, med-kits, airdrops, modificadores, aliados e intervalos de compra.
 Escudo e vida possuem regras próprias, e o ranking considera a maior onda
 alcançada. A arena é reconstruída a cada partida com oito coberturas aleatórias,
-mantendo o centro e todos os pontos de spawn livres.
+mantendo o centro livre. Os inimigos também recebem pontos de entrada aleatórios
+e espaçados, sempre afastados do jogador e das paredes.
 
 ### Sandbox
 
