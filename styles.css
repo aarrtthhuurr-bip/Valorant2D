@@ -3491,7 +3491,7 @@ button.click-feedback::after {
 }
 .black-market-status span { color: #c084fc; font-size: 9px; font-weight: 900; letter-spacing: .16em; }
 .black-market-status p { margin: 0; color: #9886a5; font-size: 10px; }
-.black-market-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.black-market-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .black-market-card {
   position: relative;
   display: grid;

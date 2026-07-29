@@ -23,7 +23,14 @@ test('catálogo contém skins únicas e respeita o teto de 240 Core', () => {
 test('Black Market possui preços únicos, positivos e utilitário inicial válido', () => {
   assert.deepEqual(
     Object.fromEntries(BLACK_MARKET_CATALOG.map((item) => [item.id, item.price])),
-    { pulseBomb: 45, cryoMine: 80, adrenaline: 95, decoyTurret: 120 },
+    {
+      pulseBomb: 45,
+      cryoMine: 80,
+      adrenaline: 95,
+      decoyTurret: 120,
+      supplyDrop: 135,
+      cloakingDevice: 150,
+    },
   );
   assert.equal(new Set(BLACK_MARKET_CATALOG.map((item) => item.id)).size, BLACK_MARKET_CATALOG.length);
   assert.ok(BLACK_MARKET_CATALOG.some((item) => item.id === STARTER_GADGET_ID));

@@ -2051,41 +2051,61 @@ const BLACK_MARKET_GADGETS = Object.freeze([
     id: "pulseBomb",
     name: "Bomba de Pulso",
     price: 45,
-    description: "Detona uma descarga concentrada que causa dano e desorienta ameaças próximas.",
+    description: "Libera uma onda de repulsão que afasta a horda e causa dano em área.",
     chargesPerWave: 2,
-    cooldown: 12,
-    preview: "./assets/black-market/pulse-bomb.gif",
+    cooldown: 15,
+    preview: "./assets/black-market/pulse_bomb.gif",
     fallback: "⌁",
   },
   {
     id: "decoyTurret",
     name: "Torreta Chamariz",
     price: 120,
-    description: "Projeta uma sentinela temporária que atrai a atenção e abre fogo contra ameaças.",
+    description: "Projeta uma sentinela que distrai e atrai a horda durante 8 segundos.",
     chargesPerWave: 1,
-    cooldown: 20,
-    preview: "./assets/black-market/decoy-turret.gif",
+    cooldown: 25,
+    preview: "./assets/black-market/turret.gif",
     fallback: "⌖",
   },
   {
     id: "cryoMine",
     name: "Mina Cryo",
     price: 80,
-    description: "Congela o setor e reduz drasticamente a marcha dos inimigos por alguns segundos.",
+    description: "Congela os zumbis próximos durante 3 segundos.",
     chargesPerWave: 2,
-    cooldown: 15,
-    preview: "./assets/black-market/cryo-mine.gif",
+    cooldown: 18,
+    preview: "./assets/black-market/cryo_mine.gif",
     fallback: "❄",
   },
   {
     id: "adrenaline",
-    name: "Adrenalina",
+    name: "Injeção de Adrenalina",
     price: 95,
-    description: "Injeta um composto instável que eleva sua velocidade e deixa um rastro energético.",
+    description: "Concede invulnerabilidade e velocidade por 3 segundos; também dispara automaticamente ao chegar a 0 HP.",
     chargesPerWave: 1,
-    cooldown: 18,
-    preview: "./assets/black-market/adrenaline.gif",
+    cooldown: 30,
+    preview: "./assets/black-market/adrenalina.gif",
     fallback: "ϟ",
+  },
+  {
+    id: "supplyDrop",
+    name: "Sinalizador de Suprimentos",
+    price: 135,
+    description: "Recupera instantaneamente 100% da vida, do escudo e da munição durante a wave.",
+    chargesPerWave: 1,
+    cooldown: 40,
+    preview: "./assets/black-market/supply_drop.gif",
+    fallback: "✚",
+  },
+  {
+    id: "cloakingDevice",
+    name: "Dispositivo de Camuflagem",
+    price: 150,
+    description: "Oculta o jogador da percepção dos bots durante 5 segundos.",
+    chargesPerWave: 1,
+    cooldown: 22,
+    preview: "./assets/black-market/cloaking.gif",
+    fallback: "◌",
   },
 ]);
 
@@ -2237,6 +2257,36 @@ function closeBlackMarket() {
   ui.blackMarketOverlay?.classList.add("hidden");
 }
 
+function activateOutbreakAdrenaline(player, { emergency = false } = {}) {
+  const durationMs = 3000;
+  const now = performance.now();
+  game.outbreakEffects.adrenalineInvulnerableUntil = Math.max(
+    game.outbreakEffects.adrenalineInvulnerableUntil || 0,
+    now + durationMs,
+  );
+  game.outbreakEffects.overdriveUntil = Math.max(game.outbreakEffects.overdriveUntil, now + durationMs);
+  if (emergency) {
+    player.hp = Math.max(1, player.hp);
+    player.alive = true;
+  }
+  synchronizePlayerEquipment();
+  spawnParticles(player.x, player.y, "#d946ef", emergency ? 52 : 34, 230);
+}
+
+function triggerEmergencyOutbreakAdrenaline(player) {
+  if (!isOutbreakMode() || blackMarketState.equipped !== "adrenaline") return false;
+  const definition = equippedBlackMarketGadget();
+  if (game.outbreakGadget?.id !== definition.id
+    || game.outbreakGadget.charges <= 0
+    || game.outbreakGadget.cooldownRemaining > 0) return false;
+  game.outbreakGadget.charges -= 1;
+  game.outbreakGadget.cooldownRemaining = definition.cooldown;
+  activateOutbreakAdrenaline(player, { emergency: true });
+  setMessage("Injeção de Adrenalina: protocolo de emergência ativado.");
+  playFrequencySweep(150, 820, 0.26, "square", 0.075);
+  return true;
+}
+
 function useOutbreakGadget() {
   if (!isOutbreakMode() || game.phase !== "action" || !game.player?.alive) return false;
   const definition = equippedBlackMarketGadget();
@@ -2262,7 +2312,11 @@ function useOutbreakGadget() {
       shake: 0.48,
     });
     for (const bot of game.bots) {
-      if (bot.alive && Math.hypot(bot.x - player.x, bot.y - player.y) <= 270) bot.detainedTimer = Math.max(bot.detainedTimer || 0, 1.5);
+      const distance = Math.hypot(bot.x - player.x, bot.y - player.y);
+      if (!bot.alive || distance > 270) continue;
+      bot.detainedTimer = Math.max(bot.detainedTimer || 0, 1.5);
+      const angle = Math.atan2(bot.y - player.y, bot.x - player.x);
+      safeDisplaceEntity(bot, Math.cos(angle) * 115, Math.sin(angle) * 115, 10);
     }
   } else if (definition.id === "decoyTurret") {
     const point = nearestWalkablePoint({
@@ -2274,20 +2328,28 @@ function useOutbreakGadget() {
       x: point.x, y: point.y, r: 14, angle: player.angle,
       ownerTeam: "player", ownerId: "black-market-decoy",
       fireTimer: 0.1, burst: 0, burstTimer: 0,
-      life: 16, maxLife: 16, targetId: null,
+      life: 8, maxLife: 8, targetId: null,
     });
     spawnParticles(point.x, point.y, "#c084fc", 24, 135);
   } else if (definition.id === "cryoMine") {
     const now = performance.now();
     for (const bot of game.bots) {
-      if (bot.alive && Math.hypot(bot.x - player.x, bot.y - player.y) <= 330) bot.outbreakCryoUntil = now + 7000;
+      if (bot.alive && Math.hypot(bot.x - player.x, bot.y - player.y) <= 330) bot.outbreakCryoUntil = now + 3000;
     }
     game.explosions.push({ x: player.x, y: player.y, r: 0, maxR: 330, life: 0.7, maxLife: 0.7, color: "#9f7aea" });
     spawnParticles(player.x, player.y, "#d8b4fe", 52, 190);
   } else if (definition.id === "adrenaline") {
-    game.outbreakEffects.overdriveUntil = Math.max(game.outbreakEffects.overdriveUntil, performance.now() + 9000);
-    synchronizePlayerEquipment();
-    spawnParticles(player.x, player.y, "#d946ef", 34, 210);
+    activateOutbreakAdrenaline(player);
+  } else if (definition.id === "supplyDrop") {
+    player.hp = player.maxHp;
+    player.armor = player.maxArmor;
+    game.armor = player.armor;
+    game.reloadTimer = 0;
+    player.ammo = currentMagSize();
+    spawnParticles(player.x, player.y, "#c084fc", 42, 180);
+  } else if (definition.id === "cloakingDevice") {
+    game.outbreakEffects.cloakUntil = Math.max(game.outbreakEffects.cloakUntil || 0, performance.now() + 5000);
+    spawnParticles(player.x, player.y, "#b794f4", 38, 160);
   }
 
   game.outbreakGadget.charges -= 1;
@@ -3450,6 +3512,8 @@ const game = {
     overdriveUntil: 0,
     chronosUntil: 0,
     empUntil: 0,
+    cloakUntil: 0,
+    adrenalineInvulnerableUntil: 0,
     nanoHealUntil: 0,
     lastModifierId: null,
     lastModifierUntil: 0,
@@ -4660,6 +4724,8 @@ function applyDamage(entity, amount) {
   if (entity.id === "player" && game.godMode) return 0;
   if (game.outbreak && entity.id?.startsWith("ally-")) return 0;
   if (entity.id === "player" && game.outbreak && performance.now() < game.outbreakEffects.phaseShiftUntil) return 0;
+  if (entity.id === "player" && isOutbreakMode()
+    && performance.now() < (game.outbreakEffects.adrenalineInvulnerableUntil || 0)) return 0;
   if (entity.id === "player" && game.outbreak && performance.now() < game.outbreakEffects.pulseShieldUntil && amount > 0) {
     game.outbreakEffects.pulseShieldUntil = 0;
     spawnParticles(entity.x, entity.y, "#38e8ff", 30, 210);
@@ -4677,6 +4743,7 @@ function applyDamage(entity, amount) {
   }
   entity.hp -= remaining;
   if (entity.id === "player") {
+    if (entity.hp <= 0) triggerEmergencyOutbreakAdrenaline(entity);
     game.armor = Math.max(0, entity.armor || 0);
     if (game.outbreak && amount > 0) game.outbreakLastDamageAt = game.outbreakElapsed;
     if (game.outbreak && entity.armor <= 0 && game.allyLoadout.lastResort
@@ -6913,7 +6980,8 @@ function closestAliveBotTo(x, y) {
 
 function botCanSeePlayer(bot) {
   const p = game.player;
-  return p.alive && !p.untargetable && p.ultimate?.type !== "yoru" && hasCombatLineOfSight(bot, p) && Math.hypot(p.x - bot.x, p.y - bot.y) < 540;
+  const cloaked = isOutbreakMode() && performance.now() < (game.outbreakEffects.cloakUntil || 0);
+  return p.alive && !cloaked && !p.untargetable && p.ultimate?.type !== "yoru" && hasCombatLineOfSight(bot, p) && Math.hypot(p.x - bot.x, p.y - bot.y) < 540;
 }
 
 function closestVisibleSquadTarget(bot) {
@@ -7476,6 +7544,12 @@ function updateBots(dt) {
         && turret.life > 0
         && Math.hypot(turret.x - bot.x, turret.y - bot.y) <= 520
         && hasLineOfSight(bot, turret));
+      const playerCloaked = now < (game.outbreakEffects.cloakUntil || 0);
+      if (playerCloaked && !decoy) {
+        updateBotAwareness(bot, null, outbreakBotDt);
+        bot.moving = false;
+        continue;
+      }
       const pursuitTarget = decoy || p;
       const target = decoy || cachedBotPerception(bot, "player", () => botCanSeePlayer(bot) ? p : null);
       updateBotAwareness(bot, target, outbreakBotDt);
@@ -13094,7 +13168,8 @@ function startOutbreakMode() {
   game.outbreakEffects = {
     superShieldUntilWave: 0, ultraShieldUntilWave: 0, blasterShieldUntilWave: 0,
     magazineUntilWave: 0, adrenalineUntilWave: 0, pulseShieldUntil: 0,
-    phaseShiftUntil: 0, overdriveUntil: 0, chronosUntil: 0, empUntil: 0,
+    phaseShiftUntil: 0, overdriveUntil: 0, chronosUntil: 0, empUntil: 0, cloakUntil: 0,
+    adrenalineInvulnerableUntil: 0,
     nanoHealUntil: 0,
     lastModifierId: null, lastModifierUntil: 0,
   };
