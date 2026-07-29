@@ -1,10 +1,10 @@
-const CACHE_VERSION = "valorant2d-shell-20260729-black-market";
+const CACHE_VERSION = "valorant2d-shell-20260729-black-market-prices";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest?v=20260729-pwa-install",
-  "./styles.css?v=20260729-black-market",
-  "./game.js?v=20260729-black-market",
+  "./styles.css?v=20260729-black-market-prices",
+  "./game.js?v=20260729-black-market-prices",
   "./assets/Favicon/android-chrome-192x192.png",
   "./assets/Favicon/android-chrome-512x512.png",
 ];

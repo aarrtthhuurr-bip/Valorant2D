@@ -21,6 +21,9 @@ const ERRORS = {
   MISSION_INCOMPLETE: [409, 'Complete a missão antes de resgatar.'], INVALID_CODE: [400, 'Código inválido.'],
   ADMIN_REQUIRED: [403, 'Acesso administrativo necessário.'], CODE_ALREADY_EXISTS: [409, 'Este código já existe.'],
   CODE_NOT_FOUND: [404, 'Código inexistente ou inativo.'], CODE_ALREADY_REDEEMED: [409, 'Este código já foi resgatado por sua conta.'],
+  GADGET_NOT_FOUND: [404, 'Utilitário não encontrado no Black Market.'],
+  GADGET_ALREADY_OWNED: [409, 'Este utilitário já foi desbloqueado.'],
+  GADGET_NOT_OWNED: [403, 'Desbloqueie o utilitário antes de equipá-lo.'],
 };
 
 function sendResult(response, result, successStatus = 200) {
@@ -46,6 +49,23 @@ async function equipSkin(request, response, next) {
   try {
     const user = await userFromSession(request, response); if (!user) return;
     sendResult(response, await Commerce.equipSkin(user.id, String(request.params.weaponId || ''), request.body?.skinId ?? null));
+  } catch (error) { next(error); }
+}
+
+async function purchaseGadget(request, response, next) {
+  try {
+    const user = await userFromSession(request, response); if (!user) return;
+    const gadgetId = String(request.params.gadgetId || '');
+    const result = await Commerce.purchaseGadget(user.id, gadgetId);
+    securityAudit('gadget_purchase', request, { userId: user.id, gadgetId, success: !result.error });
+    sendResult(response, result, 201);
+  } catch (error) { next(error); }
+}
+
+async function equipGadget(request, response, next) {
+  try {
+    const user = await userFromSession(request, response); if (!user) return;
+    sendResult(response, await Commerce.equipGadget(user.id, String(request.params.gadgetId || '')));
   } catch (error) { next(error); }
 }
 
@@ -75,4 +95,13 @@ async function createCode(request, response, next) {
   } catch (error) { next(error); }
 }
 
-module.exports = { claimMission, createCode, equipSkin, getProfile, purchaseSkin, redeemCode };
+module.exports = {
+  claimMission,
+  createCode,
+  equipGadget,
+  equipSkin,
+  getProfile,
+  purchaseGadget,
+  purchaseSkin,
+  redeemCode,
+};

@@ -9,6 +9,7 @@ process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://test:test@1
 
 const { SKIN_CATALOG, dailyOffers } = require('../data/skinCatalog');
 const { DAILY_MISSIONS, missionsForUser } = require('../data/dailyMissions');
+const { BLACK_MARKET_CATALOG, STARTER_GADGET_ID } = require('../data/blackMarketCatalog');
 const { app } = require('../index');
 const Commerce = require('../models/Commerce');
 const Session = require('../models/Session');
@@ -17,6 +18,16 @@ test('catálogo contém skins únicas e respeita o teto de 240 Core', () => {
   assert.equal(SKIN_CATALOG.length, 83);
   assert.equal(new Set(SKIN_CATALOG.map((skin) => skin.id)).size, SKIN_CATALOG.length);
   assert.ok(SKIN_CATALOG.every((skin) => skin.price > 0 && skin.price <= 240));
+});
+
+test('Black Market possui preços únicos, positivos e utilitário inicial válido', () => {
+  assert.deepEqual(
+    Object.fromEntries(BLACK_MARKET_CATALOG.map((item) => [item.id, item.price])),
+    { pulseBomb: 45, cryoMine: 80, adrenaline: 95, decoyTurret: 120 },
+  );
+  assert.equal(new Set(BLACK_MARKET_CATALOG.map((item) => item.id)).size, BLACK_MARKET_CATALOG.length);
+  assert.ok(BLACK_MARKET_CATALOG.some((item) => item.id === STARTER_GADGET_ID));
+  assert.ok(BLACK_MARKET_CATALOG.every((item) => Number.isInteger(item.price) && item.price > 0));
 });
 
 test('todas as skins do catálogo possuem arquivo de imagem publicado', () => {
@@ -97,5 +108,39 @@ test('API comercial entrega somente o saldo retornado pelo servidor', async () =
   } finally {
     Session.findValid = originalSession;
     Commerce.profile = originalProfile;
+  }
+});
+
+test('API do Black Market compra e equipa somente pela sessão autenticada', async () => {
+  const originalSession = Session.findValid;
+  const originalPurchase = Commerce.purchaseGadget;
+  const originalEquip = Commerce.equipGadget;
+  Session.findValid = async () => ({ id: 7, username: 'agente' });
+  Commerce.purchaseGadget = async (userId, gadgetId) => ({
+    gadget: { id: gadgetId, name: 'Mina Cryo', price: 80 },
+    paid: 80,
+    coreBalance: 220,
+    userId,
+  });
+  Commerce.equipGadget = async (userId, gadgetId) => ({ userId, gadgetId });
+  try {
+    const purchase = await request(app)
+      .post('/api/commerce/gadgets/cryoMine/purchase')
+      .set('Authorization', `Bearer ${'b'.repeat(64)}`)
+      .send({})
+      .expect(201);
+    assert.equal(purchase.body.paid, 80);
+    assert.equal(purchase.body.coreBalance, 220);
+
+    const equip = await request(app)
+      .put('/api/commerce/gadgets/cryoMine/equip')
+      .set('Authorization', `Bearer ${'b'.repeat(64)}`)
+      .send({})
+      .expect(200);
+    assert.equal(equip.body.gadgetId, 'cryoMine');
+  } finally {
+    Session.findValid = originalSession;
+    Commerce.purchaseGadget = originalPurchase;
+    Commerce.equipGadget = originalEquip;
   }
 });

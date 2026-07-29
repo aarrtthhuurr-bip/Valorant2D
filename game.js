@@ -538,6 +538,15 @@ function updateCoreBalances(balance) {
 function applyCommerceProfile(profile) {
   commerceState.profile = profile;
   updateCoreBalances(profile?.coreBalance || 0);
+  if (Array.isArray(profile?.ownedGadgetIds)) {
+    blackMarketState = {
+      unlocked: [...new Set(profile.ownedGadgetIds)],
+      equipped: profile.equippedGadgetId || "pulseBomb",
+    };
+    if (!blackMarketState.unlocked.includes("pulseBomb")) blackMarketState.unlocked.unshift("pulseBomb");
+    if (!blackMarketState.unlocked.includes(blackMarketState.equipped)) blackMarketState.equipped = "pulseBomb";
+    saveBlackMarketState();
+  }
   currentProfile = currentProfile ? { ...currentProfile, isAdmin: Boolean(profile?.isAdmin) } : currentProfile;
   const catalogById = new Map((profile?.catalog || []).map((skin) => [skin.id, skin]));
   equippedWeaponSkinPaths = Object.fromEntries(Object.entries(profile?.equippedSkins || {}).map(([weaponId, skinId]) => {
@@ -2041,6 +2050,7 @@ const BLACK_MARKET_GADGETS = Object.freeze([
   {
     id: "pulseBomb",
     name: "Bomba de Pulso",
+    price: 45,
     description: "Detona uma descarga concentrada que causa dano e desorienta ameaças próximas.",
     chargesPerWave: 2,
     cooldown: 12,
@@ -2050,6 +2060,7 @@ const BLACK_MARKET_GADGETS = Object.freeze([
   {
     id: "decoyTurret",
     name: "Torreta Chamariz",
+    price: 120,
     description: "Projeta uma sentinela temporária que atrai a atenção e abre fogo contra ameaças.",
     chargesPerWave: 1,
     cooldown: 20,
@@ -2059,6 +2070,7 @@ const BLACK_MARKET_GADGETS = Object.freeze([
   {
     id: "cryoMine",
     name: "Mina Cryo",
+    price: 80,
     description: "Congela o setor e reduz drasticamente a marcha dos inimigos por alguns segundos.",
     chargesPerWave: 2,
     cooldown: 15,
@@ -2068,6 +2080,7 @@ const BLACK_MARKET_GADGETS = Object.freeze([
   {
     id: "adrenaline",
     name: "Adrenalina",
+    price: 95,
     description: "Injeta um composto instável que eleva sua velocidade e deixa um rastro energético.",
     chargesPerWave: 1,
     cooldown: 18,
@@ -2146,25 +2159,64 @@ function renderBlackMarket() {
         <span>Cooldown<strong>${gadget.cooldown}s</strong></span>
       </div>
       <p>${gadget.description}</p>
-      <button type="button" class="black-market-action"${equipped ? " disabled" : ""}>${equipped ? "EQUIPADO" : unlocked ? "EQUIPAR" : "DESBLOQUEAR"}</button>`;
+      <div class="black-market-purchase">
+        <span class="black-market-price">${gadget.price} C</span>
+        <button type="button" class="black-market-action"${equipped || commerceState.busy ? " disabled" : ""}>${equipped ? "EQUIPADO" : unlocked ? "EQUIPAR" : "DESBLOQUEAR"}</button>
+      </div>`;
     const preview = card.querySelector("img");
     preview?.addEventListener("error", () => preview.classList.add("is-missing"), { once: true });
     card.querySelector(".black-market-action")?.addEventListener("click", () => {
-      if (!unlocked) {
-        blackMarketState.unlocked.push(gadget.id);
-        setBlackMarketFeedback(`${gadget.name} desbloqueado. Selecione novamente para equipar.`);
-      } else {
-        blackMarketState.equipped = gadget.id;
-        if (isOutbreakMode()) resetOutbreakGadget();
-        setBlackMarketFeedback(`${gadget.name} equipado para a próxima operação Outbreak.`);
-      }
-      saveBlackMarketState();
-      playBlackMarketAccessSound();
-      renderBlackMarket();
-      updateUi();
+      if (!unlocked) purchaseBlackMarketGadget(gadget);
+      else equipBlackMarketGadget(gadget);
     });
     ui.blackMarketGrid.appendChild(card);
   }
+}
+
+async function blackMarketMutation(path, options, successMessage) {
+  if (commerceState.busy) return;
+  if (!commerceAuthorization()) {
+    setBlackMarketFeedback("Entre com uma conta para comprar utilitários com Core.");
+    return;
+  }
+  commerceState.busy = true;
+  setBlackMarketFeedback("Validando transação no servidor...");
+  renderBlackMarket();
+  try {
+    const payload = await requestApi(path, {
+      ...options,
+      headers: { ...commerceAuthorization(), ...(options.headers || {}) },
+    });
+    await refreshCommerceProfile();
+    setBlackMarketFeedback(successMessage(payload));
+    playSound("skin_purchase");
+  } catch (error) {
+    if (Number.isFinite(Number(error.coreBalance))) updateCoreBalances(error.coreBalance);
+    setBlackMarketFeedback(error.message);
+  } finally {
+    commerceState.busy = false;
+    renderBlackMarket();
+    updateUi();
+  }
+}
+
+function purchaseBlackMarketGadget(gadget) {
+  return blackMarketMutation(
+    `/api/commerce/gadgets/${encodeURIComponent(gadget.id)}/purchase`,
+    { method: "POST", body: "{}" },
+    (payload) => `${gadget.name} desbloqueado por ${payload.paid} C.`,
+  );
+}
+
+function equipBlackMarketGadget(gadget) {
+  return blackMarketMutation(
+    `/api/commerce/gadgets/${encodeURIComponent(gadget.id)}/equip`,
+    { method: "PUT", body: "{}" },
+    () => {
+      if (isOutbreakMode()) resetOutbreakGadget();
+      return `${gadget.name} equipado para o Outbreak.`;
+    },
+  );
 }
 
 function playBlackMarketAccessSound() {

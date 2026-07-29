@@ -386,6 +386,36 @@ async function initializeDatabase() {
       )
     `);
     await client.query(`
+      CREATE TABLE IF NOT EXISTS user_gadgets (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        gadget_id VARCHAR(40) NOT NULL,
+        paid_price INTEGER NOT NULL CHECK (paid_price BETWEEN 0 AND 10000),
+        acquired_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, gadget_id)
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS equipped_gadgets (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        gadget_id VARCHAR(40) NOT NULL,
+        equipped_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id, gadget_id)
+          REFERENCES user_gadgets(user_id, gadget_id) ON DELETE CASCADE
+      )
+    `);
+    // Todo perfil recebe a Bomba de Pulso como utilitário inicial. A inserção
+    // idempotente também migra contas criadas antes do Black Market.
+    await client.query(`
+      INSERT INTO user_gadgets (user_id, gadget_id, paid_price)
+      SELECT id, 'pulseBomb', 0 FROM users
+      ON CONFLICT (user_id, gadget_id) DO NOTHING
+    `);
+    await client.query(`
+      INSERT INTO equipped_gadgets (user_id, gadget_id)
+      SELECT id, 'pulseBomb' FROM users
+      ON CONFLICT (user_id) DO NOTHING
+    `);
+    await client.query(`
       CREATE TABLE IF NOT EXISTS daily_mission_progress (
         id BIGSERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

@@ -2,6 +2,11 @@ const crypto = require('crypto');
 const database = require('../config/database');
 const { SKIN_CATALOG, SKINS_BY_ID, dailyOffers } = require('../data/skinCatalog');
 const { MISSIONS_BY_ID, missionsForUser } = require('../data/dailyMissions');
+const {
+  BLACK_MARKET_BY_ID,
+  BLACK_MARKET_CATALOG,
+  STARTER_GADGET_ID,
+} = require('../data/blackMarketCatalog');
 
 function todayUtc() {
   return new Date().toISOString().slice(0, 10);
@@ -47,7 +52,17 @@ class Commerce {
     try {
       await client.query('BEGIN');
       await ensureDailyMissions(client, userId);
-      const [userResult, ownedResult, equippedResult, missionResult, easterEggResult] = await Promise.all([
+      await client.query(
+        `INSERT INTO user_gadgets (user_id, gadget_id, paid_price)
+         VALUES ($1, $2, 0) ON CONFLICT (user_id, gadget_id) DO NOTHING`,
+        [userId, STARTER_GADGET_ID],
+      );
+      await client.query(
+        `INSERT INTO equipped_gadgets (user_id, gadget_id)
+         VALUES ($1, $2) ON CONFLICT (user_id) DO NOTHING`,
+        [userId, STARTER_GADGET_ID],
+      );
+      const [userResult, ownedResult, equippedResult, missionResult, easterEggResult, gadgetResult, equippedGadgetResult] = await Promise.all([
         client.query('SELECT core_balance, is_admin FROM users WHERE id = $1', [userId]),
         client.query('SELECT skin_id, acquired_at FROM user_skins WHERE user_id = $1 ORDER BY acquired_at DESC', [userId]),
         client.query('SELECT weapon_id, skin_id FROM equipped_skins WHERE user_id = $1', [userId]),
@@ -59,6 +74,14 @@ class Commerce {
         client.query(
           `SELECT code_display FROM promo_codes
            WHERE active = TRUE ORDER BY created_at DESC, id DESC LIMIT 5`,
+        ),
+        client.query(
+          'SELECT gadget_id FROM user_gadgets WHERE user_id = $1 ORDER BY acquired_at',
+          [userId],
+        ),
+        client.query(
+          'SELECT gadget_id FROM equipped_gadgets WHERE user_id = $1',
+          [userId],
         ),
       ]);
       await client.query('COMMIT');
@@ -72,6 +95,9 @@ class Commerce {
         equippedSkins: Object.fromEntries(equippedResult.rows.map((row) => [row.weapon_id, row.skin_id])),
         missions: missionResult.rows.map(serializeMission).filter(Boolean),
         easterEggCodes: easterEggResult.rows.map((row) => row.code_display),
+        blackMarketCatalog: BLACK_MARKET_CATALOG,
+        ownedGadgetIds: gadgetResult.rows.map((row) => row.gadget_id),
+        equippedGadgetId: equippedGadgetResult.rows[0]?.gadget_id || STARTER_GADGET_ID,
         nextRotationAt: `${new Date(Date.now() + 86400000).toISOString().slice(0, 10)}T00:00:00.000Z`,
       };
     } catch (error) {
@@ -80,6 +106,64 @@ class Commerce {
     } finally {
       client.release();
     }
+  }
+
+  static async purchaseGadget(userId, gadgetId) {
+    const gadget = BLACK_MARKET_BY_ID.get(gadgetId);
+    if (!gadget) return { error: 'GADGET_NOT_FOUND' };
+    const client = await database.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const userResult = await client.query(
+        'SELECT core_balance FROM users WHERE id = $1 FOR UPDATE',
+        [userId],
+      );
+      const balance = Number(userResult.rows[0]?.core_balance) || 0;
+      const owned = await client.query(
+        'SELECT 1 FROM user_gadgets WHERE user_id = $1 AND gadget_id = $2',
+        [userId, gadgetId],
+      );
+      if (owned.rowCount) {
+        await client.query('ROLLBACK');
+        return { error: 'GADGET_ALREADY_OWNED', coreBalance: balance };
+      }
+      if (balance < gadget.price) {
+        await client.query('ROLLBACK');
+        return { error: 'INSUFFICIENT_CORE', coreBalance: balance };
+      }
+      await client.query(
+        'INSERT INTO user_gadgets (user_id, gadget_id, paid_price) VALUES ($1, $2, $3)',
+        [userId, gadgetId, gadget.price],
+      );
+      const updated = await client.query(
+        'UPDATE users SET core_balance = core_balance - $1 WHERE id = $2 RETURNING core_balance',
+        [gadget.price, userId],
+      );
+      await client.query('COMMIT');
+      return { gadget, paid: gadget.price, coreBalance: Number(updated.rows[0].core_balance) };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  static async equipGadget(userId, gadgetId) {
+    if (!BLACK_MARKET_BY_ID.has(gadgetId)) return { error: 'GADGET_NOT_FOUND' };
+    const owned = await database.get(
+      'SELECT 1 FROM user_gadgets WHERE user_id = $1 AND gadget_id = $2',
+      [userId, gadgetId],
+    );
+    if (!owned) return { error: 'GADGET_NOT_OWNED' };
+    await database.run(
+      `INSERT INTO equipped_gadgets (user_id, gadget_id)
+       VALUES ($1, $2)
+       ON CONFLICT (user_id) DO UPDATE
+       SET gadget_id = EXCLUDED.gadget_id, equipped_at = CURRENT_TIMESTAMP`,
+      [userId, gadgetId],
+    );
+    return { gadgetId };
   }
 
   static async purchaseSkin(userId, skinId) {

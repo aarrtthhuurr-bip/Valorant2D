@@ -3537,6 +3537,7 @@ button.click-feedback::after {
 .black-market-specs span { padding: 7px; border: 1px solid rgba(192, 132, 252, .13); border-radius: 4px; color: #8d7b99; font-size: 8px; text-transform: uppercase; }
 .black-market-specs strong { display: block; margin-top: 3px; color: #d9bded; font-size: 11px; }
 .black-market-action {
+  flex: 1;
   min-height: 36px;
   border-color: rgba(168, 85, 247, .58);
   color: #ebd7ff;
@@ -3546,6 +3547,15 @@ button.click-feedback::after {
 }
 .black-market-action:hover:not(:disabled) { background: rgba(168, 85, 247, .25); box-shadow: 0 0 17px rgba(168, 85, 247, .2); }
 .black-market-action:disabled { opacity: 1; border-color: #a855f7; color: #fff; background: #6d28a0; }
+.black-market-purchase { display: flex; align-items: center; gap: 8px; }
+.black-market-price {
+  min-width: 48px;
+  color: #c084fc;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-align: center;
+}
 .black-market-feedback { border-top-color: rgba(192, 132, 252, .16); color: #a995b6; }
 .mobile-ultimate.is-cooling-down {
   border-color: rgba(192, 132, 252, .6);
