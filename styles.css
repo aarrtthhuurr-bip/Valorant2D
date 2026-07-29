@@ -7490,3 +7490,177 @@ body.is-mobile .weapon-panel {
     font-size: 12px;
   }
 }
+
+/* =========================================================================
+ * REMASTER IN-GAME — modo compacto
+ * Mantém o centro e a faixa de mira livres durante o combate.
+ * ====================================================================== */
+.top-hud {
+  top: 6px;
+  height: 52px;
+  min-width: 340px;
+  background: rgba(5, 12, 19, 0.78);
+}
+
+.hud-pill,
+.top-hud .hud-pill:not(.side-pill) {
+  min-height: 42px;
+}
+
+.top-hud .hud-pill:not(.side-pill) {
+  width: 98px;
+}
+
+.top-hud strong {
+  font-size: 17px;
+}
+
+.side-pill {
+  min-width: 58px;
+  min-height: 36px;
+}
+
+.vitals-panel,
+.weapon-panel {
+  bottom: 8px;
+  min-height: 62px;
+  background: rgba(5, 12, 19, 0.74);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+}
+
+.vitals-panel {
+  width: min(500px, calc(100% - 350px));
+  padding: 8px 18px;
+}
+
+.weapon-panel {
+  right: 12px;
+  width: 270px;
+  padding: 9px 13px;
+}
+
+.bars {
+  margin: 5px 0 4px;
+}
+
+.status-main strong,
+.weapon-line strong {
+  font-size: 13px;
+}
+
+.weapon-line span {
+  font-size: 18px;
+}
+
+.spike-status {
+  margin-top: 3px;
+  font-size: 9px;
+}
+
+.outbreak-context-hud {
+  bottom: 8px;
+  min-height: 58px;
+  padding: 6px 9px;
+  background: rgba(5, 12, 19, 0.76);
+}
+
+.outbreak-context-hud > div {
+  min-width: 66px;
+  padding: 3px 8px;
+}
+
+/*
+ * As dicas deixam de ocupar o centro inferior da tela. Elas funcionam como
+ * notificações táticas breves, próximas à borda e fora da linha de tiro.
+ */
+.message {
+  top: 70px;
+  right: 12px;
+  bottom: auto;
+  left: auto;
+  width: min(300px, calc(100% - 24px));
+  max-width: 300px;
+  margin: 0;
+  padding: 8px 11px;
+  text-align: left;
+  border-color: rgba(96, 220, 232, 0.16);
+  border-left: 3px solid rgba(96, 220, 232, 0.72);
+  background: rgba(4, 11, 17, 0.7);
+  transform: none;
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+}
+
+.message strong {
+  display: block;
+  overflow: hidden;
+  color: rgba(234, 247, 250, 0.88);
+  font-size: 11px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message span {
+  margin-top: 2px;
+  display: -webkit-box;
+  overflow: hidden;
+  color: rgba(185, 214, 226, 0.56);
+  font-size: 9px;
+  line-height: 1.25;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.round-banner {
+  top: 66px;
+  padding: 8px 18px;
+}
+
+.round-banner strong {
+  font-size: 19px;
+}
+
+.round-banner p {
+  font-size: 10px;
+}
+
+body.is-mobile .message {
+  top: max(62px, calc(env(safe-area-inset-top) + 56px));
+  right: max(8px, env(safe-area-inset-right));
+  width: min(240px, 32vw);
+  padding: 6px 9px;
+  pointer-events: none;
+}
+
+body.is-mobile .message span {
+  display: none;
+}
+
+body.is-mobile .vitals-panel {
+  width: min(440px, calc(100% - 330px));
+  min-height: 58px;
+}
+
+body.is-mobile .weapon-panel {
+  width: 235px;
+  min-height: 58px;
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  body.is-mobile .message {
+    top: 58px;
+    width: min(220px, 29vw);
+  }
+
+  body.is-mobile .vitals-panel,
+  body.is-mobile .weapon-panel {
+    bottom: 4px;
+    min-height: 52px;
+  }
+
+  body.is-mobile .status-row {
+    font-size: 9px;
+  }
+}

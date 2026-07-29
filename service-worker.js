@@ -1,10 +1,10 @@
-const CACHE_VERSION = "valorant2d-shell-20260729-ingame-remaster";
+const CACHE_VERSION = "valorant2d-shell-20260729-ingame-remaster-compact";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
-  "./styles.css?v=20260729-ingame-remaster",
-  "./game.js?v=20260729-ingame-remaster",
+  "./styles.css?v=20260729-ingame-remaster-compact",
+  "./game.js?v=20260729-ingame-remaster-compact",
   "./assets/Favicon/android-chrome-192x192.png",
   "./assets/Favicon/android-chrome-512x512.png",
 ];
