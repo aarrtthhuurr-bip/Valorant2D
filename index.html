@@ -17,7 +17,7 @@
   <meta name="valorant2d-api-url" content="https://valorant2d.onrender.com">
   <title>Valorant2D</title>
   <link rel="manifest" href="./manifest.webmanifest?v=20260729-pwa-install">
-  <link rel="stylesheet" href="./styles.css?v=20260729-outbreak-spawns">
+  <link rel="stylesheet" href="./styles.css?v=20260729-black-market">
   <script src="https://unpkg.com/lucide@1.24.0" integrity="sha384-mooE85Luwgx+AyykX7e90VcN8/QCFTSIwPuHLmvcsLVoA0en7lKYb9XlOzn5G2co" crossorigin="anonymous"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="shortcut icon" href="./assets/Favicon/favicon.ico" type="image/x-icon">
@@ -66,7 +66,7 @@
           <div class="status-row">
             <span>HP <b id="hpText">100</b></span>
             <span id="armorText" class="hidden">ARM <b id="armorValueText">0</b></span>
-            <span class="ult-counter" id="ultCounter">ULT <b id="ultPointsText">0/7</b></span>
+            <span class="ult-counter" id="ultCounter"><span id="ultLabel">ULT</span> <b id="ultPointsText">0/7</b></span>
             <span id="jettKnifeHud" class="jett-knife-hud hidden">0/6</span>
           </div>
         </div>
@@ -102,8 +102,8 @@
           <button type="button" class="mobile-action mobile-ability" data-touch-action="ability1" aria-label="Usar habilidade">
             <b>E</b><span>HABILIDADE</span>
           </button>
-          <button type="button" class="mobile-action mobile-ultimate" data-touch-action="ability2" aria-label="Usar ultimate">
-            <b>Q</b><span>ULT</span>
+          <button type="button" class="mobile-action mobile-ultimate" id="mobileUltimateButton" data-touch-action="ability2" aria-label="Usar ultimate">
+            <b>Q</b><span id="mobileUltimateLabel">ULT</span>
           </button>
           <button type="button" class="mobile-action mobile-interact" data-touch-action="interact" data-touch-hold="true" aria-label="Interagir com objetivo">
             <b>F</b><span>OBJETIVO</span>
@@ -367,6 +367,17 @@
           <header class="commerce-header">
             <div><span>CORE MARKET</span><h2>Arsenal de Skins</h2></div>
             <div class="commerce-header-actions">
+              <button
+                type="button"
+                id="blackMarketTrigger"
+                class="black-market-trigger"
+                data-audio-cue="handled"
+                aria-label="Acessar Black Market"
+                title="Canal restrito"
+              >
+                <span aria-hidden="true">◈</span>
+                <strong>CANAL</strong>
+              </button>
               <div class="core-wallet"><span class="core-icon" aria-hidden="true"><img src="./assets/images/core_v5_bright.png" alt=""></span><strong id="storeCoreBalance">0</strong><em>C</em></div>
               <button type="button" id="commerceCloseButton" aria-label="Fechar loja">×</button>
             </div>
@@ -379,6 +390,28 @@
           </nav>
           <div class="commerce-content" id="commerceContent" aria-live="polite"></div>
           <div class="commerce-feedback" id="commerceFeedback" role="status" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section class="commerce-overlay black-market-overlay hidden" id="blackMarketOverlay" aria-labelledby="blackMarketTitle">
+        <div class="commerce-shell black-market-shell" role="dialog" aria-modal="true">
+          <header class="commerce-header black-market-header">
+            <div>
+              <span>REDE PARALELA // NÍVEL VIOLETA</span>
+              <h2 id="blackMarketTitle">BLACK MARKET // ACESSO RESTRITO</h2>
+            </div>
+            <button type="button" id="blackMarketCloseButton" aria-label="Fechar Black Market">×</button>
+          </header>
+          <div class="black-market-status">
+            <span>UTILITÁRIOS PROIBIDOS</span>
+            <p>Equipe uma tecnologia. Ela substituirá a Ultimate somente no protocolo Outbreak.</p>
+          </div>
+          <div class="commerce-content black-market-content">
+            <div class="black-market-grid" id="blackMarketGrid" aria-live="polite"></div>
+          </div>
+          <div class="commerce-feedback black-market-feedback" id="blackMarketFeedback" role="status" aria-live="polite">
+            Um único utilitário pode permanecer equipado.
+          </div>
         </div>
       </section>
 
@@ -617,6 +650,6 @@
     </div>
   </main>
 
-  <script src="./game.js?v=20260729-outbreak-spawns"></script>
+  <script src="./game.js?v=20260729-black-market"></script>
 </body>
 </html>

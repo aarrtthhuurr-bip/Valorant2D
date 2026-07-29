@@ -3436,6 +3436,124 @@ button.click-feedback::after {
 .commerce-header h2 { margin: 3px 0 0; color: #f2f8fa; font-size: 27px; text-transform: uppercase; }
 .commerce-header-actions { display: flex; align-items: center; gap: 12px; }
 #commerceCloseButton { width: 42px; height: 42px; padding: 0; border-radius: 7px; font-size: 25px; }
+.black-market-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 7px 12px;
+  border: 1px solid rgba(168, 85, 247, .48);
+  border-radius: 999px;
+  background: rgba(35, 16, 54, .58);
+  color: #c084fc;
+  font-size: 9px;
+  letter-spacing: .12em;
+}
+.black-market-trigger span { font-size: 15px; line-height: 1; }
+.black-market-trigger:hover,
+.black-market-trigger:focus-visible {
+  border-color: #c084fc;
+  color: #f2ddff;
+  background: rgba(168, 85, 247, .16);
+  box-shadow: 0 0 18px rgba(168, 85, 247, .28);
+}
+.black-market-overlay {
+  z-index: 79;
+  background:
+    radial-gradient(circle at 76% 16%, rgba(168, 85, 247, .14), transparent 34%),
+    rgba(4, 2, 9, .94);
+}
+.black-market-shell {
+  border-color: rgba(168, 85, 247, .42);
+  background: linear-gradient(145deg, rgba(22, 12, 31, .99), rgba(7, 5, 13, .99));
+  box-shadow: 0 28px 90px rgba(0, 0, 0, .68), 0 0 42px rgba(168, 85, 247, .14);
+}
+.black-market-header { border-bottom-color: rgba(192, 132, 252, .2); }
+.black-market-header > div:first-child span { color: #c084fc; }
+#blackMarketCloseButton {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 7px;
+  border-color: rgba(168, 85, 247, .45);
+  color: #dfb9ff;
+  background: rgba(168, 85, 247, .08);
+  font-size: 25px;
+}
+.black-market-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 11px 22px;
+  border-bottom: 1px solid rgba(192, 132, 252, .13);
+  background: rgba(168, 85, 247, .045);
+}
+.black-market-status span { color: #c084fc; font-size: 9px; font-weight: 900; letter-spacing: .16em; }
+.black-market-status p { margin: 0; color: #9886a5; font-size: 10px; }
+.black-market-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.black-market-card {
+  position: relative;
+  display: grid;
+  grid-template-rows: 118px auto auto 1fr auto;
+  gap: 8px;
+  min-height: 340px;
+  padding: 13px;
+  overflow: hidden;
+  border: 1px solid rgba(192, 132, 252, .2);
+  border-radius: 8px;
+  background: linear-gradient(150deg, rgba(35, 20, 47, .86), rgba(10, 7, 16, .94));
+}
+.black-market-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(125deg, transparent 30%, rgba(192, 132, 252, .055), transparent 68%);
+}
+.black-market-card.is-equipped {
+  border-color: #a855f7;
+  box-shadow: inset 0 0 24px rgba(168, 85, 247, .1), 0 0 20px rgba(168, 85, 247, .14);
+}
+.black-market-preview {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(192, 132, 252, .18);
+  border-radius: 6px;
+  background:
+    linear-gradient(rgba(192, 132, 252, .045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(192, 132, 252, .045) 1px, transparent 1px),
+    #0d0913;
+  background-size: 12px 12px;
+}
+.black-market-preview img { position: relative; z-index: 2; width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+.black-market-preview img.is-missing { display: none; }
+.black-market-preview-fallback { color: #c084fc; font-size: 38px; text-shadow: 0 0 15px rgba(168, 85, 247, .52); }
+.black-market-card > b { color: #f1e8f7; font-size: 14px; text-transform: uppercase; }
+.black-market-card > p { margin: 0; color: #998da1; font-size: 10px; line-height: 1.55; }
+.black-market-specs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.black-market-specs span { padding: 7px; border: 1px solid rgba(192, 132, 252, .13); border-radius: 4px; color: #8d7b99; font-size: 8px; text-transform: uppercase; }
+.black-market-specs strong { display: block; margin-top: 3px; color: #d9bded; font-size: 11px; }
+.black-market-action {
+  min-height: 36px;
+  border-color: rgba(168, 85, 247, .58);
+  color: #ebd7ff;
+  background: rgba(168, 85, 247, .13);
+  font-size: 9px;
+  letter-spacing: .11em;
+}
+.black-market-action:hover:not(:disabled) { background: rgba(168, 85, 247, .25); box-shadow: 0 0 17px rgba(168, 85, 247, .2); }
+.black-market-action:disabled { opacity: 1; border-color: #a855f7; color: #fff; background: #6d28a0; }
+.black-market-feedback { border-top-color: rgba(192, 132, 252, .16); color: #a995b6; }
+.mobile-ultimate.is-cooling-down {
+  border-color: rgba(192, 132, 252, .6);
+  background-image: conic-gradient(
+    rgba(168, 85, 247, .56) calc((1 - var(--gadget-cooldown, 0)) * 1turn),
+    rgba(8, 10, 16, .84) 0
+  );
+}
 .commerce-tabs { display: grid; grid-template-columns: repeat(4, 1fr); padding: 0 22px; border-bottom: 1px solid rgba(140,185,210,.14); }
 .commerce-tabs button { min-height: 46px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: #718895; font-size: 11px; font-weight: 800; letter-spacing: .09em; text-align: center; text-transform: uppercase; }
 .commerce-tabs button.is-active { border-bottom-color: #00f3ff; color: #dffcff; background: linear-gradient(0deg, rgba(0,243,255,.08), transparent); }
@@ -3511,6 +3629,9 @@ button.click-feedback::after {
   .mission-card button { grid-column:1/-1; }
   .code-layout { grid-template-columns:1fr; }
   .main-core-wallet { top:10px; right:10px; }
+  .black-market-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .black-market-trigger strong { display:none; }
+  .black-market-status { align-items:flex-start; flex-direction:column; gap:4px; }
 }
 
 .menu-carousel-out .menu-card {

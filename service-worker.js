@@ -1,10 +1,10 @@
-const CACHE_VERSION = "valorant2d-shell-20260729-outbreak-spawns";
+const CACHE_VERSION = "valorant2d-shell-20260729-black-market";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest?v=20260729-pwa-install",
-  "./styles.css?v=20260729-outbreak-spawns",
-  "./game.js?v=20260729-outbreak-spawns",
+  "./styles.css?v=20260729-black-market",
+  "./game.js?v=20260729-black-market",
   "./assets/Favicon/android-chrome-192x192.png",
   "./assets/Favicon/android-chrome-512x512.png",
 ];

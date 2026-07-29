@@ -15,6 +15,7 @@ const ui = {
   weapon: document.getElementById("weaponText"),
   hp: document.getElementById("hpText"),
   ultCounter: document.getElementById("ultCounter"),
+  ultLabel: document.getElementById("ultLabel"),
   ultPoints: document.getElementById("ultPointsText"),
   ammo: document.getElementById("ammoText"),
   spike: document.getElementById("spikeText"),
@@ -155,6 +156,8 @@ const ui = {
   mobileAimStick: document.getElementById("mobileAimStick"),
   mobileAimKnob: document.getElementById("mobileAimKnob"),
   mobileFireButton: document.getElementById("mobileFireButton"),
+  mobileUltimateButton: document.getElementById("mobileUltimateButton"),
+  mobileUltimateLabel: document.getElementById("mobileUltimateLabel"),
   mobileShopButton: document.getElementById("mobileShopButton"),
   mobilePauseButton: document.getElementById("mobilePauseButton"),
   mobileOrientationHint: document.getElementById("mobileOrientationHint"),
@@ -211,6 +214,11 @@ const ui = {
   commerceFeedback: document.getElementById("commerceFeedback"),
   commerceCloseButton: document.getElementById("commerceCloseButton"),
   storeCoreBalance: document.getElementById("storeCoreBalance"),
+  blackMarketTrigger: document.getElementById("blackMarketTrigger"),
+  blackMarketOverlay: document.getElementById("blackMarketOverlay"),
+  blackMarketCloseButton: document.getElementById("blackMarketCloseButton"),
+  blackMarketGrid: document.getElementById("blackMarketGrid"),
+  blackMarketFeedback: document.getElementById("blackMarketFeedback"),
   easterEggCodes: document.getElementById("easterEggCodes"),
   uxToastRegion: document.getElementById("uxToastRegion"),
   shopFeedback: document.getElementById("shopFeedback"),
@@ -2028,6 +2036,216 @@ const purchasableUlts = [
   { id: "yoru", name: "Yoru", price: 1200, desc: "Entra na dimensão para ficar invisível e invulnerável." },
 ];
 
+const BLACK_MARKET_STORAGE_KEY = "valorant2d:black-market:v1";
+const BLACK_MARKET_GADGETS = Object.freeze([
+  {
+    id: "pulseBomb",
+    name: "Bomba de Pulso",
+    description: "Detona uma descarga concentrada que causa dano e desorienta ameaças próximas.",
+    chargesPerWave: 2,
+    cooldown: 12,
+    preview: "./assets/black-market/pulse-bomb.gif",
+    fallback: "⌁",
+  },
+  {
+    id: "decoyTurret",
+    name: "Torreta Chamariz",
+    description: "Projeta uma sentinela temporária que atrai a atenção e abre fogo contra ameaças.",
+    chargesPerWave: 1,
+    cooldown: 20,
+    preview: "./assets/black-market/decoy-turret.gif",
+    fallback: "⌖",
+  },
+  {
+    id: "cryoMine",
+    name: "Mina Cryo",
+    description: "Congela o setor e reduz drasticamente a marcha dos inimigos por alguns segundos.",
+    chargesPerWave: 2,
+    cooldown: 15,
+    preview: "./assets/black-market/cryo-mine.gif",
+    fallback: "❄",
+  },
+  {
+    id: "adrenaline",
+    name: "Adrenalina",
+    description: "Injeta um composto instável que eleva sua velocidade e deixa um rastro energético.",
+    chargesPerWave: 1,
+    cooldown: 18,
+    preview: "./assets/black-market/adrenaline.gif",
+    fallback: "ϟ",
+  },
+]);
+
+function isOutbreakMode() {
+  return game?.outbreak === true
+    && (game.playMode === "outbreak" || String(game.mode || "").toLowerCase() === "outbreak");
+}
+
+function readBlackMarketState() {
+  const fallback = { unlocked: ["pulseBomb"], equipped: "pulseBomb" };
+  try {
+    const stored = JSON.parse(localStorage.getItem(BLACK_MARKET_STORAGE_KEY) || "null");
+    const validIds = new Set(BLACK_MARKET_GADGETS.map((item) => item.id));
+    const unlocked = Array.isArray(stored?.unlocked)
+      ? stored.unlocked.filter((id) => validIds.has(id))
+      : fallback.unlocked;
+    if (!unlocked.includes("pulseBomb")) unlocked.unshift("pulseBomb");
+    const equipped = validIds.has(stored?.equipped) && unlocked.includes(stored.equipped)
+      ? stored.equipped
+      : fallback.equipped;
+    return { unlocked, equipped };
+  } catch {
+    return fallback;
+  }
+}
+
+let blackMarketState = readBlackMarketState();
+
+function saveBlackMarketState() {
+  try {
+    localStorage.setItem(BLACK_MARKET_STORAGE_KEY, JSON.stringify(blackMarketState));
+  } catch (error) {
+    console.warn("[Black Market] Não foi possível persistir o equipamento:", error?.message || error);
+  }
+}
+
+function equippedBlackMarketGadget() {
+  return BLACK_MARKET_GADGETS.find((item) => item.id === blackMarketState.equipped)
+    || BLACK_MARKET_GADGETS[0];
+}
+
+function resetOutbreakGadget({ refill = true } = {}) {
+  const gadget = equippedBlackMarketGadget();
+  game.outbreakGadget = {
+    id: gadget.id,
+    charges: refill ? gadget.chargesPerWave : Math.min(game.outbreakGadget?.charges || 0, gadget.chargesPerWave),
+    cooldownRemaining: 0,
+  };
+}
+
+function setBlackMarketFeedback(message) {
+  if (ui.blackMarketFeedback) ui.blackMarketFeedback.textContent = message;
+}
+
+function renderBlackMarket() {
+  if (!ui.blackMarketGrid) return;
+  ui.blackMarketGrid.innerHTML = "";
+  for (const gadget of BLACK_MARKET_GADGETS) {
+    const unlocked = blackMarketState.unlocked.includes(gadget.id);
+    const equipped = blackMarketState.equipped === gadget.id;
+    const card = document.createElement("article");
+    card.className = `black-market-card${equipped ? " is-equipped" : ""}`;
+    card.innerHTML = `
+      <div class="black-market-preview">
+        <span class="black-market-preview-fallback" aria-hidden="true">${gadget.fallback}</span>
+        <img src="${gadget.preview}" alt="Prévia animada de ${gadget.name}">
+      </div>
+      <b>${gadget.name}</b>
+      <div class="black-market-specs">
+        <span>Cargas / wave<strong>${gadget.chargesPerWave}</strong></span>
+        <span>Cooldown<strong>${gadget.cooldown}s</strong></span>
+      </div>
+      <p>${gadget.description}</p>
+      <button type="button" class="black-market-action"${equipped ? " disabled" : ""}>${equipped ? "EQUIPADO" : unlocked ? "EQUIPAR" : "DESBLOQUEAR"}</button>`;
+    const preview = card.querySelector("img");
+    preview?.addEventListener("error", () => preview.classList.add("is-missing"), { once: true });
+    card.querySelector(".black-market-action")?.addEventListener("click", () => {
+      if (!unlocked) {
+        blackMarketState.unlocked.push(gadget.id);
+        setBlackMarketFeedback(`${gadget.name} desbloqueado. Selecione novamente para equipar.`);
+      } else {
+        blackMarketState.equipped = gadget.id;
+        if (isOutbreakMode()) resetOutbreakGadget();
+        setBlackMarketFeedback(`${gadget.name} equipado para a próxima operação Outbreak.`);
+      }
+      saveBlackMarketState();
+      playBlackMarketAccessSound();
+      renderBlackMarket();
+      updateUi();
+    });
+    ui.blackMarketGrid.appendChild(card);
+  }
+}
+
+function playBlackMarketAccessSound() {
+  initAudio();
+  playTone(164, 0.045, "square", 0.06);
+  playTone(246, 0.045, "square", 0.065, 0.045);
+  playFrequencySweep(330, 880, 0.17, "square", 0.055, 0.09);
+}
+
+function openBlackMarket() {
+  renderBlackMarket();
+  setBlackMarketFeedback("Um único utilitário pode permanecer equipado.");
+  ui.blackMarketOverlay?.classList.remove("hidden");
+  playBlackMarketAccessSound();
+}
+
+function closeBlackMarket() {
+  ui.blackMarketOverlay?.classList.add("hidden");
+}
+
+function useOutbreakGadget() {
+  if (!isOutbreakMode() || game.phase !== "action" || !game.player?.alive) return false;
+  const definition = equippedBlackMarketGadget();
+  const state = game.outbreakGadget;
+  if (!state || state.id !== definition.id) resetOutbreakGadget();
+  if (game.outbreakGadget.cooldownRemaining > 0) {
+    setMessage(`${definition.name}: recarregando por ${Math.ceil(game.outbreakGadget.cooldownRemaining)}s.`);
+    playSound("denied");
+    return false;
+  }
+  if (game.outbreakGadget.charges <= 0) {
+    setMessage(`${definition.name}: sem cargas. O estoque será restaurado na próxima wave.`);
+    playSound("denied");
+    return false;
+  }
+
+  const player = game.player;
+  if (definition.id === "pulseBomb") {
+    explodeArea(player.x, player.y, 245, 76, "#c084fc", {
+      weaponName: "Bomba de Pulso",
+      particles: 42,
+      power: 275,
+      shake: 0.48,
+    });
+    for (const bot of game.bots) {
+      if (bot.alive && Math.hypot(bot.x - player.x, bot.y - player.y) <= 270) bot.detainedTimer = Math.max(bot.detainedTimer || 0, 1.5);
+    }
+  } else if (definition.id === "decoyTurret") {
+    const point = nearestWalkablePoint({
+      x: player.x + Math.cos(player.angle) * 48,
+      y: player.y + Math.sin(player.angle) * 48,
+    }, player);
+    game.turrets = game.turrets.filter((turret) => turret.ownerId !== "black-market-decoy");
+    game.turrets.push({
+      x: point.x, y: point.y, r: 14, angle: player.angle,
+      ownerTeam: "player", ownerId: "black-market-decoy",
+      fireTimer: 0.1, burst: 0, burstTimer: 0,
+      life: 16, maxLife: 16, targetId: null,
+    });
+    spawnParticles(point.x, point.y, "#c084fc", 24, 135);
+  } else if (definition.id === "cryoMine") {
+    const now = performance.now();
+    for (const bot of game.bots) {
+      if (bot.alive && Math.hypot(bot.x - player.x, bot.y - player.y) <= 330) bot.outbreakCryoUntil = now + 7000;
+    }
+    game.explosions.push({ x: player.x, y: player.y, r: 0, maxR: 330, life: 0.7, maxLife: 0.7, color: "#9f7aea" });
+    spawnParticles(player.x, player.y, "#d8b4fe", 52, 190);
+  } else if (definition.id === "adrenaline") {
+    game.outbreakEffects.overdriveUntil = Math.max(game.outbreakEffects.overdriveUntil, performance.now() + 9000);
+    synchronizePlayerEquipment();
+    spawnParticles(player.x, player.y, "#d946ef", 34, 210);
+  }
+
+  game.outbreakGadget.charges -= 1;
+  game.outbreakGadget.cooldownRemaining = definition.cooldown;
+  setMessage(`${definition.name} ativado. ${game.outbreakGadget.charges} carga(s) restante(s).`);
+  playFrequencySweep(180, 720, 0.2, "square", 0.07);
+  updateUi();
+  return true;
+}
+
 function recruitOutbreakAlly(respawnOnly = false) {
   if (!game.player) return;
   game.allyLoadout.recruited = true;
@@ -2699,8 +2917,8 @@ function generateOutbreakMap() {
     let accepted = null;
     for (let attempt = 0; attempt < 500 && !accepted; attempt += 1) {
       const horizontal = (index + attempt) % 2 === 0;
-      const longSide = 92 + index * 13 + Math.floor(Math.random() * 42);
-      const shortSide = 24 + (index % 4) * 5;
+      const longSide = 78 + index * 7 + Math.floor(Math.random() * 24);
+      const shortSide = 24 + (index % 3) * 5;
       const candidate = {
         x: 52 + Math.floor(Math.random() * (width - 104 - (horizontal ? longSide : shortSide))),
         y: 52 + Math.floor(Math.random() * (height - 104 - (horizontal ? shortSide : longSide))),
@@ -2710,7 +2928,7 @@ function generateOutbreakMap() {
       const centerSafeArea = { x: playerSpawn.x - 190, y: playerSpawn.y - 145, w: 380, h: 290 };
       if (rectanglesOverlap(candidate, centerSafeArea, 20)) continue;
       if (spawnPoints.some((spawn) => wallTouchesSafePoint(candidate, spawn, 105))) continue;
-      if (generatedWalls.some((wall) => rectanglesOverlap(candidate, wall, 42))) continue;
+      if (generatedWalls.some((wall) => rectanglesOverlap(candidate, wall, 76))) continue;
       accepted = candidate;
     }
     if (accepted) generatedWalls.push(accepted);
@@ -2720,14 +2938,14 @@ function generateOutbreakMap() {
   // determinístico só é usado se uma sequência extremamente improvável de
   // sorteios não conseguir preencher todas as posições.
   const fallbackSlots = [
-    { x: 145, y: 150, w: 118, h: 28 }, { x: 390, y: 92, w: 32, h: 128 },
-    { x: 855, y: 92, w: 146, h: 34 }, { x: 1080, y: 195, w: 30, h: 154 },
-    { x: 155, y: 510, w: 158, h: 36 }, { x: 390, y: 510, w: 34, h: 170 },
-    { x: 850, y: 535, w: 176, h: 30 }, { x: 1090, y: 430, w: 38, h: 132 },
+    { x: 145, y: 150, w: 108, h: 28 }, { x: 390, y: 92, w: 32, h: 116 },
+    { x: 855, y: 92, w: 126, h: 32 }, { x: 1080, y: 195, w: 30, h: 126 },
+    { x: 155, y: 510, w: 128, h: 34 }, { x: 390, y: 535, w: 32, h: 128 },
+    { x: 850, y: 535, w: 138, h: 30 }, { x: 1090, y: 430, w: 36, h: 118 },
   ];
   for (const fallback of fallbackSlots) {
     if (generatedWalls.length >= 8) break;
-    if (generatedWalls.some((wall) => rectanglesOverlap(fallback, wall, 30))) continue;
+    if (generatedWalls.some((wall) => rectanglesOverlap(fallback, wall, 64))) continue;
     generatedWalls.push({ ...fallback });
   }
 
@@ -3164,6 +3382,8 @@ const game = {
   outbreakSpawnCooldown: 0,
   outbreakWaveEnemyTotal: 0,
   outbreakShopPending: false,
+  outbreakInitialBuy: false,
+  outbreakInitialBuyRemaining: 0,
   // Indica que a loja foi aberta pelo painel de desenvolvimento e deve
   // retomar a mesma onda, preservando os inimigos que estavam ativos.
   outbreakAdminShopResume: false,
@@ -3183,6 +3403,7 @@ const game = {
     lastModifierUntil: 0,
   },
   outbreakUltInventory: { agentId: null, charges: 0 },
+  outbreakGadget: { id: "pulseBomb", charges: 2, cooldownRemaining: 0 },
   airdrops: [],
   airdropVisuals: [],
   outbreakOverdriveTrailTimer: 0,
@@ -4021,6 +4242,7 @@ function fullReset() {
   game.armor = 0;
   game.allyLoadout = { weaponId: "pistol", ownedWeapons: new Set(["pistol"]), recruited: false, damageMultiplier: 1, lastResort: false, lastResortWave: 0 };
   game.outbreakUltInventory = { agentId: null, charges: 0 };
+  resetOutbreakGadget();
   game.airdrops = [];
   game.airdropVisuals = [];
   game.outbreakOverdriveTrailTimer = 0;
@@ -4419,7 +4641,37 @@ function applyDamage(entity, amount) {
 }
 
 function updateOutbreak(dt) {
-  if (!game.outbreak || game.outbreakShopPending || game.phase !== "action" || !game.player?.alive) return;
+  if (!isOutbreakMode()) return;
+  if (game.outbreakGadget) {
+    game.outbreakGadget.cooldownRemaining = Math.max(0, game.outbreakGadget.cooldownRemaining - dt);
+  }
+  if (game.outbreakInitialBuy) {
+    game.outbreakInitialBuyRemaining = Math.max(0, game.outbreakInitialBuyRemaining - dt);
+    game.phaseTime = game.outbreakInitialBuyRemaining;
+    if (ui.outbreakShopWaveText) {
+      ui.outbreakShopWaveText.textContent = `Primeira wave em: ${Math.ceil(game.outbreakInitialBuyRemaining)}s`;
+    }
+    if (ui.outbreakShopContinue) {
+      ui.outbreakShopContinue.disabled = true;
+      ui.outbreakShopContinue.textContent = `${Math.ceil(game.outbreakInitialBuyRemaining)}S`;
+    }
+    if (game.outbreakInitialBuyRemaining === 0) {
+      game.outbreakInitialBuy = false;
+      game.outbreakShopPending = false;
+      ui.outbreakShopFooter?.classList.add("hidden");
+      if (ui.outbreakShopContinue) {
+        ui.outbreakShopContinue.disabled = false;
+        ui.outbreakShopContinue.textContent = "CONTINUAR";
+      }
+      closeShop({ force: true });
+      game.phase = "action";
+      game.phaseTime = 9999;
+      game.clockActive = true;
+      deployOutbreakWave(1);
+    }
+    return;
+  }
+  if (game.outbreakShopPending || game.phase !== "action" || !game.player?.alive) return;
   game.outbreakElapsed += dt;
   const secondsWithoutDamage = game.outbreakElapsed - game.outbreakLastDamageAt;
   const shieldCapacity = game.player.maxArmor || 50;
@@ -5806,6 +6058,9 @@ function getUltCost(entity) {
 }
 
 function activateUltimate(entity) {
+  // No Outbreak, a tecla de Ultimate é reservada ao gadget equipado. As
+  // Ultimates dos agentes permanecem intocadas nos modos Default e Blackout.
+  if (entity?.id === "player" && isOutbreakMode()) return useOutbreakGadget();
   const infiniteSandboxUlt = game.sandbox && entity?.id === "player";
   const tutorialFreeUlt = game.tutorial && entity?.id === "player" && game.tutorialFreeUlts > 0;
   const purchasedUlt = game.outbreak && entity?.id === "player" && game.outbreakUltInventory.charges > 0
@@ -7160,19 +7415,24 @@ function updateAllies(dt) {
 function updateBots(dt) {
   const p = game.player;
   game.botSpatialIndex = buildEntitySpatialIndex(game.bots);
-  if (game.outbreak) {
+  if (isOutbreakMode()) {
     const outbreakBotDt = performance.now() < game.outbreakEffects.chronosUntil ? dt * 0.38 : dt;
+    const now = performance.now();
     for (const bot of game.bots) {
       if (!bot.alive) continue;
-      const target = cachedBotPerception(bot, "player", () => botCanSeePlayer(bot) ? p : null);
+      const decoy = game.turrets.find((turret) => turret.ownerId === "black-market-decoy"
+        && turret.life > 0
+        && Math.hypot(turret.x - bot.x, turret.y - bot.y) <= 520
+        && hasLineOfSight(bot, turret));
+      const pursuitTarget = decoy || p;
+      const target = decoy || cachedBotPerception(bot, "player", () => botCanSeePlayer(bot) ? p : null);
       updateBotAwareness(bot, target, outbreakBotDt);
-      const fighting = botFightPlayer(bot, outbreakBotDt, {
-        state: "hunt",
-        preferCover: bot.hp < bot.maxHp * 0.35,
-        firePenalty: 1,
-      });
-      const distance = Math.hypot(p.x - bot.x, p.y - bot.y);
-      if (distance > 150) moveBotToward(bot, p, outbreakBotDt, fighting ? 0.58 : 1);
+      // Outbreak não compartilha a árvore tática dos demais modos: nenhuma
+      // condição de HP aciona recuo, strafe defensivo ou procura por cobertura.
+      if (target && bot.canShoot) botShootAt(bot, target, outbreakBotDt, "bot", 1);
+      const distance = Math.hypot(pursuitTarget.x - bot.x, pursuitTarget.y - bot.y);
+      const cryoMultiplier = now < (bot.outbreakCryoUntil || 0) ? 0.34 : 1;
+      if (distance > 86) moveBotToward(bot, pursuitTarget, outbreakBotDt, cryoMultiplier);
       keepBotSpacing(bot, outbreakBotDt);
     }
     return;
@@ -7890,7 +8150,7 @@ function updateTimers(dt) {
   }
   game.explosions = game.explosions.filter((explosion) => explosion.life > 0);
 
-  if (game.phase === "buy" && game.phaseTime <= 0) startActionRound();
+  if (game.phase === "buy" && game.phaseTime <= 0 && !game.outbreak) startActionRound();
   if (game.phase === "action" && game.phaseTime <= 0 && game.spike.state !== "planted") {
     endRound("defenders", "Tempo acabou. Defensores venceram.");
   }
@@ -8048,7 +8308,14 @@ function update(dt) {
  * permanecia falso, congelando apenas a simulação do Canvas.
  */
 function enforceOutbreakRuntimeState() {
-  if (!game.outbreak || game.phase === "matchOver") return;
+  if (!isOutbreakMode() || game.phase === "matchOver") return;
+  if (game.outbreakInitialBuy) {
+    game.phase = "buy";
+    game.clockActive = game.introTimer <= 0;
+    game.phaseTime = Math.max(0, game.outbreakInitialBuyRemaining);
+    if (!game.paused && game.menuState === "none" && ui.shop?.classList.contains("hidden")) openShop();
+    return;
+  }
   if (game.outbreakShopPending) {
     game.clockActive = false;
     game.phase = "buy";
@@ -9941,11 +10208,21 @@ function updateUi() {
   toggleClass(ui.vitalsPanel, "is-critical", healthRatio <= 0.25);
   const ultCost = getUltCost(game.player);
   const ultReady = getUltimatePoints(game.player) >= ultCost;
-  setText(ui.ultPoints, game.sandbox ? "∞" : `${getUltimatePoints(game.player)}/${ultCost}`);
-  toggleClass(ui.ultCounter, "ready", game.sandbox || ultReady);
-  toggleClass(ui.ultCounter, "warning", game.ultFlashTimer > 0 && !ultReady);
+  const outbreakGadgetDefinition = isOutbreakMode() ? equippedBlackMarketGadget() : null;
+  const outbreakGadgetCooldown = Math.max(0, game.outbreakGadget?.cooldownRemaining || 0);
+  const outbreakGadgetReady = Boolean(outbreakGadgetDefinition)
+    && (game.outbreakGadget?.charges || 0) > 0
+    && outbreakGadgetCooldown <= 0;
+  setText(ui.ultLabel, outbreakGadgetDefinition ? "GADGET" : "ULT");
+  setText(ui.ultPoints, outbreakGadgetDefinition
+    ? (outbreakGadgetCooldown > 0
+      ? `${Math.ceil(outbreakGadgetCooldown)}s`
+      : `${game.outbreakGadget?.charges || 0}/${outbreakGadgetDefinition.chargesPerWave}`)
+    : game.sandbox ? "∞" : `${getUltimatePoints(game.player)}/${ultCost}`);
+  toggleClass(ui.ultCounter, "ready", outbreakGadgetDefinition ? outbreakGadgetReady : game.sandbox || ultReady);
+  toggleClass(ui.ultCounter, "warning", outbreakGadgetDefinition ? !outbreakGadgetReady : game.ultFlashTimer > 0 && !ultReady);
   toggleClass(ui.ultCounter, "pulse", game.ultFlashTimer > 0);
-  if (ultReady && !game.tutorial && !game.sandbox) {
+  if (!outbreakGadgetDefinition && ultReady && !game.tutorial && !game.sandbox) {
     showContextTipOnce("ultimate-ready", `Ultimate de ${game.selectedAgent?.name || "agente"} pronta. Pressione ${settings.keys?.ability2 || "Q"} para usar.`);
   }
   const ultimateAmmo = game.player.ultimate?.type === "jett"
@@ -9967,11 +10244,21 @@ function updateUi() {
     : game.spike.state === "planted"
       ? (game.spike.defuseProgress > 0 ? `Defuse ${Math.round(game.spike.defuseProgress * 100)}%` : `${Math.ceil(game.spike.timer)}s`)
       : "Plantando");
-  const purchasedUlt = game.outbreakUltInventory;
-  const showPurchasedUlt = game.outbreak && purchasedUlt.charges > 0;
-  toggleClass(ui.outbreakUltStock, "hidden", !showPurchasedUlt);
-  if (showPurchasedUlt) {
-    setText(ui.outbreakUltStock, `ULT ${agentById(purchasedUlt.agentId)?.name || ""} · ${purchasedUlt.charges}`);
+  const showOutbreakGadget = Boolean(outbreakGadgetDefinition);
+  toggleClass(ui.outbreakUltStock, "hidden", !showOutbreakGadget);
+  if (showOutbreakGadget) {
+    setText(ui.outbreakUltStock, outbreakGadgetCooldown > 0
+      ? `${outbreakGadgetDefinition.name} · ${Math.ceil(outbreakGadgetCooldown)}s`
+      : `${outbreakGadgetDefinition.name} · ${game.outbreakGadget?.charges || 0}`);
+    setText(ui.mobileUltimateLabel, outbreakGadgetCooldown > 0 ? `${Math.ceil(outbreakGadgetCooldown)}S` : "GADGET");
+    ui.mobileUltimateButton?.setAttribute("aria-label", `Usar ${outbreakGadgetDefinition.name}`);
+    ui.mobileUltimateButton?.classList.toggle("is-cooling-down", outbreakGadgetCooldown > 0);
+    ui.mobileUltimateButton?.style.setProperty("--gadget-cooldown", String(Math.min(1, outbreakGadgetCooldown / outbreakGadgetDefinition.cooldown)));
+  } else {
+    setText(ui.mobileUltimateLabel, "ULT");
+    ui.mobileUltimateButton?.setAttribute("aria-label", "Usar ultimate");
+    ui.mobileUltimateButton?.classList.remove("is-cooling-down");
+    ui.mobileUltimateButton?.style.removeProperty("--gadget-cooldown");
   }
   const now = performance.now();
   const activeModifier = game.outbreak && ([
@@ -10093,7 +10380,9 @@ function toggleShop() {
 
 function setShopTab(tab, { preserveFeedback = false } = {}) {
   const hasAllies = game.outbreak || game.allyCount > 0 || game.sandbox || game.training;
-  const hasUlts = game.outbreak;
+  // Ultimates compráveis foram substituídas pelo gadget do Black Market no
+  // Outbreak. Os modos tradicionais continuam usando as Ults dos agentes.
+  const hasUlts = false;
   let nextTab = !hasAllies && tab === "allies" ? "weapons" : tab;
   if (!hasUlts && nextTab === "ults") nextTab = "weapons";
   const alliesTab = document.getElementById("alliesTab");
@@ -10119,7 +10408,7 @@ function setShopTab(tab, { preserveFeedback = false } = {}) {
     weapons: "Armas compradas podem ser reequipadas sem custo nesta partida.",
     equipment: "Confira o tipo e a duração de cada melhoria antes de comprar.",
     allies: game.outbreak ? "Recrute a unidade antes de liberar armas e sistemas de suporte." : "Personalize somente o equipamento dos aliados em campo.",
-    ults: "Esgote as cargas da Ultimate atual antes de trocar de agente.",
+    ults: "Utilitários do Outbreak são equipados no Black Market.",
   };
   if (!preserveFeedback) setShopFeedback(descriptions[nextTab] || "Selecione um item para ver seu estado.");
 }
@@ -10286,6 +10575,7 @@ function loadSandboxConfig() {
 }
 
 function activeGuidanceDialog() {
+  if (!ui.blackMarketOverlay?.classList.contains("hidden")) return ui.blackMarketOverlay.querySelector(".black-market-shell");
   if (!ui.playerProfileOverlay?.classList.contains("hidden")) return ui.playerProfileOverlay.querySelector(".player-profile-modal");
   if (!ui.globalRankingOverlay?.classList.contains("hidden")) return ui.globalRankingOverlay.querySelector(".global-ranking-modal");
   if (!ui.modeInfoOverlay?.classList.contains("hidden")) return ui.modeInfoOverlay.querySelector(".mode-info-panel");
@@ -10311,6 +10601,10 @@ function trapGuidanceFocus(event, dialog) {
 }
 
 function handleEscape() {
+  if (!ui.blackMarketOverlay?.classList.contains("hidden")) {
+    closeBlackMarket();
+    return;
+  }
   if (!ui.playerProfileOverlay?.classList.contains("hidden")) {
     closePlayerProfile();
     return;
@@ -12453,10 +12747,24 @@ function startMode(label, difficulty) {
 
 function outbreakWavePlan(wave) {
   const safeWave = Math.max(1, Math.round(wave) || 1);
+  if (safeWave <= 5) {
+    return {
+      total: 3 + Math.floor((safeWave - 1) / 2),
+      activeCap: 3,
+      spawnInterval: 2.5 - safeWave * 0.08,
+    };
+  }
+  if (safeWave <= 20) {
+    return {
+      total: Math.min(9, 4 + Math.floor((safeWave - 5) / 3)),
+      activeCap: Math.min(5, 3 + Math.floor((safeWave - 6) / 7)),
+      spawnInterval: Math.max(1.45, 2.15 - (safeWave - 6) * 0.045),
+    };
+  }
   return {
-    total: safeWave <= 3 ? 3 : safeWave <= 10 ? 4 : Math.min(5 + Math.floor((safeWave - 11) / 4), 10),
-    activeCap: safeWave <= 10 ? 3 : safeWave <= 20 ? 4 : safeWave <= 35 ? 5 : 6,
-    spawnInterval: Math.max(1.15, 2.25 - safeWave * 0.018),
+    total: Math.min(16, 9 + Math.floor((safeWave - 21) / 3)),
+    activeCap: Math.min(7, 5 + Math.floor((safeWave - 21) / 12)),
+    spawnInterval: Math.max(1.05, 1.42 - (safeWave - 21) * 0.012),
   };
 }
 
@@ -12545,7 +12853,11 @@ function createOutbreakWave(wave) {
     reservedSpawns.push({ ...spawn, r: 21 });
     const bot = makeBot(spawn, index);
     const archetype = outbreakBotArchetype(wave, index);
-    const baseHp = 64 + wave * 7;
+    const baseHp = wave <= 5
+      ? 58 + wave * 5
+      : wave <= 20
+        ? 83 + (wave - 5) * 8
+        : 203 + (wave - 20) * 12;
     const hpScale = archetype === "tank" ? 1.65 : archetype === "runner" ? 0.72 : 1;
     const speedScale = archetype === "tank" ? 0.7 : archetype === "runner" ? 1.28 : 1;
     bot.id = `bot-outbreak-${wave}-${index}`;
@@ -12556,21 +12868,30 @@ function createOutbreakWave(wave) {
     // As dez primeiras ondas não possuem escudo. A progressão começa na onda 11.
     bot.armor = wave < 11 ? 0 : Math.min(archetype === "tank" ? 90 : 55, 12 + (wave - 11) * (archetype === "tank" ? 4 : 2));
     bot.maxArmor = bot.armor;
-    bot.speed = Math.min(archetype === "runner" ? 190 : archetype === "tank" ? 118 : 158, (80 + wave * 2.1) * speedScale);
+    const tierSpeed = wave <= 5
+      ? 72 + wave * 2
+      : wave <= 20
+        ? 82 + (wave - 5) * 3
+        : 127 + Math.min(35, (wave - 20) * 1.5);
+    bot.speed = Math.min(archetype === "runner" ? 205 : archetype === "tank" ? 124 : 170, tierSpeed * speedScale);
     bot.r = archetype === "tank" ? 21 : archetype === "runner" ? 15 : 17;
     if (wave <= 10) bot.weapon = weapons[0];
     // O arsenal-base passa a incluir a Operator no fim da progressão, porém o
     // rifle de precisão fica estritamente bloqueado até a Wave 21.
     if (wave < 21 && bot.weapon?.id === "sniper") bot.weapon = weapons.find((weapon) => weapon.id === "dmr") || weapons[0];
-    bot.outbreakScatter = wave <= 10
-      ? Math.max(20, 60 - wave * 4)
-      : Math.max(3, 20 - (wave - 10) * 0.5) + (archetype === "runner" ? 7 : 0);
-    bot.outbreakFirePenalty = wave <= 10
-      ? Math.max(1.3, 2.2 - wave * 0.08)
-      : Math.max(0.78, 1 - (wave - 11) * 0.008);
-    bot.outbreakDamageMultiplier = Math.min(2.6, 1 + Math.max(0, wave - 1) * 0.032)
+    bot.outbreakScatter = wave <= 5
+      ? 64 - wave * 5
+      : wave <= 20
+        ? Math.max(9, 39 - (wave - 5) * 2)
+        : Math.max(3, 9 - (wave - 20) * 0.2) + (archetype === "runner" ? 5 : 0);
+    bot.outbreakFirePenalty = wave <= 5
+      ? 2.45 - wave * 0.12
+      : wave <= 20
+        ? Math.max(1.02, 1.85 - (wave - 5) * 0.055)
+        : Math.max(0.74, 1.02 - (wave - 20) * 0.008);
+    bot.outbreakDamageMultiplier = Math.min(2.8, 0.82 + Math.max(0, wave - 1) * 0.045)
       * (archetype === "tank" ? 1.16 : archetype === "runner" ? 0.88 : 1);
-    bot.outbreakReactionTime = Math.max(0.065, 0.29 - wave * 0.006)
+    bot.outbreakReactionTime = Math.max(0.055, (wave <= 5 ? 0.42 - wave * 0.025 : 0.29 - (wave - 6) * 0.007))
       * (archetype === "runner" ? 0.72 : archetype === "tank" ? 1.18 : 1);
     return bot;
   });
@@ -12612,6 +12933,7 @@ function deployOutbreakWave(wave) {
   game.outbreakAdminShopResume = false;
   ui.outbreakShopFooter?.classList.add("hidden");
   game.outbreakWave = wave;
+  resetOutbreakGadget();
   game.outbreakWaveStartKills = Math.max(0, game.stats?.kills || 0);
   game.outbreakWaveCredits = 0;
   game.roundNumber = wave;
@@ -12691,7 +13013,7 @@ function continueOutbreakFromShop() {
 }
 
 function startOutbreakMode() {
-  game.mode = "Outbreak";
+  game.mode = "outbreak";
   game.playMode = "outbreak";
   game.outbreak = true;
   game.sandbox = false;
@@ -12700,13 +13022,15 @@ function startOutbreakMode() {
   game.godMode = false;
   game.outbreakShopPending = false;
   game.outbreakAdminShopResume = false;
+  game.outbreakInitialBuy = true;
+  game.outbreakInitialBuyRemaining = 30;
   game.allyCount = 0;
   game.enemyFireMultiplier = 1.5;
   game.selectedAgent = agents[0];
   setFovMode(false);
   hideMenuOverlay();
   startNewMatch();
-  game.outbreakWave = 1;
+  game.outbreakWave = 0;
   game.outbreakWaveStartKills = 0;
   game.outbreakWaveCredits = 0;
   game.outbreakElapsed = 0;
@@ -12723,6 +13047,7 @@ function startOutbreakMode() {
     lastModifierId: null, lastModifierUntil: 0,
   };
   game.outbreakUltInventory = { agentId: null, charges: 0 };
+  resetOutbreakGadget();
   game.allyLoadout = { weaponId: "pistol", ownedWeapons: new Set(["pistol"]), recruited: false, damageMultiplier: 1, lastResort: false, lastResortWave: 0 };
   game.airdrops = [];
   game.airdropVisuals = [];
@@ -12737,11 +13062,20 @@ function startOutbreakMode() {
   game.ultOrbs = [];
   game.spike.state = "disabled";
   game.spike.owner = null;
-  game.phase = "action";
-  game.phaseTime = 9999;
-  game.clockActive = false;
+  game.phase = "buy";
+  game.phaseTime = 30;
+  game.clockActive = true;
   buildShop();
-  deployOutbreakWave(1);
+  game.outbreakShopPending = true;
+  ui.outbreakShopFooter?.classList.remove("hidden");
+  if (ui.outbreakShopWaveText) ui.outbreakShopWaveText.textContent = "Primeira wave em: 30s";
+  if (ui.outbreakShopContinue) {
+    ui.outbreakShopContinue.disabled = true;
+    ui.outbreakShopContinue.textContent = "30S";
+  }
+  showRoundBanner("WAVE 0", "Fase de preparação inicial", "30 SEGUNDOS", 3);
+  setMessage("Outbreak: prepare seu equipamento antes da primeira wave.");
+  openShop();
   ui.gameRoot?.classList.add("outbreak-mode");
 }
 
@@ -12827,7 +13161,7 @@ function startTutorialMode() {
 
 function showIntro() {
   const duration = 5;
-  ui.introMode.textContent = game.mode;
+  ui.introMode.textContent = isOutbreakMode() ? "Outbreak" : game.mode;
   ui.introMap.textContent = game.mapName;
   ui.introTeam.textContent = `${game.playerSide === "attackers" ? "Ataque" : "Defesa"} - ${map.vibe}`;
   if (ui.introTimebar) {
@@ -12968,7 +13302,7 @@ function buildShop() {
 
   if (ui.ultButtons) {
     ui.ultButtons.innerHTML = "";
-    for (const item of purchasableUlts) {
+    for (const item of (game.outbreak ? [] : purchasableUlts)) {
       const card = document.createElement("article");
       card.className = "ult-shop-card";
       const agent = agentById(item.id);
@@ -13774,6 +14108,20 @@ ui.modeInfoOverlay?.addEventListener("pointerdown", (event) => {
 ui.menuTourNextButton?.addEventListener("click", advanceMenuTour);
 ui.menuTourSkipButton?.addEventListener("click", () => void finishMenuTour());
 ui.commerceCloseButton?.addEventListener("click", closeCommerceStore);
+let lastBlackMarketPreviewSoundAt = 0;
+const previewBlackMarketAccess = () => {
+  const now = performance.now();
+  if (now - lastBlackMarketPreviewSoundAt < 650) return;
+  lastBlackMarketPreviewSoundAt = now;
+  playBlackMarketAccessSound();
+};
+ui.blackMarketTrigger?.addEventListener("pointerenter", previewBlackMarketAccess);
+ui.blackMarketTrigger?.addEventListener("touchstart", previewBlackMarketAccess, { passive: true });
+ui.blackMarketTrigger?.addEventListener("click", openBlackMarket);
+ui.blackMarketCloseButton?.addEventListener("click", closeBlackMarket);
+ui.blackMarketOverlay?.addEventListener("pointerdown", (event) => {
+  if (event.target === ui.blackMarketOverlay) closeBlackMarket();
+});
 ui.commerceTabs?.querySelectorAll("[data-commerce-tab]").forEach((button) => {
   button.addEventListener("click", () => {
     commerceState.tab = button.dataset.commerceTab;
