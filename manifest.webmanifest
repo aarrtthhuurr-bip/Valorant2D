@@ -5,18 +5,13 @@
   "description": "Jogo de tiro tático 2D para navegador.",
   "lang": "pt-BR",
   "dir": "ltr",
-  "start_url": "./",
+  "start_url": "./index.html",
   "scope": "./",
   "categories": [
     "games",
     "entertainment"
   ],
-  "display": "fullscreen",
-  "display_override": [
-    "fullscreen",
-    "standalone",
-    "minimal-ui"
-  ],
+  "display": "standalone",
   "orientation": "landscape",
   "background_color": "#05080d",
   "theme_color": "#05080d",

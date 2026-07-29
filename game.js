@@ -13499,9 +13499,14 @@ initializeGoogleIdentity();
 bootstrapAuthentication();
 if ("serviceWorker" in navigator && (window.isSecureContext || location.hostname === "localhost")) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js").catch((error) => {
-      console.warn("[PWA] Service Worker indisponível:", error?.message || error);
-    });
+    navigator.serviceWorker.register("./service-worker.js", {
+      scope: "./",
+      updateViaCache: "none",
+    })
+      .then((registration) => registration.update())
+      .catch((error) => {
+        console.warn("[PWA] Service Worker indisponível:", error?.message || error);
+      });
   });
 }
 requestAnimationFrame(loop);
