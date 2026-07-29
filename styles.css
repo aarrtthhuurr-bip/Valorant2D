@@ -6971,3 +6971,143 @@ body.is-mobile .top-hud strong {
     font-size: 25px;
   }
 }
+
+/* -------------------------------------------------------------------------
+ * Autofire e personalização dos controles mobile
+ * ---------------------------------------------------------------------- */
+body.is-mobile .mobile-stick,
+body.is-mobile .mobile-action,
+body.is-mobile .mobile-utility {
+  scale: var(--mobile-hud-scale, 1);
+  opacity: var(--mobile-hud-opacity, 0.82);
+  transform-origin: center;
+}
+
+body.is-mobile .mobile-stick.is-active,
+body.is-mobile .mobile-action.is-pressed,
+body.is-mobile .mobile-utility.is-pressed {
+  opacity: 1;
+}
+
+/* No autofire, a mira é conduzida pelo alvo visível mais adequado. */
+body.is-mobile.mobile-autofire .mobile-aim-stick,
+body.is-mobile.mobile-autofire .mobile-fire {
+  display: none;
+}
+
+/* Espelha o conjunto sem alterar a semântica ou os listeners dos botões. */
+body.is-mobile.mobile-left-handed .mobile-move-stick {
+  right: 48px;
+  left: auto;
+}
+
+body.is-mobile.mobile-left-handed .mobile-aim-stick {
+  right: auto;
+  left: 48px;
+}
+
+body.is-mobile.mobile-left-handed .mobile-fire {
+  right: auto;
+  left: 232px;
+}
+
+body.is-mobile.mobile-left-handed .mobile-ability {
+  right: auto;
+  left: 350px;
+}
+
+body.is-mobile.mobile-left-handed .mobile-ultimate {
+  right: auto;
+  left: 344px;
+}
+
+body.is-mobile.mobile-left-handed .mobile-interact {
+  right: auto;
+  left: 238px;
+}
+
+body.is-mobile.mobile-left-handed .mobile-reload {
+  right: auto;
+  left: 438px;
+}
+
+body.is-mobile.mobile-left-handed .mobile-shop-button {
+  right: 34px;
+  left: auto;
+}
+
+body.is-mobile.mobile-left-handed .mobile-pause-button {
+  right: auto;
+  left: 34px;
+}
+
+/* Menu de opções adaptado do painel mobile, sem alterar o layout desktop. */
+body.is-mobile .menu-state-options .options-panel.is-ready {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+body.is-mobile .menu-state-options .options-tabs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 6px;
+  margin-bottom: 10px;
+  overflow: visible;
+}
+
+body.is-mobile .menu-state-options .options-tabs button {
+  min-height: var(--mobile-touch-target, 72px);
+  padding-inline: 10px;
+}
+
+body.is-mobile .menu-state-options .options-content {
+  max-height: none;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  padding: 2px 4px 10px 2px;
+}
+
+body.is-mobile .menu-state-options .options-section {
+  padding: 14px;
+}
+
+body.is-mobile .menu-state-options .option-row {
+  grid-template-columns: minmax(135px, 0.8fr) minmax(190px, 1.2fr);
+}
+
+body.is-mobile .menu-state-options .option-toggle,
+body.is-mobile .menu-state-options .option-keybind,
+body.is-mobile .menu-state-options .option-toggle-group button,
+body.is-mobile .menu-state-options .option-select,
+body.is-mobile .menu-state-options .option-text-input,
+body.is-mobile .menu-state-options .options-footer button {
+  min-height: var(--mobile-touch-target, 72px);
+}
+
+body.is-mobile .menu-state-options .options-footer {
+  position: static;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(2, minmax(150px, 0.34fr));
+  background: rgba(8, 16, 24, 0.94);
+}
+
+@media (orientation: landscape) and (max-height: 560px) {
+  body.is-mobile .menu-state-options .menu-copy {
+    display: none;
+  }
+
+  body.is-mobile .menu-state-options .options-tabs button {
+    min-height: 52px;
+  }
+
+  body.is-mobile .menu-state-options .option-toggle,
+  body.is-mobile .menu-state-options .option-keybind,
+  body.is-mobile .menu-state-options .option-toggle-group button,
+  body.is-mobile .menu-state-options .option-select,
+  body.is-mobile .menu-state-options .option-text-input,
+  body.is-mobile .menu-state-options .options-footer button {
+    min-height: 52px;
+  }
+}

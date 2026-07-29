@@ -1118,6 +1118,8 @@ const touchControls = {
   heldActions: new Set(),
   pressedActions: new Set(),
   firing: false,
+  autoFiring: false,
+  autoFireTargetId: null,
 };
 
 function setMobileStickVisual(element, x = 0, y = 0, active = false) {
@@ -1143,6 +1145,8 @@ function resetMobileControls() {
   touchControls.heldActions.clear();
   touchControls.pressedActions.clear();
   touchControls.firing = false;
+  touchControls.autoFiring = false;
+  touchControls.autoFireTargetId = null;
   mouse.down = false;
   ui.mobileControls?.querySelectorAll(".is-pressed").forEach((element) => element.classList.remove("is-pressed"));
 }
@@ -1281,6 +1285,69 @@ function handleMobileCanvasTouch(event) {
   mouse.x = point.x;
   mouse.y = point.y;
   if (game.omenUlt?.state === "select") commitOmenTeleport(point);
+}
+
+/**
+ * Procura um alvo válido para o autofire mobile.
+ *
+ * Além da distância, respeita paredes, fumaças e o campo de visão do Blackout.
+ * Isso evita que a assistência revele inimigos escondidos ou tente disparar
+ * continuamente contra uma parede.
+ */
+function mobileAutofireTarget() {
+  if (!game.isMobile
+    || settings?.mobileAimMode !== "autofire"
+    || game.phase !== "action"
+    || game.menuState !== "none"
+    || game.paused
+    || !game.player?.alive) {
+    return null;
+  }
+
+  const player = game.player;
+  const range = Math.max(240, Math.min(900, Number(settings.mobileAutofireRange) || 560));
+  const rangeSquared = range * range;
+  let target = null;
+  let bestScore = Infinity;
+
+  for (const bot of game.bots) {
+    if (!bot?.alive || bot.hp <= 0 || bot.untargetable) continue;
+    const dx = bot.x - player.x;
+    const dy = bot.y - player.y;
+    const squaredDistance = dx * dx + dy * dy;
+    if (squaredDistance > rangeSquared || !isBotVisible(bot) || !hasCombatLineOfSight(player, bot)) continue;
+
+    // Prioriza o inimigo mais próximo, com um pequeno bônus para quem já está
+    // perto da direção atual da arma. O resultado é estável e não "treme"
+    // desnecessariamente entre dois alvos lado a lado.
+    const angle = Math.atan2(dy, dx);
+    const angleDelta = Math.abs(Math.atan2(Math.sin(angle - player.angle), Math.cos(angle - player.angle)));
+    const currentTargetBonus = touchControls.autoFireTargetId === bot.id ? -1800 : 0;
+    const score = squaredDistance + angleDelta * 4200 + currentTargetBonus;
+    if (score >= bestScore) continue;
+    bestScore = score;
+    target = bot;
+  }
+
+  return target;
+}
+
+function updateMobileAutofire() {
+  if (!game.isMobile) {
+    touchControls.autoFiring = false;
+    touchControls.autoFireTargetId = null;
+    return null;
+  }
+
+  const target = mobileAutofireTarget();
+  touchControls.autoFiring = Boolean(target);
+  touchControls.autoFireTargetId = target?.id ?? null;
+  if (target) {
+    mouse.x = target.x;
+    mouse.y = target.y;
+  }
+  mouse.down = touchControls.firing || touchControls.autoFiring;
+  return target;
 }
 
 function escalarViewport() {
@@ -5876,7 +5943,11 @@ function updatePlayer(dt) {
   const aimActive = game.isMobile
     && touchControls.aim.active
     && Math.hypot(touchControls.aim.x, touchControls.aim.y) > 0.08;
-  if (aimActive) {
+  const autofireTarget = updateMobileAutofire();
+  if (autofireTarget) {
+    mouse.x = autofireTarget.x;
+    mouse.y = autofireTarget.y;
+  } else if (aimActive) {
     mouse.x = p.x + touchControls.aim.x * 520;
     mouse.y = p.y + touchControls.aim.y * 520;
   } else if (game.isMobile && touchControls.firing) {
@@ -11198,6 +11269,11 @@ const OPTIONS_DEFAULTS = {
   mouseSensitivity: 50,
   adsSensitivity: 50,
   invertY: false,
+  mobileAimMode: "analog",
+  mobileAutofireRange: 560,
+  mobileHudScale: 100,
+  mobileHudOpacity: 82,
+  mobileLeftHanded: false,
   keys: { fire: "Mouse1", reload: "R", ability1: "E", ability2: "Q", interact: "F", neonRun: "Shift" },
   crosshairType: "default",
   crosshairColor: "#ffffff",
@@ -11251,6 +11327,7 @@ document.documentElement.style.setProperty("--kill-feed-scale", String((Number(s
 document.documentElement.classList.toggle("ux-reduced-motion", Boolean(settings.reduceMotion));
 document.documentElement.classList.toggle("ux-high-contrast", Boolean(settings.highContrast));
 document.documentElement.classList.toggle("ux-large-text", Boolean(settings.largeText));
+applyMobileControlPreferences(settings);
 let activeOptionsTab = "general";
 let pendingKeyBind = null;
 let optionsFeedback = "";
@@ -11319,6 +11396,16 @@ function normalizedOptions(source) {
   };
 }
 
+function applyMobileControlPreferences(source) {
+  const next = source && typeof source === "object" ? source : OPTIONS_DEFAULTS;
+  const hudScale = Math.max(75, Math.min(130, Number(next.mobileHudScale) || 100));
+  const hudOpacity = Math.max(40, Math.min(100, Number(next.mobileHudOpacity) || 82));
+  document.documentElement.style.setProperty("--mobile-hud-scale", String(hudScale / 100));
+  document.documentElement.style.setProperty("--mobile-hud-opacity", String(hudOpacity / 100));
+  document.body?.classList.toggle("mobile-autofire", next.mobileAimMode === "autofire");
+  document.body?.classList.toggle("mobile-left-handed", Boolean(next.mobileLeftHanded));
+}
+
 function applyOptionsRuntime(source) {
   const next = normalizedOptions(source);
   settings = cloneOptions(next);
@@ -11335,6 +11422,7 @@ function applyOptionsRuntime(source) {
   document.documentElement.classList.toggle("ux-reduced-motion", Boolean(next.reduceMotion));
   document.documentElement.classList.toggle("ux-high-contrast", Boolean(next.highContrast));
   document.documentElement.classList.toggle("ux-large-text", Boolean(next.largeText));
+  applyMobileControlPreferences(next);
   try { localStorage.setItem(OPTIONS_STORAGE_KEY, JSON.stringify(next)); } catch {}
   updateUi();
 }
@@ -11632,10 +11720,36 @@ function renderControlOptions() {
   if (game.selectedAgent?.id === "neon") {
     movementOptions.push(KeyBind("Atalho de corrida da Neon", "neonRun"));
   }
-  return [
-    optionSection("MOVIMENTO", [
-      ...movementOptions,
-    ]),
+  const sections = [
+    optionSection("MOVIMENTO", movementOptions),
+  ];
+
+  if (game.isMobile) {
+    const resetMobileHudButton = createOptionElement("button", "option-keybind", "REPOR LAYOUT");
+    resetMobileHudButton.type = "button";
+    resetMobileHudButton.addEventListener("click", () => {
+      optionsSettings.mobileHudScale = OPTIONS_DEFAULTS.mobileHudScale;
+      optionsSettings.mobileHudOpacity = OPTIONS_DEFAULTS.mobileHudOpacity;
+      optionsSettings.mobileLeftHanded = OPTIONS_DEFAULTS.mobileLeftHanded;
+      queuePreferencesSync();
+      showOptionsFeedback("Layout mobile restaurado");
+    });
+    attachButtonFeedback(resetMobileHudButton);
+
+    sections.push(optionSection("CONTROLES MOBILE", [
+      ToggleGroup("Modo de disparo", "mobileAimMode", [
+        { value: "analog", label: "MIRA MANUAL" },
+        { value: "autofire", label: "AUTOFIRE" },
+      ]),
+      SettingSlider("Alcance do Autofire", "mobileAutofireRange", 240, 900, 20),
+      SettingSlider("Tamanho do HUD", "mobileHudScale", 75, 130, 5, "%"),
+      SettingSlider("Opacidade do HUD", "mobileHudOpacity", 40, 100, 5, "%"),
+      ToggleSwitch("Controles para canhoto", "mobileLeftHanded", "SIM", "NÃO"),
+      optionRow("Layout touch", resetMobileHudButton, "Restaura tamanho, opacidade e posição dos controles."),
+    ]));
+  }
+
+  sections.push(
     optionSection("TECLAS", [
       KeyBind("Atirar", "fire"),
       KeyBind("Recarregar", "reload"),
@@ -11643,7 +11757,8 @@ function renderControlOptions() {
       KeyBind("Habilidade 2", "ability2"),
       KeyBind("Usar/Interagir", "interact"),
     ]),
-  ];
+  );
+  return sections;
 }
 
 function renderCrosshairOptions() {
@@ -11895,7 +12010,11 @@ function applyOptionsSettings() {
 function resetOptionsSettings() {
   const tabDefaults = {
     general: ["language", "playerName", "showFps", "showPing"],
-    controls: ["movementScheme", "mouseSensitivity", "adsSensitivity", "invertY", "keys"],
+    controls: [
+      "movementScheme", "mouseSensitivity", "adsSensitivity", "invertY",
+      "mobileAimMode", "mobileAutofireRange", "mobileHudScale", "mobileHudOpacity",
+      "mobileLeftHanded", "keys",
+    ],
     crosshair: ["crosshairType", "crosshairColor", "crosshairCustomColor", "crosshairSize", "crosshairThickness", "crosshairOpacity", "crosshairGap"],
     audio: ["masterVolume", "musicVolume", "sfxVolume", "gunshotVolume", "muted", "impactEffects"],
     video: ["displayMode", "resolution", "fpsLimit", "vsync", "quality", "brightness", "particles", "bloodEffects", "shadows"],

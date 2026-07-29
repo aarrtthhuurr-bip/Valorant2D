@@ -4,7 +4,9 @@ const Session = require('../models/Session');
 const ALLOWED_KEYS = new Set([
   'language', 'playerName', 'showFps', 'showPing', 'showTips', 'showKillFeed',
   'showMoneyDelta', 'killFeedScale', 'messageDuration', 'movementScheme',
-  'mouseSensitivity', 'adsSensitivity', 'invertY', 'keys', 'crosshairType',
+  'mouseSensitivity', 'adsSensitivity', 'invertY', 'mobileAimMode',
+  'mobileAutofireRange', 'mobileHudScale', 'mobileHudOpacity',
+  'mobileLeftHanded', 'keys', 'crosshairType',
   'crosshairColor', 'crosshairCustomColor', 'crosshairSize', 'crosshairThickness',
   'crosshairOpacity', 'crosshairGap', 'masterVolume', 'musicVolume', 'sfxVolume',
   'voiceVolume', 'gunshotVolume', 'muted', 'highlightSteps', 'impactEffects', 'displayMode',
@@ -37,6 +39,23 @@ function sanitizePreferences(input) {
   const volume = Number(preferences.masterVolume);
   if (!Number.isFinite(volume) || volume < 0 || volume > 100) return null;
   preferences.masterVolume = Math.round(volume);
+
+  if (preferences.mobileAimMode !== undefined
+    && !['analog', 'autofire'].includes(preferences.mobileAimMode)) return null;
+  if (preferences.mobileLeftHanded !== undefined
+    && typeof preferences.mobileLeftHanded !== 'boolean') return null;
+
+  const mobileNumberLimits = {
+    mobileAutofireRange: [240, 900],
+    mobileHudScale: [75, 130],
+    mobileHudOpacity: [40, 100],
+  };
+  for (const [key, [minimum, maximum]] of Object.entries(mobileNumberLimits)) {
+    if (preferences[key] === undefined) continue;
+    const number = Number(preferences[key]);
+    if (!Number.isFinite(number) || number < minimum || number > maximum) return null;
+    preferences[key] = Math.round(number);
+  }
 
   const serialized = JSON.stringify(preferences);
   if (serialized.length > 20000) return null;
