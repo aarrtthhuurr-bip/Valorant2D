@@ -1883,6 +1883,7 @@ body.is-mobile .mobile-utility {
 }
 
 .weapon-art {
+  position: relative;
   display: grid;
   place-items: center;
   width: 100%;
@@ -1894,13 +1895,22 @@ body.is-mobile .mobile-utility {
 }
 
 .weapon-art img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
   display: block;
-  width: min(100%, 190px);
+  width: min(calc(100% - 20px), 190px);
   max-width: 100%;
   height: 100%;
   max-height: 56px;
+  margin: 0;
   object-fit: contain;
   object-position: center;
+  transform:
+    translate(
+      calc(-50% + var(--weapon-art-shift-x, 0%)),
+      calc(-50% + var(--weapon-art-shift-y, 0%))
+    );
 }
 
 .weapon-choice b {
@@ -6969,6 +6979,463 @@ body.is-mobile .top-hud strong {
 
   body.is-mobile .auth-heading h1 {
     font-size: 25px;
+  }
+}
+
+/* =========================================================================
+ * MOBILE / PWA REMASTER
+ * HUD proporcional, controles afastados do centro e respeito às safe areas.
+ * ====================================================================== */
+body.is-mobile {
+  background: #02060a;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior: none;
+}
+
+body.is-mobile #game-root,
+body.is-mobile #game-viewport,
+body.is-mobile .game-wrap {
+  touch-action: none;
+}
+
+body.is-mobile.is-standalone #game-root {
+  width: 100dvw;
+  height: 100dvh;
+}
+
+body.is-mobile.mobile-gameplay-active .top-hud {
+  top: 8px;
+  height: 50px;
+  min-width: 322px;
+  padding-inline: 5px;
+  border-color: rgba(137, 190, 211, 0.22);
+  background: rgba(4, 12, 19, 0.78);
+}
+
+body.is-mobile.mobile-gameplay-active .top-hud::before,
+body.is-mobile.mobile-gameplay-active .top-hud::after {
+  width: 26px;
+  height: 3px;
+  bottom: -3px;
+}
+
+body.is-mobile.mobile-gameplay-active .hud-pill,
+body.is-mobile.mobile-gameplay-active .top-hud .hud-pill:not(.side-pill) {
+  min-height: 39px;
+}
+
+body.is-mobile.mobile-gameplay-active .top-hud .hud-pill:not(.side-pill) {
+  width: 92px;
+}
+
+body.is-mobile.mobile-gameplay-active .top-hud strong {
+  margin-top: 3px;
+  font-size: 16px;
+}
+
+body.is-mobile.mobile-gameplay-active .top-hud .label {
+  font-size: 8px;
+}
+
+body.is-mobile.mobile-gameplay-active .side-pill {
+  min-width: 54px;
+  min-height: 34px;
+  font-size: 12px;
+}
+
+body.is-mobile.mobile-gameplay-active .vitals-panel {
+  top: 68px;
+  bottom: auto;
+  left: 14px;
+  width: 300px;
+  min-height: 54px;
+  padding: 7px 13px;
+  border-radius: 4px;
+  transform: none;
+  background: rgba(4, 12, 19, 0.67);
+}
+
+body.is-mobile.mobile-gameplay-active .weapon-panel {
+  top: 68px;
+  right: 14px;
+  bottom: auto;
+  width: 210px;
+  min-height: 54px;
+  padding: 7px 11px;
+  border-radius: 4px;
+  background: rgba(4, 12, 19, 0.67);
+}
+
+body.is-mobile.mobile-gameplay-active .status-main strong,
+body.is-mobile.mobile-gameplay-active .weapon-line strong {
+  font-size: 11px;
+}
+
+body.is-mobile.mobile-gameplay-active .status-row {
+  font-size: 8px;
+}
+
+body.is-mobile.mobile-gameplay-active .status-row b {
+  font-size: 10px;
+}
+
+body.is-mobile.mobile-gameplay-active .bars {
+  margin: 4px 0 3px;
+}
+
+body.is-mobile.mobile-gameplay-active .bar {
+  height: 4px;
+}
+
+body.is-mobile.mobile-gameplay-active .weapon-line span {
+  font-size: 16px;
+}
+
+body.is-mobile.mobile-gameplay-active .spike-status {
+  margin-top: 2px;
+  font-size: 8px;
+}
+
+body.is-mobile.mobile-gameplay-active .outbreak-context-hud {
+  top: 68px;
+  bottom: auto;
+  left: 50%;
+  min-height: 52px;
+  padding: 5px 7px;
+  transform: translateX(-50%);
+  background: rgba(4, 12, 19, 0.69);
+}
+
+body.is-mobile.mobile-gameplay-active .outbreak-context-hud > div {
+  min-width: 58px;
+  padding: 2px 6px;
+}
+
+body.is-mobile.mobile-gameplay-active .outbreak-context-hud strong {
+  font-size: 13px;
+}
+
+body.is-mobile.mobile-gameplay-active .outbreak-context-hud span {
+  font-size: 6px;
+}
+
+body.is-mobile.mobile-gameplay-active .kill-feed {
+  top: 130px;
+  left: 10px;
+  gap: 3px;
+}
+
+body.is-mobile.mobile-gameplay-active .kill-entry {
+  min-width: 0;
+  max-width: 220px;
+  padding: 4px 7px;
+  font-size: 9px;
+}
+
+body.is-mobile.mobile-gameplay-active .message {
+  top: 128px;
+  right: 10px;
+  width: min(215px, 28vw);
+  max-width: 215px;
+  padding: 5px 8px;
+  background: rgba(4, 11, 17, 0.58);
+}
+
+body.is-mobile.mobile-gameplay-active .message strong {
+  font-size: 9px;
+}
+
+body.is-mobile.mobile-gameplay-active .round-banner {
+  top: 64px;
+  min-width: 260px;
+  padding: 6px 14px;
+}
+
+body.is-mobile.mobile-gameplay-active .round-banner strong {
+  font-size: 16px;
+}
+
+body.is-mobile.mobile-gameplay-active .round-banner p {
+  margin-top: 2px;
+  font-size: 8px;
+}
+
+/* Controles: maior área útil, aparência discreta e centro livre para combate. */
+body.is-mobile .mobile-stick {
+  width: 150px;
+  height: 150px;
+}
+
+body.is-mobile .mobile-move-stick {
+  left: 34px;
+  bottom: 30px;
+}
+
+body.is-mobile .mobile-aim-stick {
+  right: 34px;
+  bottom: 30px;
+}
+
+body.is-mobile .mobile-stick-ring {
+  border-color: rgba(154, 207, 226, 0.26);
+  background:
+    radial-gradient(circle, transparent 0 34%, rgba(96, 220, 232, 0.06) 35% 37%, transparent 38%),
+    rgba(3, 10, 16, 0.34);
+  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.28);
+}
+
+body.is-mobile .mobile-stick-knob {
+  width: 58px;
+  height: 58px;
+  border-color: rgba(203, 232, 242, 0.5);
+  background: rgba(14, 36, 48, 0.8);
+}
+
+body.is-mobile .mobile-stick small {
+  bottom: -18px;
+  font-size: 9px;
+}
+
+body.is-mobile .mobile-action {
+  width: 66px;
+  height: 66px;
+  border-color: rgba(166, 208, 224, 0.27);
+  background: rgba(4, 13, 20, 0.58);
+}
+
+body.is-mobile .mobile-action b {
+  font-size: 18px;
+}
+
+body.is-mobile .mobile-action span {
+  font-size: 7px;
+}
+
+body.is-mobile .mobile-fire {
+  right: 205px;
+  bottom: 57px;
+  width: 88px;
+  height: 88px;
+  border-color: rgba(255, 80, 95, 0.65);
+  background: linear-gradient(145deg, rgba(151, 27, 43, 0.76), rgba(64, 13, 23, 0.68));
+}
+
+body.is-mobile .mobile-fire span {
+  font-size: 11px;
+}
+
+body.is-mobile .mobile-ability {
+  right: 312px;
+  bottom: 32px;
+}
+
+body.is-mobile .mobile-ultimate {
+  right: 302px;
+  bottom: 110px;
+}
+
+body.is-mobile .mobile-interact {
+  right: 205px;
+  bottom: 154px;
+}
+
+body.is-mobile .mobile-reload {
+  right: 394px;
+  bottom: 36px;
+  width: 58px;
+  height: 58px;
+}
+
+body.is-mobile .mobile-utility {
+  top: 132px;
+  width: 80px;
+  height: 44px;
+  border-color: rgba(159, 203, 221, 0.24);
+  background: rgba(4, 12, 19, 0.62);
+}
+
+body.is-mobile .mobile-shop-button {
+  left: 14px;
+}
+
+body.is-mobile .mobile-pause-button {
+  right: 14px;
+}
+
+body.is-mobile.mobile-left-handed .mobile-move-stick {
+  right: 34px;
+  left: auto;
+}
+
+body.is-mobile.mobile-left-handed .mobile-aim-stick {
+  right: auto;
+  left: 34px;
+}
+
+body.is-mobile.mobile-left-handed .mobile-fire {
+  right: auto;
+  left: 205px;
+}
+
+body.is-mobile.mobile-left-handed .mobile-ability {
+  right: auto;
+  left: 312px;
+}
+
+body.is-mobile.mobile-left-handed .mobile-ultimate {
+  right: auto;
+  left: 302px;
+}
+
+body.is-mobile.mobile-left-handed .mobile-interact {
+  right: auto;
+  left: 205px;
+}
+
+body.is-mobile.mobile-left-handed .mobile-reload {
+  right: auto;
+  left: 394px;
+}
+
+body.is-mobile.mobile-left-handed .mobile-shop-button {
+  right: 14px;
+  left: auto;
+}
+
+body.is-mobile.mobile-left-handed .mobile-pause-button {
+  right: auto;
+  left: 14px;
+}
+
+/* Loja mobile: itens proporcionais, imagens centralizadas e rolagem interna. */
+body.is-mobile .shop {
+  top: 10px;
+  right: 10px;
+  bottom: 10px;
+  left: 10px;
+  border-radius: 6px;
+  background: rgba(4, 11, 17, 0.96);
+}
+
+body.is-mobile .shop header {
+  min-height: 54px;
+  padding: 7px 14px;
+}
+
+body.is-mobile .shop h1 {
+  font-size: 16px;
+}
+
+body.is-mobile .shop-tabs {
+  margin-bottom: 5px;
+  padding-block: 5px;
+}
+
+body.is-mobile .shop-tabs button {
+  min-height: 48px;
+  font-size: 13px;
+}
+
+body.is-mobile .weapon-category-tabs {
+  gap: 5px;
+}
+
+body.is-mobile .weapon-category-tab {
+  min-height: 44px;
+}
+
+body.is-mobile .weapon-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+body.is-mobile .weapon-choice {
+  min-height: 126px;
+  grid-template-rows: 60px auto auto;
+}
+
+body.is-mobile .weapon-art {
+  min-height: 60px;
+}
+
+body.is-mobile .weapon-art img {
+  max-height: 48px;
+}
+
+body.is-mobile #equipmentButtons {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+body.is-mobile .equip-card {
+  min-height: 130px;
+  padding: 11px 8px;
+}
+
+/* Menus e modais ocupam a visual viewport sem depender de rolagem global. */
+body.is-mobile .auth-overlay,
+body.is-mobile .menu-overlay,
+body.is-mobile .agent-overlay,
+body.is-mobile .welcome-overlay,
+body.is-mobile .mode-info-overlay,
+body.is-mobile .player-profile-overlay,
+body.is-mobile .global-ranking-overlay {
+  width: 100dvw;
+  height: 100dvh;
+  padding:
+    max(8px, env(safe-area-inset-top))
+    max(10px, env(safe-area-inset-right))
+    max(8px, env(safe-area-inset-bottom))
+    max(10px, env(safe-area-inset-left));
+}
+
+body.is-mobile .menu-card,
+body.is-mobile .auth-panel,
+body.is-mobile .agent-select,
+body.is-mobile .welcome-panel,
+body.is-mobile .mode-info-panel {
+  max-height: calc(100dvh - 16px);
+}
+
+body.is-mobile .menu-button,
+body.is-mobile .mode-card-select,
+body.is-mobile .difficulty-card,
+body.is-mobile .shop button {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+@media (orientation: landscape) and (max-height: 430px) {
+  body.is-mobile.mobile-gameplay-active .vitals-panel,
+  body.is-mobile.mobile-gameplay-active .weapon-panel,
+  body.is-mobile.mobile-gameplay-active .outbreak-context-hud {
+    top: 60px;
+  }
+
+  body.is-mobile.mobile-gameplay-active .message,
+  body.is-mobile.mobile-gameplay-active .kill-feed {
+    top: 116px;
+  }
+
+  body.is-mobile .mobile-stick {
+    width: 138px;
+    height: 138px;
+  }
+
+  body.is-mobile .mobile-move-stick {
+    left: 24px;
+    bottom: 22px;
+  }
+
+  body.is-mobile .mobile-aim-stick {
+    right: 24px;
+    bottom: 22px;
+  }
+
+  body.is-mobile .shop {
+    top: 6px;
+    right: 6px;
+    bottom: 6px;
+    left: 6px;
   }
 }
 

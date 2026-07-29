@@ -1102,6 +1102,25 @@ const mouse = { x: BASE_WIDTH / 2, y: BASE_HEIGHT / 2, down: false, rightDown: f
 const coarsePointerQuery = window.matchMedia?.("(pointer: coarse)");
 const standaloneDisplayQuery = window.matchMedia?.("(display-mode: standalone)");
 const mobileUserAgentQuery = /Android|iPhone|iPad|iPod|Mobile|Tablet|Silk|Kindle/i;
+let deferredPwaInstallPrompt = null;
+
+function isPwaInstalled() {
+  return Boolean(standaloneDisplayQuery?.matches || navigator.standalone === true);
+}
+
+async function requestPwaInstallation() {
+  if (!deferredPwaInstallPrompt) {
+    setMessage(isPwaInstalled()
+      ? "Valorant2D já está instalado neste dispositivo."
+      : "A instalação será oferecida pelo navegador quando estiver disponível.");
+    return;
+  }
+  const prompt = deferredPwaInstallPrompt;
+  deferredPwaInstallPrompt = null;
+  await prompt.prompt();
+  await prompt.userChoice.catch(() => null);
+  if (game.menuState === "main") showMainMenu();
+}
 
 function detectMobileDevice() {
   const touchPoints = Number(navigator.maxTouchPoints || 0);
@@ -10217,6 +10236,10 @@ function mainMenuIconSvg(icon) {
       lucide: "shopping-bag",
       fallback: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h12l1 13H5L6 8Z"></path><path d="M9 9V6a3 3 0 0 1 6 0v3"></path></svg>',
     },
+    download: {
+      lucide: "download",
+      fallback: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>',
+    },
   };
   const selected = icons[icon] || icons.star;
   return `<span class="menu-icon" data-lucide="${selected.lucide}" aria-hidden="true">${selected.fallback}</span>`;
@@ -10679,12 +10702,21 @@ function showMainMenu() {
   let lastMode = "";
   try { lastMode = localStorage.getItem("valorant2d-last-mode") || ""; } catch {}
   const lastModeLabel = ({ default: "DEFAULT", blackout: "BLACKOUT", outbreak: "OUTBREAK", sandbox: "SANDBOX", training: "TREINO" })[lastMode];
-  setMenu("Valorant 2D", "", [
+  const mainActions = [
     { label: "JOGAR", description: lastModeLabel ? `ÚLTIMO: ${lastModeLabel}` : "ESCOLHA SEU MODO", icon: "gamepad", action: showModeSelect, onboardingTarget: "play", audioCue: "play_action" },
     { label: "OPÇÕES", icon: "tools", action: showOptionsMenu },
     { label: "LOJA", icon: "store", action: openCommerceStore, onboardingTarget: "store" },
     { label: "RANKING", icon: "trophy", action: openGlobalRanking },
-  ], "MENU", "main");
+  ];
+  if (deferredPwaInstallPrompt && !isPwaInstalled()) {
+    mainActions.push({
+      label: "INSTALAR",
+      description: "JOGAR EM TELA CHEIA",
+      icon: "download",
+      action: requestPwaInstallation,
+    });
+  }
+  setMenu("Valorant 2D", "", mainActions, "MENU", "main");
   updateCoreBalances(commerceState.profile?.coreBalance || currentProfile?.coreBalance || 0);
   maybeScheduleMenuTour();
 }
@@ -12831,6 +12863,51 @@ function renderWeaponCards() {
   }
 }
 
+/**
+ * Centraliza o conteúdo realmente visível do ícone.
+ *
+ * Alguns arquivos possuem margens transparentes diferentes em cada lado.
+ * Centralizar apenas a tag <img> mantém essa margem invisível e faz a arma
+ * parecer deslocada. A leitura abaixo encontra os limites dos pixels opacos
+ * uma única vez, no carregamento, e compensa o deslocamento via CSS.
+ */
+function centerVisibleWeaponArtwork(image) {
+  if (!image?.naturalWidth || !image.naturalHeight || image.dataset.visibleCentered === "true") return;
+  image.dataset.visibleCentered = "true";
+  try {
+    const sampleLimit = 320;
+    const ratio = Math.min(1, sampleLimit / Math.max(image.naturalWidth, image.naturalHeight));
+    const width = Math.max(1, Math.round(image.naturalWidth * ratio));
+    const height = Math.max(1, Math.round(image.naturalHeight * ratio));
+    const surface = document.createElement("canvas");
+    surface.width = width;
+    surface.height = height;
+    const surfaceContext = surface.getContext("2d", { willReadFrequently: true });
+    surfaceContext.drawImage(image, 0, 0, width, height);
+    const pixels = surfaceContext.getImageData(0, 0, width, height).data;
+    let left = width;
+    let right = -1;
+    let top = height;
+    let bottom = -1;
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        if (pixels[(y * width + x) * 4 + 3] < 18) continue;
+        left = Math.min(left, x);
+        right = Math.max(right, x);
+        top = Math.min(top, y);
+        bottom = Math.max(bottom, y);
+      }
+    }
+    if (right < left || bottom < top) return;
+    const visibleCenterX = (left + right + 1) / 2;
+    const visibleCenterY = (top + bottom + 1) / 2;
+    image.style.setProperty("--weapon-art-shift-x", `${((width / 2 - visibleCenterX) / width) * 100}%`);
+    image.style.setProperty("--weapon-art-shift-y", `${((height / 2 - visibleCenterY) / height) * 100}%`);
+  } catch {
+    // O alinhamento CSS tradicional continua sendo um fallback seguro.
+  }
+}
+
 function createWeaponCard(weapon) {
   const button = document.createElement("button");
   button.type = "button";
@@ -12839,6 +12916,7 @@ function createWeaponCard(weapon) {
   image.alt = weapon.name;
   image.loading = "eager";
   image.decoding = "async";
+  image.addEventListener("load", () => centerVisibleWeaponArtwork(image));
   image.addEventListener("error", () => {
     const fallback = fallbackWeaponImagePath(weapon);
     if (fallback && image.dataset.fallbackTried !== "true") {
@@ -13399,6 +13477,18 @@ ui.authUsername?.addEventListener("input", () => {
 ui.authPassword?.addEventListener("input", () => {
   ui.authPassword.removeAttribute("aria-invalid");
   setAuthFeedback("");
+});
+
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  deferredPwaInstallPrompt = event;
+  if (game.menuState === "main") showMainMenu();
+});
+
+window.addEventListener("appinstalled", () => {
+  deferredPwaInstallPrompt = null;
+  document.body?.classList.add("is-standalone");
+  if (game.menuState === "main") showMainMenu();
 });
 
 buildShop();

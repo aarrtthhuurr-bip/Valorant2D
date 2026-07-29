@@ -4,16 +4,26 @@
   "short_name": "Valorant2D",
   "description": "Jogo de tiro tático 2D para navegador.",
   "lang": "pt-BR",
+  "dir": "ltr",
   "start_url": "./",
   "scope": "./",
+  "categories": [
+    "games",
+    "entertainment"
+  ],
   "display": "fullscreen",
   "display_override": [
     "fullscreen",
-    "standalone"
+    "standalone",
+    "minimal-ui"
   ],
   "orientation": "landscape",
   "background_color": "#05080d",
   "theme_color": "#05080d",
+  "prefer_related_applications": false,
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
   "icons": [
     {
       "src": "./assets/Favicon/android-chrome-192x192.png",
@@ -25,7 +35,13 @@
       "src": "./assets/Favicon/android-chrome-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "./assets/Favicon/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

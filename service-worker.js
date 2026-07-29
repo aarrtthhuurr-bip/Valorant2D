@@ -1,10 +1,10 @@
-const CACHE_VERSION = "valorant2d-shell-20260729-ingame-remaster-compact";
+const CACHE_VERSION = "valorant2d-shell-20260729-mobile-pwa-remaster";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
-  "./styles.css?v=20260729-ingame-remaster-compact",
-  "./game.js?v=20260729-ingame-remaster-compact",
+  "./styles.css?v=20260729-mobile-pwa-remaster",
+  "./game.js?v=20260729-mobile-pwa-remaster",
   "./assets/Favicon/android-chrome-192x192.png",
   "./assets/Favicon/android-chrome-512x512.png",
 ];
@@ -19,14 +19,21 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys()
-      .then((keys) => Promise.all(
-        keys
-          .filter((key) => key.startsWith("valorant2d-shell-") && key !== CACHE_VERSION)
-          .map((key) => caches.delete(key)),
-      ))
+    Promise.all([
+      self.registration.navigationPreload?.enable?.(),
+      caches.keys()
+        .then((keys) => Promise.all(
+          keys
+            .filter((key) => key.startsWith("valorant2d-shell-") && key !== CACHE_VERSION)
+            .map((key) => caches.delete(key)),
+        )),
+    ])
       .then(() => self.clients.claim()),
   );
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("fetch", (event) => {
@@ -38,7 +45,8 @@ self.addEventListener("fetch", (event) => {
 
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request)
+      event.preloadResponse
+        .then((preloaded) => preloaded || fetch(request))
         .then((response) => {
           const copy = response.clone();
           caches.open(CACHE_VERSION).then((cache) => cache.put("./index.html", copy));
