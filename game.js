@@ -11900,7 +11900,7 @@ function showModeSelect(immediate = false) {
     }, 220);
     return;
   }
-  setMenu("ESCOLHA O MODO", "", [], "JOGAR", "mode-select");
+  setMenu("ENTRE EM CAMPO", "", [], "MODOS DE JOGO", "mode-select");
   renderModeSelect();
 }
 
@@ -11908,23 +11908,44 @@ function renderModeSelect() {
   if (!ui.menuButtons) return;
   ui.menuButtons.className = "mode-select-shell";
   ui.menuButtons.innerHTML = `
-    <div class="mode-select-grid"></div>
+    <section class="mode-select-section mode-select-primary">
+      <header class="mode-select-section-head"><span>EXPERIÊNCIAS PRINCIPAIS</span><small>PROGRESSO, CORE E RANKING GLOBAL</small></header>
+      <div class="mode-primary-grid"></div>
+    </section>
+    <section class="mode-select-section mode-select-secondary">
+      <header class="mode-select-section-head"><span>ÁREA DE PREPARAÇÃO</span><small>SEM IMPACTO NO RANKING</small></header>
+      <div class="mode-secondary-grid"></div>
+    </section>
     <footer class="mode-select-footer">
       <button type="button" class="mode-select-back" aria-label="Voltar ao menu principal">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 7-5 5 5 5"></path></svg>
         <span>VOLTAR</span>
       </button>
     </footer>`;
-  const grid = ui.menuButtons.querySelector(".mode-select-grid");
+  const primaryGrid = ui.menuButtons.querySelector(".mode-primary-grid");
+  const secondaryGrid = ui.menuButtons.querySelector(".mode-secondary-grid");
+  let lastMode = "";
+  try { lastMode = localStorage.getItem("valorant2d-last-mode") || ""; } catch {}
   PLAY_MODE_OPTIONS.forEach((option, index) => {
+    const primary = ["default", "blackout", "outbreak"].includes(option.id);
+    const isRecent = option.id === lastMode;
     const card = document.createElement("article");
-    card.className = `mode-card mode-card-${option.id}`;
+    card.className = `mode-card mode-card-${option.id} mode-card-${primary ? "primary" : "secondary"}${isRecent ? " is-recent" : ""}`;
+    card.dataset.mode = option.id;
     card.innerHTML = `
       <button type="button" class="mode-card-select" aria-label="Jogar ${option.name}">
-        <span class="mode-card-index" aria-hidden="true">0${index + 1}</span>
-        <span class="mode-card-icon" aria-hidden="true">${playModeIconSvg(option.id)}</span>
-        <span class="mode-card-copy"><small>${option.tag}</small><strong>${option.name}</strong><em>${option.description}</em></span>
-        <span class="mode-card-arrow" aria-hidden="true">›</span>
+        <span class="mode-card-visual" aria-hidden="true">
+          <span class="mode-card-index">0${index + 1}</span>
+          <span class="mode-card-icon">${playModeIconSvg(option.id)}</span>
+          <span class="mode-card-scan"></span>
+        </span>
+        <span class="mode-card-copy">
+          <small>${option.tag}</small>
+          <strong>${option.name}</strong>
+          <em>${option.description}</em>
+          ${primary ? '<span class="mode-card-action">SELECIONAR</span>' : ""}
+        </span>
+        ${isRecent ? '<span class="mode-card-recent">ÚLTIMO JOGADO</span>' : ""}
       </button>
       <button type="button" class="mode-info-button" aria-label="Como jogar ${option.name}" title="Como jogar ${option.name}">i</button>`;
     const selectButton = card.querySelector(".mode-card-select");
@@ -11933,7 +11954,7 @@ function renderModeSelect() {
     infoButton.addEventListener("click", () => openModeInfo(option, infoButton));
     attachButtonFeedback(selectButton);
     attachButtonFeedback(infoButton);
-    grid.appendChild(card);
+    (primary ? primaryGrid : secondaryGrid).appendChild(card);
   });
   const backButton = ui.menuButtons.querySelector(".mode-select-back");
   backButton?.addEventListener("click", showMainMenu);

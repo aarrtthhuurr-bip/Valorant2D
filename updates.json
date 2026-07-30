@@ -27,6 +27,11 @@
       "type": "interface"
     },
     {
+      "title": "Seleção de modos remasterizada",
+      "description": "Default, Blackout e Outbreak agora ocupam cards principais; Sandbox e Treino ficam na área de preparação.",
+      "type": "interface"
+    },
+    {
       "title": "Atualização automática do PWA",
       "description": "O jogo detecta uma publicação nova, renova o Service Worker e recarrega os arquivos sem limpeza manual.",
       "type": "system"
