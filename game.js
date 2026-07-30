@@ -2052,7 +2052,7 @@ const BLACK_MARKET_GADGETS = Object.freeze([
     id: "pulseBomb",
     name: "Bomba de Pulso",
     price: 45,
-    description: "Libera uma onda de repulsão que afasta a horda e causa dano em área.",
+    description: "Detona um núcleo de 340px: elimina ameaças próximas e perde dano gradualmente até a borda.",
     chargesPerWave: 2,
     cooldown: 15,
     preview: "./assets/black-market/pulse_bomb.gif",
@@ -2062,7 +2062,7 @@ const BLACK_MARKET_GADGETS = Object.freeze([
     id: "decoyTurret",
     name: "Torreta Chamariz",
     price: 120,
-    description: "Projeta uma sentinela que distrai e atrai a horda durante 8 segundos.",
+    description: "Projeta por 16s uma sentinela ofensiva que atrai a horda e dispara rajadas perfurantes.",
     chargesPerWave: 1,
     cooldown: 25,
     preview: "./assets/black-market/turret.gif",
@@ -2072,7 +2072,7 @@ const BLACK_MARKET_GADGETS = Object.freeze([
     id: "cryoMine",
     name: "Mina Cryo",
     price: 80,
-    description: "Congela os zumbis próximos durante 3 segundos.",
+    description: "Congela completamente e danifica os zumbis em uma área de 400px durante 6 segundos.",
     chargesPerWave: 2,
     cooldown: 18,
     preview: "./assets/black-market/cryo_mine.gif",
@@ -2082,7 +2082,7 @@ const BLACK_MARKET_GADGETS = Object.freeze([
     id: "adrenaline",
     name: "Injeção de Adrenalina",
     price: 95,
-    description: "Concede invulnerabilidade e velocidade por 3 segundos; também dispara automaticamente ao chegar a 0 HP.",
+    description: "Concede invulnerabilidade e velocidade extrema por 6 segundos; também dispara ao chegar a 0 HP.",
     chargesPerWave: 1,
     cooldown: 30,
     preview: "./assets/black-market/adrenalina.gif",
@@ -2102,7 +2102,7 @@ const BLACK_MARKET_GADGETS = Object.freeze([
     id: "cloakingDevice",
     name: "Dispositivo de Camuflagem",
     price: 150,
-    description: "Oculta o jogador da percepção dos bots durante 5 segundos.",
+    description: "Rompe a percepção dos bots e oculta o jogador durante 10 segundos.",
     chargesPerWave: 1,
     cooldown: 22,
     preview: "./assets/black-market/cloaking.gif",
@@ -2258,7 +2258,7 @@ function closeBlackMarket() {
 }
 
 function activateOutbreakAdrenaline(player, { emergency = false } = {}) {
-  const durationMs = 3000;
+  const durationMs = 6000;
   const now = performance.now();
   game.outbreakEffects.adrenalineInvulnerableUntil = Math.max(
     game.outbreakEffects.adrenalineInvulnerableUntil || 0,
@@ -2271,6 +2271,57 @@ function activateOutbreakAdrenaline(player, { emergency = false } = {}) {
   }
   synchronizePlayerEquipment();
   spawnParticles(player.x, player.y, "#d946ef", emergency ? 52 : 34, 230);
+  game.ultimateEffects.push({
+    type: "bm-adrenaline",
+    x: player.x,
+    y: player.y,
+    entityId: player.id,
+    radius: 24,
+    life: 6,
+    maxLife: 6,
+    color: "#ff2fcf",
+  });
+}
+
+/**
+ * A Bomba de Pulso usa uma curva quadrática: o núcleo é capaz de eliminar
+ * ameaças resistentes, enquanto a borda ainda causa dano útil e repulsão.
+ */
+function detonateOutbreakPulseBomb(player) {
+  const radius = 340;
+  const coreDamage = 640;
+  const edgeDamage = 115;
+  game.explosions.push({ x: player.x, y: player.y, r: 0, maxR: radius, life: 0.72, maxLife: 0.72, color: "#d946ef" });
+  game.explosions.push({ x: player.x, y: player.y, r: 0, maxR: 170, life: 0.38, maxLife: 0.38, color: "#f5d0fe" });
+  game.ultimateEffects.push({
+    type: "bm-pulse",
+    x: player.x,
+    y: player.y,
+    radius: 16,
+    maxRadius: radius,
+    life: 0.9,
+    maxLife: 0.9,
+    color: "#d946ef",
+  });
+  addPaintDecal(player.x, player.y, "#7e22ce", 138, 5);
+  spawnParticles(player.x, player.y, "#f0abfc", 96, 430);
+  game.shake = Math.max(game.shake, 0.92);
+
+  for (const bot of game.bots) {
+    if (!bot.alive) continue;
+    const distance = Math.hypot(bot.x - player.x, bot.y - player.y);
+    if (distance > radius + bot.r) continue;
+    const normalizedDistance = Math.min(1, distance / radius);
+    const damage = edgeDamage + (coreDamage - edgeDamage) * ((1 - normalizedDistance) ** 2);
+    const actualDamage = applyDamage(bot, damage);
+    game.stats.damage += Math.round(actualDamage);
+    spawnDamageNumber(bot, actualDamage, normalizedDistance <= 0.2);
+    bot.detainedTimer = Math.max(bot.detainedTimer || 0, 2.2 - normalizedDistance);
+    const angle = Math.atan2(bot.y - player.y, bot.x - player.x);
+    const knockback = 185 * (1 - normalizedDistance * 0.45);
+    safeDisplaceEntity(bot, Math.cos(angle) * knockback, Math.sin(angle) * knockback, 12);
+    if (bot.hp <= 0) eliminateBot(bot, { playerCredit: true, weaponName: "Bomba de Pulso" });
+  }
 }
 
 function triggerEmergencyOutbreakAdrenaline(player) {
@@ -2305,19 +2356,7 @@ function useOutbreakGadget() {
 
   const player = game.player;
   if (definition.id === "pulseBomb") {
-    explodeArea(player.x, player.y, 245, 76, "#c084fc", {
-      weaponName: "Bomba de Pulso",
-      particles: 42,
-      power: 275,
-      shake: 0.48,
-    });
-    for (const bot of game.bots) {
-      const distance = Math.hypot(bot.x - player.x, bot.y - player.y);
-      if (!bot.alive || distance > 270) continue;
-      bot.detainedTimer = Math.max(bot.detainedTimer || 0, 1.5);
-      const angle = Math.atan2(bot.y - player.y, bot.x - player.x);
-      safeDisplaceEntity(bot, Math.cos(angle) * 115, Math.sin(angle) * 115, 10);
-    }
+    detonateOutbreakPulseBomb(player);
   } else if (definition.id === "decoyTurret") {
     const point = nearestWalkablePoint({
       x: player.x + Math.cos(player.angle) * 48,
@@ -2328,16 +2367,33 @@ function useOutbreakGadget() {
       x: point.x, y: point.y, r: 14, angle: player.angle,
       ownerTeam: "player", ownerId: "black-market-decoy",
       fireTimer: 0.1, burst: 0, burstTimer: 0,
-      life: 8, maxLife: 8, targetId: null,
+      life: 16, maxLife: 16, targetId: null,
+      range: 520, damage: 28, burstSize: 5, burstDelay: 0.075,
+      fireDelay: 0.62, blackMarket: true,
     });
-    spawnParticles(point.x, point.y, "#c084fc", 24, 135);
+    game.ultimateEffects.push({
+      type: "bm-turret-deploy", x: point.x, y: point.y,
+      radius: 12, maxRadius: 86, life: 0.8, maxLife: 0.8, color: "#ff3bd4",
+    });
+    spawnParticles(point.x, point.y, "#c084fc", 48, 220);
   } else if (definition.id === "cryoMine") {
     const now = performance.now();
     for (const bot of game.bots) {
-      if (bot.alive && Math.hypot(bot.x - player.x, bot.y - player.y) <= 330) bot.outbreakCryoUntil = now + 3000;
+      if (!bot.alive || Math.hypot(bot.x - player.x, bot.y - player.y) > 400) continue;
+      bot.outbreakCryoUntil = now + 6000;
+      bot.detainedTimer = Math.max(bot.detainedTimer || 0, 6);
+      const actualDamage = applyDamage(bot, 85);
+      game.stats.damage += Math.round(actualDamage);
+      spawnDamageNumber(bot, actualDamage, false);
+      if (bot.hp <= 0) eliminateBot(bot, { playerCredit: true, weaponName: "Mina Cryo" });
     }
-    game.explosions.push({ x: player.x, y: player.y, r: 0, maxR: 330, life: 0.7, maxLife: 0.7, color: "#9f7aea" });
-    spawnParticles(player.x, player.y, "#d8b4fe", 52, 190);
+    game.explosions.push({ x: player.x, y: player.y, r: 0, maxR: 400, life: 0.9, maxLife: 0.9, color: "#67e8f9" });
+    game.ultimateEffects.push({
+      type: "bm-cryo", x: player.x, y: player.y,
+      radius: 10, maxRadius: 400, life: 1.15, maxLife: 1.15, color: "#67e8f9",
+    });
+    spawnParticles(player.x, player.y, "#cffafe", 88, 310);
+    game.shake = Math.max(game.shake, 0.48);
   } else if (definition.id === "adrenaline") {
     activateOutbreakAdrenaline(player);
   } else if (definition.id === "supplyDrop") {
@@ -2346,10 +2402,18 @@ function useOutbreakGadget() {
     game.armor = player.armor;
     game.reloadTimer = 0;
     player.ammo = currentMagSize();
-    spawnParticles(player.x, player.y, "#c084fc", 42, 180);
+    game.ultimateEffects.push({
+      type: "bm-supply", x: player.x, y: player.y,
+      radius: 18, maxRadius: 150, life: 1.4, maxLife: 1.4, color: "#5eead4",
+    });
+    spawnParticles(player.x, player.y, "#5eead4", 72, 250);
   } else if (definition.id === "cloakingDevice") {
-    game.outbreakEffects.cloakUntil = Math.max(game.outbreakEffects.cloakUntil || 0, performance.now() + 5000);
-    spawnParticles(player.x, player.y, "#b794f4", 38, 160);
+    game.outbreakEffects.cloakUntil = Math.max(game.outbreakEffects.cloakUntil || 0, performance.now() + 10000);
+    game.ultimateEffects.push({
+      type: "bm-cloak", x: player.x, y: player.y, entityId: player.id,
+      radius: 28, life: 10, maxLife: 10, color: "#8b5cf6",
+    });
+    spawnParticles(player.x, player.y, "#b794f4", 64, 230);
   }
 
   game.outbreakGadget.charges -= 1;
@@ -7554,7 +7618,9 @@ function updateBots(dt) {
       updateBotAwareness(bot, target, outbreakBotDt);
       // Outbreak não compartilha a árvore tática dos demais modos: nenhuma
       // condição de HP aciona recuo, strafe defensivo ou procura por cobertura.
-      if (target && bot.canShoot) botShootAt(bot, target, outbreakBotDt, "bot", 1);
+      if (target && bot.canShoot && (bot.detainedTimer || 0) <= 0) {
+        botShootAt(bot, target, outbreakBotDt, "bot", 1);
+      }
       const distance = Math.hypot(pursuitTarget.x - bot.x, pursuitTarget.y - bot.y);
       const cryoMultiplier = now < (bot.outbreakCryoUntil || 0) ? 0.34 : 1;
       if (distance > 86) moveBotToward(bot, pursuitTarget, outbreakBotDt, cryoMultiplier);
@@ -8023,10 +8089,11 @@ function updateAgentObjects(dt) {
 
   for (const turret of game.turrets) {
     turret.life -= dt;
+    const range = turret.range || 360;
     const targets = game.bots
-      .filter((bot) => bot.alive && !bot.isDead && hasLineOfSight(turret, bot) && Math.hypot(bot.x - turret.x, bot.y - turret.y) <= 360)
+      .filter((bot) => bot.alive && !bot.isDead && hasLineOfSight(turret, bot) && Math.hypot(bot.x - turret.x, bot.y - turret.y) <= range)
       .sort((a, b) => Math.hypot(a.x - turret.x, a.y - turret.y) - Math.hypot(b.x - turret.x, b.y - turret.y));
-    const target = targets.find((bot) => {
+    const target = turret.blackMarket ? (targets[0] || null) : targets.find((bot) => {
       const angle = Math.atan2(bot.y - turret.y, bot.x - turret.x);
       const delta = Math.atan2(Math.sin(angle - turret.angle), Math.cos(angle - turret.angle));
       return Math.abs(delta) <= Math.PI / 2;
@@ -8042,18 +8109,23 @@ function updateAgentObjects(dt) {
     turret.fireTimer -= dt;
     turret.burstTimer -= dt;
     if (turret.fireTimer <= 0 && turret.burst <= 0) {
-      turret.burst = 3;
+      turret.burst = turret.burstSize || 3;
       turret.burstTimer = 0;
-      turret.fireTimer = 1.15;
+      turret.fireTimer = turret.fireDelay || 1.15;
     }
     if (turret.burst > 0 && turret.burstTimer <= 0) {
       turret.burst -= 1;
-      turret.burstTimer = 0.11;
-      const damage = applyDamage(target, 9);
+      turret.burstTimer = turret.burstDelay || 0.11;
+      const damage = applyDamage(target, turret.damage || 9);
       game.stats.damage += Math.round(damage);
       spawnDamageNumber(target, damage, false);
-      game.neonTrails.push({ x1: turret.x, y1: turret.y, x2: target.x, y2: target.y, life: 0.18, maxLife: 0.18, color: "#ffd166" });
-      spawnParticles(target.x, target.y, "#ffd166", 4, 80);
+      const tracerColor = turret.blackMarket ? "#ff3bd4" : "#ffd166";
+      game.neonTrails.push({ x1: turret.x, y1: turret.y, x2: target.x, y2: target.y, life: 0.2, maxLife: 0.2, color: tracerColor });
+      spawnParticles(target.x, target.y, tracerColor, turret.blackMarket ? 8 : 4, turret.blackMarket ? 130 : 80);
+      if (turret.blackMarket) {
+        spawnParticles(turret.x + Math.cos(turret.angle) * 24, turret.y + Math.sin(turret.angle) * 24, "#f5d0fe", 5, 100);
+        game.shake = Math.max(game.shake, 0.055);
+      }
       if (target.hp <= 0) {
         eliminateBot(target, { playerCredit: true, weaponName: "Torreta" });
         turret.targetId = null;
@@ -9437,7 +9509,92 @@ function drawUltimateEffects() {
     ctx.strokeStyle = effect.color;
     ctx.shadowColor = effect.color;
     ctx.shadowBlur = 28;
-    if (effect.type === "neon-overload") {
+    const effectProgress = 1 - alpha;
+    if (effect.type === "bm-pulse") {
+      const radius = 24 + effectProgress * (effect.maxRadius || 340);
+      ctx.lineWidth = 8 * alpha + 2;
+      for (let ring = 0; ring < 3; ring += 1) {
+        ctx.globalAlpha = Math.max(0, alpha * (1 - ring * 0.22));
+        ctx.beginPath();
+        ctx.arc(effect.x, effect.y, Math.max(8, radius - ring * 28), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = alpha;
+      ctx.lineWidth = 3;
+      for (let ray = 0; ray < 18; ray += 1) {
+        const angle = ray * Math.PI / 9 + effectProgress * 0.45;
+        const inner = radius * 0.32;
+        ctx.beginPath();
+        ctx.moveTo(effect.x + Math.cos(angle) * inner, effect.y + Math.sin(angle) * inner);
+        ctx.lineTo(effect.x + Math.cos(angle) * radius, effect.y + Math.sin(angle) * radius);
+        ctx.stroke();
+      }
+    } else if (effect.type === "bm-cryo") {
+      const radius = 18 + effectProgress * (effect.maxRadius || 400);
+      ctx.strokeStyle = "#a5f3fc";
+      ctx.fillStyle = `rgba(34, 211, 238, ${alpha * 0.12})`;
+      ctx.lineWidth = 5 * alpha + 1;
+      ctx.beginPath();
+      ctx.arc(effect.x, effect.y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      for (let shard = 0; shard < 24; shard += 1) {
+        const angle = shard * Math.PI / 12 + (shard % 2) * 0.08;
+        const inner = radius * (0.52 + (shard % 3) * 0.08);
+        const outer = radius * (0.9 + (shard % 2) * 0.1);
+        ctx.beginPath();
+        ctx.moveTo(effect.x + Math.cos(angle) * inner, effect.y + Math.sin(angle) * inner);
+        ctx.lineTo(effect.x + Math.cos(angle) * outer, effect.y + Math.sin(angle) * outer);
+        ctx.stroke();
+      }
+    } else if (effect.type === "bm-supply") {
+      const radius = 22 + Math.sin(effectProgress * Math.PI) * 105;
+      ctx.strokeStyle = "#5eead4";
+      ctx.fillStyle = `rgba(45, 212, 191, ${alpha * 0.13})`;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(effect.x, effect.y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.globalAlpha = alpha * 0.9;
+      ctx.fillStyle = "#ccfbf1";
+      ctx.fillRect(effect.x - 6, effect.y - radius, 12, radius * 2);
+      ctx.fillRect(effect.x - radius, effect.y - 6, radius * 2, 12);
+    } else if (effect.type === "bm-turret-deploy") {
+      const radius = 12 + effectProgress * (effect.maxRadius || 86);
+      ctx.strokeStyle = "#ff3bd4";
+      ctx.lineWidth = 4 * alpha + 1;
+      ctx.setLineDash([9, 7]);
+      ctx.lineDashOffset = -performance.now() / 24;
+      ctx.beginPath();
+      ctx.arc(effect.x, effect.y, radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.arc(effect.x, effect.y, radius * 0.62, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (effect.type === "bm-adrenaline") {
+      const pulse = 1 + Math.sin(performance.now() / 58) * 0.14;
+      ctx.strokeStyle = "#ff2fcf";
+      ctx.lineWidth = 3;
+      for (let arc = 0; arc < 5; arc += 1) {
+        const angle = performance.now() / 120 + arc * Math.PI * 0.4;
+        ctx.beginPath();
+        ctx.arc(effect.x, effect.y, (31 + arc * 6) * pulse, angle, angle + 0.72);
+        ctx.stroke();
+      }
+    } else if (effect.type === "bm-cloak") {
+      ctx.strokeStyle = `rgba(196, 181, 253, ${0.35 + alpha * 0.5})`;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([3, 9]);
+      ctx.lineDashOffset = -performance.now() / 18;
+      for (let ring = 0; ring < 3; ring += 1) {
+        ctx.beginPath();
+        ctx.ellipse(effect.x, effect.y, 29 + ring * 8, 21 + ring * 5, performance.now() / 900, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+    } else if (effect.type === "neon-overload") {
       const pulse = .82 + Math.sin(performance.now() / 72) * .18;
       ctx.lineWidth = 3;
       for (let arc = 0; arc < 4; arc += 1) {
@@ -9553,25 +9710,50 @@ function drawAgentObjects() {
     if (!estaNoCampoDeVisao(turret, turret.r || 28)) continue;
     ctx.save();
     ctx.translate(turret.x, turret.y);
+    if (turret.blackMarket) {
+      const lifeRatio = Math.max(0, turret.life / turret.maxLife);
+      const scan = 1 + Math.sin(performance.now() / 90) * 0.07;
+      ctx.strokeStyle = "rgba(255, 59, 212, 0.42)";
+      ctx.fillStyle = "rgba(168, 85, 247, 0.08)";
+      ctx.shadowColor = "#ff3bd4";
+      ctx.shadowBlur = 20;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([8, 10]);
+      ctx.lineDashOffset = -performance.now() / 32;
+      ctx.beginPath();
+      ctx.arc(0, 0, 48 * scan, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.strokeStyle = "#ff3bd4";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(0, 0, 33, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * lifeRatio);
+      ctx.stroke();
+    }
     ctx.rotate(turret.angle);
-    ctx.fillStyle = "rgba(255, 209, 102, 0.12)";
+    ctx.fillStyle = turret.blackMarket ? "rgba(255, 59, 212, 0.1)" : "rgba(255, 209, 102, 0.12)";
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.arc(0, 0, 118, -Math.PI / 2, Math.PI / 2);
+    ctx.arc(0, 0, turret.blackMarket ? 150 : 118, -Math.PI / 2, Math.PI / 2);
     ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = "rgba(255, 70, 85, 0.45)";
+    ctx.strokeStyle = turret.blackMarket ? "rgba(255, 59, 212, 0.62)" : "rgba(255, 70, 85, 0.45)";
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.lineTo(118, 0);
+    ctx.lineTo(turret.blackMarket ? 150 : 118, 0);
     ctx.stroke();
-    ctx.fillStyle = "#1f2a34";
-    ctx.fillRect(-11, -9, 22, 18);
-    ctx.fillStyle = "#ffd166";
-    ctx.fillRect(4, -4, 18, 8);
-    ctx.strokeStyle = "#ffd166";
-    ctx.strokeRect(-11, -9, 22, 18);
+    ctx.fillStyle = turret.blackMarket ? "#17091d" : "#1f2a34";
+    ctx.fillRect(-13, -11, 26, 22);
+    ctx.fillStyle = turret.blackMarket ? "#ff3bd4" : "#ffd166";
+    ctx.fillRect(3, -5, turret.blackMarket ? 25 : 19, 10);
+    ctx.strokeStyle = turret.blackMarket ? "#f5d0fe" : "#ffd166";
+    ctx.strokeRect(-13, -11, 26, 22);
+    if (turret.blackMarket) {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(18, -2, 10, 4);
+    }
     ctx.restore();
   }
 
@@ -9839,6 +10021,88 @@ function drawAirdropModifierEffects() {
   const time = now / 1000;
   drawOutbreakModifierBursts(now);
   ctx.save();
+
+  // A Cryo precisa ser imediatamente legível: cada alvo congelado recebe uma
+  // cápsula facetada, flocos orbitais e um arco que indica a duração restante.
+  for (const bot of game.bots) {
+    if (!bot.alive || now >= (bot.outbreakCryoUntil || 0) || isOutsideViewport(bot, 56)) continue;
+    const remaining = Math.max(0, Math.min(1, (bot.outbreakCryoUntil - now) / 6000));
+    const pulse = 1 + Math.sin(time * 9 + (bot.patrol || 0)) * 0.05;
+    ctx.save();
+    ctx.translate(bot.x, bot.y);
+    ctx.strokeStyle = "#a5f3fc";
+    ctx.fillStyle = `rgba(34, 211, 238, ${0.12 + remaining * 0.12})`;
+    ctx.shadowColor = "#22d3ee";
+    ctx.shadowBlur = 18;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let side = 0; side < 6; side += 1) {
+      const angle = -Math.PI / 2 + side * Math.PI / 3;
+      const x = Math.cos(angle) * 28 * pulse;
+      const y = Math.sin(angle) * 34 * pulse;
+      if (side === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(0, 0, 38, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * remaining);
+    ctx.stroke();
+    for (let flake = 0; flake < 5; flake += 1) {
+      const angle = time * 1.8 + flake * Math.PI * 0.4;
+      ctx.fillStyle = "#ecfeff";
+      ctx.fillRect(Math.cos(angle) * 35 - 1.5, Math.sin(angle) * 27 - 1.5, 3, 3);
+    }
+    ctx.restore();
+  }
+
+  if (now < (game.outbreakEffects.adrenalineInvulnerableUntil || 0)) {
+    const intensity = 0.12 + (Math.sin(time * 15) + 1) * 0.035;
+    const surge = ctx.createRadialGradient(player.x, player.y, 60, player.x, player.y, Math.max(canvas.width, canvas.height) * 0.72);
+    surge.addColorStop(0, "rgba(255, 47, 207, 0)");
+    surge.addColorStop(0.58, `rgba(217, 70, 239, ${intensity * 0.18})`);
+    surge.addColorStop(1, `rgba(93, 0, 80, ${intensity})`);
+    ctx.fillStyle = surge;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = "#ff5cda";
+    ctx.shadowColor = "#ff2fcf";
+    ctx.shadowBlur = 20;
+    ctx.lineWidth = 3;
+    for (let spark = 0; spark < 8; spark += 1) {
+      const angle = time * 4.5 + spark * Math.PI / 4;
+      const inner = 28 + (spark % 2) * 6;
+      ctx.beginPath();
+      ctx.moveTo(player.x + Math.cos(angle) * inner, player.y + Math.sin(angle) * inner);
+      ctx.lineTo(player.x + Math.cos(angle + 0.11) * (inner + 18), player.y + Math.sin(angle + 0.11) * (inner + 18));
+      ctx.lineTo(player.x + Math.cos(angle - 0.08) * (inner + 32), player.y + Math.sin(angle - 0.08) * (inner + 32));
+      ctx.stroke();
+    }
+  }
+
+  if (now < (game.outbreakEffects.cloakUntil || 0)) {
+    const shimmer = (Math.sin(time * 11) + 1) * 0.5;
+    ctx.strokeStyle = `rgba(196, 181, 253, ${0.36 + shimmer * 0.22})`;
+    ctx.shadowColor = "#8b5cf6";
+    ctx.shadowBlur = 17;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 8]);
+    ctx.lineDashOffset = -time * 32;
+    for (let echo = 0; echo < 4; echo += 1) {
+      ctx.globalAlpha = 0.65 - echo * 0.12;
+      ctx.beginPath();
+      ctx.ellipse(player.x + (echo - 1.5) * 5, player.y, 27 + echo * 7, 20 + echo * 5, time * 0.24, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 0.13;
+    ctx.fillStyle = "#a78bfa";
+    for (let line = 0; line < canvas.height; line += 7) {
+      const offset = Math.sin(time * 8 + line * 0.05) * 9;
+      ctx.fillRect(offset, line, canvas.width, 1);
+    }
+    ctx.globalAlpha = 1;
+  }
 
   if (now < game.outbreakEffects.pulseShieldUntil) {
     const pulse = 1 + Math.sin(time * 7) * 0.06;

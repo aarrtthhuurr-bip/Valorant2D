@@ -3460,15 +3460,36 @@ button.click-feedback::after {
 .black-market-overlay {
   z-index: 79;
   background:
-    radial-gradient(circle at 76% 16%, rgba(168, 85, 247, .14), transparent 34%),
-    rgba(4, 2, 9, .94);
+    linear-gradient(rgba(192, 132, 252, .018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(192, 132, 252, .018) 1px, transparent 1px),
+    radial-gradient(circle at 76% 16%, rgba(110, 28, 170, .12), transparent 30%),
+    radial-gradient(circle at 18% 82%, rgba(76, 12, 112, .09), transparent 32%),
+    rgba(1, 0, 4, .975);
+  background-size: 32px 32px, 32px 32px, auto, auto, auto;
 }
 .black-market-shell {
-  border-color: rgba(168, 85, 247, .42);
-  background: linear-gradient(145deg, rgba(22, 12, 31, .99), rgba(7, 5, 13, .99));
-  box-shadow: 0 28px 90px rgba(0, 0, 0, .68), 0 0 42px rgba(168, 85, 247, .14);
+  position: relative;
+  border-color: rgba(132, 54, 190, .38);
+  background:
+    linear-gradient(115deg, transparent 49.7%, rgba(192, 132, 252, .025) 50%, transparent 50.3%),
+    linear-gradient(145deg, rgba(10, 5, 15, .995), rgba(2, 1, 5, .995));
+  box-shadow: 0 35px 110px rgba(0, 0, 0, .88), 0 0 55px rgba(88, 20, 130, .1), inset 0 0 80px rgba(0, 0, 0, .42);
 }
-.black-market-header { border-bottom-color: rgba(192, 132, 252, .2); }
+.black-market-shell::after {
+  content: "";
+  position: absolute;
+  z-index: 8;
+  inset: 0;
+  pointer-events: none;
+  border: 1px solid rgba(229, 190, 255, .035);
+  background: repeating-linear-gradient(0deg, transparent 0 3px, rgba(255, 255, 255, .009) 3px 4px);
+  mix-blend-mode: screen;
+}
+.black-market-shell > * { position: relative; z-index: 9; }
+.black-market-header {
+  border-bottom-color: rgba(154, 74, 214, .17);
+  background: linear-gradient(90deg, rgba(18, 7, 25, .98), rgba(4, 2, 7, .98));
+}
 .black-market-header > div:first-child span { color: #c084fc; }
 #blackMarketCloseButton {
   width: 42px;
@@ -3487,7 +3508,7 @@ button.click-feedback::after {
   gap: 18px;
   padding: 11px 22px;
   border-bottom: 1px solid rgba(192, 132, 252, .13);
-  background: rgba(168, 85, 247, .045);
+  background: rgba(68, 20, 91, .055);
 }
 .black-market-status span { color: #c084fc; font-size: 9px; font-weight: 900; letter-spacing: .16em; }
 .black-market-status p { margin: 0; color: #9886a5; font-size: 10px; }
@@ -3500,20 +3521,23 @@ button.click-feedback::after {
   min-height: 340px;
   padding: 13px;
   overflow: hidden;
-  border: 1px solid rgba(192, 132, 252, .2);
+  border: 1px solid rgba(154, 98, 190, .16);
   border-radius: 8px;
-  background: linear-gradient(150deg, rgba(35, 20, 47, .86), rgba(10, 7, 16, .94));
+  background: linear-gradient(150deg, rgba(17, 9, 23, .94), rgba(3, 2, 6, .985));
+  box-shadow: inset 0 0 30px rgba(0, 0, 0, .42);
 }
 .black-market-card::before {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(125deg, transparent 30%, rgba(192, 132, 252, .055), transparent 68%);
+  background:
+    linear-gradient(125deg, transparent 30%, rgba(192, 132, 252, .035), transparent 68%),
+    repeating-linear-gradient(0deg, transparent 0 5px, rgba(255, 255, 255, .008) 5px 6px);
 }
 .black-market-card.is-equipped {
   border-color: #a855f7;
-  box-shadow: inset 0 0 24px rgba(168, 85, 247, .1), 0 0 20px rgba(168, 85, 247, .14);
+  box-shadow: inset 0 0 30px rgba(126, 34, 206, .09), 0 0 22px rgba(88, 20, 130, .16);
 }
 .black-market-preview {
   position: relative;
@@ -3525,7 +3549,7 @@ button.click-feedback::after {
   background:
     linear-gradient(rgba(192, 132, 252, .045) 1px, transparent 1px),
     linear-gradient(90deg, rgba(192, 132, 252, .045) 1px, transparent 1px),
-    #0d0913;
+    #050208;
   background-size: 12px 12px;
 }
 .black-market-preview img { position: relative; z-index: 2; width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
