@@ -4781,22 +4781,11 @@ function updateOutbreak(dt) {
       ui.outbreakShopWaveText.textContent = `Primeira wave em: ${Math.ceil(game.outbreakInitialBuyRemaining)}s`;
     }
     if (ui.outbreakShopContinue) {
-      ui.outbreakShopContinue.disabled = true;
-      ui.outbreakShopContinue.textContent = `${Math.ceil(game.outbreakInitialBuyRemaining)}S`;
+      ui.outbreakShopContinue.disabled = false;
+      ui.outbreakShopContinue.textContent = `PULAR · ${Math.ceil(game.outbreakInitialBuyRemaining)}S`;
     }
     if (game.outbreakInitialBuyRemaining === 0) {
-      game.outbreakInitialBuy = false;
-      game.outbreakShopPending = false;
-      ui.outbreakShopFooter?.classList.add("hidden");
-      if (ui.outbreakShopContinue) {
-        ui.outbreakShopContinue.disabled = false;
-        ui.outbreakShopContinue.textContent = "CONTINUAR";
-      }
-      closeShop({ force: true });
-      game.phase = "action";
-      game.phaseTime = 9999;
-      game.clockActive = true;
-      deployOutbreakWave(1);
+      completeOutbreakInitialBuy();
     }
     return;
   }
@@ -13116,6 +13105,11 @@ function openOutbreakShopBreak({ resumeCurrentWave = false } = {}) {
       ? `Retomar onda: ${game.outbreakWave}`
       : `Próxima onda: ${game.outbreakWave + 1}`;
   }
+  if (ui.outbreakShopContinue) {
+    ui.outbreakShopContinue.disabled = false;
+    ui.outbreakShopContinue.textContent = "CONTINUAR";
+    ui.outbreakShopContinue.title = "Continuar para a próxima wave";
+  }
   showRoundBanner(
     "REABASTECIMENTO",
     "Equipe-se antes de continuar",
@@ -13146,6 +13140,27 @@ function continueOutbreakFromShop() {
     return;
   }
   deployOutbreakWave(nextWave);
+}
+
+/**
+ * Encerra a preparação da Wave 0 pelo término do contador ou por ação do
+ * jogador. A proteção no início evita que dois eventos iniciem a wave juntos.
+ */
+function completeOutbreakInitialBuy() {
+  if (!game.outbreak || !game.outbreakInitialBuy) return;
+  game.outbreakInitialBuy = false;
+  game.outbreakInitialBuyRemaining = 0;
+  game.outbreakShopPending = false;
+  ui.outbreakShopFooter?.classList.add("hidden");
+  if (ui.outbreakShopContinue) {
+    ui.outbreakShopContinue.disabled = false;
+    ui.outbreakShopContinue.textContent = "CONTINUAR";
+  }
+  closeShop({ force: true });
+  game.phase = "action";
+  game.phaseTime = 9999;
+  game.clockActive = true;
+  deployOutbreakWave(1);
 }
 
 function startOutbreakMode() {
@@ -13207,8 +13222,9 @@ function startOutbreakMode() {
   ui.outbreakShopFooter?.classList.remove("hidden");
   if (ui.outbreakShopWaveText) ui.outbreakShopWaveText.textContent = "Primeira wave em: 30s";
   if (ui.outbreakShopContinue) {
-    ui.outbreakShopContinue.disabled = true;
-    ui.outbreakShopContinue.textContent = "30S";
+    ui.outbreakShopContinue.disabled = false;
+    ui.outbreakShopContinue.textContent = "PULAR · 30S";
+    ui.outbreakShopContinue.title = "Iniciar a primeira wave agora";
   }
   showRoundBanner("WAVE 0", "Fase de preparação inicial", "30 SEGUNDOS", 3);
   setMessage("Outbreak: prepare seu equipamento antes da primeira wave.");
@@ -14071,7 +14087,15 @@ if (ui.shopBackdrop) ui.shopBackdrop.addEventListener("click", () => {
   closeShop();
   updateUi();
 });
-if (ui.outbreakShopContinue) ui.outbreakShopContinue.addEventListener("click", continueOutbreakFromShop);
+if (ui.outbreakShopContinue) {
+  ui.outbreakShopContinue.addEventListener("click", () => {
+    if (game.outbreakInitialBuy) {
+      completeOutbreakInitialBuy();
+      return;
+    }
+    continueOutbreakFromShop();
+  });
+}
 escalarViewport();
 
 if (ui.shopTabs && typeof ui.shopTabs.querySelectorAll === "function") {
