@@ -2242,9 +2242,8 @@ function equipBlackMarketGadget(gadget) {
 
 function playBlackMarketAccessSound() {
   initAudio();
-  playTone(164, 0.045, "square", 0.06);
-  playTone(246, 0.045, "square", 0.065, 0.045);
-  playFrequencySweep(330, 880, 0.17, "square", 0.055, 0.09);
+  // Identificação discreta: um único bip grave, curto e sem cauda melódica.
+  playTone(92, 0.06, "square", 0.08 * soundMix("menu_click"));
 }
 
 function openBlackMarket() {
