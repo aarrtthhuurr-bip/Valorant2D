@@ -16,8 +16,8 @@
   <!-- Altere apenas este valor caso o endereço definitivo do Render mude. -->
   <meta name="valorant2d-api-url" content="https://valorant2d.onrender.com">
   <title>Valorant2D</title>
-  <link rel="manifest" href="./manifest.webmanifest?v=20260729-pwa-install">
-  <link id="gameStylesheet" rel="stylesheet" href="./styles.css?v=20260729-cache-recovery">
+  <link rel="manifest" href="./manifest.webmanifest?v=0.9.0-dev.1">
+  <link id="gameStylesheet" rel="stylesheet" href="./styles.css?v=0.9.0-dev.1">
   <script>
     // Recuperação autônoma para instalações PWA que conservaram um cache
     // incompleto: se CSS ou JavaScript não iniciarem, remove somente os caches
@@ -365,6 +365,13 @@
           <span class="core-icon" aria-hidden="true"><img src="./assets/images/core_v5_bright.png" alt=""></span><strong id="mainCoreBalance">0</strong><em>C</em>
         </div>
         <button type="button" class="menu-tutorial-shortcut hidden" id="menuTutorialButton" aria-label="Abrir ajuda do jogo">?</button>
+        <button type="button" class="menu-updates-shortcut hidden" id="menuUpdatesButton" aria-label="Ver novidades da versão" title="Novidades">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 13V9l11-4v12L5 13Z"></path>
+            <path d="M8 14v5h3l1-4M18 8v6"></path>
+          </svg>
+          <span class="menu-updates-badge hidden" id="menuUpdatesBadge">NOVO</span>
+        </button>
         <div class="menu-card glass">
           <div class="account-summary hidden" id="accountSummary">
             <button type="button" class="account-profile-trigger" id="profileButton" aria-label="Abrir perfil do jogador">
@@ -610,6 +617,25 @@
         </div>
       </section>
 
+      <section class="updates-overlay hidden" id="updatesOverlay" aria-hidden="true" aria-labelledby="updatesTitle">
+        <div class="updates-modal" role="dialog" aria-modal="true">
+          <header class="updates-header">
+            <div>
+              <span id="updatesKicker">ATUALIZAÇÃO</span>
+              <h2 id="updatesTitle">O QUE HÁ DE NOVO</h2>
+            </div>
+            <span class="updates-version" id="updatesVersion">v0.0.0</span>
+          </header>
+          <div class="updates-content">
+            <p class="updates-summary" id="updatesSummary"></p>
+            <div class="updates-list" id="updatesList" aria-live="polite"></div>
+          </div>
+          <footer class="updates-actions">
+            <button type="button" class="updates-close" id="updatesCloseButton">CONTINUAR</button>
+          </footer>
+        </div>
+      </section>
+
       <section class="welcome-overlay hidden" id="welcomeOverlay" aria-labelledby="welcomeTitle" aria-hidden="true">
         <div class="welcome-background" aria-hidden="true"><i></i><i></i><i></i></div>
         <div class="welcome-panel" role="dialog" aria-modal="true">
@@ -680,6 +706,6 @@
     </div>
   </main>
 
-  <script src="./game.js?v=20260729-cache-recovery"></script>
+  <script src="./game.js?v=0.9.0-dev.1"></script>
 </body>
 </html>

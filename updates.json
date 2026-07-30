@@ -1,0 +1,29 @@
+{
+  "version": "0.9.0-dev.1",
+  "channel": "develop",
+  "publishedAt": "2026-07-30",
+  "title": "Nova base de desenvolvimento",
+  "summary": "O Valorant2D agora possui versões organizadas, testes locais e um histórico de novidades dentro do jogo.",
+  "highlights": [
+    {
+      "title": "Versões mais seguras",
+      "description": "Novas funções passam pela branch develop antes de chegar ao jogo público.",
+      "type": "system"
+    },
+    {
+      "title": "Ambiente local",
+      "description": "Front-End e Back-End podem ser testados juntos sem alterar o GitHub Pages.",
+      "type": "development"
+    },
+    {
+      "title": "Central de atualizações",
+      "description": "Cada nova versão apresentará suas principais mudanças ao jogador.",
+      "type": "interface"
+    },
+    {
+      "title": "Black Market reforçado",
+      "description": "Gadgets receberam mais impacto, novos efeitos e ajustes importantes de funcionamento.",
+      "type": "gameplay"
+    }
+  ]
+}

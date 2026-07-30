@@ -1,10 +1,11 @@
-const CACHE_VERSION = "valorant2d-shell-20260729-cache-recovery";
+const CACHE_VERSION = "valorant2d-shell-v0.9.0-dev.1";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./manifest.webmanifest?v=20260729-pwa-install",
-  "./styles.css?v=20260729-cache-recovery",
-  "./game.js?v=20260729-cache-recovery",
+  "./manifest.webmanifest?v=0.9.0-dev.1",
+  "./styles.css?v=0.9.0-dev.1",
+  "./game.js?v=0.9.0-dev.1",
+  "./updates.json?v=0.9.0-dev.1",
   "./assets/Favicon/android-chrome-192x192.png",
   "./assets/Favicon/android-chrome-512x512.png",
 ];
@@ -53,6 +54,27 @@ self.addEventListener("fetch", (event) => {
           return response;
         })
         .catch(() => caches.match("./index.html")),
+    );
+    return;
+  }
+
+  // O changelog deve refletir a versão publicada mesmo que o jogador possua
+  // uma instalação antiga do PWA.
+  if (requestUrl.pathname.endsWith("/updates.json")) {
+    event.respondWith(
+      fetch(request, { cache: "no-store" })
+        .then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(async () => (
+          (await caches.match(request))
+          || (await caches.match(request, { ignoreSearch: true }))
+          || Response.error()
+        )),
     );
     return;
   }

@@ -174,7 +174,44 @@ entrar em outro computador ou celular.
 - banco de dados: PostgreSQL gerenciado, atualmente compatível com Supabase,
   Neon ou outro provedor que forneça `DATABASE_URL`.
 
-## Executar o front-end localmente
+## Fluxo de versões
+
+O desenvolvimento segue três níveis:
+
+- `main`: versão pública estável, utilizada pelo GitHub Pages e pelo Render;
+- `develop`: integração e validação local da próxima versão;
+- `feature/nome-da-mudanca`: trabalho isolado de uma funcionalidade.
+
+Versões publicadas recebem tags imutáveis no formato SemVer:
+
+```text
+v1.0.0     versão principal
+v1.1.0     nova funcionalidade compatível
+v1.1.1     correção sem nova funcionalidade
+```
+
+Fluxo recomendado:
+
+```bash
+git switch develop
+git switch -c feature/nome-da-mudanca
+
+# implementar e testar
+
+git switch develop
+git merge --no-ff feature/nome-da-mudanca
+
+# após a homologação da versão completa
+git switch main
+git merge --no-ff develop
+git tag -a v1.0.0 -m "Valorant2D v1.0.0"
+git push origin main --tags
+```
+
+A `main` não deve receber experimentos diretamente. Uma tag permite restaurar
+ou inspecionar qualquer versão publicada sem depender de branches antigas.
+
+## Executar o projeto localmente
 
 Clone o repositório:
 
@@ -183,61 +220,67 @@ git clone https://github.com/aarrtthhuurr-bip/Valorant2D.git
 cd Valorant2D
 ```
 
-Sirva os arquivos por HTTP. Com Python:
-
-```bash
-python3 -m http.server 5500
-```
-
-Depois, abra:
-
-```text
-http://localhost:5500/
-```
-
-Também é possível usar a extensão Live Server do VS Code.
-
-Não é recomendado abrir o `index.html` diretamente por `file://`. Recursos como
-Service Worker, instalação PWA, autenticação e algumas requisições exigem um
-contexto HTTP ou HTTPS.
-
-O front-end usa a API publicada em:
-
-```text
-https://valorant2d.onrender.com
-```
-
-Portanto, contas e progresso permanecem unificados entre Live Server, GitHub
-Pages e dispositivos diferentes.
-
-## Executar o back-end localmente
-
-Entre na pasta do servidor e instale as dependências:
+Instale as dependências do servidor:
 
 ```bash
 cd server
 npm install
+cd ..
 ```
 
-Crie o arquivo de ambiente:
+Crie `server/.env` a partir de `server/.env.example` e preencha
+`DEVELOPMENT_DATABASE_URL` com a conexão de um PostgreSQL exclusivo para
+testes. O servidor recusa iniciar em desenvolvimento sem essa variável para
+evitar o uso acidental do banco público.
 
-```bash
-cp .env.example .env
-```
-
-Preencha pelo menos `DATABASE_URL` com uma conexão PostgreSQL válida. Em seguida:
+Inicie Front-End e Back-End juntos pela raiz:
 
 ```bash
 npm run dev
 ```
 
-Para executar como produção:
+Abra:
 
-```bash
-npm start
+```text
+http://localhost:3000/
 ```
 
-A porta padrão é `3000`, mas o servidor respeita `process.env.PORT`.
+Nesse endereço, o Front-End usa automaticamente a API local. GitHub Pages,
+arquivos abertos por Live Server e outras portas continuam utilizando o Render.
+O Express expõe apenas os arquivos públicos necessários; a pasta `server` e o
+arquivo `.env` não podem ser acessados pelo navegador.
+
+Não é recomendado abrir o `index.html` diretamente por `file://`. Recursos como
+Service Worker, instalação PWA, autenticação e algumas requisições exigem um
+contexto HTTP ou HTTPS.
+
+Para testar somente a interface contra a API pública, ainda é possível executar:
+
+```bash
+python3 -m http.server 5500
+```
+
+e acessar `http://localhost:5500/`.
+
+## Central de atualizações
+
+As novidades da versão ficam em `updates.json`. Quando seu campo `version`
+muda, o jogo apresenta automaticamente a tela “O que há de novo” uma vez para
+cada navegador. A tela pode ser reaberta pelo botão de novidades no canto
+inferior do menu principal.
+
+Antes de publicar uma versão:
+
+1. atualize `version`, `publishedAt`, `summary` e `highlights`;
+2. use o mesmo número no `CACHE_VERSION` do Service Worker;
+3. atualize os parâmetros de versão de `game.js`, `styles.css` e do manifesto;
+4. valide localmente;
+5. crie a tag Git somente depois do merge aprovado na `main`.
+
+No Render, `NODE_ENV=production` utiliza exclusivamente `DATABASE_URL`. No
+computador, `NODE_ENV=development` utiliza exclusivamente
+`DEVELOPMENT_DATABASE_URL`. A porta padrão é `3000`, mas o servidor respeita
+`process.env.PORT`.
 
 ## Variáveis de ambiente
 
@@ -248,6 +291,7 @@ As opções disponíveis estão documentadas em `server/.env.example`.
 | `PORT` | Porta HTTP do servidor |
 | `NODE_ENV` | Ambiente de execução |
 | `DATABASE_URL` | URI de conexão do PostgreSQL |
+| `DEVELOPMENT_DATABASE_URL` | URI do PostgreSQL isolado para testes locais |
 | `GOOGLE_CLIENT_ID` | Client ID do Login com Google |
 | `ADMIN_USERNAME` | Conta administrativa promovida na inicialização |
 | `DAILY_OFFER_SECRET` | Sal das ofertas diárias |
