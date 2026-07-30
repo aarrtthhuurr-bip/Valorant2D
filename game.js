@@ -11233,8 +11233,7 @@ function handleEscape() {
 
 function canOpenPauseMenu() {
   return game.menuState === "none"
-    && ["buy", "action"].includes(game.phase)
-    && !game.introTimer;
+    && ["buy", "action"].includes(game.phase);
 }
 
 function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
@@ -13770,7 +13769,9 @@ function startTutorialMode() {
 }
 
 function showIntro() {
-  const duration = 5;
+  // A apresentação do mapa dura apenas três segundos. O pause continua
+  // disponível durante esse intervalo e congela o contador normalmente.
+  const duration = 3;
   ui.introMode.textContent = isOutbreakMode() ? "Outbreak" : game.mode;
   ui.introMap.textContent = game.mapName;
   ui.introTeam.textContent = `${game.playerSide === "attackers" ? "Ataque" : "Defesa"} - ${map.vibe}`;

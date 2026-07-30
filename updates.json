@@ -32,6 +32,11 @@
       "type": "interface"
     },
     {
+      "title": "Entrada de partida mais ágil",
+      "description": "A apresentação do mapa está dois segundos mais curta e agora permite abrir o menu de pause.",
+      "type": "interface"
+    },
+    {
       "title": "Atualização automática do PWA",
       "description": "O jogo detecta uma publicação nova, renova o Service Worker e recarrega os arquivos sem limpeza manual.",
       "type": "system"
