@@ -73,6 +73,7 @@ if (process.env.NODE_ENV === 'development') {
     ['/index.html', 'index.html'],
     ['/game.js', 'game.js'],
     ['/styles.css', 'styles.css'],
+    ['/version-manager.js', 'version-manager.js'],
     ['/manifest.webmanifest', 'manifest.webmanifest'],
     ['/service-worker.js', 'service-worker.js'],
     ['/updates.json', 'updates.json'],

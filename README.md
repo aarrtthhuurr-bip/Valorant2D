@@ -264,18 +264,30 @@ e acessar `http://localhost:5500/`.
 
 ## Central de atualizações
 
-As novidades da versão ficam em `updates.json`. Quando seu campo `version`
-muda, o jogo apresenta automaticamente a tela “O que há de novo” uma vez para
-cada navegador. A tela pode ser reaberta pelo botão de novidades no canto
-inferior do menu principal.
+As novidades da versão ficam em `updates.json`. Durante o desenvolvimento, o
+arquivo permanece com `status: "draft"` e a tela automática não é exibida.
+Quando toda a versão estiver aprovada, altere para `status: "published"`,
+preencha a data e troque o canal para `stable`.
+
+Somente uma versão `published` apresenta automaticamente a tela “O que há de
+novo”, uma vez para cada navegador. A lista deve registrar todas as alterações
+incluídas no lançamento, e não apenas os destaques mais visíveis. A tela pode
+ser reaberta pelo botão de novidades no canto inferior do menu principal.
+
+O `version-manager.js` verifica novas publicações ao abrir o jogo, ao retornar
+para a aba e a cada 15 minutos. Quando encontra uma versão diferente, força a
+atualização do Service Worker, remove o cache de shell anterior e recarrega a
+aplicação uma única vez. O jogador não precisa limpar o cache manualmente.
 
 Antes de publicar uma versão:
 
-1. atualize `version`, `publishedAt`, `summary` e `highlights`;
-2. use o mesmo número no `CACHE_VERSION` do Service Worker;
-3. atualize os parâmetros de versão de `game.js`, `styles.css` e do manifesto;
-4. valide localmente;
-5. crie a tag Git somente depois do merge aprovado na `main`.
+1. registre em `highlights` todas as alterações acumuladas;
+2. teste mantendo `status: "draft"`;
+3. remova o sufixo `-dev`, defina `status: "published"`, canal `stable` e data;
+4. use o mesmo número no `CACHE_VERSION` do Service Worker;
+5. atualize os parâmetros de versão dos arquivos em `index.html`;
+6. execute `npm run check`;
+7. crie a tag Git somente depois do merge aprovado na `main`.
 
 No Render, `NODE_ENV=production` utiliza exclusivamente `DATABASE_URL`. No
 computador, `NODE_ENV=development` utiliza exclusivamente

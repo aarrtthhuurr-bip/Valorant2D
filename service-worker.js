@@ -1,11 +1,12 @@
-const CACHE_VERSION = "valorant2d-shell-v0.9.0-dev.1";
+const CACHE_VERSION = "valorant2d-shell-v0.9.0-dev.2";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./manifest.webmanifest?v=0.9.0-dev.1",
-  "./styles.css?v=0.9.0-dev.1",
-  "./game.js?v=0.9.0-dev.1",
-  "./updates.json?v=0.9.0-dev.1",
+  "./manifest.webmanifest?v=0.9.0-dev.2",
+  "./styles.css?v=0.9.0-dev.2",
+  "./version-manager.js?v=0.9.0-dev.2",
+  "./game.js?v=0.9.0-dev.2",
+  "./updates.json?v=0.9.0-dev.2",
   "./assets/Favicon/android-chrome-192x192.png",
   "./assets/Favicon/android-chrome-512x512.png",
 ];
@@ -47,7 +48,7 @@ self.addEventListener("fetch", (event) => {
   if (request.mode === "navigate") {
     event.respondWith(
       event.preloadResponse
-        .then((preloaded) => preloaded || fetch(request))
+        .then((preloaded) => preloaded || fetch(request, { cache: "no-store" }))
         .then((response) => {
           const copy = response.clone();
           caches.open(CACHE_VERSION).then((cache) => cache.put("./index.html", copy));
@@ -83,7 +84,7 @@ self.addEventListener("fetch", (event) => {
   // Assim, uma entrada antiga ou incompleta nunca mantém o jogo preso ao HTML.
   if (request.destination === "style" || request.destination === "script") {
     event.respondWith(
-      fetch(request)
+      fetch(request, { cache: "no-store" })
         .then((response) => {
           if (response.ok) {
             const copy = response.clone();

@@ -338,7 +338,8 @@ function loadUpdatesManifest() {
       return response.json();
     })
     .then((payload) => {
-      if (!payload?.version || !Array.isArray(payload.highlights)) {
+      if (!payload?.version || !["draft", "published"].includes(payload.status)
+        || !Array.isArray(payload.highlights)) {
         throw new Error("Manifesto de atualização inválido.");
       }
       return payload;
@@ -366,9 +367,18 @@ async function openUpdateNotes({ automatic = false } = {}) {
   updatesReturnFocus = automatic ? null : document.activeElement;
   try {
     const payload = await loadUpdatesManifest();
+    if (payload.status !== "published" && !isIntegratedLocalDevelopment) {
+      if (!automatic) {
+        showUxToast("Nenhuma atualização nova foi publicada.", {
+          title: "ATUALIZAÇÕES",
+          tone: "info",
+        });
+      }
+      return;
+    }
     if (ui.updatesKicker) {
-      ui.updatesKicker.textContent = payload.channel === "develop"
-        ? "CANAL DE TESTES"
+      ui.updatesKicker.textContent = payload.status === "draft"
+        ? "PRÉVIA DA PRÓXIMA VERSÃO"
         : `ATUALIZAÇÃO · ${payload.publishedAt || ""}`;
     }
     if (ui.updatesVersion) ui.updatesVersion.textContent = `v${payload.version}`;
@@ -403,6 +413,10 @@ async function maybeScheduleUpdateNotes() {
   if (game.menuState !== "main" || !ui.welcomeOverlay?.classList.contains("hidden")) return;
   try {
     const payload = await loadUpdatesManifest();
+    if (payload.status !== "published") {
+      ui.menuUpdatesBadge?.classList.add("hidden");
+      return;
+    }
     const lastSeen = localStorage.getItem(LAST_SEEN_VERSION_KEY) || "";
     const isNewVersion = lastSeen !== payload.version;
     ui.menuUpdatesBadge?.classList.toggle("hidden", !isNewVersion);
@@ -420,7 +434,9 @@ async function maybeScheduleUpdateNotes() {
 async function closeUpdateNotes() {
   try {
     const payload = await loadUpdatesManifest();
-    localStorage.setItem(LAST_SEEN_VERSION_KEY, payload.version);
+    if (payload.status === "published") {
+      localStorage.setItem(LAST_SEEN_VERSION_KEY, payload.version);
+    }
   } catch {}
   ui.updatesOverlay?.classList.add("hidden");
   ui.updatesOverlay?.setAttribute("aria-hidden", "true");
@@ -14743,24 +14759,4 @@ game.menuMapTimer = 0;
 startNewMatch();
 initializeGoogleIdentity();
 bootstrapAuthentication();
-if ("serviceWorker" in navigator && !isIntegratedLocalDevelopment
-  && (window.isSecureContext || location.hostname === "localhost")) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js", {
-      scope: "./",
-      updateViaCache: "none",
-    })
-      .then((registration) => registration.update())
-      .catch((error) => {
-        console.warn("[PWA] Service Worker indisponível:", error?.message || error);
-      });
-  });
-} else if ("serviceWorker" in navigator && isIntegratedLocalDevelopment) {
-  // O ambiente de testes deve refletir cada arquivo salvo imediatamente.
-  // Workers instalados anteriormente são removidos somente deste localhost.
-  window.addEventListener("load", () => {
-    void navigator.serviceWorker.getRegistrations()
-      .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())));
-  });
-}
 requestAnimationFrame(loop);
