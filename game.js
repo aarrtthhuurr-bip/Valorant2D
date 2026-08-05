@@ -2213,6 +2213,8 @@ const BLACK_MARKET_GADGETS = Object.freeze([
       src: "./assets/black-market/bomb_explosion_row1.png",
       frameWidth: 32,
       frameHeight: 33,
+      columns: 8,
+      rows: 1,
       frames: 8,
       frameDuration: 250,
       lastFrameDuration: 500,
@@ -2227,6 +2229,17 @@ const BLACK_MARKET_GADGETS = Object.freeze([
     chargesPerWave: 1,
     cooldown: 25,
     preview: "./assets/black-market/turret.gif",
+    staticPreview: "./assets/black-market/turret.png",
+    spriteSheet: {
+      src: "./assets/black-market/Turret_frames.png",
+      frameWidth: 32,
+      frameHeight: 32,
+      columns: 14,
+      rows: 1,
+      frames: 14,
+      frameDuration: 180,
+      lastFrameDuration: 420,
+    },
     fallback: "⌖",
   },
   {
@@ -2237,6 +2250,17 @@ const BLACK_MARKET_GADGETS = Object.freeze([
     chargesPerWave: 2,
     cooldown: 18,
     preview: "./assets/black-market/cryo_mine.gif",
+    staticPreview: "./assets/black-market/cryo_mine.png",
+    spriteSheet: {
+      src: "./assets/black-market/ice_frames.png",
+      frameWidth: 32,
+      frameHeight: 32,
+      columns: 8,
+      rows: 8,
+      frames: 64,
+      frameDuration: 120,
+      lastFrameDuration: 420,
+    },
     fallback: "❄",
   },
   {
@@ -2247,6 +2271,7 @@ const BLACK_MARKET_GADGETS = Object.freeze([
     chargesPerWave: 1,
     cooldown: 30,
     preview: "./assets/black-market/adrenalina.gif",
+    staticPreview: "./assets/black-market/adrenalina.png",
     fallback: "ϟ",
   },
   {
@@ -2257,6 +2282,7 @@ const BLACK_MARKET_GADGETS = Object.freeze([
     chargesPerWave: 1,
     cooldown: 40,
     preview: "./assets/black-market/supply_drop.gif",
+    staticPreview: "./assets/black-market/supply_drop.png",
     fallback: "✚",
   },
   {
@@ -2267,6 +2293,7 @@ const BLACK_MARKET_GADGETS = Object.freeze([
     chargesPerWave: 1,
     cooldown: 22,
     preview: "./assets/black-market/cloaking.gif",
+    staticPreview: "./assets/black-market/cloaking.png",
     fallback: "◌",
   },
 ]);
@@ -2322,18 +2349,94 @@ function setBlackMarketFeedback(message) {
   if (ui.blackMarketFeedback) ui.blackMarketFeedback.textContent = message;
 }
 
-function startPreviewSpriteAnimation(element, spriteSheet) {
-  if (!element || !spriteSheet) return;
+function configureBlackMarketPreview(card, gadget) {
+  const previewContainer = card.querySelector(".black-market-preview");
+  const spritePreview = card.querySelector(".black-market-sprite-preview");
+  const imagePreview = card.querySelector(".black-market-image-preview");
+  const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  let animationTimer = 0;
   let frame = 0;
-  const drawFrame = () => {
-    if (!element.isConnected) return;
-    element.style.backgroundPosition = `${-frame * spriteSheet.frameWidth}px 0`;
-    const isLastFrame = frame === spriteSheet.frames - 1;
-    const delay = isLastFrame ? spriteSheet.lastFrameDuration : spriteSheet.frameDuration;
-    frame = (frame + 1) % spriteSheet.frames;
-    window.setTimeout(drawFrame, delay);
+  let running = false;
+
+  const showSpriteFrame = (index) => {
+    if (!spritePreview || !gadget.spriteSheet) return;
+    const columns = Math.max(1, gadget.spriteSheet.columns || gadget.spriteSheet.frames || 1);
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    spritePreview.style.backgroundPosition = `${-column * gadget.spriteSheet.frameWidth}px ${-row * gadget.spriteSheet.frameHeight}px`;
   };
-  drawFrame();
+
+  const stop = () => {
+    running = false;
+    window.clearTimeout(animationTimer);
+    animationTimer = 0;
+    frame = 0;
+    showSpriteFrame(0);
+    card.classList.remove("is-previewing");
+    if (imagePreview) {
+      imagePreview.src = gadget.staticPreview || gadget.preview;
+      imagePreview.alt = `Imagem estática de ${gadget.name}`;
+    }
+  };
+
+  const advanceSprite = () => {
+    if (!running || !spritePreview?.isConnected || !gadget.spriteSheet) return;
+    showSpriteFrame(frame);
+    const isLastFrame = frame === gadget.spriteSheet.frames - 1;
+    const delay = isLastFrame
+      ? gadget.spriteSheet.lastFrameDuration
+      : gadget.spriteSheet.frameDuration;
+    frame = (frame + 1) % gadget.spriteSheet.frames;
+    animationTimer = window.setTimeout(advanceSprite, delay);
+  };
+
+  const start = () => {
+    if (running || prefersReducedMotion) return;
+    running = true;
+    card.classList.add("is-previewing");
+    if (spritePreview && gadget.spriteSheet) {
+      frame = 0;
+      advanceSprite();
+      return;
+    }
+    if (imagePreview) {
+      // Reatribuir o src reinicia GIFs que já tenham sido reproduzidos em
+      // outro hover, sem modificar o listener do botão de compra.
+      imagePreview.classList.remove("is-missing");
+      imagePreview.src = "";
+      imagePreview.src = gadget.preview;
+      imagePreview.alt = `Animação de ${gadget.name}`;
+    }
+  };
+
+  if (spritePreview && gadget.spriteSheet) {
+    const columns = Math.max(1, gadget.spriteSheet.columns || gadget.spriteSheet.frames || 1);
+    const rows = Math.max(1, gadget.spriteSheet.rows || Math.ceil(gadget.spriteSheet.frames / columns));
+    Object.assign(spritePreview.style, {
+      width: `${gadget.spriteSheet.frameWidth}px`,
+      height: `${gadget.spriteSheet.frameHeight}px`,
+      backgroundImage: `url("${gadget.spriteSheet.src}")`,
+      backgroundSize: `${gadget.spriteSheet.frameWidth * columns}px ${gadget.spriteSheet.frameHeight * rows}px`,
+    });
+    showSpriteFrame(0);
+  }
+
+  imagePreview?.addEventListener("error", () => {
+    imagePreview.classList.add("is-missing");
+    previewContainer?.classList.add("uses-fallback");
+  });
+  imagePreview?.addEventListener("load", () => {
+    imagePreview.classList.remove("is-missing");
+    previewContainer?.classList.remove("uses-fallback");
+  });
+
+  card.addEventListener("pointerenter", start);
+  card.addEventListener("pointerleave", stop);
+  card.addEventListener("focusin", start);
+  card.addEventListener("focusout", (event) => {
+    if (!card.contains(event.relatedTarget)) stop();
+  });
+  stop();
 }
 
 function renderBlackMarket() {
@@ -2344,9 +2447,10 @@ function renderBlackMarket() {
     const equipped = blackMarketState.equipped === gadget.id;
     const card = document.createElement("article");
     card.className = `black-market-card${equipped ? " is-equipped" : ""}`;
+    card.dataset.gadget = gadget.id;
     const previewMarkup = gadget.spriteSheet
-      ? `<span class="black-market-sprite-preview" role="img" aria-label="Prévia animada de ${gadget.name}"></span>`
-      : `<img src="${gadget.preview}" alt="Prévia animada de ${gadget.name}">`;
+      ? `<span class="black-market-sprite-preview" role="img" aria-label="Primeiro frame de ${gadget.name}"></span>`
+      : `<img class="black-market-image-preview" src="${gadget.staticPreview || gadget.preview}" alt="Imagem estática de ${gadget.name}">`;
     card.innerHTML = `
       <div class="black-market-preview${gadget.spriteSheet ? " has-sprite" : ""}">
         <span class="black-market-preview-fallback" aria-hidden="true">${gadget.fallback}</span>
@@ -2362,18 +2466,7 @@ function renderBlackMarket() {
         <span class="black-market-price">${gadget.price} C</span>
         <button type="button" class="black-market-action"${equipped || commerceState.busy ? " disabled" : ""}>${equipped ? "EQUIPADO" : unlocked ? "EQUIPAR" : "DESBLOQUEAR"}</button>
       </div>`;
-    const preview = card.querySelector("img");
-    preview?.addEventListener("error", () => preview.classList.add("is-missing"), { once: true });
-    const spritePreview = card.querySelector(".black-market-sprite-preview");
-    if (spritePreview && gadget.spriteSheet) {
-      Object.assign(spritePreview.style, {
-        width: `${gadget.spriteSheet.frameWidth}px`,
-        height: `${gadget.spriteSheet.frameHeight}px`,
-        backgroundImage: `url("${gadget.spriteSheet.src}")`,
-        backgroundSize: `${gadget.spriteSheet.frameWidth * gadget.spriteSheet.frames}px ${gadget.spriteSheet.frameHeight}px`,
-      });
-      startPreviewSpriteAnimation(spritePreview, gadget.spriteSheet);
-    }
+    configureBlackMarketPreview(card, gadget);
     card.querySelector(".black-market-action")?.addEventListener("click", () => {
       if (!unlocked) purchaseBlackMarketGadget(gadget);
       else equipBlackMarketGadget(gadget);

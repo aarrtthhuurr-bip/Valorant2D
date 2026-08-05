@@ -1,5 +1,5 @@
 {
-  "version": "0.9.1-dev.1",
+  "version": "0.9.1-dev.2",
   "status": "draft",
   "channel": "develop",
   "publishedAt": null,
@@ -19,6 +19,16 @@
     {
       "title": "Emblemas de modos aprimorados",
       "description": "As logos deixaram as antigas caixas coloridas e agora aparecem como emblemas livres, maiores e melhor posicionados em cada card.",
+      "type": "interface"
+    },
+    {
+      "title": "Pixel art interativa no Black Market",
+      "description": "As prévias dos gadgets permanecem congeladas em repouso e reproduzem suas animações apenas durante hover ou foco.",
+      "type": "interface"
+    },
+    {
+      "title": "Modos mais legíveis",
+      "description": "Títulos, descrições e comandos dos cards receberam contraste, tamanho e espaçamento mais claros.",
       "type": "interface"
     }
   ]

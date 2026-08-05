@@ -3706,7 +3706,11 @@ button.click-feedback::after {
     #050208;
   background-size: 12px 12px;
 }
-.black-market-preview img { position: relative; z-index: 2; width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+.black-market-preview {
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+}
+.black-market-preview img { position: relative; z-index: 2; width: 100%; height: 100%; object-fit: contain; image-rendering: crisp-edges; image-rendering: pixelated; }
 .black-market-preview img.is-missing { display: none; }
 .black-market-preview-fallback { color: #c084fc; font-size: 38px; text-shadow: 0 0 15px rgba(168, 85, 247, .52); }
 .black-market-preview.has-sprite .black-market-preview-fallback { display: none; }
@@ -3716,9 +3720,38 @@ button.click-feedback::after {
   display: block;
   flex: 0 0 auto;
   background-repeat: no-repeat;
+  image-rendering: crisp-edges;
   image-rendering: pixelated;
   transform: scale(2.45);
   transform-origin: center;
+}
+.black-market-card.is-previewing .black-market-sprite-preview { filter: saturate(1.15) contrast(1.04); }
+.black-market-card.is-previewing .black-market-preview-fallback { animation: blackMarketFallbackPulse .75s steps(3, end) infinite; }
+.black-market-card[data-gadget="adrenaline"].is-previewing .black-market-preview-fallback { animation-name: blackMarketFallbackCharge; color: #ff4fd8; }
+.black-market-card[data-gadget="supplyDrop"].is-previewing .black-market-preview-fallback { animation-name: blackMarketFallbackDrop; color: #8dffcf; }
+.black-market-card[data-gadget="cloakingDevice"].is-previewing .black-market-preview-fallback { animation-name: blackMarketFallbackCloak; color: #78e8ff; }
+
+@keyframes blackMarketFallbackPulse {
+  0%, 100% { opacity: .65; transform: scale(.92); }
+  50% { opacity: 1; transform: scale(1.12); }
+}
+
+@keyframes blackMarketFallbackCharge {
+  0% { opacity: .48; transform: translateY(3px) scale(.88); }
+  50% { opacity: 1; transform: translateY(-2px) scale(1.18); }
+  100% { opacity: .68; transform: translateY(0) scale(1); }
+}
+
+@keyframes blackMarketFallbackDrop {
+  0% { opacity: 0; transform: translateY(-15px) scale(.78); }
+  55% { opacity: 1; transform: translateY(3px) scale(1.08); }
+  100% { opacity: .72; transform: translateY(0) scale(1); }
+}
+
+@keyframes blackMarketFallbackCloak {
+  0%, 100% { opacity: .18; transform: scale(.9); }
+  35% { opacity: 1; transform: scale(1.08); }
+  65% { opacity: .35; transform: scaleX(.72); }
 }
 .black-market-card > b { color: #f1e8f7; font-size: 14px; text-transform: uppercase; }
 .black-market-card > p { margin: 0; color: #998da1; font-size: 10px; line-height: 1.55; }
@@ -7460,6 +7493,41 @@ body.is-mobile .top-hud strong {
     width: 48px;
     height: 48px;
   }
+}
+
+/* Legibilidade dos comandos e descrições na seleção de modos. */
+.mode-card-copy > small {
+  color: color-mix(in srgb, var(--mode-accent) 88%, white);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, .7);
+}
+
+.mode-card-copy strong {
+  color: #f7fafb;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, .72);
+}
+
+.mode-card-copy > em {
+  color: #b2c0c8;
+  font-weight: 600;
+}
+
+.mode-card-action {
+  font-size: 10px;
+  letter-spacing: .12em;
+  text-shadow: 0 0 10px rgba(var(--mode-accent-rgb), .2);
+}
+
+.mode-select-back {
+  color: #dbe6eb;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+@media (orientation: landscape) and (max-height: 620px) {
+  .mode-card-copy strong { font-size: 14px; }
+  .mode-card-copy > small { font-size: 7px; }
+  .mode-card-copy > em { font-size: 9px; line-height: 1.32; }
+  .mode-card-action { padding-top: 7px; font-size: 8px; }
 }
 
 /* ==========================================================================
