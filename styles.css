@@ -1385,7 +1385,16 @@ body.is-mobile .mobile-utility {
 .kill-entry .kf-weapon { color: var(--muted); font-size: 10px; margin: 0 4px; }
 .kill-entry .kf-hs     { color: #ff4d5d; font-size: 10px; margin-left: 2px; }
 .kill-entry .kf-weapon { display: inline-flex; align-items: center; gap: 5px; }
-.kill-entry .kf-weapon img { width: 34px; height: 14px; object-fit: contain; filter: grayscale(.25); }
+.kill-entry .kf-weapon img {
+  width: 34px;
+  height: 14px;
+  object-fit: contain;
+  filter: grayscale(.25);
+  /* Os assets apontam originalmente para a esquerda; no fluxo
+     assassino → arma → vítima, a inversão mantém o cano voltado à vítima. */
+  transform: scaleX(-1);
+  transform-origin: center;
+}
 .kill-entry.is-headshot { border-color: rgba(255,70,85,.7); background: linear-gradient(90deg, rgba(255,70,85,.18), rgba(5,10,15,.9)); }
 .kill-entry.is-headshot .kf-hs { font-weight: 800; letter-spacing: .08em; }
 
