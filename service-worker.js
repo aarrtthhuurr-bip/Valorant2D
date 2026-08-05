@@ -1,10 +1,12 @@
-const CACHE_VERSION = "valorant2d-shell-20260729-cache-recovery";
+const CACHE_VERSION = "valorant2d-shell-v0.9.0";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./manifest.webmanifest?v=20260729-pwa-install",
-  "./styles.css?v=20260729-cache-recovery",
-  "./game.js?v=20260729-cache-recovery",
+  "./manifest.webmanifest?v=0.9.0",
+  "./styles.css?v=0.9.0",
+  "./version-manager.js?v=0.9.0",
+  "./game.js?v=0.9.0",
+  "./updates.json?v=0.9.0",
   "./assets/Favicon/android-chrome-192x192.png",
   "./assets/Favicon/android-chrome-512x512.png",
 ];
@@ -46,7 +48,7 @@ self.addEventListener("fetch", (event) => {
   if (request.mode === "navigate") {
     event.respondWith(
       event.preloadResponse
-        .then((preloaded) => preloaded || fetch(request))
+        .then((preloaded) => preloaded || fetch(request, { cache: "no-store" }))
         .then((response) => {
           const copy = response.clone();
           caches.open(CACHE_VERSION).then((cache) => cache.put("./index.html", copy));
@@ -57,11 +59,32 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // O changelog deve refletir a versão publicada mesmo que o jogador possua
+  // uma instalação antiga do PWA.
+  if (requestUrl.pathname.endsWith("/updates.json")) {
+    event.respondWith(
+      fetch(request, { cache: "no-store" })
+        .then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(async () => (
+          (await caches.match(request))
+          || (await caches.match(request, { ignoreSearch: true }))
+          || Response.error()
+        )),
+    );
+    return;
+  }
+
   // Arquivos que controlam toda a aparência e execução usam network-first.
   // Assim, uma entrada antiga ou incompleta nunca mantém o jogo preso ao HTML.
   if (request.destination === "style" || request.destination === "script") {
     event.respondWith(
-      fetch(request)
+      fetch(request, { cache: "no-store" })
         .then((response) => {
           if (response.ok) {
             const copy = response.clone();

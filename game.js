@@ -209,6 +209,14 @@ const ui = {
   mainCoreWallet: document.getElementById("mainCoreWallet"),
   mainCoreBalance: document.getElementById("mainCoreBalance"),
   menuTutorialButton: document.getElementById("menuTutorialButton"),
+  menuUpdatesButton: document.getElementById("menuUpdatesButton"),
+  menuUpdatesBadge: document.getElementById("menuUpdatesBadge"),
+  updatesOverlay: document.getElementById("updatesOverlay"),
+  updatesKicker: document.getElementById("updatesKicker"),
+  updatesVersion: document.getElementById("updatesVersion"),
+  updatesSummary: document.getElementById("updatesSummary"),
+  updatesList: document.getElementById("updatesList"),
+  updatesCloseButton: document.getElementById("updatesCloseButton"),
   commerceOverlay: document.getElementById("commerceOverlay"),
   commerceTabs: document.getElementById("commerceTabs"),
   commerceContent: document.getElementById("commerceContent"),
@@ -258,7 +266,7 @@ const ui = {
  * aplicada ao Canvas de 1280 x 720. Isso preserva a leitura em telas estreitas.
  */
 function mountViewportOverlays() {
-  for (const overlay of [ui.authOverlay, ui.welcomeOverlay, ui.modeInfoOverlay, ui.menuTourLayer, ui.matchOverlay, ui.pauseOverlay, ui.playerProfileOverlay, ui.globalRankingOverlay, ui.mobileOrientationHint]) {
+  for (const overlay of [ui.authOverlay, ui.welcomeOverlay, ui.updatesOverlay, ui.modeInfoOverlay, ui.menuTourLayer, ui.matchOverlay, ui.pauseOverlay, ui.playerProfileOverlay, ui.globalRankingOverlay, ui.mobileOrientationHint]) {
     if (overlay && ui.gameRoot && overlay.parentElement !== ui.gameRoot) ui.gameRoot.appendChild(overlay);
   }
 }
@@ -271,9 +279,15 @@ const configuredApiUrl = document
   .querySelector('meta[name="valorant2d-api-url"]')
   ?.getAttribute("content")
   ?.trim();
-// Todas as execuções do cliente, inclusive via Live Server, usam o mesmo
-// back-end no Render. Assim, contas e progresso pertencem a uma única base.
-const API_BASE_URL = (configuredApiUrl || "https://valorant2d.onrender.com").replace(/\/$/, "");
+// Somente o servidor integrado em :3000 ativa a API local. Live Server e
+// GitHub Pages continuam usando a produção, evitando ambientes ambíguos.
+const isIntegratedLocalDevelopment = ["localhost", "127.0.0.1"].includes(window.location.hostname)
+  && window.location.port === "3000";
+const API_BASE_URL = (
+  isIntegratedLocalDevelopment
+    ? window.location.origin
+    : configuredApiUrl || "https://valorant2d.onrender.com"
+).replace(/\/$/, "");
 // O Render pode precisar de alguns segundos extras para sair do estado de suspensão.
 const API_REQUEST_TIMEOUT = 45000;
 
@@ -291,7 +305,12 @@ let serverWakeDelayTimer = 0;
 let googleIdentityInitialized = false;
 let profileReturnFocus = null;
 let rankingReturnFocus = null;
+let updatesReturnFocus = null;
+let updatesPayloadPromise = null;
+let updatesAutoTimer = 0;
 const shownContextTips = new Set();
+
+const LAST_SEEN_VERSION_KEY = "valorant2d:last-seen-version";
 
 function showUxToast(message, { title = "INFORMAÇÃO", tone = "info", duration = 2800 } = {}) {
   if (!ui.uxToastRegion || !message) return;
@@ -309,6 +328,122 @@ function showUxToast(message, { title = "INFORMAÇÃO", tone = "info", duration 
   ui.uxToastRegion.appendChild(toast);
   while (ui.uxToastRegion.children.length > 3) ui.uxToastRegion.firstElementChild?.remove();
   window.setTimeout(remove, Math.max(1200, duration));
+}
+
+function loadUpdatesManifest() {
+  if (updatesPayloadPromise) return updatesPayloadPromise;
+  updatesPayloadPromise = fetch("./updates.json", { cache: "no-store" })
+    .then((response) => {
+      if (!response.ok) throw new Error(`Manifesto de atualização indisponível (${response.status}).`);
+      return response.json();
+    })
+    .then((payload) => {
+      if (!payload?.version || !["draft", "published"].includes(payload.status)
+        || !Array.isArray(payload.highlights)) {
+        throw new Error("Manifesto de atualização inválido.");
+      }
+      return payload;
+    })
+    .catch((error) => {
+      updatesPayloadPromise = null;
+      throw error;
+    });
+  return updatesPayloadPromise;
+}
+
+function updateNotesTypeLabel(type) {
+  return ({
+    gameplay: "JOGABILIDADE",
+    interface: "INTERFACE",
+    development: "DESENVOLVIMENTO",
+    system: "SISTEMA",
+  })[type] || "ATUALIZAÇÃO";
+}
+
+async function openUpdateNotes({ automatic = false } = {}) {
+  window.clearTimeout(updatesAutoTimer);
+  updatesAutoTimer = 0;
+  hideMenuTour();
+  updatesReturnFocus = automatic ? null : document.activeElement;
+  try {
+    const payload = await loadUpdatesManifest();
+    if (payload.status !== "published" && !isIntegratedLocalDevelopment) {
+      if (!automatic) {
+        showUxToast("Nenhuma atualização nova foi publicada.", {
+          title: "ATUALIZAÇÕES",
+          tone: "info",
+        });
+      }
+      return;
+    }
+    if (ui.updatesKicker) {
+      ui.updatesKicker.textContent = payload.status === "draft"
+        ? "PRÉVIA DA PRÓXIMA VERSÃO"
+        : `ATUALIZAÇÃO · ${payload.publishedAt || ""}`;
+    }
+    if (ui.updatesVersion) ui.updatesVersion.textContent = `v${payload.version}`;
+    if (ui.updatesSummary) ui.updatesSummary.textContent = payload.summary || payload.title || "";
+    if (ui.updatesList) {
+      ui.updatesList.replaceChildren(...payload.highlights.map((highlight) => {
+        const item = document.createElement("article");
+        item.className = "updates-item";
+        item.dataset.type = highlight.type || "system";
+        const category = document.createElement("span");
+        category.textContent = updateNotesTypeLabel(highlight.type);
+        const title = document.createElement("strong");
+        title.textContent = highlight.title || "Atualização";
+        const description = document.createElement("p");
+        description.textContent = highlight.description || "";
+        item.append(category, title, description);
+        return item;
+      }));
+    }
+    ui.updatesOverlay?.classList.remove("hidden");
+    ui.updatesOverlay?.setAttribute("aria-hidden", "false");
+    ui.menuUpdatesBadge?.classList.add("hidden");
+    window.setTimeout(() => ui.updatesCloseButton?.focus(), 30);
+  } catch (error) {
+    if (!automatic) showUxToast(error.message, { title: "ATUALIZAÇÕES", tone: "error" });
+  }
+}
+
+async function maybeScheduleUpdateNotes() {
+  window.clearTimeout(updatesAutoTimer);
+  updatesAutoTimer = 0;
+  if (game.menuState !== "main" || !ui.welcomeOverlay?.classList.contains("hidden")) return;
+  try {
+    const payload = await loadUpdatesManifest();
+    if (payload.status !== "published") {
+      ui.menuUpdatesBadge?.classList.add("hidden");
+      return;
+    }
+    const lastSeen = localStorage.getItem(LAST_SEEN_VERSION_KEY) || "";
+    const isNewVersion = lastSeen !== payload.version;
+    ui.menuUpdatesBadge?.classList.toggle("hidden", !isNewVersion);
+    if (!isNewVersion) return;
+    updatesAutoTimer = window.setTimeout(() => {
+      if (game.menuState === "main" && ui.welcomeOverlay?.classList.contains("hidden")) {
+        void openUpdateNotes({ automatic: true });
+      }
+    }, 650);
+  } catch (error) {
+    console.warn("[Atualizações] Não foi possível consultar a versão:", error.message);
+  }
+}
+
+async function closeUpdateNotes() {
+  try {
+    const payload = await loadUpdatesManifest();
+    if (payload.status === "published") {
+      localStorage.setItem(LAST_SEEN_VERSION_KEY, payload.version);
+    }
+  } catch {}
+  ui.updatesOverlay?.classList.add("hidden");
+  ui.updatesOverlay?.setAttribute("aria-hidden", "true");
+  ui.menuUpdatesBadge?.classList.add("hidden");
+  updatesReturnFocus?.focus?.();
+  updatesReturnFocus = null;
+  maybeScheduleMenuTour();
 }
 
 function updateServerConnectionState(state, detail = "") {
@@ -2056,6 +2191,14 @@ const BLACK_MARKET_GADGETS = Object.freeze([
     chargesPerWave: 2,
     cooldown: 15,
     preview: "./assets/black-market/pulse_bomb.gif",
+    spriteSheet: {
+      src: "./assets/black-market/bomb_explosion_row1.png",
+      frameWidth: 32,
+      frameHeight: 33,
+      frames: 8,
+      frameDuration: 250,
+      lastFrameDuration: 500,
+    },
     fallback: "⌁",
   },
   {
@@ -2161,6 +2304,20 @@ function setBlackMarketFeedback(message) {
   if (ui.blackMarketFeedback) ui.blackMarketFeedback.textContent = message;
 }
 
+function startPreviewSpriteAnimation(element, spriteSheet) {
+  if (!element || !spriteSheet) return;
+  let frame = 0;
+  const drawFrame = () => {
+    if (!element.isConnected) return;
+    element.style.backgroundPosition = `${-frame * spriteSheet.frameWidth}px 0`;
+    const isLastFrame = frame === spriteSheet.frames - 1;
+    const delay = isLastFrame ? spriteSheet.lastFrameDuration : spriteSheet.frameDuration;
+    frame = (frame + 1) % spriteSheet.frames;
+    window.setTimeout(drawFrame, delay);
+  };
+  drawFrame();
+}
+
 function renderBlackMarket() {
   if (!ui.blackMarketGrid) return;
   ui.blackMarketGrid.innerHTML = "";
@@ -2169,10 +2326,13 @@ function renderBlackMarket() {
     const equipped = blackMarketState.equipped === gadget.id;
     const card = document.createElement("article");
     card.className = `black-market-card${equipped ? " is-equipped" : ""}`;
+    const previewMarkup = gadget.spriteSheet
+      ? `<span class="black-market-sprite-preview" role="img" aria-label="Prévia animada de ${gadget.name}"></span>`
+      : `<img src="${gadget.preview}" alt="Prévia animada de ${gadget.name}">`;
     card.innerHTML = `
-      <div class="black-market-preview">
+      <div class="black-market-preview${gadget.spriteSheet ? " has-sprite" : ""}">
         <span class="black-market-preview-fallback" aria-hidden="true">${gadget.fallback}</span>
-        <img src="${gadget.preview}" alt="Prévia animada de ${gadget.name}">
+        ${previewMarkup}
       </div>
       <b>${gadget.name}</b>
       <div class="black-market-specs">
@@ -2186,6 +2346,16 @@ function renderBlackMarket() {
       </div>`;
     const preview = card.querySelector("img");
     preview?.addEventListener("error", () => preview.classList.add("is-missing"), { once: true });
+    const spritePreview = card.querySelector(".black-market-sprite-preview");
+    if (spritePreview && gadget.spriteSheet) {
+      Object.assign(spritePreview.style, {
+        width: `${gadget.spriteSheet.frameWidth}px`,
+        height: `${gadget.spriteSheet.frameHeight}px`,
+        backgroundImage: `url("${gadget.spriteSheet.src}")`,
+        backgroundSize: `${gadget.spriteSheet.frameWidth * gadget.spriteSheet.frames}px ${gadget.spriteSheet.frameHeight}px`,
+      });
+      startPreviewSpriteAnimation(spritePreview, gadget.spriteSheet);
+    }
     card.querySelector(".black-market-action")?.addEventListener("click", () => {
       if (!unlocked) purchaseBlackMarketGadget(gadget);
       else equipBlackMarketGadget(gadget);
@@ -11063,8 +11233,7 @@ function handleEscape() {
 
 function canOpenPauseMenu() {
   return game.menuState === "none"
-    && ["buy", "action"].includes(game.phase)
-    && !game.introTimer;
+    && ["buy", "action"].includes(game.phase);
 }
 
 function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
@@ -11110,6 +11279,7 @@ function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
   game.menuState = state;
   ui.mainCoreWallet?.classList.toggle("hidden", state !== "main" || currentProfile?.isGuest);
   ui.menuTutorialButton?.classList.toggle("hidden", state !== "main");
+  ui.menuUpdatesButton?.classList.toggle("hidden", state !== "main");
 }
 
 function mainMenuIconSvg(icon) {
@@ -11236,6 +11406,7 @@ function maybeScheduleMenuTour() {
   window.clearTimeout(menuTourTimer);
   if (game.menuState !== "main" || currentProfile?.isGuest
     || currentProfile?.onboardingCompleted !== true || currentProfile?.menuTourCompleted !== false
+    || updatesAutoTimer || !ui.updatesOverlay?.classList.contains("hidden")
     || !ui.welcomeOverlay?.classList.contains("hidden")) return;
   menuTourTimer = window.setTimeout(startMenuTour, 480);
 }
@@ -11628,7 +11799,7 @@ function showMainMenu() {
   }
   setMenu("Valorant 2D", "", mainActions, "MENU", "main");
   updateCoreBalances(commerceState.profile?.coreBalance || currentProfile?.coreBalance || 0);
-  maybeScheduleMenuTour();
+  void maybeScheduleUpdateNotes().then(() => maybeScheduleMenuTour());
 }
 
 const PLAY_MODE_OPTIONS = [
@@ -11728,7 +11899,7 @@ function showModeSelect(immediate = false) {
     }, 220);
     return;
   }
-  setMenu("ESCOLHA O MODO", "", [], "JOGAR", "mode-select");
+  setMenu("ENTRE EM CAMPO", "", [], "MODOS DE JOGO", "mode-select");
   renderModeSelect();
 }
 
@@ -11736,23 +11907,44 @@ function renderModeSelect() {
   if (!ui.menuButtons) return;
   ui.menuButtons.className = "mode-select-shell";
   ui.menuButtons.innerHTML = `
-    <div class="mode-select-grid"></div>
+    <section class="mode-select-section mode-select-primary">
+      <header class="mode-select-section-head"><span>EXPERIÊNCIAS PRINCIPAIS</span><small>PROGRESSO, CORE E RANKING GLOBAL</small></header>
+      <div class="mode-primary-grid"></div>
+    </section>
+    <section class="mode-select-section mode-select-secondary">
+      <header class="mode-select-section-head"><span>ÁREA DE PREPARAÇÃO</span><small>SEM IMPACTO NO RANKING</small></header>
+      <div class="mode-secondary-grid"></div>
+    </section>
     <footer class="mode-select-footer">
       <button type="button" class="mode-select-back" aria-label="Voltar ao menu principal">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 7-5 5 5 5"></path></svg>
         <span>VOLTAR</span>
       </button>
     </footer>`;
-  const grid = ui.menuButtons.querySelector(".mode-select-grid");
+  const primaryGrid = ui.menuButtons.querySelector(".mode-primary-grid");
+  const secondaryGrid = ui.menuButtons.querySelector(".mode-secondary-grid");
+  let lastMode = "";
+  try { lastMode = localStorage.getItem("valorant2d-last-mode") || ""; } catch {}
   PLAY_MODE_OPTIONS.forEach((option, index) => {
+    const primary = ["default", "blackout", "outbreak"].includes(option.id);
+    const isRecent = option.id === lastMode;
     const card = document.createElement("article");
-    card.className = `mode-card mode-card-${option.id}`;
+    card.className = `mode-card mode-card-${option.id} mode-card-${primary ? "primary" : "secondary"}${isRecent ? " is-recent" : ""}`;
+    card.dataset.mode = option.id;
     card.innerHTML = `
       <button type="button" class="mode-card-select" aria-label="Jogar ${option.name}">
-        <span class="mode-card-index" aria-hidden="true">0${index + 1}</span>
-        <span class="mode-card-icon" aria-hidden="true">${playModeIconSvg(option.id)}</span>
-        <span class="mode-card-copy"><small>${option.tag}</small><strong>${option.name}</strong><em>${option.description}</em></span>
-        <span class="mode-card-arrow" aria-hidden="true">›</span>
+        <span class="mode-card-visual" aria-hidden="true">
+          <span class="mode-card-index">0${index + 1}</span>
+          <span class="mode-card-icon">${playModeIconSvg(option.id)}</span>
+          <span class="mode-card-scan"></span>
+        </span>
+        <span class="mode-card-copy">
+          <small>${option.tag}</small>
+          <strong>${option.name}</strong>
+          <em>${option.description}</em>
+          ${primary ? '<span class="mode-card-action">SELECIONAR</span>' : ""}
+        </span>
+        ${isRecent ? '<span class="mode-card-recent">ÚLTIMO JOGADO</span>' : ""}
       </button>
       <button type="button" class="mode-info-button" aria-label="Como jogar ${option.name}" title="Como jogar ${option.name}">i</button>`;
     const selectButton = card.querySelector(".mode-card-select");
@@ -11761,7 +11953,7 @@ function renderModeSelect() {
     infoButton.addEventListener("click", () => openModeInfo(option, infoButton));
     attachButtonFeedback(selectButton);
     attachButtonFeedback(infoButton);
-    grid.appendChild(card);
+    (primary ? primaryGrid : secondaryGrid).appendChild(card);
   });
   const backButton = ui.menuButtons.querySelector(".mode-select-back");
   backButton?.addEventListener("click", showMainMenu);
@@ -13577,7 +13769,9 @@ function startTutorialMode() {
 }
 
 function showIntro() {
-  const duration = 5;
+  // A apresentação do mapa dura apenas três segundos. O pause continua
+  // disponível durante esse intervalo e congela o contador normalmente.
+  const duration = 3;
   ui.introMode.textContent = isOutbreakMode() ? "Outbreak" : game.mode;
   ui.introMap.textContent = game.mapName;
   ui.introTeam.textContent = `${game.playerSide === "attackers" ? "Ataque" : "Defesa"} - ${map.vibe}`;
@@ -14526,6 +14720,8 @@ ui.globalRankingOverlay?.addEventListener("pointerdown", (event) => {
   if (event.target === ui.globalRankingOverlay) closeGlobalRanking();
 });
 ui.menuTutorialButton?.addEventListener("click", () => showWelcomeScreen({ firstAccess: false }));
+ui.menuUpdatesButton?.addEventListener("click", () => void openUpdateNotes());
+ui.updatesCloseButton?.addEventListener("click", () => void closeUpdateNotes());
 ui.welcomeTutorialButton?.addEventListener("click", () => void leaveWelcomeScreen("tutorial"));
 ui.welcomeMenuButton?.addEventListener("click", () => void leaveWelcomeScreen("menu"));
 ui.welcomeCloseButton?.addEventListener("click", closeWelcomeReview);
@@ -14585,16 +14781,4 @@ game.menuMapTimer = 0;
 startNewMatch();
 initializeGoogleIdentity();
 bootstrapAuthentication();
-if ("serviceWorker" in navigator && (window.isSecureContext || location.hostname === "localhost")) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js", {
-      scope: "./",
-      updateViaCache: "none",
-    })
-      .then((registration) => registration.update())
-      .catch((error) => {
-        console.warn("[PWA] Service Worker indisponível:", error?.message || error);
-      });
-  });
-}
 requestAnimationFrame(loop);

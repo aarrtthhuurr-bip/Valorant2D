@@ -11,5 +11,16 @@ animação ainda não tenha sido adicionada:
 - `supply_drop.gif`
 - `cloaking.gif`
 
-Use GIFs ou sprites animados com fundo transparente. A interface preserva
-pixels nítidos por meio de `image-rendering: pixelated`.
+## Formato recomendado
+
+Prefira spritesheets PNG com fundo transparente. Diferentemente de um GIF, os
+frames separados permitem controlar velocidade, pausas e interrupções pelo
+JavaScript. A Bomba de Pulso utiliza:
+
+- `bomb_explosion_row1.png`;
+- 8 frames de 32 x 33 pixels;
+- 250 ms por frame;
+- 500 ms de pausa no último frame.
+
+GIFs continuam aceitos como fallback para gadgets ainda não convertidos. A
+interface preserva pixels nítidos por meio de `image-rendering: pixelated`.

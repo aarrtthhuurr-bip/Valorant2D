@@ -2,14 +2,25 @@ const fs = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
 
-const databaseUrl = process.env.DATABASE_URL?.trim();
+const isDevelopment = process.env.NODE_ENV === 'development';
+const databaseUrl = (
+  isDevelopment
+    ? process.env.DEVELOPMENT_DATABASE_URL
+    : process.env.DATABASE_URL
+)?.trim();
 
 if (!databaseUrl) {
-  throw new Error('DATABASE_URL é obrigatória e deve conter a URI do PostgreSQL.');
+  throw new Error(
+    isDevelopment
+      ? 'DEVELOPMENT_DATABASE_URL é obrigatória no ambiente local. Não use o banco de produção para testes.'
+      : 'DATABASE_URL é obrigatória e deve conter a URI do PostgreSQL.',
+  );
 }
 
 if (!/^postgres(?:ql)?:\/\//i.test(databaseUrl)) {
-  throw new Error('DATABASE_URL deve começar com postgres:// ou postgresql://.');
+  throw new Error(
+    `${isDevelopment ? 'DEVELOPMENT_DATABASE_URL' : 'DATABASE_URL'} deve começar com postgres:// ou postgresql://.`,
+  );
 }
 
 const parsedDatabaseUrl = new URL(databaseUrl);

@@ -1,0 +1,80 @@
+{
+  "version": "0.9.0",
+  "status": "published",
+  "channel": "stable",
+  "publishedAt": "2026-08-05T18:13:00-03:00",
+  "title": "Atualização 0.9.0 do Valorant2D",
+  "summary": "Uma nova base de versões, melhorias no Outbreak e uma seleção de modos completamente remasterizada.",
+  "highlights": [
+    {
+      "title": "Fluxo de versões",
+      "description": "A branch main permanece estável enquanto novas funções são integradas e testadas na develop.",
+      "type": "system"
+    },
+    {
+      "title": "Servidor local integrado",
+      "description": "Front-End e Back-End agora podem ser iniciados juntos em http://localhost:3000.",
+      "type": "development"
+    },
+    {
+      "title": "Banco seguro para testes",
+      "description": "O ambiente local exige um PostgreSQL separado e não aceita silenciosamente o banco público.",
+      "type": "development"
+    },
+    {
+      "title": "Central de novidades",
+      "description": "Versões publicadas exibem uma tela com a lista completa das alterações.",
+      "type": "interface"
+    },
+    {
+      "title": "Seleção de modos remasterizada",
+      "description": "Default, Blackout e Outbreak agora ocupam cards principais e cada modo recebeu uma identidade cromática própria; Sandbox e Treino ficam na área de preparação.",
+      "type": "interface"
+    },
+    {
+      "title": "Entrada de partida mais ágil",
+      "description": "A apresentação do mapa está dois segundos mais curta e agora permite abrir o menu de pause.",
+      "type": "interface"
+    },
+    {
+      "title": "Atualização automática do PWA",
+      "description": "O jogo detecta uma publicação nova, renova o Service Worker e recarrega os arquivos sem limpeza manual.",
+      "type": "system"
+    },
+    {
+      "title": "Verificação de versão",
+      "description": "Uma validação impede publicar HTML, changelog e cache com números de versão diferentes.",
+      "type": "development"
+    },
+    {
+      "title": "Black Market mais sombrio",
+      "description": "O mercado recebeu fundo quase preto, grade discreta e acabamento clandestino.",
+      "type": "interface"
+    },
+    {
+      "title": "Bomba de Pulso reformulada",
+      "description": "O dano agora varia pela distância, com núcleo destrutivo, grande repulsão e efeitos expansivos.",
+      "type": "gameplay"
+    },
+    {
+      "title": "Torreta ofensiva",
+      "description": "A Torreta Chamariz passou a disparar rajadas fortes enquanto atrai a horda.",
+      "type": "gameplay"
+    },
+    {
+      "title": "Mina Cryo corrigida",
+      "description": "A mina agora congela completamente, causa dano e exibe uma cápsula de gelo em cada alvo.",
+      "type": "gameplay"
+    },
+    {
+      "title": "Gadgets prolongados",
+      "description": "Adrenalina e Camuflagem tiveram suas durações dobradas e receberam efeitos exclusivos.",
+      "type": "gameplay"
+    },
+    {
+      "title": "Animação em spritesheet",
+      "description": "A Bomba de Pulso usa frames PNG controlados: 250 ms por frame e 500 ms no último.",
+      "type": "gameplay"
+    }
+  ]
+}

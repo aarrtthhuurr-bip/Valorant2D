@@ -13,41 +13,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Valorant2D">
+  <meta name="valorant2d-version" content="0.9.0">
   <!-- Altere apenas este valor caso o endereço definitivo do Render mude. -->
   <meta name="valorant2d-api-url" content="https://valorant2d.onrender.com">
   <title>Valorant2D</title>
-  <link rel="manifest" href="./manifest.webmanifest?v=20260729-pwa-install">
-  <link id="gameStylesheet" rel="stylesheet" href="./styles.css?v=20260729-cache-recovery">
-  <script>
-    // Recuperação autônoma para instalações PWA que conservaram um cache
-    // incompleto: se CSS ou JavaScript não iniciarem, remove somente os caches
-    // deste site, desregistra o worker antigo e tenta novamente uma única vez.
-    window.addEventListener("load", function recoverBrokenPwaCache() {
-      window.setTimeout(async function verifyGameAssets() {
-        const stylesheetLoaded = Array.from(document.styleSheets)
-          .some((sheet) => String(sheet.href || "").includes("/styles.css"));
-        const gameLoaded = window.__VALORANT2D_BOOTED__ === true;
-        const recoveryAttempted = new URLSearchParams(window.location.search).has("cache-recovery");
-        if ((stylesheetLoaded && gameLoaded) || recoveryAttempted) return;
-        try {
-          if ("serviceWorker" in navigator) {
-            const registrations = await navigator.serviceWorker.getRegistrations();
-            await Promise.all(registrations.map((registration) => registration.unregister()));
-          }
-          if ("caches" in window) {
-            const keys = await caches.keys();
-            await Promise.all(keys
-              .filter((key) => key.startsWith("valorant2d-shell-"))
-              .map((key) => caches.delete(key)));
-          }
-        } finally {
-          const recoveryUrl = new URL(window.location.href);
-          recoveryUrl.searchParams.set("cache-recovery", Date.now());
-          window.location.replace(recoveryUrl.toString());
-        }
-      }, 1800);
-    });
-  </script>
+  <link rel="manifest" href="./manifest.webmanifest?v=0.9.0">
+  <link id="gameStylesheet" rel="stylesheet" href="./styles.css?v=0.9.0">
+  <script src="./version-manager.js?v=0.9.0"></script>
   <script src="https://unpkg.com/lucide@1.24.0" integrity="sha384-mooE85Luwgx+AyykX7e90VcN8/QCFTSIwPuHLmvcsLVoA0en7lKYb9XlOzn5G2co" crossorigin="anonymous"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="shortcut icon" href="./assets/Favicon/favicon.ico" type="image/x-icon">
@@ -365,6 +337,13 @@
           <span class="core-icon" aria-hidden="true"><img src="./assets/images/core_v5_bright.png" alt=""></span><strong id="mainCoreBalance">0</strong><em>C</em>
         </div>
         <button type="button" class="menu-tutorial-shortcut hidden" id="menuTutorialButton" aria-label="Abrir ajuda do jogo">?</button>
+        <button type="button" class="menu-updates-shortcut hidden" id="menuUpdatesButton" aria-label="Ver novidades da versão" title="Novidades">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 13V9l11-4v12L5 13Z"></path>
+            <path d="M8 14v5h3l1-4M18 8v6"></path>
+          </svg>
+          <span class="menu-updates-badge hidden" id="menuUpdatesBadge">NOVO</span>
+        </button>
         <div class="menu-card glass">
           <div class="account-summary hidden" id="accountSummary">
             <button type="button" class="account-profile-trigger" id="profileButton" aria-label="Abrir perfil do jogador">
@@ -610,6 +589,25 @@
         </div>
       </section>
 
+      <section class="updates-overlay hidden" id="updatesOverlay" aria-hidden="true" aria-labelledby="updatesTitle">
+        <div class="updates-modal" role="dialog" aria-modal="true">
+          <header class="updates-header">
+            <div>
+              <span id="updatesKicker">ATUALIZAÇÃO</span>
+              <h2 id="updatesTitle">O QUE HÁ DE NOVO</h2>
+            </div>
+            <span class="updates-version" id="updatesVersion">v0.0.0</span>
+          </header>
+          <div class="updates-content">
+            <p class="updates-summary" id="updatesSummary"></p>
+            <div class="updates-list" id="updatesList" aria-live="polite"></div>
+          </div>
+          <footer class="updates-actions">
+            <button type="button" class="updates-close" id="updatesCloseButton">CONTINUAR</button>
+          </footer>
+        </div>
+      </section>
+
       <section class="welcome-overlay hidden" id="welcomeOverlay" aria-labelledby="welcomeTitle" aria-hidden="true">
         <div class="welcome-background" aria-hidden="true"><i></i><i></i><i></i></div>
         <div class="welcome-panel" role="dialog" aria-modal="true">
@@ -680,6 +678,6 @@
     </div>
   </main>
 
-  <script src="./game.js?v=20260729-cache-recovery"></script>
+  <script src="./game.js?v=0.9.0"></script>
 </body>
 </html>

@@ -1,5 +1,6 @@
 require('dotenv').config();
 
+const path = require('path');
 const cors = require('cors');
 const express = require('express');
 const { initializeDatabase } = require('./config/database');
@@ -61,6 +62,38 @@ app.use('/api', (_request, response, next) => {
 app.use('/api', globalLimiter);
 app.use(express.json({ limit: '32kb', strict: true }));
 app.use(requireJson);
+
+// No desenvolvimento, o próprio Express entrega somente os arquivos públicos
+// necessários. Este bloco precede o health check para que "/" abra o jogo.
+// A pasta server nunca é exposta, protegendo .env, testes e código-fonte.
+if (process.env.NODE_ENV === 'development') {
+  const projectRoot = path.resolve(__dirname, '..');
+  const publicFiles = new Map([
+    ['/', 'index.html'],
+    ['/index.html', 'index.html'],
+    ['/game.js', 'game.js'],
+    ['/styles.css', 'styles.css'],
+    ['/version-manager.js', 'version-manager.js'],
+    ['/manifest.webmanifest', 'manifest.webmanifest'],
+    ['/service-worker.js', 'service-worker.js'],
+    ['/updates.json', 'updates.json'],
+  ]);
+
+  app.use('/assets', express.static(path.join(projectRoot, 'assets'), {
+    dotfiles: 'deny',
+    etag: true,
+    fallthrough: false,
+    index: false,
+    maxAge: 0,
+  }));
+  for (const [route, fileName] of publicFiles) {
+    app.get(route, (_request, response) => {
+      response.setHeader('Cache-Control', 'no-store, max-age=0');
+      response.sendFile(path.join(projectRoot, fileName));
+    });
+  }
+  console.log('[Desenvolvimento] Front-end disponível em http://localhost:3000.');
+}
 
 app.use('/', healthRoutes);
 app.use('/api', authRoutes);
