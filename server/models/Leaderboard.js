@@ -8,6 +8,12 @@ function coreRewardForMatch(gameMode, completedWaves = 0, randomInt = crypto.ran
   return randomInt(5, 16);
 }
 
+function performanceCoreBonus(assists = 0, damage = 0) {
+  const assistBonus = Math.floor(Math.max(0, Number(assists) || 0) / 3);
+  const damageBonus = Math.floor(Math.max(0, Number(damage) || 0) / 1500);
+  return Math.min(5, assistBonus + damageBonus);
+}
+
 const RANKING_CONFIGURATION = Object.freeze({
   default: Object.freeze({ metric: 'wins_default', played: 'matches_default > 0', type: 'wins' }),
   blackout: Object.freeze({ metric: 'wins_blackout', played: 'matches_blackout > 0', type: 'wins' }),
@@ -132,7 +138,7 @@ class Leaderboard {
    * Consome o comprovante, atualiza estatísticas e grava o ranking na mesma
    * transação. Uma falha não deixa a partida parcialmente registrada.
    */
-  static async recordCompletedMatch({ matchId, userId, playerName, gameMode, score, maxWave = 0, completedWaves = 0, victory, kills, deaths = 0 }) {
+  static async recordCompletedMatch({ matchId, userId, playerName, gameMode, score, maxWave = 0, completedWaves = 0, victory, kills, deaths = 0, assists = 0, damage = 0 }) {
     const client = await database.pool.connect();
     try {
       await client.query('BEGIN');
@@ -150,7 +156,8 @@ class Leaderboard {
       }
       // A recompensa nasce somente depois que o comprovante descartável foi
       // consumido e dentro da mesma transação das estatísticas da partida.
-      const coreReward = coreRewardForMatch(gameMode, completedWaves);
+      const coreReward = coreRewardForMatch(gameMode, completedWaves)
+        + performanceCoreBonus(assists, damage);
       const statisticsResult = await client.query(
         `UPDATE users
          SET partidas_jogadas = partidas_jogadas + 1,
@@ -208,4 +215,4 @@ class Leaderboard {
 }
 
 module.exports = Leaderboard;
-module.exports._test = { coreRewardForMatch, rankingConfiguration };
+module.exports._test = { coreRewardForMatch, performanceCoreBonus, rankingConfiguration };

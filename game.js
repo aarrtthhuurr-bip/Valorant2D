@@ -16,6 +16,9 @@ const ui = {
   weapon: document.getElementById("weaponText"),
   hp: document.getElementById("hpText"),
   ultCounter: document.getElementById("ultCounter"),
+  abilityFeedback: document.getElementById("abilityFeedback"),
+  abilityPrimaryState: document.getElementById("abilityPrimaryState"),
+  abilityUltimateState: document.getElementById("abilityUltimateState"),
   ultLabel: document.getElementById("ultLabel"),
   ultPoints: document.getElementById("ultPointsText"),
   ammo: document.getElementById("ammoText"),
@@ -216,6 +219,7 @@ const ui = {
   updatesVersion: document.getElementById("updatesVersion"),
   updatesSummary: document.getElementById("updatesSummary"),
   updatesList: document.getElementById("updatesList"),
+  updatesCount: document.getElementById("updatesCount"),
   updatesCloseButton: document.getElementById("updatesCloseButton"),
   commerceOverlay: document.getElementById("commerceOverlay"),
   commerceTabs: document.getElementById("commerceTabs"),
@@ -316,7 +320,8 @@ function showUxToast(message, { title = "INFORMAÇÃO", tone = "info", duration 
   if (!ui.uxToastRegion || !message) return;
   const toast = document.createElement("article");
   toast.className = `ux-toast is-${tone}`;
-  toast.innerHTML = '<span class="ux-toast-mark" aria-hidden="true"></span><div><strong></strong><p></p></div><button type="button" aria-label="Fechar mensagem">×</button>';
+  toast.style.setProperty("--toast-duration", `${Math.max(1200, duration)}ms`);
+  toast.innerHTML = '<span class="ux-toast-mark" aria-hidden="true"></span><div><strong></strong><p></p></div><button type="button" aria-label="Fechar mensagem">×</button><i class="ux-toast-timer" aria-hidden="true"></i>';
   toast.querySelector("strong").textContent = title;
   toast.querySelector("p").textContent = message;
   const remove = () => {
@@ -328,6 +333,37 @@ function showUxToast(message, { title = "INFORMAÇÃO", tone = "info", duration 
   ui.uxToastRegion.appendChild(toast);
   while (ui.uxToastRegion.children.length > 3) ui.uxToastRegion.firstElementChild?.remove();
   window.setTimeout(remove, Math.max(1200, duration));
+}
+
+const LAB_ACHIEVEMENTS_KEY = "valorant2d:lab-achievements";
+const LAB_ACHIEVEMENTS = Object.freeze({
+  firstBlood: { title: "PRIMEIRO CONTATO", description: "Conseguiu a primeira eliminação.", reward: 150 },
+  headHunter: { title: "MIRA CIRÚRGICA", description: "Acertou 5 headshots na mesma partida.", reward: 300 },
+  damageDealer: { title: "PRESSÃO MÁXIMA", description: "Causou 2.500 de dano na mesma partida.", reward: 400 },
+  outbreakTen: { title: "SOBREVIVENTE", description: "Alcançou a onda 10 no Outbreak.", reward: 500 },
+});
+
+function unlockedLabAchievements() {
+  try { return new Set(JSON.parse(localStorage.getItem(LAB_ACHIEVEMENTS_KEY) || "[]")); } catch { return new Set(); }
+}
+
+function unlockLabAchievement(id) {
+  if (!labEnabled("localAchievements") || !LAB_ACHIEVEMENTS[id]) return false;
+  const unlocked = unlockedLabAchievements();
+  if (unlocked.has(id)) return false;
+  unlocked.add(id);
+  localStorage.setItem(LAB_ACHIEVEMENTS_KEY, JSON.stringify([...unlocked]));
+  const achievement = LAB_ACHIEVEMENTS[id];
+  // Recompensa local e estritamente in-game; o saldo Core do servidor nunca
+  // é alterado pelo cliente.
+  game.money = Math.min(ECONOMY.cap, game.money + achievement.reward);
+  showUxToast(`${achievement.description} +$${achievement.reward} nesta partida.`, {
+    title: `CONQUISTA // ${achievement.title}`,
+    tone: "achievement",
+    duration: 5200,
+  });
+  playSound("purchase");
+  return true;
 }
 
 function loadUpdatesManifest() {
@@ -360,6 +396,15 @@ function updateNotesTypeLabel(type) {
   })[type] || "ATUALIZAÇÃO";
 }
 
+function updateNotesTypeIcon(type) {
+  return ({
+    gameplay: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12h8M12 8v8"></path><path d="M7 5h10l4 6-2 7-4-3H9l-4 3-2-7 4-6Z"></path></svg>',
+    interface: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 9h18M8 9v11"></path></svg>',
+    development: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"></path></svg>',
+    system: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"></path></svg>',
+  })[type] || '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"></path></svg>';
+}
+
 async function openUpdateNotes({ automatic = false } = {}) {
   window.clearTimeout(updatesAutoTimer);
   updatesAutoTimer = 0;
@@ -383,18 +428,26 @@ async function openUpdateNotes({ automatic = false } = {}) {
     }
     if (ui.updatesVersion) ui.updatesVersion.textContent = `v${payload.version}`;
     if (ui.updatesSummary) ui.updatesSummary.textContent = payload.summary || payload.title || "";
+    if (ui.updatesCount) ui.updatesCount.textContent = String(payload.highlights.length).padStart(2, "0");
     if (ui.updatesList) {
-      ui.updatesList.replaceChildren(...payload.highlights.map((highlight) => {
+      ui.updatesList.replaceChildren(...payload.highlights.map((highlight, index) => {
         const item = document.createElement("article");
         item.className = "updates-item";
         item.dataset.type = highlight.type || "system";
+        item.style.setProperty("--update-order", `"${String(index + 1).padStart(2, "0")}"`);
+        const heading = document.createElement("div");
+        heading.className = "updates-item-heading";
+        const icon = document.createElement("i");
+        icon.className = "updates-item-icon";
+        icon.innerHTML = updateNotesTypeIcon(highlight.type);
         const category = document.createElement("span");
         category.textContent = updateNotesTypeLabel(highlight.type);
         const title = document.createElement("strong");
         title.textContent = highlight.title || "Atualização";
         const description = document.createElement("p");
         description.textContent = highlight.description || "";
-        item.append(category, title, description);
+        heading.append(icon, category);
+        item.append(heading, title, description);
         return item;
       }));
     }
@@ -1559,6 +1612,96 @@ const FOV_VISIBILITY_RADIUS = 99999; // visão "infinita" — vai até a parede 
 const FOV_ANGLE_EPSILON = 0.0001;    // desvio menor = polígono mais preciso nas quinas
 const FOV_DARKNESS_OPACITY = 0.5;
 const FOV_STORAGE_KEY = "valorant2d-fov-mode";
+
+/**
+ * Balanço cinético central, sempre expresso em unidades por segundo.
+ *
+ * A simulação permanece fixa em 60 ticks por segundo; estes valores definem
+ * apenas o ritmo do jogo e podem ser recalibrados sem tocar no Delta Time.
+ */
+const GAME_CONFIG = Object.freeze({
+  movement: Object.freeze({
+    playerSpeed: 150,
+    playerUpgradeMultiplier: 1.1,
+    standardBotSpeed: 82,
+    standardBotIndexStep: 6,
+    allySpeed: 88,
+    allyIndexStep: 6,
+    trainingBotSpeed: 78,
+    trainingBotVariation: 13,
+    outbreakBotSpeedMultiplier: 0.72,
+  }),
+  projectiles: Object.freeze({
+    weaponSpeedMultiplier: 0.86,
+    utilitySpeedMultiplier: 0.88,
+  }),
+  combat: Object.freeze({
+    botAttackIntervalMultiplier: 1.12,
+  }),
+  outbreak: Object.freeze({
+    spawnIntervalMultiplier: 1.15,
+  }),
+});
+
+/**
+ * Laboratório de jogabilidade.
+ *
+ * Cada recurso pode ser desligado isoladamente pelo console, sem alterar a
+ * implementação principal:
+ *   Valorant2DLab.set("slidingCollision", false)
+ * As escolhas ficam apenas neste navegador e entram em vigor após recarregar.
+ */
+const TEST_MODE = true;
+const GAMEPLAY_LAB_STORAGE_KEY = "valorant2d:gameplay-lab";
+const GAMEPLAY_LAB_DEFAULTS = Object.freeze({
+  interpolation: true,
+  optimizedFov: true,
+  fovEntityClipping: true,
+  distinctHitboxes: true,
+  dynamicRecoil: true,
+  performanceEconomy: true,
+  slidingCollision: true,
+  yoruExitProtection: true,
+  allyCoverReload: true,
+  syntheticKillcam: true,
+  dynamicOmenSmoke: true,
+  localAchievements: true,
+  abilityFeedback: true,
+  enhancedKillfeed: true,
+  enhancedShopFeedback: true,
+  enhancedToasts: true,
+});
+
+function readGameplayLabOverrides() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(GAMEPLAY_LAB_STORAGE_KEY) || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+const GAMEPLAY_LAB = Object.freeze({ ...GAMEPLAY_LAB_DEFAULTS, ...readGameplayLabOverrides() });
+function labEnabled(feature) {
+  return TEST_MODE && GAMEPLAY_LAB[feature] !== false;
+}
+
+window.Valorant2DLab = Object.freeze({
+  enabled: TEST_MODE,
+  features: GAMEPLAY_LAB,
+  set(feature, enabled) {
+    if (!(feature in GAMEPLAY_LAB_DEFAULTS)) throw new Error(`Recurso de laboratório desconhecido: ${feature}`);
+    const overrides = readGameplayLabOverrides();
+    overrides[feature] = Boolean(enabled);
+    localStorage.setItem(GAMEPLAY_LAB_STORAGE_KEY, JSON.stringify(overrides));
+    return `Recarregue a página para aplicar ${feature}=${Boolean(enabled)}.`;
+  },
+  reset() {
+    localStorage.removeItem(GAMEPLAY_LAB_STORAGE_KEY);
+    return "Configurações do laboratório restauradas. Recarregue a página.";
+  },
+});
+
 // Custo de orbs por agente para ativar a ultimate
 const ULT_COSTS = {
   neon:     5,
@@ -1853,6 +1996,12 @@ const agents = [
         spawnParticles(p.x, p.y, "#315cff", 26, 180);
         p.x = destination.x;
         p.y = destination.y;
+        p.lastX = destination.x;
+        p.lastY = destination.y;
+        if (labEnabled("yoruExitProtection")) {
+          p.yoruExitProtectedUntil = performance.now() + 900;
+          showUxToast("Proteção dimensional ativa por 0,9 s.", { title: "YORU // SAÍDA SEGURA", tone: "info", duration: 1500 });
+        }
         spawnParticles(p.x, p.y, "#80a0ff", 32, 220);
         game.screenTint = { color: "rgba(20, 40, 140, 0.48)", life: 0.32, maxLife: 0.32 };
         game.yoruGatecrash = null;
@@ -1862,8 +2011,8 @@ const agents = [
         active: true,
         x: p.x + Math.cos(p.angle) * 28,
         y: p.y + Math.sin(p.angle) * 28,
-        vx: Math.cos(p.angle) * 360,
-        vy: Math.sin(p.angle) * 360,
+        vx: Math.cos(p.angle) * 360 * GAME_CONFIG.projectiles.utilitySpeedMultiplier,
+        vy: Math.sin(p.angle) * 360 * GAME_CONFIG.projectiles.utilitySpeedMultiplier,
         life: 5,
         maxLife: 5,
       };
@@ -1875,7 +2024,7 @@ const agents = [
 const weapons = [
   { id: "pistol", name: "Classic", price: 0, damage: 28, fireRate: 0.34, speed: 980, spread: 0.04, mag: 12, reload: 1.1 },
   { id: "light-pistol", name: "Shorty", price: 650, damage: 20, fireRate: 0.18, speed: 930, spread: 0.075, mag: 15, reload: 1.2 },
-  { id: "revolver", name: "Sheriff", price: 1050, damage: 54, fireRate: 0.44, speed: 1180, spread: 0.035, mag: 6, reload: 1.35 },
+  { id: "revolver", name: "Sheriff", price: 650, damage: 54, fireRate: 0.44, speed: 1180, spread: 0.035, mag: 6, reload: 1.35 },
   { id: "smg", name: "Spectre", price: 1450, damage: 18, fireRate: 0.09, speed: 900, spread: 0.09, mag: 25, reload: 1.4 },
   { id: "shotgun", name: "Judge", price: 2150, damage: 15, fireRate: 0.65, speed: 760, spread: 0.22, mag: 6, reload: 1.5, pellets: 6 },
   { id: "carbine", name: "Bulldog", price: 3200, damage: 33, fireRate: 0.12, speed: 1080, spread: 0.055, mag: 24, reload: 1.6 },
@@ -2149,7 +2298,7 @@ const equipment = [
 
 const outbreakAllyItems = [
   { id: "allyUnit", name: "Recrutar Aliado", price: 3000, desc: "Operador imortal que acompanha o jogador.", apply: recruitOutbreakAlly },
-  { id: "allySheriff", name: "Sheriff", price: 1050, desc: "Precisão de alto impacto.", weaponId: "revolver", apply: () => { game.allyLoadout.weaponId = "revolver"; game.allyLoadout.ownedWeapons.add("revolver"); } },
+  { id: "allySheriff", name: "Sheriff", price: 650, desc: "Precisão de alto impacto.", weaponId: "revolver", apply: () => { game.allyLoadout.weaponId = "revolver"; game.allyLoadout.ownedWeapons.add("revolver"); } },
   { id: "allyBulldog", name: "Bulldog", price: 3200, desc: "Rajadas controladas para média distância.", weaponId: "carbine", apply: () => { game.allyLoadout.weaponId = "carbine"; game.allyLoadout.ownedWeapons.add("carbine"); } },
   { id: "allyVandal", name: "Vandal", price: 3900, desc: "Poder de parada em qualquer distância.", weaponId: "rifle", apply: () => { game.allyLoadout.weaponId = "rifle"; game.allyLoadout.ownedWeapons.add("rifle"); } },
   { id: "allyOperator", name: "Operator", price: 6900, desc: "Cobertura pesada de longa distância.", weaponId: "sniper", apply: () => { game.allyLoadout.weaponId = "sniper"; game.allyLoadout.ownedWeapons.add("sniper"); } },
@@ -2195,6 +2344,8 @@ const BLACK_MARKET_GADGETS = Object.freeze([
       src: "./assets/black-market/bomb_explosion_row1.png",
       frameWidth: 32,
       frameHeight: 33,
+      columns: 8,
+      rows: 1,
       frames: 8,
       frameDuration: 250,
       lastFrameDuration: 500,
@@ -2209,6 +2360,17 @@ const BLACK_MARKET_GADGETS = Object.freeze([
     chargesPerWave: 1,
     cooldown: 25,
     preview: "./assets/black-market/turret.gif",
+    staticPreview: "./assets/black-market/turret.png",
+    spriteSheet: {
+      src: "./assets/black-market/Turret_frames.png",
+      frameWidth: 32,
+      frameHeight: 32,
+      columns: 14,
+      rows: 1,
+      frames: 14,
+      frameDuration: 180,
+      lastFrameDuration: 420,
+    },
     fallback: "⌖",
   },
   {
@@ -2219,6 +2381,17 @@ const BLACK_MARKET_GADGETS = Object.freeze([
     chargesPerWave: 2,
     cooldown: 18,
     preview: "./assets/black-market/cryo_mine.gif",
+    staticPreview: "./assets/black-market/cryo_mine.png",
+    spriteSheet: {
+      src: "./assets/black-market/ice_frames.png",
+      frameWidth: 32,
+      frameHeight: 32,
+      columns: 8,
+      rows: 8,
+      frames: 64,
+      frameDuration: 120,
+      lastFrameDuration: 420,
+    },
     fallback: "❄",
   },
   {
@@ -2229,6 +2402,7 @@ const BLACK_MARKET_GADGETS = Object.freeze([
     chargesPerWave: 1,
     cooldown: 30,
     preview: "./assets/black-market/adrenalina.gif",
+    staticPreview: "./assets/black-market/adrenalina.png",
     fallback: "ϟ",
   },
   {
@@ -2239,6 +2413,7 @@ const BLACK_MARKET_GADGETS = Object.freeze([
     chargesPerWave: 1,
     cooldown: 40,
     preview: "./assets/black-market/supply_drop.gif",
+    staticPreview: "./assets/black-market/supply_drop.png",
     fallback: "✚",
   },
   {
@@ -2249,6 +2424,7 @@ const BLACK_MARKET_GADGETS = Object.freeze([
     chargesPerWave: 1,
     cooldown: 22,
     preview: "./assets/black-market/cloaking.gif",
+    staticPreview: "./assets/black-market/cloaking.png",
     fallback: "◌",
   },
 ]);
@@ -2304,18 +2480,94 @@ function setBlackMarketFeedback(message) {
   if (ui.blackMarketFeedback) ui.blackMarketFeedback.textContent = message;
 }
 
-function startPreviewSpriteAnimation(element, spriteSheet) {
-  if (!element || !spriteSheet) return;
+function configureBlackMarketPreview(card, gadget) {
+  const previewContainer = card.querySelector(".black-market-preview");
+  const spritePreview = card.querySelector(".black-market-sprite-preview");
+  const imagePreview = card.querySelector(".black-market-image-preview");
+  const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  let animationTimer = 0;
   let frame = 0;
-  const drawFrame = () => {
-    if (!element.isConnected) return;
-    element.style.backgroundPosition = `${-frame * spriteSheet.frameWidth}px 0`;
-    const isLastFrame = frame === spriteSheet.frames - 1;
-    const delay = isLastFrame ? spriteSheet.lastFrameDuration : spriteSheet.frameDuration;
-    frame = (frame + 1) % spriteSheet.frames;
-    window.setTimeout(drawFrame, delay);
+  let running = false;
+
+  const showSpriteFrame = (index) => {
+    if (!spritePreview || !gadget.spriteSheet) return;
+    const columns = Math.max(1, gadget.spriteSheet.columns || gadget.spriteSheet.frames || 1);
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    spritePreview.style.backgroundPosition = `${-column * gadget.spriteSheet.frameWidth}px ${-row * gadget.spriteSheet.frameHeight}px`;
   };
-  drawFrame();
+
+  const stop = () => {
+    running = false;
+    window.clearTimeout(animationTimer);
+    animationTimer = 0;
+    frame = 0;
+    showSpriteFrame(0);
+    card.classList.remove("is-previewing");
+    if (imagePreview) {
+      imagePreview.src = gadget.staticPreview || gadget.preview;
+      imagePreview.alt = `Imagem estática de ${gadget.name}`;
+    }
+  };
+
+  const advanceSprite = () => {
+    if (!running || !spritePreview?.isConnected || !gadget.spriteSheet) return;
+    showSpriteFrame(frame);
+    const isLastFrame = frame === gadget.spriteSheet.frames - 1;
+    const delay = isLastFrame
+      ? gadget.spriteSheet.lastFrameDuration
+      : gadget.spriteSheet.frameDuration;
+    frame = (frame + 1) % gadget.spriteSheet.frames;
+    animationTimer = window.setTimeout(advanceSprite, delay);
+  };
+
+  const start = () => {
+    if (running || prefersReducedMotion) return;
+    running = true;
+    card.classList.add("is-previewing");
+    if (spritePreview && gadget.spriteSheet) {
+      frame = 0;
+      advanceSprite();
+      return;
+    }
+    if (imagePreview) {
+      // Reatribuir o src reinicia GIFs que já tenham sido reproduzidos em
+      // outro hover, sem modificar o listener do botão de compra.
+      imagePreview.classList.remove("is-missing");
+      imagePreview.src = "";
+      imagePreview.src = gadget.preview;
+      imagePreview.alt = `Animação de ${gadget.name}`;
+    }
+  };
+
+  if (spritePreview && gadget.spriteSheet) {
+    const columns = Math.max(1, gadget.spriteSheet.columns || gadget.spriteSheet.frames || 1);
+    const rows = Math.max(1, gadget.spriteSheet.rows || Math.ceil(gadget.spriteSheet.frames / columns));
+    Object.assign(spritePreview.style, {
+      width: `${gadget.spriteSheet.frameWidth}px`,
+      height: `${gadget.spriteSheet.frameHeight}px`,
+      backgroundImage: `url("${gadget.spriteSheet.src}")`,
+      backgroundSize: `${gadget.spriteSheet.frameWidth * columns}px ${gadget.spriteSheet.frameHeight * rows}px`,
+    });
+    showSpriteFrame(0);
+  }
+
+  imagePreview?.addEventListener("error", () => {
+    imagePreview.classList.add("is-missing");
+    previewContainer?.classList.add("uses-fallback");
+  });
+  imagePreview?.addEventListener("load", () => {
+    imagePreview.classList.remove("is-missing");
+    previewContainer?.classList.remove("uses-fallback");
+  });
+
+  card.addEventListener("pointerenter", start);
+  card.addEventListener("pointerleave", stop);
+  card.addEventListener("focusin", start);
+  card.addEventListener("focusout", (event) => {
+    if (!card.contains(event.relatedTarget)) stop();
+  });
+  stop();
 }
 
 function renderBlackMarket() {
@@ -2326,9 +2578,10 @@ function renderBlackMarket() {
     const equipped = blackMarketState.equipped === gadget.id;
     const card = document.createElement("article");
     card.className = `black-market-card${equipped ? " is-equipped" : ""}`;
+    card.dataset.gadget = gadget.id;
     const previewMarkup = gadget.spriteSheet
-      ? `<span class="black-market-sprite-preview" role="img" aria-label="Prévia animada de ${gadget.name}"></span>`
-      : `<img src="${gadget.preview}" alt="Prévia animada de ${gadget.name}">`;
+      ? `<span class="black-market-sprite-preview" role="img" aria-label="Primeiro frame de ${gadget.name}"></span>`
+      : `<img class="black-market-image-preview" src="${gadget.staticPreview || gadget.preview}" alt="Imagem estática de ${gadget.name}">`;
     card.innerHTML = `
       <div class="black-market-preview${gadget.spriteSheet ? " has-sprite" : ""}">
         <span class="black-market-preview-fallback" aria-hidden="true">${gadget.fallback}</span>
@@ -2344,18 +2597,7 @@ function renderBlackMarket() {
         <span class="black-market-price">${gadget.price} C</span>
         <button type="button" class="black-market-action"${equipped || commerceState.busy ? " disabled" : ""}>${equipped ? "EQUIPADO" : unlocked ? "EQUIPAR" : "DESBLOQUEAR"}</button>
       </div>`;
-    const preview = card.querySelector("img");
-    preview?.addEventListener("error", () => preview.classList.add("is-missing"), { once: true });
-    const spritePreview = card.querySelector(".black-market-sprite-preview");
-    if (spritePreview && gadget.spriteSheet) {
-      Object.assign(spritePreview.style, {
-        width: `${gadget.spriteSheet.frameWidth}px`,
-        height: `${gadget.spriteSheet.frameHeight}px`,
-        backgroundImage: `url("${gadget.spriteSheet.src}")`,
-        backgroundSize: `${gadget.spriteSheet.frameWidth * gadget.spriteSheet.frames}px ${gadget.spriteSheet.frameHeight}px`,
-      });
-      startPreviewSpriteAnimation(spritePreview, gadget.spriteSheet);
-    }
+    configureBlackMarketPreview(card, gadget);
     card.querySelector(".black-market-action")?.addEventListener("click", () => {
       if (!unlocked) purchaseBlackMarketGadget(gadget);
       else equipBlackMarketGadget(gadget);
@@ -3801,6 +4043,7 @@ const game = {
   fogMode: false,
   omenUlt: null,
   fovMode: localStorage.getItem(FOV_STORAGE_KEY) === "on",
+  fovClipActive: false,
   fovSegmentsCache: { key: null, segments: null },
   fovPolygonCache: { key: null, polygon: null },
   ultFlashTimer: 0,
@@ -3834,7 +4077,10 @@ const game = {
   shotChain: 0,
   crosshairScale: 1,
   lossStreak: 0,
-  stats: { kills: 0, deaths: 0, headshots: 0, plants: 0, defuses: 0, damage: 0 },
+  stats: { kills: 0, deaths: 0, headshots: 0, plants: 0, defuses: 0, damage: 0, assists: 0 },
+  replayBuffer: [],
+  replaySampleTimer: 0,
+  syntheticKillcam: null,
   selectedAgent: agents[0],
   selectedWeapon: weapons[0],
   ownedWeapons: new Set(["pistol"]),
@@ -3915,7 +4161,8 @@ function effectivePlayerMaxArmor() {
 }
 
 function effectivePlayerSpeed() {
-  const baseSpeed = game.upgrades.speed ? 248 : 225;
+  const baseSpeed = GAME_CONFIG.movement.playerSpeed
+    * (game.upgrades.speed ? GAME_CONFIG.movement.playerUpgradeMultiplier : 1);
   const adrenaline = outbreakEffectActive(game.outbreakEffects.adrenalineUntilWave) ? 1.2 : 1;
   const overdrive = game.outbreak && performance.now() < game.outbreakEffects.overdriveUntil ? 1.28 : 1;
   return baseSpeed * adrenaline * overdrive;
@@ -4012,7 +4259,7 @@ function makeBot(spawn, index) {
     maxHp: 100,
     armor: botArmor,
     maxArmor: botArmor,
-    speed: 118 + index * 8,
+    speed: GAME_CONFIG.movement.standardBotSpeed + index * GAME_CONFIG.movement.standardBotIndexStep,
     angle: Math.PI / 2,
     alive: true,
     side: botSide,
@@ -4053,7 +4300,7 @@ function makeAlly(spawn, index) {
     maxHp: 100,
     armor,
     maxArmor: armor,
-    speed: 126 + index * 8,
+    speed: GAME_CONFIG.movement.allySpeed + index * GAME_CONFIG.movement.allyIndexStep,
     angle: game.playerSide === "attackers" ? -Math.PI / 2 : Math.PI / 2,
     alive: true,
     side: game.playerSide,
@@ -4494,6 +4741,7 @@ function startActionRound() {
 }
 
 let shopKeyHandler = null;
+let pendingShopFeedbackCard = null;
 
 function isShopOpen() {
   return !!ui.shop && !ui.shop.classList.contains("hidden");
@@ -4515,6 +4763,13 @@ function announceShopResult(text, { success = false, title = "ARSENAL", purchase
   showUxToast(text, { title, tone: success ? "success" : "warning", duration: success ? 2200 : 3200 });
   if (purchaseSound) playSound("ingame_purchase");
   else if (!success) playSound("denied");
+  if (labEnabled("enhancedShopFeedback") && pendingShopFeedbackCard) {
+    const stateClass = success ? "purchase-confirmed" : "purchase-denied";
+    pendingShopFeedbackCard.classList.remove("purchase-confirmed", "purchase-denied");
+    void pendingShopFeedbackCard.offsetWidth;
+    pendingShopFeedbackCard.classList.add(stateClass);
+    window.setTimeout(() => pendingShopFeedbackCard?.classList.remove(stateClass), 720);
+  }
 }
 
 function showContextTipOnce(id, message) {
@@ -4624,7 +4879,10 @@ function startNewMatch() {
   game.enemyScore = 0;
   game.money = game.sandbox || game.training ? 99999 : ECONOMY.start;
   game.lossStreak = 0;
-  game.stats = { kills: 0, deaths: 0, headshots: 0, plants: 0, defuses: 0, damage: 0 };
+  game.stats = { kills: 0, deaths: 0, headshots: 0, plants: 0, defuses: 0, damage: 0, assists: 0 };
+  game.replayBuffer = [];
+  game.replaySampleTimer = 0;
+  game.syntheticKillcam = null;
   game.ownedWeapons = new Set(["pistol"]);
   game.upgrades = { armorCapacity: 0, speed: false, magazine: false, reload: false };
   game.armor = 0;
@@ -4859,6 +5117,8 @@ async function recordCompletedMatch() {
     game_mode: gameMode,
     wave,
     survival_seconds: survivalSeconds,
+    assists: labEnabled("performanceEconomy") ? Math.max(0, Math.round(game.stats?.assists || 0)) : 0,
+    damage: labEnabled("performanceEconomy") ? Math.max(0, Math.round(game.stats?.damage || 0)) : 0,
     matchToken: game.matchSubmissionToken,
   };
 
@@ -4966,6 +5226,8 @@ function currentPlayerDefuseTime() {
 
 function applyDamage(entity, amount) {
   if (entity.id === "player" && game.godMode) return 0;
+  if (entity.id === "player" && labEnabled("yoruExitProtection")
+    && performance.now() < (entity.yoruExitProtectedUntil || 0)) return 0;
   if (game.outbreak && entity.id?.startsWith("ally-")) return 0;
   if (entity.id === "player" && game.outbreak && performance.now() < game.outbreakEffects.phaseShiftUntil) return 0;
   if (entity.id === "player" && isOutbreakMode()
@@ -5083,6 +5345,33 @@ function moveEntity(entity, dx, dy, walls) {
     || (includeDestructibles && game.destructibles.some((wall) => circleRectCollides(entity, wall)));
   const startX = entity.x;
   const startY = entity.y;
+  if (labEnabled("slidingCollision") && entity.id === "player" && dx && dy) {
+    entity.x += dx;
+    entity.y += dy;
+    if (!collidesWithScenario()) {
+      entity.x = Math.max(entity.r, Math.min(map.width - entity.r, entity.x));
+      entity.y = Math.max(entity.r, Math.min(map.height - entity.r, entity.y));
+      return Math.hypot(entity.x - startX, entity.y - startY);
+    }
+    entity.x = startX;
+    entity.y = startY;
+    // Resolve primeiro o eixo com maior intenção e preserva o tangencial.
+    // Isso evita prender o círculo nas quinas sem permitir atravessar paredes.
+    const attempts = Math.abs(dx) >= Math.abs(dy)
+      ? [{ x: dx, y: 0 }, { x: 0, y: dy }]
+      : [{ x: 0, y: dy }, { x: dx, y: 0 }];
+    for (const attempt of attempts) {
+      entity.x += attempt.x;
+      entity.y += attempt.y;
+      if (collidesWithScenario()) {
+        entity.x -= attempt.x;
+        entity.y -= attempt.y;
+      }
+    }
+    entity.x = Math.max(entity.r, Math.min(map.width - entity.r, entity.x));
+    entity.y = Math.max(entity.r, Math.min(map.height - entity.r, entity.y));
+    return Math.hypot(entity.x - startX, entity.y - startY);
+  }
   entity.x += dx;
   if (collidesWithScenario()) entity.x -= dx;
   entity.y += dy;
@@ -5219,8 +5508,8 @@ function launchRazeGrenade(owner, angle, mini = false) {
   game.grenades.push({
     x: owner.x + Math.cos(angle) * (owner.r + 8),
     y: owner.y + Math.sin(angle) * (owner.r + 8),
-    vx: Math.cos(angle) * (mini ? 270 : 430),
-    vy: Math.sin(angle) * (mini ? 270 : 430),
+    vx: Math.cos(angle) * (mini ? 270 : 430) * GAME_CONFIG.projectiles.utilitySpeedMultiplier,
+    vy: Math.sin(angle) * (mini ? 270 : 430) * GAME_CONFIG.projectiles.utilitySpeedMultiplier,
     life: mini ? 0.85 : 0.72,
     maxLife: mini ? 0.85 : 0.72,
     r: mini ? 7 : 10,
@@ -5239,8 +5528,8 @@ function throwJettKnife(owner, angle = owner?.angle || 0, spread = 0) {
     y: owner.y + Math.sin(shotAngle) * owner.r,
     startX: owner.x,
     startY: owner.y,
-    vx: Math.cos(shotAngle) * 1420,
-    vy: Math.sin(shotAngle) * 1420,
+    vx: Math.cos(shotAngle) * 1420 * GAME_CONFIG.projectiles.utilitySpeedMultiplier,
+    vy: Math.sin(shotAngle) * 1420 * GAME_CONFIG.projectiles.utilitySpeedMultiplier,
     life: 0.92,
     damage: 84,
     team: entityTeam(owner) === "player" ? "player" : "bot",
@@ -5276,8 +5565,8 @@ function fireRazeRocket(owner) {
   game.rockets.push({
     x: owner.x + Math.cos(owner.angle) * (owner.r + 16),
     y: owner.y + Math.sin(owner.angle) * (owner.r + 16),
-    vx: Math.cos(owner.angle) * 620,
-    vy: Math.sin(owner.angle) * 620,
+    vx: Math.cos(owner.angle) * 620 * GAME_CONFIG.projectiles.utilitySpeedMultiplier,
+    vy: Math.sin(owner.angle) * 620 * GAME_CONFIG.projectiles.utilitySpeedMultiplier,
     life: 1.9,
     maxLife: 1.9,
     r: 13,
@@ -5975,6 +6264,22 @@ function castFovRay(radians) {
   };
 }
 
+function activeFovCorners(origin) {
+  const segments = wallsToSegments();
+  if (!labEnabled("optimizedFov")) return segments.flatMap((segment) => [segment.p1, segment.p2]);
+  // Uma quina distante ainda pode formar a silhueta visível atrás do jogador.
+  // Por isso a otimização segura elimina SOMENTE coordenadas repetidas; jamais
+  // descarta vértices por distância, viewport ou suposta oclusão antecipada.
+  // Cada raio continua sendo interceptado contra todos os segmentos do mapa.
+  const unique = new Map();
+  for (const segment of segments) {
+    for (const point of [segment.p1, segment.p2]) {
+      unique.set(`${Math.round(point.x)},${Math.round(point.y)}`, point);
+    }
+  }
+  return [...unique.values()];
+}
+
 function buildFovPolygon() {
   if (!game.player?.alive) return [];
   const origin = game.player;
@@ -5993,11 +6298,8 @@ function buildFovPolygon() {
     }
   };
 
-  for (const segment of wallsToSegments()) {
-    for (const point of [segment.p1, segment.p2]) {
-      // Sem filtro de distância: todos os vértices recebem raios extras, evitando vazamento nas quinas
-      addAngle(Math.atan2(point.y - origin.y, point.x - origin.x));
-    }
+  for (const point of activeFovCorners(origin)) {
+    addAngle(Math.atan2(point.y - origin.y, point.x - origin.x));
   }
 
   for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 12) addAngle(angle);
@@ -6029,6 +6331,10 @@ function estaNoCampoDeVisao(objeto, radius = 0) {
   if (!isFovModeEnabled()) return true;
   if (isRoundTransitionRevealActive()) return true;
   if (!game.player?.alive || !objeto) return false;
+  // Dentro do bloco recortado não fazemos uma decisão binária pelo centro da
+  // entidade. Basta enviá-la ao Canvas; ctx.clip() conserva somente os pixels
+  // realmente alcançados pelo polígono de visão.
+  if (game.fovClipActive) return !isOutsideViewport(objeto, Math.max(4, radius));
   const dx = objeto.x - game.player.x;
   const dy = objeto.y - game.player.y;
   const distance = Math.hypot(dx, dy);
@@ -6093,6 +6399,9 @@ function headCircle(entity) {
 }
 
 function hitRegion(x1, y1, x2, y2, entity, padding = 0) {
+  if (!labEnabled("distinctHitboxes")) {
+    return segmentCircleHit(x1, y1, x2, y2, entity, padding) ? "body" : null;
+  }
   if (segmentCircleHit(x1, y1, x2, y2, headCircle(entity), padding * 0.55)) return "head";
   if (segmentCircleHit(x1, y1, x2, y2, entity, padding)) return "body";
   return null;
@@ -6176,7 +6485,9 @@ function shoot(owner, targetX, targetY, weapon, team) {
     if (!infiniteAmmo) owner.ammo -= 1;
     game.shotChain += 1;
     const recoilGain = weapon.id === "sniper" ? 0.5 : weapon.id === "lmg" ? 0.26 : weapon.id === "smg" ? 0.22 : 0.18;
-    game.recoilHeat = Math.min(2.6, game.recoilHeat + recoilGain);
+    game.recoilHeat = labEnabled("dynamicRecoil")
+      ? Math.min(2.6, game.recoilHeat + recoilGain)
+      : 0;
     game.shake = Math.max(game.shake, shakeForWeapon(weapon));
     playWeaponSound(weapon, "shot", owner);
     spawnParticles(owner.x + Math.cos(owner.angle) * 24, owner.y + Math.sin(owner.angle) * 24, "#ffe6a8", 5, 90);
@@ -6186,7 +6497,9 @@ function shoot(owner, targetX, targetY, weapon, team) {
   for (let i = 0; i < count; i++) {
     const base = Math.atan2(targetY - owner.y, targetX - owner.x);
     const movingPenalty = owner.moving ? 1.8 : 1;
-    const recoilPenalty = team === "player" ? 1 + game.recoilHeat * 0.85 : 1 + (owner.aiState === "plant" || owner.aiState === "defuse" ? 0.55 : 0);
+    const recoilPenalty = team === "player"
+      ? (labEnabled("dynamicRecoil") ? 1 + game.recoilHeat * 0.85 : 1)
+      : 1 + (owner.aiState === "plant" || owner.aiState === "defuse" ? 0.55 : 0);
     const neonUltimate = owner.ultimate?.type === "neon";
     const spread = neonUltimate ? 0 : (Math.random() - 0.5) * weapon.spread * 2 * movingPenalty * recoilPenalty;
     const startX = owner.x + Math.cos(base) * owner.r;
@@ -6196,8 +6509,8 @@ function shoot(owner, targetX, targetY, weapon, team) {
       y: startY,
       startX,
       startY,
-      vx: Math.cos(base + spread) * (neonUltimate ? weapon.speed * 1.25 : weapon.speed),
-      vy: Math.sin(base + spread) * (neonUltimate ? weapon.speed * 1.25 : weapon.speed),
+      vx: Math.cos(base + spread) * (neonUltimate ? weapon.speed * 1.25 : weapon.speed) * GAME_CONFIG.projectiles.weaponSpeedMultiplier,
+      vy: Math.sin(base + spread) * (neonUltimate ? weapon.speed * 1.25 : weapon.speed) * GAME_CONFIG.projectiles.weaponSpeedMultiplier,
       life: 0.9,
       damage: neonUltimate ? Math.min(55, weapon.damage * 1.25) : weapon.damage,
       team,
@@ -6387,10 +6700,12 @@ function updateOmenUltimate(dt) {
     p.moving = false;
     if (state.travelTimer <= 0) {
       const destination = nearestWalkablePoint(state.destination, state.from);
-      p.x = destination.x;
-      p.y = destination.y;
-      p.lastX = destination.x;
-      p.lastY = destination.y;
+        p.x = destination.x;
+        p.y = destination.y;
+        p.lastX = destination.x;
+        p.lastY = destination.y;
+        p.renderPrevX = destination.x;
+        p.renderPrevY = destination.y;
       p.invulnerable = false;
       p.untargetable = false;
       p.ultimate = null;
@@ -7256,8 +7571,16 @@ function botShootAt(bot, target, dt, team, firePenalty = 1, options = {}) {
   bot.angle = angle;
   bot.fireTimer -= dt;
   if (bot.fireTimer <= 0) {
+    if (team === "ally" && labEnabled("allyCoverReload") && (bot.labReloadTimer || 0) > 0) return;
     const bulletStart = game.bullets.length;
     shoot(bot, aimX, aimY, weapon, team);
+    if (team === "ally" && labEnabled("allyCoverReload")) {
+      bot.labShotsSinceReload = (bot.labShotsSinceReload || 0) + 1;
+      if (bot.labShotsSinceReload >= Math.max(4, Math.round((weapon.mag || 12) * 0.7))) {
+        bot.labReloadTimer = Math.max(0.8, weapon.reload || 1.2);
+        bot.labShotsSinceReload = 0;
+      }
+    }
     const latest = game.bullets.slice(bulletStart);
     if (team === "ally" && game.allyLoadout.damageMultiplier > 1) {
       latest.forEach((bullet) => { if (bullet.team === "ally") bullet.damage *= game.allyLoadout.damageMultiplier; });
@@ -7278,7 +7601,11 @@ function botShootAt(bot, target, dt, team, firePenalty = 1, options = {}) {
       });
     }
     const multiplier = team === "bot" ? game.enemyFireMultiplier : 1;
-    bot.fireTimer = (weapon.fireRate + 0.18 + Math.random() * 0.22) * multiplier * firePenalty * (bot.outbreakFirePenalty || 1);
+    bot.fireTimer = (weapon.fireRate + 0.18 + Math.random() * 0.22)
+      * multiplier
+      * firePenalty
+      * (bot.outbreakFirePenalty || 1)
+      * GAME_CONFIG.combat.botAttackIntervalMultiplier;
     bot.strafe *= -1;
   }
 }
@@ -7710,6 +8037,21 @@ function updateAllies(dt) {
   game.allies.forEach((ally, index) => {
     if (!ally.alive) return;
     const enemy = cachedBotPerception(ally, "enemy", () => closestVisibleEnemy(ally));
+    if (labEnabled("allyCoverReload") && (ally.labReloadTimer || 0) > 0) {
+      ally.labReloadTimer = Math.max(0, ally.labReloadTimer - dt);
+      ally.aiState = "reload-cover";
+      const cover = enemy ? findCoverPoint(ally, enemy) : null;
+      if (cover && Math.hypot(ally.x - cover.x, ally.y - cover.y) > 18) {
+        moveBotToward(ally, cover, dt, 1.08);
+      } else {
+        // Sem cobertura útil, mantém uma formação protetora próxima do jogador.
+        const angle = Math.atan2(ally.y - game.player.y, ally.x - game.player.x) || index * Math.PI;
+        const formation = { x: game.player.x + Math.cos(angle) * 72, y: game.player.y + Math.sin(angle) * 72 };
+        moveBotToward(ally, formation, dt, 0.82);
+      }
+      keepSquadSpacing(ally, squad, dt);
+      return;
+    }
     if (game.sandbox && ally.sandboxControl) {
       if (ally.sandboxCanShoot !== false && enemy) botShootAt(ally, enemy, dt, "ally");
       if (ally.sandboxCanMove !== false && ally.sandboxBehavior === "patrol") {
@@ -7974,10 +8316,17 @@ function updateBots(dt) {
 function eliminateBot(bot, { playerCredit = false, weaponName = "Poison Cloud", headshot = false } = {}) {
    if (!bot.alive) return;
    bot.alive = false;
+   if (!playerCredit && labEnabled("performanceEconomy")
+     && performance.now() - (bot.labPlayerDamageAt || 0) <= 5000) {
+     game.stats.assists = (game.stats.assists || 0) + 1;
+   }
    if (game.training) bot.respawnTimer = 1.25 + Math.random() * 0.75;
    if (playerCredit) {
      playSound("bot_kill");
      game.stats.kills += 1;
+     if (game.stats.kills === 1) unlockLabAchievement("firstBlood");
+     if (game.stats.headshots >= 5) unlockLabAchievement("headHunter");
+     if (game.stats.damage >= 2500) unlockLabAchievement("damageDealer");
      addKillFeedEntry(true, weaponName, headshot);
      if (game.player?.ultimate?.type === "jett") {
        game.player.ultimate.knives = 6;
@@ -8025,7 +8374,8 @@ function createTrainingBot() {
   const bot = makeBot(randomTrainingSpawn(), game.trainingBotSequence++);
   bot.id = `training-bot-${game.trainingBotSequence}`;
   bot.hasSpike = false;
-  bot.speed = 108 + Math.random() * 18;
+  bot.speed = GAME_CONFIG.movement.trainingBotSpeed
+    + Math.random() * GAME_CONFIG.movement.trainingBotVariation;
   bot.respawnTimer = 0;
   sanitizeEntityPosition(bot);
   return bot;
@@ -8098,6 +8448,7 @@ function updateBullets(dt) {
           const actualDamage = applyDamage(bot, damage);
           if (bullet.team === "player") {
             game.stats.damage += Math.round(actualDamage);
+            bot.labPlayerDamageAt = performance.now();
             if (region === "head") game.stats.headshots += 1;
             spawnDamageNumber(bot, actualDamage, region === "head");
           }
@@ -8133,6 +8484,7 @@ function updateBullets(dt) {
         game.hitMarkers.push({ x: target.x, y: target.y - 30, life: 0.3, maxLife: 0.3, color: "#ff5b5b" });
         spawnParticles(bullet.x, bullet.y, "#ff4d5d", 8, 120);
         if (target.id === "player") {
+          if (target.hp <= 0) startSyntheticKillcam(bullet, target);
           game.shake = Math.max(game.shake, region === "head" ? 0.34 : 0.24);
           game.damageFlash = Math.max(game.damageFlash, region === "head" ? 0.55 : 0.38);
           game.damageIndicator = {
@@ -8310,8 +8662,11 @@ function updateAgentObjects(dt) {
     const oldY = grenade.y;
     grenade.x += grenade.vx * dt;
     grenade.y += grenade.vy * dt;
-    grenade.vx *= 0.98;
-    grenade.vy *= 0.98;
+    // Conserva o mesmo arrasto percebido a 60 Hz sem depender da quantidade
+    // de frames renderizados pelo dispositivo.
+    const grenadeDrag = Math.pow(0.98, dt * 60);
+    grenade.vx *= grenadeDrag;
+    grenade.vy *= grenadeDrag;
     grenade.life -= dt;
     if (lineIntersectsAnyWall(oldX, oldY, grenade.x, grenade.y)) grenade.life = 0;
     if (grenade.life <= 0) {
@@ -8351,6 +8706,10 @@ function updateAgentObjects(dt) {
 }
 
 function updateTimers(dt) {
+  if (game.syntheticKillcam) {
+    game.syntheticKillcam.life = Math.max(0, game.syntheticKillcam.life - dt);
+    if (game.syntheticKillcam.life === 0) game.syntheticKillcam = null;
+  }
   if (game.introTimer > 0) {
     game.introTimer = Math.max(0, game.introTimer - dt);
     if (game.introTimer === 0) {
@@ -8404,7 +8763,17 @@ function updateTimers(dt) {
     } else {
       smoke.life -= dt;
     }
-    if (smoke.targetR) smoke.r += (smoke.targetR - smoke.r) * Math.min(1, dt * 1.4);
+    if (smoke.targetR) {
+      let targetRadius = smoke.targetR;
+      if (labEnabled("dynamicOmenSmoke") && smoke.omenSmoke && smoke.maxLife) {
+        const remaining = Math.max(0, smoke.life / smoke.maxLife);
+        // Nos dois segundos finais a esfera contrai, denuncia o término e
+        // libera visão gradualmente em vez de desaparecer num único frame.
+        smoke.expiryRatio = Math.min(1, smoke.life / 2);
+        targetRadius *= remaining < 0.27 ? 0.5 + remaining * 1.85 : 1;
+      }
+      smoke.r += (targetRadius - smoke.r) * Math.min(1, dt * 2.2);
+    }
     if (!smoke.poison) continue;
     smoke.tick = (smoke.tick || 0) - dt;
     const targets = smoke.ownerTeam === "bot" ? [game.player, ...game.allies] : game.bots;
@@ -8491,8 +8860,9 @@ function updateTimers(dt) {
   for (const particle of game.particles) {
     particle.x += particle.vx * dt;
     particle.y += particle.vy * dt;
-    particle.vx *= 0.88;
-    particle.vy *= 0.88;
+    const particleDrag = Math.pow(0.88, dt * 60);
+    particle.vx *= particleDrag;
+    particle.vy *= particleDrag;
     particle.life -= dt;
   }
   game.particles = game.particles.filter((p) => p.life > 0);
@@ -8506,7 +8876,7 @@ function updateTimers(dt) {
   for (const number of game.damageNumbers) {
     number.x += number.drift * dt;
     number.y += number.vy * dt;
-    number.vy *= 0.92;
+    number.vy *= Math.pow(0.92, dt * 60);
     number.life -= dt;
   }
   game.damageNumbers = game.damageNumbers.filter((number) => number.life > 0);
@@ -8622,6 +8992,7 @@ function update(dt) {
     return;
   }
   if (game.paused) return;
+  updateReplayRecorder(dt);
   updateTimers(dt);
   if (game.introTimer > 0 || !game.clockActive) return;
   if (isShopOpen() && !canUseShop()) {
@@ -8667,6 +9038,77 @@ function update(dt) {
       checkWinConditions();
     }
   }
+}
+
+function updateReplayRecorder(dt) {
+  if (!labEnabled("syntheticKillcam") || !game.player?.alive || game.phase !== "action") return;
+  game.replaySampleTimer = (game.replaySampleTimer || 0) - dt;
+  if (game.replaySampleTimer > 0) return;
+  game.replaySampleTimer = 0.08;
+  game.replayBuffer.push({
+    at: performance.now(),
+    player: { x: game.player.x, y: game.player.y },
+    hostileBullets: game.bullets
+      .filter((bullet) => bullet.team === "bot")
+      .map((bullet) => ({ x: bullet.x, y: bullet.y, startX: bullet.startX, startY: bullet.startY })),
+  });
+  const cutoff = performance.now() - 4200;
+  while (game.replayBuffer[0]?.at < cutoff) game.replayBuffer.shift();
+}
+
+function startSyntheticKillcam(bullet, target) {
+  if (!labEnabled("syntheticKillcam") || !bullet || !target) return;
+  game.syntheticKillcam = {
+    life: 2.4,
+    maxLife: 2.4,
+    fromX: Number.isFinite(bullet.startX) ? bullet.startX : bullet.x - bullet.vx * 0.25,
+    fromY: Number.isFinite(bullet.startY) ? bullet.startY : bullet.y - bullet.vy * 0.25,
+    toX: target.x,
+    toY: target.y,
+    samples: game.replayBuffer.slice(-24),
+  };
+  showUxToast("Trajetória fatal reconstruída no campo de batalha.", { title: "KILLCAM 2D", tone: "danger", duration: 2400 });
+}
+
+function drawSyntheticKillcam() {
+  const replay = game.syntheticKillcam;
+  if (!replay || replay.life <= 0) return;
+  const progress = 1 - replay.life / replay.maxLife;
+  const endX = replay.fromX + (replay.toX - replay.fromX) * Math.min(1, progress * 2.2);
+  const endY = replay.fromY + (replay.toY - replay.fromY) * Math.min(1, progress * 2.2);
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, replay.life * 1.5);
+  ctx.strokeStyle = "#ff4655";
+  ctx.lineWidth = 3;
+  ctx.setLineDash([12, 8]);
+  ctx.beginPath();
+  ctx.moveTo(replay.fromX, replay.fromY);
+  ctx.lineTo(endX, endY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = "rgba(255,70,85,.18)";
+  ctx.beginPath();
+  ctx.arc(replay.toX, replay.toY, 22 + Math.sin(performance.now() / 90) * 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function capturePreviousSimulationState() {
+  if (!labEnabled("interpolation")) return;
+  for (const entity of [game.player, ...game.bots, ...game.allies, ...game.bullets]) {
+    if (!entity) continue;
+    entity.renderPrevX = entity.x;
+    entity.renderPrevY = entity.y;
+  }
+}
+
+function interpolatedPosition(entity) {
+  if (!labEnabled("interpolation") || !Number.isFinite(entity?.renderPrevX)) return { x: entity.x, y: entity.y };
+  const alpha = Math.max(0, Math.min(1, game.renderAlpha || 0));
+  return {
+    x: entity.renderPrevX + (entity.x - entity.renderPrevX) * alpha,
+    y: entity.renderPrevY + (entity.y - entity.renderPrevY) * alpha,
+  };
 }
 
 /**
@@ -8920,10 +9362,11 @@ function drawHeldWeapon(entity, weapon, kind) {
 
 function drawEntity(entity, color, label, kind = "bot") {
   if (!entity.alive) return;
+  const rendered = interpolatedPosition(entity);
   const weapon = kind === "player" ? game.selectedWeapon : entity.weapon;
   const armorRatio = (entity.maxArmor || 0) > 0 ? Math.max(0, entity.armor || 0) / entity.maxArmor : 0;
   ctx.save();
-  ctx.translate(entity.x, entity.y);
+  ctx.translate(rendered.x, rendered.y);
   if (kind === "player") {
     ctx.strokeStyle = "rgba(98, 230, 160, 0.5)";
     ctx.shadowColor = "#62e6a0";
@@ -8974,8 +9417,8 @@ function drawEntity(entity, color, label, kind = "bot") {
   const maxHp = entity.maxHp || 100;
   if (kind === "player" && game.outbreak) {
     const width = 76;
-    const left = entity.x - width / 2;
-    const shieldY = entity.y + entity.r + 8;
+    const left = rendered.x - width / 2;
+    const shieldY = rendered.y + entity.r + 8;
     const healthY = shieldY + 8;
     ctx.save();
     ctx.fillStyle = "rgba(1, 8, 13, 0.82)";
@@ -9268,6 +9711,21 @@ function drawFogOfWar() {
   ctx.save();
   ctx.drawImage(fogCanvas, 0, 0);
   ctx.restore();
+}
+
+function applyFovEntityClip() {
+  if (!labEnabled("fovEntityClipping") || !game.fovMode
+    || isRoundTransitionRevealActive() || !game.player?.alive) return false;
+  const polygon = buildFovPolygon();
+  if (!polygon || polygon.length < 3) return false;
+  ctx.beginPath();
+  ctx.moveTo(polygon[0].x, polygon[0].y);
+  for (let index = 1; index < polygon.length; index += 1) {
+    ctx.lineTo(polygon[index].x, polygon[index].y);
+  }
+  ctx.closePath();
+  ctx.clip();
+  return true;
 }
 
 function drawBotDebug() {
@@ -10421,10 +10879,13 @@ function draw() {
     ctx.fillStyle = game.tutorialStep === 2 ? "rgba(1, 6, 10, 0.48)" : "rgba(1, 6, 10, 0.28)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
-  // ── Névoa desenhada AQUI: antes de qualquer entidade.
-  // Isso garante que bots, aliados e o jogador sejam renderizados
-  // POR CIMA da camada de fóg, eliminando o efeito de piscar.
+  // A névoa fica sobre o mapa e sob a camada dinâmica. Em seguida, a mesma
+  // geometria do raycasting vira uma máscara: entidades na borda aparecem
+  // parcialmente, sem revelar pixels que estejam atrás da escuridão.
   drawFogOfWar();
+  ctx.save();
+  try {
+    game.fovClipActive = applyFovEntityClip();
   drawMedkitsAndOrbs();
   drawAgentObjects();
 
@@ -10460,7 +10921,8 @@ function draw() {
       ctx.fillStyle = gradient;
     } else if (smoke.omenSmoke) {
       const gradient = ctx.createRadialGradient(smoke.x, smoke.y, smoke.r * 0.1, smoke.x, smoke.y, smoke.r);
-      gradient.addColorStop(0, "rgba(96, 76, 132, 0.62)");
+      const expiry = labEnabled("dynamicOmenSmoke") ? Math.max(0, Math.min(1, smoke.expiryRatio ?? 1)) : 1;
+      gradient.addColorStop(0, expiry < 0.55 ? "rgba(185, 72, 150, 0.68)" : "rgba(96, 76, 132, 0.62)");
       gradient.addColorStop(0.62, "rgba(57, 47, 82, 0.72)");
       gradient.addColorStop(1, "rgba(23, 19, 37, 0.28)");
       ctx.fillStyle = gradient;
@@ -10537,7 +10999,7 @@ function draw() {
 
   for (const bot of game.bots) {
     if (isOutsideViewport(bot, bot.r + 24)) continue;
-    if (!isBotVisible(bot)) continue;
+    if (!game.fovClipActive && !isBotVisible(bot)) continue;
     const visible = game.revealTimer > 0 || hasLineOfSight(game.player, bot);
     const outbreakTypeLabel = bot.outbreakArchetype === "tank"
       ? "TANK"
@@ -10593,25 +11055,26 @@ function draw() {
   ctx.fillStyle = "#f8fafc";
   for (const bullet of game.bullets) {
     if (!estaNoCampoDeVisao(bullet, bullet.knife ? 10 : 4)) continue;
+    const renderedBullet = interpolatedPosition(bullet);
     if (bullet.knife) {
-      drawKunaiShape(bullet.x, bullet.y, (bullet.angle ?? Math.atan2(bullet.vy, bullet.vx)) + Math.PI / 2, 0.72, 1);
+      drawKunaiShape(renderedBullet.x, renderedBullet.y, (bullet.angle ?? Math.atan2(bullet.vy, bullet.vx)) + Math.PI / 2, 0.72, 1);
     } else {
       const speed = Math.max(1, Math.hypot(bullet.vx || 0, bullet.vy || 0));
       const trailLength = Math.min(16, speed * 0.014);
-      const trailX = bullet.x - ((bullet.vx || 0) / speed) * trailLength;
-      const trailY = bullet.y - ((bullet.vy || 0) / speed) * trailLength;
-      const trail = ctx.createLinearGradient(trailX, trailY, bullet.x, bullet.y);
+      const trailX = renderedBullet.x - ((bullet.vx || 0) / speed) * trailLength;
+      const trailY = renderedBullet.y - ((bullet.vy || 0) / speed) * trailLength;
+      const trail = ctx.createLinearGradient(trailX, trailY, renderedBullet.x, renderedBullet.y);
       trail.addColorStop(0, "rgba(248, 250, 252, 0)");
       trail.addColorStop(1, bullet.team === "player" ? "rgba(117, 226, 239, 0.92)" : "rgba(255, 102, 112, 0.88)");
       ctx.strokeStyle = trail;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(trailX, trailY);
-      ctx.lineTo(bullet.x, bullet.y);
+      ctx.lineTo(renderedBullet.x, renderedBullet.y);
       ctx.stroke();
       ctx.fillStyle = bullet.team === "player" ? "#d8fbff" : "#ffd9dc";
       ctx.beginPath();
-      ctx.arc(bullet.x, bullet.y, 2.5, 0, Math.PI * 2);
+      ctx.arc(renderedBullet.x, renderedBullet.y, 2.5, 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -10669,6 +11132,11 @@ function draw() {
   }
   ctx.globalAlpha = 1;
 
+  } finally {
+    ctx.restore();
+    game.fovClipActive = false;
+  }
+
   drawBotDebug();
   drawDamageIndicator();
   if (!game.tutorial) {
@@ -10679,6 +11147,7 @@ function draw() {
   drawDamageFlash();
   drawShadowBlindness();
   drawAgentScreenEffects();
+  drawSyntheticKillcam();
   ctx.restore();
 }
 
@@ -10781,6 +11250,29 @@ function updateUi() {
   toggleClass(ui.ultCounter, "ready", outbreakGadgetDefinition ? outbreakGadgetReady : game.sandbox || ultReady);
   toggleClass(ui.ultCounter, "warning", outbreakGadgetDefinition ? !outbreakGadgetReady : game.ultFlashTimer > 0 && !ultReady);
   toggleClass(ui.ultCounter, "pulse", game.ultFlashTimer > 0);
+  if (labEnabled("abilityFeedback")) {
+    toggleClass(ui.abilityFeedback, "hidden", false);
+    const primaryReady = game.sandbox || game.abilityCooldown <= 0;
+    const primaryLabel = primaryReady ? "PRONTA" : `${Math.ceil(game.abilityCooldown)}S`;
+    setText(ui.abilityPrimaryState?.querySelector("b"), primaryLabel);
+    toggleClass(ui.abilityPrimaryState, "is-ready", primaryReady);
+    toggleClass(ui.abilityPrimaryState, "is-cooldown", !primaryReady);
+    const ultimateReady = outbreakGadgetDefinition ? outbreakGadgetReady : game.sandbox || ultReady;
+    const ultimateEmpty = outbreakGadgetDefinition
+      ? (game.outbreakGadget?.charges || 0) <= 0
+      : !game.sandbox && getUltimatePoints(game.player) <= 0;
+    setText(ui.abilityUltimateState?.querySelector("b"), ultimateReady
+      ? "PRONTA"
+      : ultimateEmpty
+        ? "SEM CARGA"
+        : outbreakGadgetCooldown > 0
+          ? `${Math.ceil(outbreakGadgetCooldown)}S`
+          : `${getUltimatePoints(game.player)}/${ultCost}`);
+    toggleClass(ui.abilityUltimateState, "is-ready", ultimateReady);
+    toggleClass(ui.abilityUltimateState, "is-empty", ultimateEmpty);
+  } else {
+    toggleClass(ui.abilityFeedback, "hidden", true);
+  }
   if (!outbreakGadgetDefinition && ultReady && !game.tutorial && !game.sandbox) {
     showContextTipOnce("ultimate-ready", `Ultimate de ${game.selectedAgent?.name || "agente"} pronta. Pressione ${settings.keys?.ability2 || "Q"} para usar.`);
   }
@@ -11024,7 +11516,9 @@ function renderSandboxBotList() {
     });
     row.querySelector('[data-action="toggle-move"]')?.addEventListener("click", () => {
       entity.sandboxCanMove = entity.sandboxCanMove === false;
-      entity.speed = entity.sandboxCanMove ? (team === "ally" ? 126 : 118) : 0;
+      entity.speed = entity.sandboxCanMove
+        ? (team === "ally" ? GAME_CONFIG.movement.allySpeed : GAME_CONFIG.movement.standardBotSpeed)
+        : 0;
       renderSandboxPanel();
     });
     row.querySelector('[data-action="remove"]')?.addEventListener("click", () => {
@@ -13332,20 +13826,22 @@ function outbreakWavePlan(wave) {
     return {
       total: 3 + Math.floor((safeWave - 1) / 2),
       activeCap: 3,
-      spawnInterval: 2.5 - safeWave * 0.08,
+      spawnInterval: (2.5 - safeWave * 0.08) * GAME_CONFIG.outbreak.spawnIntervalMultiplier,
     };
   }
   if (safeWave <= 20) {
     return {
       total: Math.min(9, 4 + Math.floor((safeWave - 5) / 3)),
       activeCap: Math.min(5, 3 + Math.floor((safeWave - 6) / 7)),
-      spawnInterval: Math.max(1.45, 2.15 - (safeWave - 6) * 0.045),
+      spawnInterval: Math.max(1.45, 2.15 - (safeWave - 6) * 0.045)
+        * GAME_CONFIG.outbreak.spawnIntervalMultiplier,
     };
   }
   return {
     total: Math.min(16, 9 + Math.floor((safeWave - 21) / 3)),
     activeCap: Math.min(7, 5 + Math.floor((safeWave - 21) / 12)),
-    spawnInterval: Math.max(1.05, 1.42 - (safeWave - 21) * 0.012),
+    spawnInterval: Math.max(1.05, 1.42 - (safeWave - 21) * 0.012)
+      * GAME_CONFIG.outbreak.spawnIntervalMultiplier,
   };
 }
 
@@ -13454,7 +13950,10 @@ function createOutbreakWave(wave) {
       : wave <= 20
         ? 82 + (wave - 5) * 3
         : 127 + Math.min(35, (wave - 20) * 1.5);
-    bot.speed = Math.min(archetype === "runner" ? 205 : archetype === "tank" ? 124 : 170, tierSpeed * speedScale);
+    bot.speed = Math.min(
+      archetype === "runner" ? 205 : archetype === "tank" ? 124 : 170,
+      tierSpeed * speedScale,
+    ) * GAME_CONFIG.movement.outbreakBotSpeedMultiplier;
     bot.r = archetype === "tank" ? 21 : archetype === "runner" ? 15 : 17;
     if (wave <= 10) bot.weapon = weapons[0];
     // O arsenal-base passa a incluir a Operator no fim da progressão, porém o
@@ -13514,6 +14013,7 @@ function deployOutbreakWave(wave) {
   game.outbreakAdminShopResume = false;
   ui.outbreakShopFooter?.classList.add("hidden");
   game.outbreakWave = wave;
+  if (wave >= 10) unlockLabAchievement("outbreakTen");
   resetOutbreakGadget();
   game.outbreakWaveStartKills = Math.max(0, game.stats?.kills || 0);
   game.outbreakWaveCredits = 0;
@@ -13796,14 +14296,32 @@ function addKillFeedEntry(killerIsPlayer, weaponName, headshot) {
   if (!settings.showKillFeed || !ui.killFeed) return;
   const entry = document.createElement("div");
   entry.className = "kill-entry";
-  const killer = killerIsPlayer
-    ? `<span class="kf-player">Você</span>`
-    : `<span class="kf-enemy">Bot</span>`;
-  const victim = killerIsPlayer
-    ? `<span class="kf-enemy">Bot</span>`
-    : `<span class="kf-player">Você</span>`;
-  const hs = headshot ? `<span class="kf-hs">HS</span>` : "";
-  entry.innerHTML = `${killer}<span class="kf-weapon">${weaponName}</span>${victim}${hs}`;
+  entry.classList.toggle("is-headshot", labEnabled("enhancedKillfeed") && headshot);
+  const killer = document.createElement("span");
+  killer.className = killerIsPlayer ? "kf-player" : "kf-enemy";
+  killer.textContent = killerIsPlayer ? "Você" : "Bot";
+  const victim = document.createElement("span");
+  victim.className = killerIsPlayer ? "kf-enemy" : "kf-player";
+  victim.textContent = killerIsPlayer ? "Bot" : "Você";
+  const weaponLabel = document.createElement("span");
+  weaponLabel.className = "kf-weapon";
+  weaponLabel.title = weaponName || "Eliminação";
+  weaponLabel.setAttribute("aria-label", weaponName || "Eliminação");
+  const weapon = weapons.find((candidate) => candidate.name === weaponName);
+  if (labEnabled("enhancedKillfeed") && weapon) {
+    const icon = document.createElement("img");
+    icon.src = weaponImagePath(weapon);
+    icon.alt = "";
+    icon.addEventListener("error", () => icon.remove(), { once: true });
+    weaponLabel.append(icon);
+  }
+  entry.append(killer, weaponLabel, victim);
+  if (headshot) {
+    const hs = document.createElement("span");
+    hs.className = "kf-hs";
+    hs.textContent = "HEADSHOT";
+    entry.append(hs);
+  }
   ui.killFeed.prepend(entry);
   killFeedEntries.push(entry);
   if (killFeedEntries.length > 4) {
@@ -14352,10 +14870,16 @@ function updateShopState() {
   });
 }
 
+const SIMULATION_STEP = 1 / 60;
+const MAX_FRAME_DELTA = 0.1;
+const MAX_SIMULATION_STEPS = Math.ceil(MAX_FRAME_DELTA / SIMULATION_STEP);
+const SIMULATION_EPSILON = 1e-9;
+
 function loop(now) {
   const rawDelta = Math.max(0, (now - loop.last) / 1000 || 0);
-  const dt = Math.min(0.033, rawDelta);
+  const deltaTime = Math.min(MAX_FRAME_DELTA, rawDelta);
   loop.last = now;
+  loop.accumulator = Math.min(MAX_FRAME_DELTA, loop.accumulator + deltaTime);
   loop.fpsFrames += 1;
   const fpsWindow = now - loop.fpsSampleStartedAt;
   if (fpsWindow >= 500) {
@@ -14363,12 +14887,34 @@ function loop(now) {
     loop.fpsFrames = 0;
     loop.fpsSampleStartedAt = now;
   }
+  let ranSimulationStep = false;
   try {
     game.pingMs = 28 + Math.round(Math.sin(now / 900) * 5 + Math.random() * 4);
     const tutorialSlowMotion = game.tutorial
       && game.tutorialStage === "defend"
       && game.tutorialSlowTimer > 0;
-    update(dt * (tutorialSlowMotion ? 0.2 : 1) * (game.timeScale || 1));
+    const simulationScale = (tutorialSlowMotion ? 0.2 : 1) * (game.timeScale || 1);
+    let simulationSteps = 0;
+
+    // A renderização continua acompanhando a frequência do monitor, mas a
+    // física avança em passos fixos de 60 Hz. Em um frame de 20 FPS, por
+    // exemplo, três ticks são processados antes do desenho; assim jogador,
+    // bots, projéteis e timers percorrem o mesmo tempo real que em 60 FPS.
+    while (loop.accumulator + SIMULATION_EPSILON >= SIMULATION_STEP && simulationSteps < MAX_SIMULATION_STEPS) {
+      ranSimulationStep = true;
+      capturePreviousSimulationState();
+      update(SIMULATION_STEP * simulationScale);
+      loop.accumulator = Math.max(0, loop.accumulator - SIMULATION_STEP);
+      simulationSteps += 1;
+
+      // Ações de toque único pertencem apenas ao primeiro tick. Teclas
+      // mantidas usam `keys`/`heldActions` e continuam ativas normalmente.
+      if (simulationSteps === 1) {
+        pressed.clear();
+        touchControls.pressedActions.clear();
+      }
+    }
+    game.renderAlpha = labEnabled("interpolation") ? loop.accumulator / SIMULATION_STEP : 1;
     draw();
     updateUi();
   } catch (error) {
@@ -14385,12 +14931,17 @@ function loop(now) {
       setMessage("Outbreak recuperou uma falha temporária da simulação.");
     }
   } finally {
-    pressed.clear();
-    touchControls.pressedActions.clear();
+    // Em monitores acima de 60 Hz pode haver frames apenas de desenho. Nesse
+    // caso, preserva o comando até o próximo tick de simulação.
+    if (ranSimulationStep) {
+      pressed.clear();
+      touchControls.pressedActions.clear();
+    }
     requestAnimationFrame(loop);
   }
 }
 loop.last = performance.now();
+loop.accumulator = 0;
 loop.fpsFrames = 0;
 loop.fpsSampleStartedAt = loop.last;
 
@@ -14670,6 +15221,9 @@ ui.sandboxBlackoutToggle?.addEventListener("click", () => {
 });
 ui.sandboxSaveButton?.addEventListener("click", saveSandboxConfig);
 ui.sandboxLoadButton?.addEventListener("click", loadSandboxConfig);
+ui.shop?.addEventListener("pointerdown", (event) => {
+  pendingShopFeedbackCard = event.target.closest(".choice, .ally-card, .ult-shop-card, button");
+});
 
 if (ui.newGameButton) ui.newGameButton.addEventListener("click", () => {
   ui.matchOverlay?.classList.add("hidden");

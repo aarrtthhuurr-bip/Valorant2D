@@ -1,79 +1,99 @@
 {
-  "version": "0.9.0",
+  "version": "0.9.1",
   "status": "published",
   "channel": "stable",
-  "publishedAt": "2026-08-05T18:13:00-03:00",
-  "title": "Atualização 0.9.0 do Valorant2D",
-  "summary": "Uma nova base de versões, melhorias no Outbreak e uma seleção de modos completamente remasterizada.",
+  "publishedAt": "2026-08-05T20:48:50-03:00",
+  "title": "Atualização 0.9.1 — Precisão Tática",
+  "summary": "A atualização estabiliza a simulação, aprimora o combate e torna o Blackout visualmente preciso até o último pixel.",
   "highlights": [
     {
-      "title": "Fluxo de versões",
-      "description": "A branch main permanece estável enquanto novas funções são integradas e testadas na develop.",
+      "title": "Física independente de FPS",
+      "description": "A simulação agora opera em 60 ticks fixos por segundo, mantendo jogadores, bots, tiros e timers na mesma velocidade em computadores lentos ou rápidos.",
       "type": "system"
     },
     {
-      "title": "Servidor local integrado",
-      "description": "Front-End e Back-End agora podem ser iniciados juntos em http://localhost:3000.",
-      "type": "development"
-    },
-    {
-      "title": "Banco seguro para testes",
-      "description": "O ambiente local exige um PostgreSQL separado e não aceita silenciosamente o banco público.",
-      "type": "development"
-    },
-    {
-      "title": "Central de novidades",
-      "description": "Versões publicadas exibem uma tela com a lista completa das alterações.",
+      "title": "Central de novidades reformulada",
+      "description": "A tela de atualizações recebeu mais espaço, hierarquia visual, categorias identificáveis e contagem completa das alterações.",
       "type": "interface"
     },
     {
-      "title": "Seleção de modos remasterizada",
-      "description": "Default, Blackout e Outbreak agora ocupam cards principais e cada modo recebeu uma identidade cromática própria; Sandbox e Treino ficam na área de preparação.",
+      "title": "Emblemas de modos aprimorados",
+      "description": "As logos deixaram as antigas caixas coloridas e agora aparecem como emblemas livres, maiores e melhor posicionados em cada card.",
       "type": "interface"
     },
     {
-      "title": "Entrada de partida mais ágil",
-      "description": "A apresentação do mapa está dois segundos mais curta e agora permite abrir o menu de pause.",
+      "title": "Pixel art interativa no Black Market",
+      "description": "As prévias dos gadgets permanecem congeladas em repouso e reproduzem suas animações apenas durante hover ou foco.",
       "type": "interface"
     },
     {
-      "title": "Atualização automática do PWA",
-      "description": "O jogo detecta uma publicação nova, renova o Service Worker e recarrega os arquivos sem limpeza manual.",
+      "title": "Modos mais legíveis",
+      "description": "Títulos, descrições e comandos dos cards receberam contraste, tamanho e espaçamento mais claros.",
+      "type": "interface"
+    },
+    {
+      "title": "Ritmo tático recalibrado",
+      "description": "Jogador, bots e projéteis ficaram mais controláveis; ataques inimigos e spawns do Outbreak agora oferecem mais tempo de reação.",
+      "type": "gameplay"
+    },
+    {
+      "title": "Interpolação de movimento",
+      "description": "Entidades e projéteis agora interpolam posições entre os ticks da simulação para manter movimentos fluidos sem alterar a física.",
       "type": "system"
     },
     {
-      "title": "Verificação de versão",
-      "description": "Uma validação impede publicar HTML, changelog e cache com números de versão diferentes.",
-      "type": "development"
+      "title": "Blackout sem vazamentos",
+      "description": "O raycasting considera todas as quinas do mapa e elimina os antigos triângulos incorretos de visibilidade.",
+      "type": "gameplay"
     },
     {
-      "title": "Black Market mais sombrio",
-      "description": "O mercado recebeu fundo quase preto, grade discreta e acabamento clandestino.",
+      "title": "Recorte preciso do campo de visão",
+      "description": "Bots, itens, tiros e efeitos na borda da névoa aparecem apenas na porção realmente alcançada pela visão.",
+      "type": "gameplay"
+    },
+    {
+      "title": "Combate mais detalhado",
+      "description": "Hitboxes de cabeça e corpo, recoil progressivo e recuperação de precisão tornam rajadas e headshots mais consistentes.",
+      "type": "gameplay"
+    },
+    {
+      "title": "Movimentação e agentes",
+      "description": "Colisões diagonais agora deslizam pelas superfícies e Yoru recebe uma breve proteção ao sair da Passagem Dimensional.",
+      "type": "gameplay"
+    },
+    {
+      "title": "Aliados mais inteligentes",
+      "description": "Bots aliados procuram cobertura e mantêm formação enquanto recarregam suas armas.",
+      "type": "gameplay"
+    },
+    {
+      "title": "Killcam 2D sintética",
+      "description": "O jogo registra os segundos anteriores à eliminação e reconstrói visualmente a trajetória do disparo fatal.",
+      "type": "gameplay"
+    },
+    {
+      "title": "Fumaça dinâmica do Omen",
+      "description": "A fumaça diminui gradualmente e muda de cor antes de desaparecer, deixando seu encerramento mais legível.",
+      "type": "gameplay"
+    },
+    {
+      "title": "Conquistas e desempenho",
+      "description": "Novas conquistas locais concedem créditos da partida, enquanto dano e assistências participam do bônus Core validado pelo servidor.",
+      "type": "system"
+    },
+    {
+      "title": "HUD e feedback renovados",
+      "description": "Habilidades exibem carga e cooldown; compras, alertas e headshots receberam animações e mensagens mais claras.",
       "type": "interface"
     },
     {
-      "title": "Bomba de Pulso reformulada",
-      "description": "O dano agora varia pela distância, com núcleo destrutivo, grande repulsão e efeitos expansivos.",
-      "type": "gameplay"
+      "title": "Killfeed visual",
+      "description": "O nome da arma foi substituído pelo ícone direcionado à vítima, com destaque específico para headshots.",
+      "type": "interface"
     },
     {
-      "title": "Torreta ofensiva",
-      "description": "A Torreta Chamariz passou a disparar rajadas fortes enquanto atrai a horda.",
-      "type": "gameplay"
-    },
-    {
-      "title": "Mina Cryo corrigida",
-      "description": "A mina agora congela completamente, causa dano e exibe uma cápsula de gelo em cada alvo.",
-      "type": "gameplay"
-    },
-    {
-      "title": "Gadgets prolongados",
-      "description": "Adrenalina e Camuflagem tiveram suas durações dobradas e receberam efeitos exclusivos.",
-      "type": "gameplay"
-    },
-    {
-      "title": "Animação em spritesheet",
-      "description": "A Bomba de Pulso usa frames PNG controlados: 250 ms por frame e 500 ms no último.",
+      "title": "Sheriff por 650 créditos",
+      "description": "A Sheriff agora custa 650 créditos em todos os modos e também no equipamento de aliados.",
       "type": "gameplay"
     }
   ]

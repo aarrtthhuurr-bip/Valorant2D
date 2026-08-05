@@ -13,13 +13,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Valorant2D">
-  <meta name="valorant2d-version" content="0.9.0">
+  <meta name="valorant2d-version" content="0.9.1">
   <!-- Altere apenas este valor caso o endereço definitivo do Render mude. -->
   <meta name="valorant2d-api-url" content="https://valorant2d.onrender.com">
   <title>Valorant2D</title>
-  <link rel="manifest" href="./manifest.webmanifest?v=0.9.0">
-  <link id="gameStylesheet" rel="stylesheet" href="./styles.css?v=0.9.0">
-  <script src="./version-manager.js?v=0.9.0"></script>
+  <link rel="manifest" href="./manifest.webmanifest?v=0.9.1">
+  <link id="gameStylesheet" rel="stylesheet" href="./styles.css?v=0.9.1">
+  <script src="./version-manager.js?v=0.9.1"></script>
   <script src="https://unpkg.com/lucide@1.24.0" integrity="sha384-mooE85Luwgx+AyykX7e90VcN8/QCFTSIwPuHLmvcsLVoA0en7lKYb9XlOzn5G2co" crossorigin="anonymous"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="shortcut icon" href="./assets/Favicon/favicon.ico" type="image/x-icon">
@@ -70,6 +70,10 @@
             <span id="armorText" class="hidden">ARM <b id="armorValueText">0</b></span>
             <span class="ult-counter" id="ultCounter"><span id="ultLabel">ULT</span> <b id="ultPointsText">0/7</b></span>
             <span id="jettKnifeHud" class="jett-knife-hud hidden">0/6</span>
+          </div>
+          <div class="ability-feedback" id="abilityFeedback" aria-label="Estado das habilidades">
+            <span id="abilityPrimaryState"><kbd>E</kbd><b>PRONTA</b></span>
+            <span id="abilityUltimateState"><kbd>Q</kbd><b>SEM CARGA</b></span>
           </div>
         </div>
         <div class="weapon-panel glass" id="hud-weapon-info">
@@ -603,6 +607,7 @@
             <div class="updates-list" id="updatesList" aria-live="polite"></div>
           </div>
           <footer class="updates-actions">
+            <p class="updates-count"><strong id="updatesCount">0</strong><span>ALTERAÇÕES NESTA VERSÃO</span></p>
             <button type="button" class="updates-close" id="updatesCloseButton">CONTINUAR</button>
           </footer>
         </div>
@@ -678,6 +683,6 @@
     </div>
   </main>
 
-  <script src="./game.js?v=0.9.0"></script>
+  <script src="./game.js?v=0.9.1"></script>
 </body>
 </html>

@@ -706,3 +706,11 @@ test('recompensa Core respeita as faixas de cada modo e as waves do Outbreak', (
   assert.equal(reward('outbreak', 17), 17);
   assert.equal(reward('outbreak', 0), 0);
 });
+
+test('bônus de desempenho considera assistências e dano com limite rígido', () => {
+  const bonus = Leaderboard._test.performanceCoreBonus;
+  assert.equal(bonus(0, 0), 0);
+  assert.equal(bonus(3, 1500), 2);
+  assert.equal(bonus(30, 30000), 5);
+  assert.equal(bonus(-5, Number.NaN), 0);
+});
