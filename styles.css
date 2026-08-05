@@ -1384,6 +1384,47 @@ body.is-mobile .mobile-utility {
 .kill-entry .kf-enemy  { color: #ff8a5b; font-weight: 600; }
 .kill-entry .kf-weapon { color: var(--muted); font-size: 10px; margin: 0 4px; }
 .kill-entry .kf-hs     { color: #ff4d5d; font-size: 10px; margin-left: 2px; }
+.kill-entry .kf-weapon { display: inline-flex; align-items: center; gap: 5px; }
+.kill-entry .kf-weapon img { width: 34px; height: 14px; object-fit: contain; filter: grayscale(.25); }
+.kill-entry.is-headshot { border-color: rgba(255,70,85,.7); background: linear-gradient(90deg, rgba(255,70,85,.18), rgba(5,10,15,.9)); }
+.kill-entry.is-headshot .kf-hs { font-weight: 800; letter-spacing: .08em; }
+
+.ability-feedback {
+  display: flex;
+  gap: 5px;
+  margin-top: 5px;
+}
+.ability-feedback > span {
+  display: inline-flex;
+  min-width: 78px;
+  min-height: 24px;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 7px;
+  border: 1px solid rgba(126,151,164,.22);
+  background: rgba(4,12,18,.72);
+  color: #718692;
+  font-size: 9px;
+  letter-spacing: .1em;
+}
+.ability-feedback kbd { color: #d8e7ed; font: 800 10px Rajdhani, sans-serif; }
+.ability-feedback .is-ready { border-color: rgba(98,230,160,.48); color: #62e6a0; }
+.ability-feedback .is-cooldown { border-color: rgba(240,199,94,.42); color: #f0c75e; }
+.ability-feedback .is-empty { border-color: rgba(255,70,85,.38); color: #ff6f7b; }
+body.is-mobile .ability-feedback { gap: 3px; margin-top: 3px; }
+body.is-mobile .ability-feedback > span { min-width: 62px; min-height: 22px; padding: 2px 5px; font-size: 8px; }
+
+.purchase-confirmed { animation: labPurchaseConfirmed .68s ease both !important; }
+.purchase-denied { animation: labPurchaseDenied .42s ease both !important; }
+@keyframes labPurchaseConfirmed {
+  0%, 100% { box-shadow: none; }
+  35% { box-shadow: inset 0 0 0 2px #62e6a0, 0 0 22px rgba(98,230,160,.42); transform: translateY(-2px); }
+}
+@keyframes labPurchaseDenied {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); box-shadow: inset 0 0 0 1px #ff4655; }
+  65% { transform: translateX(4px); }
+}
 @keyframes killIn {
   from { opacity: 0; transform: translateX(12px); }
   to   { opacity: 1; transform: translateX(0); }
@@ -6220,6 +6261,13 @@ button.click-feedback::after {
 .ux-toast-mark { width: 4px; border-radius: 2px; background: #31c8e8; box-shadow: 0 0 14px currentColor; }
 .ux-toast.is-success .ux-toast-mark { background: #62e6a0; }
 .ux-toast.is-warning .ux-toast-mark { background: #ff5b69; }
+.ux-toast.is-danger .ux-toast-mark { background: #ff4655; }
+.ux-toast.is-achievement { border-color: rgba(240,199,94,.48); background: linear-gradient(110deg, rgba(42,31,8,.97), rgba(7,16,24,.98) 58%); }
+.ux-toast.is-achievement .ux-toast-mark { background: #f0c75e; }
+.ux-toast-timer { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: currentColor; color: #31c8e8; transform-origin: left; animation: uxToastTimer var(--toast-duration, 2800ms) linear both; }
+.ux-toast.is-warning .ux-toast-timer, .ux-toast.is-danger .ux-toast-timer { color: #ff4655; }
+.ux-toast.is-achievement .ux-toast-timer { color: #f0c75e; }
+@keyframes uxToastTimer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 .ux-toast strong { color: #eaf3f6; font-size: 10px; letter-spacing: .15em; }
 .ux-toast p { margin: 4px 0 0; color: #91a4ae; font-size: 12px; line-height: 1.35; }
 .ux-toast button { position: absolute; top: 8px; right: 8px; width: 28px; min-height: 28px; padding: 0; border: 0; background: transparent; color: #718692; font-size: 18px; }

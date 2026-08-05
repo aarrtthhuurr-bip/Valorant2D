@@ -27,6 +27,8 @@ function validatedMatchPayload(body, match) {
   const victory = body?.victory;
   const wave = Number(body?.wave ?? 0);
   const survivalSeconds = Number(body?.survival_seconds ?? 0);
+  const assists = Number(body?.assists ?? 0);
+  const damage = Number(body?.damage ?? 0);
   const duration = Number(match?.duracao_segundos);
 
   if (!match || !ALLOWED_MODES.has(gameMode) || match.modo !== gameMode
@@ -34,6 +36,8 @@ function validatedMatchPayload(body, match) {
     || typeof victory !== 'boolean'
     || !Number.isInteger(kills) || kills < 0 || kills > Math.ceil(duration * 2) + 10
     || !Number.isInteger(deaths) || deaths < 0 || deaths > Math.ceil(duration / 5) + 10
+    || !Number.isInteger(assists) || assists < 0 || assists > Math.ceil(duration) + 10
+    || !Number.isInteger(damage) || damage < 0 || damage > Math.ceil(duration * 1500)
     || !Number.isInteger(score) || score < 0 || score > 10000000) return null;
 
   if (gameMode === 'outbreak') {
@@ -50,6 +54,8 @@ function validatedMatchPayload(body, match) {
     score,
     kills,
     deaths,
+    assists,
+    damage,
     victory,
     maxWave: gameMode === 'outbreak' ? wave : 0,
     // A wave exibida é a onda em que o jogador foi eliminado. Portanto,

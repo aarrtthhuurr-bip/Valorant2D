@@ -16,6 +16,9 @@ const ui = {
   weapon: document.getElementById("weaponText"),
   hp: document.getElementById("hpText"),
   ultCounter: document.getElementById("ultCounter"),
+  abilityFeedback: document.getElementById("abilityFeedback"),
+  abilityPrimaryState: document.getElementById("abilityPrimaryState"),
+  abilityUltimateState: document.getElementById("abilityUltimateState"),
   ultLabel: document.getElementById("ultLabel"),
   ultPoints: document.getElementById("ultPointsText"),
   ammo: document.getElementById("ammoText"),
@@ -317,7 +320,8 @@ function showUxToast(message, { title = "INFORMAÇÃO", tone = "info", duration 
   if (!ui.uxToastRegion || !message) return;
   const toast = document.createElement("article");
   toast.className = `ux-toast is-${tone}`;
-  toast.innerHTML = '<span class="ux-toast-mark" aria-hidden="true"></span><div><strong></strong><p></p></div><button type="button" aria-label="Fechar mensagem">×</button>';
+  toast.style.setProperty("--toast-duration", `${Math.max(1200, duration)}ms`);
+  toast.innerHTML = '<span class="ux-toast-mark" aria-hidden="true"></span><div><strong></strong><p></p></div><button type="button" aria-label="Fechar mensagem">×</button><i class="ux-toast-timer" aria-hidden="true"></i>';
   toast.querySelector("strong").textContent = title;
   toast.querySelector("p").textContent = message;
   const remove = () => {
@@ -329,6 +333,37 @@ function showUxToast(message, { title = "INFORMAÇÃO", tone = "info", duration 
   ui.uxToastRegion.appendChild(toast);
   while (ui.uxToastRegion.children.length > 3) ui.uxToastRegion.firstElementChild?.remove();
   window.setTimeout(remove, Math.max(1200, duration));
+}
+
+const LAB_ACHIEVEMENTS_KEY = "valorant2d:lab-achievements";
+const LAB_ACHIEVEMENTS = Object.freeze({
+  firstBlood: { title: "PRIMEIRO CONTATO", description: "Conseguiu a primeira eliminação.", reward: 150 },
+  headHunter: { title: "MIRA CIRÚRGICA", description: "Acertou 5 headshots na mesma partida.", reward: 300 },
+  damageDealer: { title: "PRESSÃO MÁXIMA", description: "Causou 2.500 de dano na mesma partida.", reward: 400 },
+  outbreakTen: { title: "SOBREVIVENTE", description: "Alcançou a onda 10 no Outbreak.", reward: 500 },
+});
+
+function unlockedLabAchievements() {
+  try { return new Set(JSON.parse(localStorage.getItem(LAB_ACHIEVEMENTS_KEY) || "[]")); } catch { return new Set(); }
+}
+
+function unlockLabAchievement(id) {
+  if (!labEnabled("localAchievements") || !LAB_ACHIEVEMENTS[id]) return false;
+  const unlocked = unlockedLabAchievements();
+  if (unlocked.has(id)) return false;
+  unlocked.add(id);
+  localStorage.setItem(LAB_ACHIEVEMENTS_KEY, JSON.stringify([...unlocked]));
+  const achievement = LAB_ACHIEVEMENTS[id];
+  // Recompensa local e estritamente in-game; o saldo Core do servidor nunca
+  // é alterado pelo cliente.
+  game.money = Math.min(ECONOMY.cap, game.money + achievement.reward);
+  showUxToast(`${achievement.description} +$${achievement.reward} nesta partida.`, {
+    title: `CONQUISTA // ${achievement.title}`,
+    tone: "achievement",
+    duration: 5200,
+  });
+  playSound("purchase");
+  return true;
 }
 
 function loadUpdatesManifest() {
@@ -1608,6 +1643,64 @@ const GAME_CONFIG = Object.freeze({
   }),
 });
 
+/**
+ * Laboratório de jogabilidade.
+ *
+ * Cada recurso pode ser desligado isoladamente pelo console, sem alterar a
+ * implementação principal:
+ *   Valorant2DLab.set("slidingCollision", false)
+ * As escolhas ficam apenas neste navegador e entram em vigor após recarregar.
+ */
+const TEST_MODE = true;
+const GAMEPLAY_LAB_STORAGE_KEY = "valorant2d:gameplay-lab";
+const GAMEPLAY_LAB_DEFAULTS = Object.freeze({
+  interpolation: true,
+  optimizedFov: true,
+  distinctHitboxes: true,
+  dynamicRecoil: true,
+  performanceEconomy: true,
+  slidingCollision: true,
+  yoruExitProtection: true,
+  allyCoverReload: true,
+  syntheticKillcam: true,
+  dynamicOmenSmoke: true,
+  localAchievements: true,
+  abilityFeedback: true,
+  enhancedKillfeed: true,
+  enhancedShopFeedback: true,
+  enhancedToasts: true,
+});
+
+function readGameplayLabOverrides() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(GAMEPLAY_LAB_STORAGE_KEY) || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+const GAMEPLAY_LAB = Object.freeze({ ...GAMEPLAY_LAB_DEFAULTS, ...readGameplayLabOverrides() });
+function labEnabled(feature) {
+  return TEST_MODE && GAMEPLAY_LAB[feature] !== false;
+}
+
+window.Valorant2DLab = Object.freeze({
+  enabled: TEST_MODE,
+  features: GAMEPLAY_LAB,
+  set(feature, enabled) {
+    if (!(feature in GAMEPLAY_LAB_DEFAULTS)) throw new Error(`Recurso de laboratório desconhecido: ${feature}`);
+    const overrides = readGameplayLabOverrides();
+    overrides[feature] = Boolean(enabled);
+    localStorage.setItem(GAMEPLAY_LAB_STORAGE_KEY, JSON.stringify(overrides));
+    return `Recarregue a página para aplicar ${feature}=${Boolean(enabled)}.`;
+  },
+  reset() {
+    localStorage.removeItem(GAMEPLAY_LAB_STORAGE_KEY);
+    return "Configurações do laboratório restauradas. Recarregue a página.";
+  },
+});
+
 // Custo de orbs por agente para ativar a ultimate
 const ULT_COSTS = {
   neon:     5,
@@ -1902,6 +1995,12 @@ const agents = [
         spawnParticles(p.x, p.y, "#315cff", 26, 180);
         p.x = destination.x;
         p.y = destination.y;
+        p.lastX = destination.x;
+        p.lastY = destination.y;
+        if (labEnabled("yoruExitProtection")) {
+          p.yoruExitProtectedUntil = performance.now() + 900;
+          showUxToast("Proteção dimensional ativa por 0,9 s.", { title: "YORU // SAÍDA SEGURA", tone: "info", duration: 1500 });
+        }
         spawnParticles(p.x, p.y, "#80a0ff", 32, 220);
         game.screenTint = { color: "rgba(20, 40, 140, 0.48)", life: 0.32, maxLife: 0.32 };
         game.yoruGatecrash = null;
@@ -3976,7 +4075,10 @@ const game = {
   shotChain: 0,
   crosshairScale: 1,
   lossStreak: 0,
-  stats: { kills: 0, deaths: 0, headshots: 0, plants: 0, defuses: 0, damage: 0 },
+  stats: { kills: 0, deaths: 0, headshots: 0, plants: 0, defuses: 0, damage: 0, assists: 0 },
+  replayBuffer: [],
+  replaySampleTimer: 0,
+  syntheticKillcam: null,
   selectedAgent: agents[0],
   selectedWeapon: weapons[0],
   ownedWeapons: new Set(["pistol"]),
@@ -4637,6 +4739,7 @@ function startActionRound() {
 }
 
 let shopKeyHandler = null;
+let pendingShopFeedbackCard = null;
 
 function isShopOpen() {
   return !!ui.shop && !ui.shop.classList.contains("hidden");
@@ -4658,6 +4761,13 @@ function announceShopResult(text, { success = false, title = "ARSENAL", purchase
   showUxToast(text, { title, tone: success ? "success" : "warning", duration: success ? 2200 : 3200 });
   if (purchaseSound) playSound("ingame_purchase");
   else if (!success) playSound("denied");
+  if (labEnabled("enhancedShopFeedback") && pendingShopFeedbackCard) {
+    const stateClass = success ? "purchase-confirmed" : "purchase-denied";
+    pendingShopFeedbackCard.classList.remove("purchase-confirmed", "purchase-denied");
+    void pendingShopFeedbackCard.offsetWidth;
+    pendingShopFeedbackCard.classList.add(stateClass);
+    window.setTimeout(() => pendingShopFeedbackCard?.classList.remove(stateClass), 720);
+  }
 }
 
 function showContextTipOnce(id, message) {
@@ -4767,7 +4877,10 @@ function startNewMatch() {
   game.enemyScore = 0;
   game.money = game.sandbox || game.training ? 99999 : ECONOMY.start;
   game.lossStreak = 0;
-  game.stats = { kills: 0, deaths: 0, headshots: 0, plants: 0, defuses: 0, damage: 0 };
+  game.stats = { kills: 0, deaths: 0, headshots: 0, plants: 0, defuses: 0, damage: 0, assists: 0 };
+  game.replayBuffer = [];
+  game.replaySampleTimer = 0;
+  game.syntheticKillcam = null;
   game.ownedWeapons = new Set(["pistol"]);
   game.upgrades = { armorCapacity: 0, speed: false, magazine: false, reload: false };
   game.armor = 0;
@@ -5002,6 +5115,8 @@ async function recordCompletedMatch() {
     game_mode: gameMode,
     wave,
     survival_seconds: survivalSeconds,
+    assists: labEnabled("performanceEconomy") ? Math.max(0, Math.round(game.stats?.assists || 0)) : 0,
+    damage: labEnabled("performanceEconomy") ? Math.max(0, Math.round(game.stats?.damage || 0)) : 0,
     matchToken: game.matchSubmissionToken,
   };
 
@@ -5109,6 +5224,8 @@ function currentPlayerDefuseTime() {
 
 function applyDamage(entity, amount) {
   if (entity.id === "player" && game.godMode) return 0;
+  if (entity.id === "player" && labEnabled("yoruExitProtection")
+    && performance.now() < (entity.yoruExitProtectedUntil || 0)) return 0;
   if (game.outbreak && entity.id?.startsWith("ally-")) return 0;
   if (entity.id === "player" && game.outbreak && performance.now() < game.outbreakEffects.phaseShiftUntil) return 0;
   if (entity.id === "player" && isOutbreakMode()
@@ -5226,6 +5343,33 @@ function moveEntity(entity, dx, dy, walls) {
     || (includeDestructibles && game.destructibles.some((wall) => circleRectCollides(entity, wall)));
   const startX = entity.x;
   const startY = entity.y;
+  if (labEnabled("slidingCollision") && entity.id === "player" && dx && dy) {
+    entity.x += dx;
+    entity.y += dy;
+    if (!collidesWithScenario()) {
+      entity.x = Math.max(entity.r, Math.min(map.width - entity.r, entity.x));
+      entity.y = Math.max(entity.r, Math.min(map.height - entity.r, entity.y));
+      return Math.hypot(entity.x - startX, entity.y - startY);
+    }
+    entity.x = startX;
+    entity.y = startY;
+    // Resolve primeiro o eixo com maior intenção e preserva o tangencial.
+    // Isso evita prender o círculo nas quinas sem permitir atravessar paredes.
+    const attempts = Math.abs(dx) >= Math.abs(dy)
+      ? [{ x: dx, y: 0 }, { x: 0, y: dy }]
+      : [{ x: 0, y: dy }, { x: dx, y: 0 }];
+    for (const attempt of attempts) {
+      entity.x += attempt.x;
+      entity.y += attempt.y;
+      if (collidesWithScenario()) {
+        entity.x -= attempt.x;
+        entity.y -= attempt.y;
+      }
+    }
+    entity.x = Math.max(entity.r, Math.min(map.width - entity.r, entity.x));
+    entity.y = Math.max(entity.r, Math.min(map.height - entity.r, entity.y));
+    return Math.hypot(entity.x - startX, entity.y - startY);
+  }
   entity.x += dx;
   if (collidesWithScenario()) entity.x -= dx;
   entity.y += dy;
@@ -6118,6 +6262,26 @@ function castFovRay(radians) {
   };
 }
 
+function activeFovCorners(origin) {
+  const segments = wallsToSegments();
+  if (!labEnabled("optimizedFov")) return segments.flatMap((segment) => [segment.p1, segment.p2]);
+  // Só quinas que podem alterar a silhueta visível geram raios. A interseção
+  // continua testando todas as paredes, portanto não cria vazamentos na névoa.
+  const radius = Math.max(560, Math.min(canvas.width, canvas.height) * 0.9);
+  const radiusSq = radius * radius;
+  const unique = new Map();
+  for (const segment of segments) {
+    for (const point of [segment.p1, segment.p2]) {
+      const dx = point.x - origin.x;
+      const dy = point.y - origin.y;
+      const isMapEdge = point.x === 0 || point.y === 0 || point.x === map.width || point.y === map.height;
+      if (!isMapEdge && dx * dx + dy * dy > radiusSq) continue;
+      unique.set(`${Math.round(point.x)},${Math.round(point.y)}`, point);
+    }
+  }
+  return [...unique.values()];
+}
+
 function buildFovPolygon() {
   if (!game.player?.alive) return [];
   const origin = game.player;
@@ -6136,11 +6300,8 @@ function buildFovPolygon() {
     }
   };
 
-  for (const segment of wallsToSegments()) {
-    for (const point of [segment.p1, segment.p2]) {
-      // Sem filtro de distância: todos os vértices recebem raios extras, evitando vazamento nas quinas
-      addAngle(Math.atan2(point.y - origin.y, point.x - origin.x));
-    }
+  for (const point of activeFovCorners(origin)) {
+    addAngle(Math.atan2(point.y - origin.y, point.x - origin.x));
   }
 
   for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 12) addAngle(angle);
@@ -6236,6 +6397,9 @@ function headCircle(entity) {
 }
 
 function hitRegion(x1, y1, x2, y2, entity, padding = 0) {
+  if (!labEnabled("distinctHitboxes")) {
+    return segmentCircleHit(x1, y1, x2, y2, entity, padding) ? "body" : null;
+  }
   if (segmentCircleHit(x1, y1, x2, y2, headCircle(entity), padding * 0.55)) return "head";
   if (segmentCircleHit(x1, y1, x2, y2, entity, padding)) return "body";
   return null;
@@ -6319,7 +6483,9 @@ function shoot(owner, targetX, targetY, weapon, team) {
     if (!infiniteAmmo) owner.ammo -= 1;
     game.shotChain += 1;
     const recoilGain = weapon.id === "sniper" ? 0.5 : weapon.id === "lmg" ? 0.26 : weapon.id === "smg" ? 0.22 : 0.18;
-    game.recoilHeat = Math.min(2.6, game.recoilHeat + recoilGain);
+    game.recoilHeat = labEnabled("dynamicRecoil")
+      ? Math.min(2.6, game.recoilHeat + recoilGain)
+      : 0;
     game.shake = Math.max(game.shake, shakeForWeapon(weapon));
     playWeaponSound(weapon, "shot", owner);
     spawnParticles(owner.x + Math.cos(owner.angle) * 24, owner.y + Math.sin(owner.angle) * 24, "#ffe6a8", 5, 90);
@@ -6329,7 +6495,9 @@ function shoot(owner, targetX, targetY, weapon, team) {
   for (let i = 0; i < count; i++) {
     const base = Math.atan2(targetY - owner.y, targetX - owner.x);
     const movingPenalty = owner.moving ? 1.8 : 1;
-    const recoilPenalty = team === "player" ? 1 + game.recoilHeat * 0.85 : 1 + (owner.aiState === "plant" || owner.aiState === "defuse" ? 0.55 : 0);
+    const recoilPenalty = team === "player"
+      ? (labEnabled("dynamicRecoil") ? 1 + game.recoilHeat * 0.85 : 1)
+      : 1 + (owner.aiState === "plant" || owner.aiState === "defuse" ? 0.55 : 0);
     const neonUltimate = owner.ultimate?.type === "neon";
     const spread = neonUltimate ? 0 : (Math.random() - 0.5) * weapon.spread * 2 * movingPenalty * recoilPenalty;
     const startX = owner.x + Math.cos(base) * owner.r;
@@ -6530,10 +6698,12 @@ function updateOmenUltimate(dt) {
     p.moving = false;
     if (state.travelTimer <= 0) {
       const destination = nearestWalkablePoint(state.destination, state.from);
-      p.x = destination.x;
-      p.y = destination.y;
-      p.lastX = destination.x;
-      p.lastY = destination.y;
+        p.x = destination.x;
+        p.y = destination.y;
+        p.lastX = destination.x;
+        p.lastY = destination.y;
+        p.renderPrevX = destination.x;
+        p.renderPrevY = destination.y;
       p.invulnerable = false;
       p.untargetable = false;
       p.ultimate = null;
@@ -7399,8 +7569,16 @@ function botShootAt(bot, target, dt, team, firePenalty = 1, options = {}) {
   bot.angle = angle;
   bot.fireTimer -= dt;
   if (bot.fireTimer <= 0) {
+    if (team === "ally" && labEnabled("allyCoverReload") && (bot.labReloadTimer || 0) > 0) return;
     const bulletStart = game.bullets.length;
     shoot(bot, aimX, aimY, weapon, team);
+    if (team === "ally" && labEnabled("allyCoverReload")) {
+      bot.labShotsSinceReload = (bot.labShotsSinceReload || 0) + 1;
+      if (bot.labShotsSinceReload >= Math.max(4, Math.round((weapon.mag || 12) * 0.7))) {
+        bot.labReloadTimer = Math.max(0.8, weapon.reload || 1.2);
+        bot.labShotsSinceReload = 0;
+      }
+    }
     const latest = game.bullets.slice(bulletStart);
     if (team === "ally" && game.allyLoadout.damageMultiplier > 1) {
       latest.forEach((bullet) => { if (bullet.team === "ally") bullet.damage *= game.allyLoadout.damageMultiplier; });
@@ -7857,6 +8035,21 @@ function updateAllies(dt) {
   game.allies.forEach((ally, index) => {
     if (!ally.alive) return;
     const enemy = cachedBotPerception(ally, "enemy", () => closestVisibleEnemy(ally));
+    if (labEnabled("allyCoverReload") && (ally.labReloadTimer || 0) > 0) {
+      ally.labReloadTimer = Math.max(0, ally.labReloadTimer - dt);
+      ally.aiState = "reload-cover";
+      const cover = enemy ? findCoverPoint(ally, enemy) : null;
+      if (cover && Math.hypot(ally.x - cover.x, ally.y - cover.y) > 18) {
+        moveBotToward(ally, cover, dt, 1.08);
+      } else {
+        // Sem cobertura útil, mantém uma formação protetora próxima do jogador.
+        const angle = Math.atan2(ally.y - game.player.y, ally.x - game.player.x) || index * Math.PI;
+        const formation = { x: game.player.x + Math.cos(angle) * 72, y: game.player.y + Math.sin(angle) * 72 };
+        moveBotToward(ally, formation, dt, 0.82);
+      }
+      keepSquadSpacing(ally, squad, dt);
+      return;
+    }
     if (game.sandbox && ally.sandboxControl) {
       if (ally.sandboxCanShoot !== false && enemy) botShootAt(ally, enemy, dt, "ally");
       if (ally.sandboxCanMove !== false && ally.sandboxBehavior === "patrol") {
@@ -8121,10 +8314,17 @@ function updateBots(dt) {
 function eliminateBot(bot, { playerCredit = false, weaponName = "Poison Cloud", headshot = false } = {}) {
    if (!bot.alive) return;
    bot.alive = false;
+   if (!playerCredit && labEnabled("performanceEconomy")
+     && performance.now() - (bot.labPlayerDamageAt || 0) <= 5000) {
+     game.stats.assists = (game.stats.assists || 0) + 1;
+   }
    if (game.training) bot.respawnTimer = 1.25 + Math.random() * 0.75;
    if (playerCredit) {
      playSound("bot_kill");
      game.stats.kills += 1;
+     if (game.stats.kills === 1) unlockLabAchievement("firstBlood");
+     if (game.stats.headshots >= 5) unlockLabAchievement("headHunter");
+     if (game.stats.damage >= 2500) unlockLabAchievement("damageDealer");
      addKillFeedEntry(true, weaponName, headshot);
      if (game.player?.ultimate?.type === "jett") {
        game.player.ultimate.knives = 6;
@@ -8246,6 +8446,7 @@ function updateBullets(dt) {
           const actualDamage = applyDamage(bot, damage);
           if (bullet.team === "player") {
             game.stats.damage += Math.round(actualDamage);
+            bot.labPlayerDamageAt = performance.now();
             if (region === "head") game.stats.headshots += 1;
             spawnDamageNumber(bot, actualDamage, region === "head");
           }
@@ -8281,6 +8482,7 @@ function updateBullets(dt) {
         game.hitMarkers.push({ x: target.x, y: target.y - 30, life: 0.3, maxLife: 0.3, color: "#ff5b5b" });
         spawnParticles(bullet.x, bullet.y, "#ff4d5d", 8, 120);
         if (target.id === "player") {
+          if (target.hp <= 0) startSyntheticKillcam(bullet, target);
           game.shake = Math.max(game.shake, region === "head" ? 0.34 : 0.24);
           game.damageFlash = Math.max(game.damageFlash, region === "head" ? 0.55 : 0.38);
           game.damageIndicator = {
@@ -8502,6 +8704,10 @@ function updateAgentObjects(dt) {
 }
 
 function updateTimers(dt) {
+  if (game.syntheticKillcam) {
+    game.syntheticKillcam.life = Math.max(0, game.syntheticKillcam.life - dt);
+    if (game.syntheticKillcam.life === 0) game.syntheticKillcam = null;
+  }
   if (game.introTimer > 0) {
     game.introTimer = Math.max(0, game.introTimer - dt);
     if (game.introTimer === 0) {
@@ -8555,7 +8761,17 @@ function updateTimers(dt) {
     } else {
       smoke.life -= dt;
     }
-    if (smoke.targetR) smoke.r += (smoke.targetR - smoke.r) * Math.min(1, dt * 1.4);
+    if (smoke.targetR) {
+      let targetRadius = smoke.targetR;
+      if (labEnabled("dynamicOmenSmoke") && smoke.omenSmoke && smoke.maxLife) {
+        const remaining = Math.max(0, smoke.life / smoke.maxLife);
+        // Nos dois segundos finais a esfera contrai, denuncia o término e
+        // libera visão gradualmente em vez de desaparecer num único frame.
+        smoke.expiryRatio = Math.min(1, smoke.life / 2);
+        targetRadius *= remaining < 0.27 ? 0.5 + remaining * 1.85 : 1;
+      }
+      smoke.r += (targetRadius - smoke.r) * Math.min(1, dt * 2.2);
+    }
     if (!smoke.poison) continue;
     smoke.tick = (smoke.tick || 0) - dt;
     const targets = smoke.ownerTeam === "bot" ? [game.player, ...game.allies] : game.bots;
@@ -8774,6 +8990,7 @@ function update(dt) {
     return;
   }
   if (game.paused) return;
+  updateReplayRecorder(dt);
   updateTimers(dt);
   if (game.introTimer > 0 || !game.clockActive) return;
   if (isShopOpen() && !canUseShop()) {
@@ -8819,6 +9036,77 @@ function update(dt) {
       checkWinConditions();
     }
   }
+}
+
+function updateReplayRecorder(dt) {
+  if (!labEnabled("syntheticKillcam") || !game.player?.alive || game.phase !== "action") return;
+  game.replaySampleTimer = (game.replaySampleTimer || 0) - dt;
+  if (game.replaySampleTimer > 0) return;
+  game.replaySampleTimer = 0.08;
+  game.replayBuffer.push({
+    at: performance.now(),
+    player: { x: game.player.x, y: game.player.y },
+    hostileBullets: game.bullets
+      .filter((bullet) => bullet.team === "bot")
+      .map((bullet) => ({ x: bullet.x, y: bullet.y, startX: bullet.startX, startY: bullet.startY })),
+  });
+  const cutoff = performance.now() - 4200;
+  while (game.replayBuffer[0]?.at < cutoff) game.replayBuffer.shift();
+}
+
+function startSyntheticKillcam(bullet, target) {
+  if (!labEnabled("syntheticKillcam") || !bullet || !target) return;
+  game.syntheticKillcam = {
+    life: 2.4,
+    maxLife: 2.4,
+    fromX: Number.isFinite(bullet.startX) ? bullet.startX : bullet.x - bullet.vx * 0.25,
+    fromY: Number.isFinite(bullet.startY) ? bullet.startY : bullet.y - bullet.vy * 0.25,
+    toX: target.x,
+    toY: target.y,
+    samples: game.replayBuffer.slice(-24),
+  };
+  showUxToast("Trajetória fatal reconstruída no campo de batalha.", { title: "KILLCAM 2D", tone: "danger", duration: 2400 });
+}
+
+function drawSyntheticKillcam() {
+  const replay = game.syntheticKillcam;
+  if (!replay || replay.life <= 0) return;
+  const progress = 1 - replay.life / replay.maxLife;
+  const endX = replay.fromX + (replay.toX - replay.fromX) * Math.min(1, progress * 2.2);
+  const endY = replay.fromY + (replay.toY - replay.fromY) * Math.min(1, progress * 2.2);
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, replay.life * 1.5);
+  ctx.strokeStyle = "#ff4655";
+  ctx.lineWidth = 3;
+  ctx.setLineDash([12, 8]);
+  ctx.beginPath();
+  ctx.moveTo(replay.fromX, replay.fromY);
+  ctx.lineTo(endX, endY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = "rgba(255,70,85,.18)";
+  ctx.beginPath();
+  ctx.arc(replay.toX, replay.toY, 22 + Math.sin(performance.now() / 90) * 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function capturePreviousSimulationState() {
+  if (!labEnabled("interpolation")) return;
+  for (const entity of [game.player, ...game.bots, ...game.allies, ...game.bullets]) {
+    if (!entity) continue;
+    entity.renderPrevX = entity.x;
+    entity.renderPrevY = entity.y;
+  }
+}
+
+function interpolatedPosition(entity) {
+  if (!labEnabled("interpolation") || !Number.isFinite(entity?.renderPrevX)) return { x: entity.x, y: entity.y };
+  const alpha = Math.max(0, Math.min(1, game.renderAlpha || 0));
+  return {
+    x: entity.renderPrevX + (entity.x - entity.renderPrevX) * alpha,
+    y: entity.renderPrevY + (entity.y - entity.renderPrevY) * alpha,
+  };
 }
 
 /**
@@ -9072,10 +9360,11 @@ function drawHeldWeapon(entity, weapon, kind) {
 
 function drawEntity(entity, color, label, kind = "bot") {
   if (!entity.alive) return;
+  const rendered = interpolatedPosition(entity);
   const weapon = kind === "player" ? game.selectedWeapon : entity.weapon;
   const armorRatio = (entity.maxArmor || 0) > 0 ? Math.max(0, entity.armor || 0) / entity.maxArmor : 0;
   ctx.save();
-  ctx.translate(entity.x, entity.y);
+  ctx.translate(rendered.x, rendered.y);
   if (kind === "player") {
     ctx.strokeStyle = "rgba(98, 230, 160, 0.5)";
     ctx.shadowColor = "#62e6a0";
@@ -9126,8 +9415,8 @@ function drawEntity(entity, color, label, kind = "bot") {
   const maxHp = entity.maxHp || 100;
   if (kind === "player" && game.outbreak) {
     const width = 76;
-    const left = entity.x - width / 2;
-    const shieldY = entity.y + entity.r + 8;
+    const left = rendered.x - width / 2;
+    const shieldY = rendered.y + entity.r + 8;
     const healthY = shieldY + 8;
     ctx.save();
     ctx.fillStyle = "rgba(1, 8, 13, 0.82)";
@@ -10612,7 +10901,8 @@ function draw() {
       ctx.fillStyle = gradient;
     } else if (smoke.omenSmoke) {
       const gradient = ctx.createRadialGradient(smoke.x, smoke.y, smoke.r * 0.1, smoke.x, smoke.y, smoke.r);
-      gradient.addColorStop(0, "rgba(96, 76, 132, 0.62)");
+      const expiry = labEnabled("dynamicOmenSmoke") ? Math.max(0, Math.min(1, smoke.expiryRatio ?? 1)) : 1;
+      gradient.addColorStop(0, expiry < 0.55 ? "rgba(185, 72, 150, 0.68)" : "rgba(96, 76, 132, 0.62)");
       gradient.addColorStop(0.62, "rgba(57, 47, 82, 0.72)");
       gradient.addColorStop(1, "rgba(23, 19, 37, 0.28)");
       ctx.fillStyle = gradient;
@@ -10745,25 +11035,26 @@ function draw() {
   ctx.fillStyle = "#f8fafc";
   for (const bullet of game.bullets) {
     if (!estaNoCampoDeVisao(bullet, bullet.knife ? 10 : 4)) continue;
+    const renderedBullet = interpolatedPosition(bullet);
     if (bullet.knife) {
-      drawKunaiShape(bullet.x, bullet.y, (bullet.angle ?? Math.atan2(bullet.vy, bullet.vx)) + Math.PI / 2, 0.72, 1);
+      drawKunaiShape(renderedBullet.x, renderedBullet.y, (bullet.angle ?? Math.atan2(bullet.vy, bullet.vx)) + Math.PI / 2, 0.72, 1);
     } else {
       const speed = Math.max(1, Math.hypot(bullet.vx || 0, bullet.vy || 0));
       const trailLength = Math.min(16, speed * 0.014);
-      const trailX = bullet.x - ((bullet.vx || 0) / speed) * trailLength;
-      const trailY = bullet.y - ((bullet.vy || 0) / speed) * trailLength;
-      const trail = ctx.createLinearGradient(trailX, trailY, bullet.x, bullet.y);
+      const trailX = renderedBullet.x - ((bullet.vx || 0) / speed) * trailLength;
+      const trailY = renderedBullet.y - ((bullet.vy || 0) / speed) * trailLength;
+      const trail = ctx.createLinearGradient(trailX, trailY, renderedBullet.x, renderedBullet.y);
       trail.addColorStop(0, "rgba(248, 250, 252, 0)");
       trail.addColorStop(1, bullet.team === "player" ? "rgba(117, 226, 239, 0.92)" : "rgba(255, 102, 112, 0.88)");
       ctx.strokeStyle = trail;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(trailX, trailY);
-      ctx.lineTo(bullet.x, bullet.y);
+      ctx.lineTo(renderedBullet.x, renderedBullet.y);
       ctx.stroke();
       ctx.fillStyle = bullet.team === "player" ? "#d8fbff" : "#ffd9dc";
       ctx.beginPath();
-      ctx.arc(bullet.x, bullet.y, 2.5, 0, Math.PI * 2);
+      ctx.arc(renderedBullet.x, renderedBullet.y, 2.5, 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -10831,6 +11122,7 @@ function draw() {
   drawDamageFlash();
   drawShadowBlindness();
   drawAgentScreenEffects();
+  drawSyntheticKillcam();
   ctx.restore();
 }
 
@@ -10933,6 +11225,29 @@ function updateUi() {
   toggleClass(ui.ultCounter, "ready", outbreakGadgetDefinition ? outbreakGadgetReady : game.sandbox || ultReady);
   toggleClass(ui.ultCounter, "warning", outbreakGadgetDefinition ? !outbreakGadgetReady : game.ultFlashTimer > 0 && !ultReady);
   toggleClass(ui.ultCounter, "pulse", game.ultFlashTimer > 0);
+  if (labEnabled("abilityFeedback")) {
+    toggleClass(ui.abilityFeedback, "hidden", false);
+    const primaryReady = game.sandbox || game.abilityCooldown <= 0;
+    const primaryLabel = primaryReady ? "PRONTA" : `${Math.ceil(game.abilityCooldown)}S`;
+    setText(ui.abilityPrimaryState?.querySelector("b"), primaryLabel);
+    toggleClass(ui.abilityPrimaryState, "is-ready", primaryReady);
+    toggleClass(ui.abilityPrimaryState, "is-cooldown", !primaryReady);
+    const ultimateReady = outbreakGadgetDefinition ? outbreakGadgetReady : game.sandbox || ultReady;
+    const ultimateEmpty = outbreakGadgetDefinition
+      ? (game.outbreakGadget?.charges || 0) <= 0
+      : !game.sandbox && getUltimatePoints(game.player) <= 0;
+    setText(ui.abilityUltimateState?.querySelector("b"), ultimateReady
+      ? "PRONTA"
+      : ultimateEmpty
+        ? "SEM CARGA"
+        : outbreakGadgetCooldown > 0
+          ? `${Math.ceil(outbreakGadgetCooldown)}S`
+          : `${getUltimatePoints(game.player)}/${ultCost}`);
+    toggleClass(ui.abilityUltimateState, "is-ready", ultimateReady);
+    toggleClass(ui.abilityUltimateState, "is-empty", ultimateEmpty);
+  } else {
+    toggleClass(ui.abilityFeedback, "hidden", true);
+  }
   if (!outbreakGadgetDefinition && ultReady && !game.tutorial && !game.sandbox) {
     showContextTipOnce("ultimate-ready", `Ultimate de ${game.selectedAgent?.name || "agente"} pronta. Pressione ${settings.keys?.ability2 || "Q"} para usar.`);
   }
@@ -13673,6 +13988,7 @@ function deployOutbreakWave(wave) {
   game.outbreakAdminShopResume = false;
   ui.outbreakShopFooter?.classList.add("hidden");
   game.outbreakWave = wave;
+  if (wave >= 10) unlockLabAchievement("outbreakTen");
   resetOutbreakGadget();
   game.outbreakWaveStartKills = Math.max(0, game.stats?.kills || 0);
   game.outbreakWaveCredits = 0;
@@ -13955,14 +14271,33 @@ function addKillFeedEntry(killerIsPlayer, weaponName, headshot) {
   if (!settings.showKillFeed || !ui.killFeed) return;
   const entry = document.createElement("div");
   entry.className = "kill-entry";
-  const killer = killerIsPlayer
-    ? `<span class="kf-player">Você</span>`
-    : `<span class="kf-enemy">Bot</span>`;
-  const victim = killerIsPlayer
-    ? `<span class="kf-enemy">Bot</span>`
-    : `<span class="kf-player">Você</span>`;
-  const hs = headshot ? `<span class="kf-hs">HS</span>` : "";
-  entry.innerHTML = `${killer}<span class="kf-weapon">${weaponName}</span>${victim}${hs}`;
+  entry.classList.toggle("is-headshot", labEnabled("enhancedKillfeed") && headshot);
+  const killer = document.createElement("span");
+  killer.className = killerIsPlayer ? "kf-player" : "kf-enemy";
+  killer.textContent = killerIsPlayer ? "Você" : "Bot";
+  const victim = document.createElement("span");
+  victim.className = killerIsPlayer ? "kf-enemy" : "kf-player";
+  victim.textContent = killerIsPlayer ? "Bot" : "Você";
+  const weaponLabel = document.createElement("span");
+  weaponLabel.className = "kf-weapon";
+  const weapon = weapons.find((candidate) => candidate.name === weaponName);
+  if (labEnabled("enhancedKillfeed") && weapon) {
+    const icon = document.createElement("img");
+    icon.src = weaponImagePath(weapon);
+    icon.alt = "";
+    icon.addEventListener("error", () => icon.remove(), { once: true });
+    weaponLabel.append(icon);
+  }
+  const text = document.createElement("span");
+  text.textContent = weaponName || "ELIMINAÇÃO";
+  weaponLabel.append(text);
+  entry.append(killer, weaponLabel, victim);
+  if (headshot) {
+    const hs = document.createElement("span");
+    hs.className = "kf-hs";
+    hs.textContent = "HEADSHOT";
+    entry.append(hs);
+  }
   ui.killFeed.prepend(entry);
   killFeedEntries.push(entry);
   if (killFeedEntries.length > 4) {
@@ -14543,6 +14878,7 @@ function loop(now) {
     // bots, projéteis e timers percorrem o mesmo tempo real que em 60 FPS.
     while (loop.accumulator + SIMULATION_EPSILON >= SIMULATION_STEP && simulationSteps < MAX_SIMULATION_STEPS) {
       ranSimulationStep = true;
+      capturePreviousSimulationState();
       update(SIMULATION_STEP * simulationScale);
       loop.accumulator = Math.max(0, loop.accumulator - SIMULATION_STEP);
       simulationSteps += 1;
@@ -14554,6 +14890,7 @@ function loop(now) {
         touchControls.pressedActions.clear();
       }
     }
+    game.renderAlpha = labEnabled("interpolation") ? loop.accumulator / SIMULATION_STEP : 1;
     draw();
     updateUi();
   } catch (error) {
@@ -14860,6 +15197,9 @@ ui.sandboxBlackoutToggle?.addEventListener("click", () => {
 });
 ui.sandboxSaveButton?.addEventListener("click", saveSandboxConfig);
 ui.sandboxLoadButton?.addEventListener("click", loadSandboxConfig);
+ui.shop?.addEventListener("pointerdown", (event) => {
+  pendingShopFeedbackCard = event.target.closest(".choice, .ally-card, .ult-shop-card, button");
+});
 
 if (ui.newGameButton) ui.newGameButton.addEventListener("click", () => {
   ui.matchOverlay?.classList.add("hidden");
