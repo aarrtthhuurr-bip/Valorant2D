@@ -1,10 +1,10 @@
 {
-  "version": "0.9.0-dev.2",
-  "status": "draft",
-  "channel": "develop",
-  "publishedAt": null,
-  "title": "Próxima atualização do Valorant2D",
-  "summary": "Esta versão ainda está em desenvolvimento. A lista abaixo reúne tudo que será publicado quando os testes terminarem.",
+  "version": "0.9.0",
+  "status": "published",
+  "channel": "stable",
+  "publishedAt": "2026-08-05T18:13:00-03:00",
+  "title": "Atualização 0.9.0 do Valorant2D",
+  "summary": "Uma nova base de versões, melhorias no Outbreak e uma seleção de modos completamente remasterizada.",
   "highlights": [
     {
       "title": "Fluxo de versões",
@@ -28,7 +28,7 @@
     },
     {
       "title": "Seleção de modos remasterizada",
-      "description": "Default, Blackout e Outbreak agora ocupam cards principais; Sandbox e Treino ficam na área de preparação.",
+      "description": "Default, Blackout e Outbreak agora ocupam cards principais e cada modo recebeu uma identidade cromática própria; Sandbox e Treino ficam na área de preparação.",
       "type": "interface"
     },
     {

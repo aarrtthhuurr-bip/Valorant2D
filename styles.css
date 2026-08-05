@@ -7410,35 +7410,36 @@ body.is-mobile .top-hud strong {
 }
 
 .mode-card-default {
-  --mode-accent: #ff5361;
-  --mode-accent-rgb: 255, 83, 97;
+  --mode-accent: #ff4655;
+  --mode-accent-rgb: 255, 70, 85;
 }
 
 .mode-card-blackout {
-  --mode-accent: #9ba8ca;
-  --mode-accent-rgb: 155, 168, 202;
+  --mode-accent: #9d4edd;
+  --mode-accent-rgb: 157, 78, 221;
   background:
-    linear-gradient(155deg, rgba(107, 87, 151, 0.14), transparent 50%),
-    #080c13;
+    radial-gradient(circle at 82% 8%, rgba(157, 78, 221, 0.18), transparent 38%),
+    linear-gradient(155deg, rgba(157, 78, 221, 0.1), transparent 52%),
+    #0b0912;
 }
 
 .mode-card-outbreak {
-  --mode-accent: #ff3049;
-  --mode-accent-rgb: 255, 48, 73;
+  --mode-accent: #00f5d4;
+  --mode-accent-rgb: 0, 245, 212;
   background:
-    radial-gradient(circle at 82% 10%, rgba(153, 13, 37, 0.23), transparent 36%),
-    linear-gradient(155deg, rgba(255, 48, 73, 0.09), transparent 52%),
-    #100a10;
+    radial-gradient(circle at 82% 10%, rgba(0, 245, 212, 0.14), transparent 36%),
+    linear-gradient(155deg, rgba(0, 245, 212, 0.075), transparent 52%),
+    #071310;
 }
 
 .mode-card-sandbox {
-  --mode-accent: #d5ad55;
-  --mode-accent-rgb: 213, 173, 85;
+  --mode-accent: #ffb703;
+  --mode-accent-rgb: 255, 183, 3;
 }
 
 .mode-card-training {
-  --mode-accent: #4ebac4;
-  --mode-accent-rgb: 78, 186, 196;
+  --mode-accent: #00f0ff;
+  --mode-accent-rgb: 0, 240, 255;
 }
 
 .mode-card:hover,
