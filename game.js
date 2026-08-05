@@ -6265,17 +6265,13 @@ function castFovRay(radians) {
 function activeFovCorners(origin) {
   const segments = wallsToSegments();
   if (!labEnabled("optimizedFov")) return segments.flatMap((segment) => [segment.p1, segment.p2]);
-  // Só quinas que podem alterar a silhueta visível geram raios. A interseção
-  // continua testando todas as paredes, portanto não cria vazamentos na névoa.
-  const radius = Math.max(560, Math.min(canvas.width, canvas.height) * 0.9);
-  const radiusSq = radius * radius;
+  // Uma quina distante ainda pode formar a silhueta visível atrás do jogador.
+  // Por isso a otimização segura elimina SOMENTE coordenadas repetidas; jamais
+  // descarta vértices por distância, viewport ou suposta oclusão antecipada.
+  // Cada raio continua sendo interceptado contra todos os segmentos do mapa.
   const unique = new Map();
   for (const segment of segments) {
     for (const point of [segment.p1, segment.p2]) {
-      const dx = point.x - origin.x;
-      const dy = point.y - origin.y;
-      const isMapEdge = point.x === 0 || point.y === 0 || point.x === map.width || point.y === map.height;
-      if (!isMapEdge && dx * dx + dy * dy > radiusSq) continue;
       unique.set(`${Math.round(point.x)},${Math.round(point.y)}`, point);
     }
   }
