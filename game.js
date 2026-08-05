@@ -1577,6 +1577,37 @@ const FOV_VISIBILITY_RADIUS = 99999; // visão "infinita" — vai até a parede 
 const FOV_ANGLE_EPSILON = 0.0001;    // desvio menor = polígono mais preciso nas quinas
 const FOV_DARKNESS_OPACITY = 0.5;
 const FOV_STORAGE_KEY = "valorant2d-fov-mode";
+
+/**
+ * Balanço cinético central, sempre expresso em unidades por segundo.
+ *
+ * A simulação permanece fixa em 60 ticks por segundo; estes valores definem
+ * apenas o ritmo do jogo e podem ser recalibrados sem tocar no Delta Time.
+ */
+const GAME_CONFIG = Object.freeze({
+  movement: Object.freeze({
+    playerSpeed: 150,
+    playerUpgradeMultiplier: 1.1,
+    standardBotSpeed: 82,
+    standardBotIndexStep: 6,
+    allySpeed: 88,
+    allyIndexStep: 6,
+    trainingBotSpeed: 78,
+    trainingBotVariation: 13,
+    outbreakBotSpeedMultiplier: 0.72,
+  }),
+  projectiles: Object.freeze({
+    weaponSpeedMultiplier: 0.86,
+    utilitySpeedMultiplier: 0.88,
+  }),
+  combat: Object.freeze({
+    botAttackIntervalMultiplier: 1.12,
+  }),
+  outbreak: Object.freeze({
+    spawnIntervalMultiplier: 1.15,
+  }),
+});
+
 // Custo de orbs por agente para ativar a ultimate
 const ULT_COSTS = {
   neon:     5,
@@ -1880,8 +1911,8 @@ const agents = [
         active: true,
         x: p.x + Math.cos(p.angle) * 28,
         y: p.y + Math.sin(p.angle) * 28,
-        vx: Math.cos(p.angle) * 360,
-        vy: Math.sin(p.angle) * 360,
+        vx: Math.cos(p.angle) * 360 * GAME_CONFIG.projectiles.utilitySpeedMultiplier,
+        vy: Math.sin(p.angle) * 360 * GAME_CONFIG.projectiles.utilitySpeedMultiplier,
         life: 5,
         maxLife: 5,
       };
@@ -4026,7 +4057,8 @@ function effectivePlayerMaxArmor() {
 }
 
 function effectivePlayerSpeed() {
-  const baseSpeed = game.upgrades.speed ? 248 : 225;
+  const baseSpeed = GAME_CONFIG.movement.playerSpeed
+    * (game.upgrades.speed ? GAME_CONFIG.movement.playerUpgradeMultiplier : 1);
   const adrenaline = outbreakEffectActive(game.outbreakEffects.adrenalineUntilWave) ? 1.2 : 1;
   const overdrive = game.outbreak && performance.now() < game.outbreakEffects.overdriveUntil ? 1.28 : 1;
   return baseSpeed * adrenaline * overdrive;
@@ -4123,7 +4155,7 @@ function makeBot(spawn, index) {
     maxHp: 100,
     armor: botArmor,
     maxArmor: botArmor,
-    speed: 118 + index * 8,
+    speed: GAME_CONFIG.movement.standardBotSpeed + index * GAME_CONFIG.movement.standardBotIndexStep,
     angle: Math.PI / 2,
     alive: true,
     side: botSide,
@@ -4164,7 +4196,7 @@ function makeAlly(spawn, index) {
     maxHp: 100,
     armor,
     maxArmor: armor,
-    speed: 126 + index * 8,
+    speed: GAME_CONFIG.movement.allySpeed + index * GAME_CONFIG.movement.allyIndexStep,
     angle: game.playerSide === "attackers" ? -Math.PI / 2 : Math.PI / 2,
     alive: true,
     side: game.playerSide,
@@ -5330,8 +5362,8 @@ function launchRazeGrenade(owner, angle, mini = false) {
   game.grenades.push({
     x: owner.x + Math.cos(angle) * (owner.r + 8),
     y: owner.y + Math.sin(angle) * (owner.r + 8),
-    vx: Math.cos(angle) * (mini ? 270 : 430),
-    vy: Math.sin(angle) * (mini ? 270 : 430),
+    vx: Math.cos(angle) * (mini ? 270 : 430) * GAME_CONFIG.projectiles.utilitySpeedMultiplier,
+    vy: Math.sin(angle) * (mini ? 270 : 430) * GAME_CONFIG.projectiles.utilitySpeedMultiplier,
     life: mini ? 0.85 : 0.72,
     maxLife: mini ? 0.85 : 0.72,
     r: mini ? 7 : 10,
@@ -5350,8 +5382,8 @@ function throwJettKnife(owner, angle = owner?.angle || 0, spread = 0) {
     y: owner.y + Math.sin(shotAngle) * owner.r,
     startX: owner.x,
     startY: owner.y,
-    vx: Math.cos(shotAngle) * 1420,
-    vy: Math.sin(shotAngle) * 1420,
+    vx: Math.cos(shotAngle) * 1420 * GAME_CONFIG.projectiles.utilitySpeedMultiplier,
+    vy: Math.sin(shotAngle) * 1420 * GAME_CONFIG.projectiles.utilitySpeedMultiplier,
     life: 0.92,
     damage: 84,
     team: entityTeam(owner) === "player" ? "player" : "bot",
@@ -5387,8 +5419,8 @@ function fireRazeRocket(owner) {
   game.rockets.push({
     x: owner.x + Math.cos(owner.angle) * (owner.r + 16),
     y: owner.y + Math.sin(owner.angle) * (owner.r + 16),
-    vx: Math.cos(owner.angle) * 620,
-    vy: Math.sin(owner.angle) * 620,
+    vx: Math.cos(owner.angle) * 620 * GAME_CONFIG.projectiles.utilitySpeedMultiplier,
+    vy: Math.sin(owner.angle) * 620 * GAME_CONFIG.projectiles.utilitySpeedMultiplier,
     life: 1.9,
     maxLife: 1.9,
     r: 13,
@@ -6307,8 +6339,8 @@ function shoot(owner, targetX, targetY, weapon, team) {
       y: startY,
       startX,
       startY,
-      vx: Math.cos(base + spread) * (neonUltimate ? weapon.speed * 1.25 : weapon.speed),
-      vy: Math.sin(base + spread) * (neonUltimate ? weapon.speed * 1.25 : weapon.speed),
+      vx: Math.cos(base + spread) * (neonUltimate ? weapon.speed * 1.25 : weapon.speed) * GAME_CONFIG.projectiles.weaponSpeedMultiplier,
+      vy: Math.sin(base + spread) * (neonUltimate ? weapon.speed * 1.25 : weapon.speed) * GAME_CONFIG.projectiles.weaponSpeedMultiplier,
       life: 0.9,
       damage: neonUltimate ? Math.min(55, weapon.damage * 1.25) : weapon.damage,
       team,
@@ -7389,7 +7421,11 @@ function botShootAt(bot, target, dt, team, firePenalty = 1, options = {}) {
       });
     }
     const multiplier = team === "bot" ? game.enemyFireMultiplier : 1;
-    bot.fireTimer = (weapon.fireRate + 0.18 + Math.random() * 0.22) * multiplier * firePenalty * (bot.outbreakFirePenalty || 1);
+    bot.fireTimer = (weapon.fireRate + 0.18 + Math.random() * 0.22)
+      * multiplier
+      * firePenalty
+      * (bot.outbreakFirePenalty || 1)
+      * GAME_CONFIG.combat.botAttackIntervalMultiplier;
     bot.strafe *= -1;
   }
 }
@@ -8136,7 +8172,8 @@ function createTrainingBot() {
   const bot = makeBot(randomTrainingSpawn(), game.trainingBotSequence++);
   bot.id = `training-bot-${game.trainingBotSequence}`;
   bot.hasSpike = false;
-  bot.speed = 108 + Math.random() * 18;
+  bot.speed = GAME_CONFIG.movement.trainingBotSpeed
+    + Math.random() * GAME_CONFIG.movement.trainingBotVariation;
   bot.respawnTimer = 0;
   sanitizeEntityPosition(bot);
   return bot;
@@ -11139,7 +11176,9 @@ function renderSandboxBotList() {
     });
     row.querySelector('[data-action="toggle-move"]')?.addEventListener("click", () => {
       entity.sandboxCanMove = entity.sandboxCanMove === false;
-      entity.speed = entity.sandboxCanMove ? (team === "ally" ? 126 : 118) : 0;
+      entity.speed = entity.sandboxCanMove
+        ? (team === "ally" ? GAME_CONFIG.movement.allySpeed : GAME_CONFIG.movement.standardBotSpeed)
+        : 0;
       renderSandboxPanel();
     });
     row.querySelector('[data-action="remove"]')?.addEventListener("click", () => {
@@ -13447,20 +13486,22 @@ function outbreakWavePlan(wave) {
     return {
       total: 3 + Math.floor((safeWave - 1) / 2),
       activeCap: 3,
-      spawnInterval: 2.5 - safeWave * 0.08,
+      spawnInterval: (2.5 - safeWave * 0.08) * GAME_CONFIG.outbreak.spawnIntervalMultiplier,
     };
   }
   if (safeWave <= 20) {
     return {
       total: Math.min(9, 4 + Math.floor((safeWave - 5) / 3)),
       activeCap: Math.min(5, 3 + Math.floor((safeWave - 6) / 7)),
-      spawnInterval: Math.max(1.45, 2.15 - (safeWave - 6) * 0.045),
+      spawnInterval: Math.max(1.45, 2.15 - (safeWave - 6) * 0.045)
+        * GAME_CONFIG.outbreak.spawnIntervalMultiplier,
     };
   }
   return {
     total: Math.min(16, 9 + Math.floor((safeWave - 21) / 3)),
     activeCap: Math.min(7, 5 + Math.floor((safeWave - 21) / 12)),
-    spawnInterval: Math.max(1.05, 1.42 - (safeWave - 21) * 0.012),
+    spawnInterval: Math.max(1.05, 1.42 - (safeWave - 21) * 0.012)
+      * GAME_CONFIG.outbreak.spawnIntervalMultiplier,
   };
 }
 
@@ -13569,7 +13610,10 @@ function createOutbreakWave(wave) {
       : wave <= 20
         ? 82 + (wave - 5) * 3
         : 127 + Math.min(35, (wave - 20) * 1.5);
-    bot.speed = Math.min(archetype === "runner" ? 205 : archetype === "tank" ? 124 : 170, tierSpeed * speedScale);
+    bot.speed = Math.min(
+      archetype === "runner" ? 205 : archetype === "tank" ? 124 : 170,
+      tierSpeed * speedScale,
+    ) * GAME_CONFIG.movement.outbreakBotSpeedMultiplier;
     bot.r = archetype === "tank" ? 21 : archetype === "runner" ? 15 : 17;
     if (wave <= 10) bot.weapon = weapons[0];
     // O arsenal-base passa a incluir a Operator no fim da progressão, porém o

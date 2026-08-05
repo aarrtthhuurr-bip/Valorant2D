@@ -1,5 +1,5 @@
 {
-  "version": "0.9.1-dev.2",
+  "version": "0.9.1-dev.3",
   "status": "draft",
   "channel": "develop",
   "publishedAt": null,
@@ -30,6 +30,11 @@
       "title": "Modos mais legíveis",
       "description": "Títulos, descrições e comandos dos cards receberam contraste, tamanho e espaçamento mais claros.",
       "type": "interface"
+    },
+    {
+      "title": "Ritmo tático recalibrado",
+      "description": "Jogador, bots e projéteis ficaram mais controláveis; ataques inimigos e spawns do Outbreak agora oferecem mais tempo de reação.",
+      "type": "gameplay"
     }
   ]
 }
