@@ -216,6 +216,7 @@ const ui = {
   updatesVersion: document.getElementById("updatesVersion"),
   updatesSummary: document.getElementById("updatesSummary"),
   updatesList: document.getElementById("updatesList"),
+  updatesCount: document.getElementById("updatesCount"),
   updatesCloseButton: document.getElementById("updatesCloseButton"),
   commerceOverlay: document.getElementById("commerceOverlay"),
   commerceTabs: document.getElementById("commerceTabs"),
@@ -360,6 +361,15 @@ function updateNotesTypeLabel(type) {
   })[type] || "ATUALIZAÇÃO";
 }
 
+function updateNotesTypeIcon(type) {
+  return ({
+    gameplay: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12h8M12 8v8"></path><path d="M7 5h10l4 6-2 7-4-3H9l-4 3-2-7 4-6Z"></path></svg>',
+    interface: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 9h18M8 9v11"></path></svg>',
+    development: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"></path></svg>',
+    system: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"></path></svg>',
+  })[type] || '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"></path></svg>';
+}
+
 async function openUpdateNotes({ automatic = false } = {}) {
   window.clearTimeout(updatesAutoTimer);
   updatesAutoTimer = 0;
@@ -383,18 +393,26 @@ async function openUpdateNotes({ automatic = false } = {}) {
     }
     if (ui.updatesVersion) ui.updatesVersion.textContent = `v${payload.version}`;
     if (ui.updatesSummary) ui.updatesSummary.textContent = payload.summary || payload.title || "";
+    if (ui.updatesCount) ui.updatesCount.textContent = String(payload.highlights.length).padStart(2, "0");
     if (ui.updatesList) {
-      ui.updatesList.replaceChildren(...payload.highlights.map((highlight) => {
+      ui.updatesList.replaceChildren(...payload.highlights.map((highlight, index) => {
         const item = document.createElement("article");
         item.className = "updates-item";
         item.dataset.type = highlight.type || "system";
+        item.style.setProperty("--update-order", `"${String(index + 1).padStart(2, "0")}"`);
+        const heading = document.createElement("div");
+        heading.className = "updates-item-heading";
+        const icon = document.createElement("i");
+        icon.className = "updates-item-icon";
+        icon.innerHTML = updateNotesTypeIcon(highlight.type);
         const category = document.createElement("span");
         category.textContent = updateNotesTypeLabel(highlight.type);
         const title = document.createElement("strong");
         title.textContent = highlight.title || "Atualização";
         const description = document.createElement("p");
         description.textContent = highlight.description || "";
-        item.append(category, title, description);
+        heading.append(icon, category);
+        item.append(heading, title, description);
         return item;
       }));
     }
@@ -8310,8 +8328,11 @@ function updateAgentObjects(dt) {
     const oldY = grenade.y;
     grenade.x += grenade.vx * dt;
     grenade.y += grenade.vy * dt;
-    grenade.vx *= 0.98;
-    grenade.vy *= 0.98;
+    // Conserva o mesmo arrasto percebido a 60 Hz sem depender da quantidade
+    // de frames renderizados pelo dispositivo.
+    const grenadeDrag = Math.pow(0.98, dt * 60);
+    grenade.vx *= grenadeDrag;
+    grenade.vy *= grenadeDrag;
     grenade.life -= dt;
     if (lineIntersectsAnyWall(oldX, oldY, grenade.x, grenade.y)) grenade.life = 0;
     if (grenade.life <= 0) {
@@ -8491,8 +8512,9 @@ function updateTimers(dt) {
   for (const particle of game.particles) {
     particle.x += particle.vx * dt;
     particle.y += particle.vy * dt;
-    particle.vx *= 0.88;
-    particle.vy *= 0.88;
+    const particleDrag = Math.pow(0.88, dt * 60);
+    particle.vx *= particleDrag;
+    particle.vy *= particleDrag;
     particle.life -= dt;
   }
   game.particles = game.particles.filter((p) => p.life > 0);
@@ -8506,7 +8528,7 @@ function updateTimers(dt) {
   for (const number of game.damageNumbers) {
     number.x += number.drift * dt;
     number.y += number.vy * dt;
-    number.vy *= 0.92;
+    number.vy *= Math.pow(0.92, dt * 60);
     number.life -= dt;
   }
   game.damageNumbers = game.damageNumbers.filter((number) => number.life > 0);
@@ -14352,10 +14374,16 @@ function updateShopState() {
   });
 }
 
+const SIMULATION_STEP = 1 / 60;
+const MAX_FRAME_DELTA = 0.1;
+const MAX_SIMULATION_STEPS = Math.ceil(MAX_FRAME_DELTA / SIMULATION_STEP);
+const SIMULATION_EPSILON = 1e-9;
+
 function loop(now) {
   const rawDelta = Math.max(0, (now - loop.last) / 1000 || 0);
-  const dt = Math.min(0.033, rawDelta);
+  const deltaTime = Math.min(MAX_FRAME_DELTA, rawDelta);
   loop.last = now;
+  loop.accumulator = Math.min(MAX_FRAME_DELTA, loop.accumulator + deltaTime);
   loop.fpsFrames += 1;
   const fpsWindow = now - loop.fpsSampleStartedAt;
   if (fpsWindow >= 500) {
@@ -14363,12 +14391,32 @@ function loop(now) {
     loop.fpsFrames = 0;
     loop.fpsSampleStartedAt = now;
   }
+  let ranSimulationStep = false;
   try {
     game.pingMs = 28 + Math.round(Math.sin(now / 900) * 5 + Math.random() * 4);
     const tutorialSlowMotion = game.tutorial
       && game.tutorialStage === "defend"
       && game.tutorialSlowTimer > 0;
-    update(dt * (tutorialSlowMotion ? 0.2 : 1) * (game.timeScale || 1));
+    const simulationScale = (tutorialSlowMotion ? 0.2 : 1) * (game.timeScale || 1);
+    let simulationSteps = 0;
+
+    // A renderização continua acompanhando a frequência do monitor, mas a
+    // física avança em passos fixos de 60 Hz. Em um frame de 20 FPS, por
+    // exemplo, três ticks são processados antes do desenho; assim jogador,
+    // bots, projéteis e timers percorrem o mesmo tempo real que em 60 FPS.
+    while (loop.accumulator + SIMULATION_EPSILON >= SIMULATION_STEP && simulationSteps < MAX_SIMULATION_STEPS) {
+      ranSimulationStep = true;
+      update(SIMULATION_STEP * simulationScale);
+      loop.accumulator = Math.max(0, loop.accumulator - SIMULATION_STEP);
+      simulationSteps += 1;
+
+      // Ações de toque único pertencem apenas ao primeiro tick. Teclas
+      // mantidas usam `keys`/`heldActions` e continuam ativas normalmente.
+      if (simulationSteps === 1) {
+        pressed.clear();
+        touchControls.pressedActions.clear();
+      }
+    }
     draw();
     updateUi();
   } catch (error) {
@@ -14385,12 +14433,17 @@ function loop(now) {
       setMessage("Outbreak recuperou uma falha temporária da simulação.");
     }
   } finally {
-    pressed.clear();
-    touchControls.pressedActions.clear();
+    // Em monitores acima de 60 Hz pode haver frames apenas de desenho. Nesse
+    // caso, preserva o comando até o próximo tick de simulação.
+    if (ranSimulationStep) {
+      pressed.clear();
+      touchControls.pressedActions.clear();
+    }
     requestAnimationFrame(loop);
   }
 }
 loop.last = performance.now();
+loop.accumulator = 0;
 loop.fpsFrames = 0;
 loop.fpsSampleStartedAt = loop.last;
 
