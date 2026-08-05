@@ -2024,7 +2024,7 @@ const agents = [
 const weapons = [
   { id: "pistol", name: "Classic", price: 0, damage: 28, fireRate: 0.34, speed: 980, spread: 0.04, mag: 12, reload: 1.1 },
   { id: "light-pistol", name: "Shorty", price: 650, damage: 20, fireRate: 0.18, speed: 930, spread: 0.075, mag: 15, reload: 1.2 },
-  { id: "revolver", name: "Sheriff", price: 1050, damage: 54, fireRate: 0.44, speed: 1180, spread: 0.035, mag: 6, reload: 1.35 },
+  { id: "revolver", name: "Sheriff", price: 650, damage: 54, fireRate: 0.44, speed: 1180, spread: 0.035, mag: 6, reload: 1.35 },
   { id: "smg", name: "Spectre", price: 1450, damage: 18, fireRate: 0.09, speed: 900, spread: 0.09, mag: 25, reload: 1.4 },
   { id: "shotgun", name: "Judge", price: 2150, damage: 15, fireRate: 0.65, speed: 760, spread: 0.22, mag: 6, reload: 1.5, pellets: 6 },
   { id: "carbine", name: "Bulldog", price: 3200, damage: 33, fireRate: 0.12, speed: 1080, spread: 0.055, mag: 24, reload: 1.6 },
@@ -2298,7 +2298,7 @@ const equipment = [
 
 const outbreakAllyItems = [
   { id: "allyUnit", name: "Recrutar Aliado", price: 3000, desc: "Operador imortal que acompanha o jogador.", apply: recruitOutbreakAlly },
-  { id: "allySheriff", name: "Sheriff", price: 1050, desc: "Precisão de alto impacto.", weaponId: "revolver", apply: () => { game.allyLoadout.weaponId = "revolver"; game.allyLoadout.ownedWeapons.add("revolver"); } },
+  { id: "allySheriff", name: "Sheriff", price: 650, desc: "Precisão de alto impacto.", weaponId: "revolver", apply: () => { game.allyLoadout.weaponId = "revolver"; game.allyLoadout.ownedWeapons.add("revolver"); } },
   { id: "allyBulldog", name: "Bulldog", price: 3200, desc: "Rajadas controladas para média distância.", weaponId: "carbine", apply: () => { game.allyLoadout.weaponId = "carbine"; game.allyLoadout.ownedWeapons.add("carbine"); } },
   { id: "allyVandal", name: "Vandal", price: 3900, desc: "Poder de parada em qualquer distância.", weaponId: "rifle", apply: () => { game.allyLoadout.weaponId = "rifle"; game.allyLoadout.ownedWeapons.add("rifle"); } },
   { id: "allyOperator", name: "Operator", price: 6900, desc: "Cobertura pesada de longa distância.", weaponId: "sniper", apply: () => { game.allyLoadout.weaponId = "sniper"; game.allyLoadout.ownedWeapons.add("sniper"); } },
@@ -14305,6 +14305,8 @@ function addKillFeedEntry(killerIsPlayer, weaponName, headshot) {
   victim.textContent = killerIsPlayer ? "Bot" : "Você";
   const weaponLabel = document.createElement("span");
   weaponLabel.className = "kf-weapon";
+  weaponLabel.title = weaponName || "Eliminação";
+  weaponLabel.setAttribute("aria-label", weaponName || "Eliminação");
   const weapon = weapons.find((candidate) => candidate.name === weaponName);
   if (labEnabled("enhancedKillfeed") && weapon) {
     const icon = document.createElement("img");
@@ -14313,9 +14315,6 @@ function addKillFeedEntry(killerIsPlayer, weaponName, headshot) {
     icon.addEventListener("error", () => icon.remove(), { once: true });
     weaponLabel.append(icon);
   }
-  const text = document.createElement("span");
-  text.textContent = weaponName || "ELIMINAÇÃO";
-  weaponLabel.append(text);
   entry.append(killer, weaponLabel, victim);
   if (headshot) {
     const hs = document.createElement("span");

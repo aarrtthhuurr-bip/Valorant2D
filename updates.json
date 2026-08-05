@@ -1,10 +1,10 @@
 {
-  "version": "0.9.1-dev.3",
-  "status": "draft",
-  "channel": "develop",
-  "publishedAt": null,
-  "title": "Próxima atualização do Valorant2D",
-  "summary": "Esta versão estabiliza a simulação em qualquer FPS e aprimora a apresentação das interfaces principais.",
+  "version": "0.9.1",
+  "status": "published",
+  "channel": "stable",
+  "publishedAt": "2026-08-05T20:48:50-03:00",
+  "title": "Atualização 0.9.1 — Precisão Tática",
+  "summary": "A atualização estabiliza a simulação, aprimora o combate e torna o Blackout visualmente preciso até o último pixel.",
   "highlights": [
     {
       "title": "Física independente de FPS",
@@ -34,6 +34,66 @@
     {
       "title": "Ritmo tático recalibrado",
       "description": "Jogador, bots e projéteis ficaram mais controláveis; ataques inimigos e spawns do Outbreak agora oferecem mais tempo de reação.",
+      "type": "gameplay"
+    },
+    {
+      "title": "Interpolação de movimento",
+      "description": "Entidades e projéteis agora interpolam posições entre os ticks da simulação para manter movimentos fluidos sem alterar a física.",
+      "type": "system"
+    },
+    {
+      "title": "Blackout sem vazamentos",
+      "description": "O raycasting considera todas as quinas do mapa e elimina os antigos triângulos incorretos de visibilidade.",
+      "type": "gameplay"
+    },
+    {
+      "title": "Recorte preciso do campo de visão",
+      "description": "Bots, itens, tiros e efeitos na borda da névoa aparecem apenas na porção realmente alcançada pela visão.",
+      "type": "gameplay"
+    },
+    {
+      "title": "Combate mais detalhado",
+      "description": "Hitboxes de cabeça e corpo, recoil progressivo e recuperação de precisão tornam rajadas e headshots mais consistentes.",
+      "type": "gameplay"
+    },
+    {
+      "title": "Movimentação e agentes",
+      "description": "Colisões diagonais agora deslizam pelas superfícies e Yoru recebe uma breve proteção ao sair da Passagem Dimensional.",
+      "type": "gameplay"
+    },
+    {
+      "title": "Aliados mais inteligentes",
+      "description": "Bots aliados procuram cobertura e mantêm formação enquanto recarregam suas armas.",
+      "type": "gameplay"
+    },
+    {
+      "title": "Killcam 2D sintética",
+      "description": "O jogo registra os segundos anteriores à eliminação e reconstrói visualmente a trajetória do disparo fatal.",
+      "type": "gameplay"
+    },
+    {
+      "title": "Fumaça dinâmica do Omen",
+      "description": "A fumaça diminui gradualmente e muda de cor antes de desaparecer, deixando seu encerramento mais legível.",
+      "type": "gameplay"
+    },
+    {
+      "title": "Conquistas e desempenho",
+      "description": "Novas conquistas locais concedem créditos da partida, enquanto dano e assistências participam do bônus Core validado pelo servidor.",
+      "type": "system"
+    },
+    {
+      "title": "HUD e feedback renovados",
+      "description": "Habilidades exibem carga e cooldown; compras, alertas e headshots receberam animações e mensagens mais claras.",
+      "type": "interface"
+    },
+    {
+      "title": "Killfeed visual",
+      "description": "O nome da arma foi substituído pelo ícone direcionado à vítima, com destaque específico para headshots.",
+      "type": "interface"
+    },
+    {
+      "title": "Sheriff por 650 créditos",
+      "description": "A Sheriff agora custa 650 créditos em todos os modos e também no equipamento de aliados.",
       "type": "gameplay"
     }
   ]

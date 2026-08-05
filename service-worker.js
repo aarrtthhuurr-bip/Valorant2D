@@ -1,12 +1,12 @@
-const CACHE_VERSION = "valorant2d-shell-v0.9.1-dev.3";
+const CACHE_VERSION = "valorant2d-shell-v0.9.1";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./manifest.webmanifest?v=0.9.1-dev.3",
-  "./styles.css?v=0.9.1-dev.3",
-  "./version-manager.js?v=0.9.1-dev.3",
-  "./game.js?v=0.9.1-dev.3",
-  "./updates.json?v=0.9.1-dev.3",
+  "./manifest.webmanifest?v=0.9.1",
+  "./styles.css?v=0.9.1",
+  "./version-manager.js?v=0.9.1",
+  "./game.js?v=0.9.1",
+  "./updates.json?v=0.9.1",
   "./assets/Favicon/android-chrome-192x192.png",
   "./assets/Favicon/android-chrome-512x512.png",
 ];
