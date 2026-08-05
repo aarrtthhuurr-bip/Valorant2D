@@ -11,6 +11,7 @@ Abra o console do navegador e use:
 ```js
 Valorant2DLab.set("interpolation", false);
 Valorant2DLab.set("optimizedFov", false);
+Valorant2DLab.set("fovEntityClipping", false);
 Valorant2DLab.set("distinctHitboxes", false);
 Valorant2DLab.set("dynamicRecoil", false);
 Valorant2DLab.set("performanceEconomy", false);
@@ -43,6 +44,7 @@ Valorant2DLab.reset();
 
 - simulação fixa com interpolação visual entre ticks;
 - quinas ativas no cálculo do FOV sem remover paredes da etapa de interseção;
+- recorte pixel a pixel de entidades, itens e projéteis nas bordas do FOV;
 - hitboxes de cabeça e corpo, recoil progressivo e recuperação da precisão;
 - sliding nas colisões diagonais do jogador;
 - proteção de 0,9 segundo na saída da passagem do Yoru;

@@ -1656,6 +1656,7 @@ const GAMEPLAY_LAB_STORAGE_KEY = "valorant2d:gameplay-lab";
 const GAMEPLAY_LAB_DEFAULTS = Object.freeze({
   interpolation: true,
   optimizedFov: true,
+  fovEntityClipping: true,
   distinctHitboxes: true,
   dynamicRecoil: true,
   performanceEconomy: true,
@@ -4042,6 +4043,7 @@ const game = {
   fogMode: false,
   omenUlt: null,
   fovMode: localStorage.getItem(FOV_STORAGE_KEY) === "on",
+  fovClipActive: false,
   fovSegmentsCache: { key: null, segments: null },
   fovPolygonCache: { key: null, polygon: null },
   ultFlashTimer: 0,
@@ -6329,6 +6331,10 @@ function estaNoCampoDeVisao(objeto, radius = 0) {
   if (!isFovModeEnabled()) return true;
   if (isRoundTransitionRevealActive()) return true;
   if (!game.player?.alive || !objeto) return false;
+  // Dentro do bloco recortado não fazemos uma decisão binária pelo centro da
+  // entidade. Basta enviá-la ao Canvas; ctx.clip() conserva somente os pixels
+  // realmente alcançados pelo polígono de visão.
+  if (game.fovClipActive) return !isOutsideViewport(objeto, Math.max(4, radius));
   const dx = objeto.x - game.player.x;
   const dy = objeto.y - game.player.y;
   const distance = Math.hypot(dx, dy);
@@ -9707,6 +9713,21 @@ function drawFogOfWar() {
   ctx.restore();
 }
 
+function applyFovEntityClip() {
+  if (!labEnabled("fovEntityClipping") || !game.fovMode
+    || isRoundTransitionRevealActive() || !game.player?.alive) return false;
+  const polygon = buildFovPolygon();
+  if (!polygon || polygon.length < 3) return false;
+  ctx.beginPath();
+  ctx.moveTo(polygon[0].x, polygon[0].y);
+  for (let index = 1; index < polygon.length; index += 1) {
+    ctx.lineTo(polygon[index].x, polygon[index].y);
+  }
+  ctx.closePath();
+  ctx.clip();
+  return true;
+}
+
 function drawBotDebug() {
   if (!game.debugRoutes) return;
   ctx.save();
@@ -10858,10 +10879,13 @@ function draw() {
     ctx.fillStyle = game.tutorialStep === 2 ? "rgba(1, 6, 10, 0.48)" : "rgba(1, 6, 10, 0.28)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
-  // ── Névoa desenhada AQUI: antes de qualquer entidade.
-  // Isso garante que bots, aliados e o jogador sejam renderizados
-  // POR CIMA da camada de fóg, eliminando o efeito de piscar.
+  // A névoa fica sobre o mapa e sob a camada dinâmica. Em seguida, a mesma
+  // geometria do raycasting vira uma máscara: entidades na borda aparecem
+  // parcialmente, sem revelar pixels que estejam atrás da escuridão.
   drawFogOfWar();
+  ctx.save();
+  try {
+    game.fovClipActive = applyFovEntityClip();
   drawMedkitsAndOrbs();
   drawAgentObjects();
 
@@ -10975,7 +10999,7 @@ function draw() {
 
   for (const bot of game.bots) {
     if (isOutsideViewport(bot, bot.r + 24)) continue;
-    if (!isBotVisible(bot)) continue;
+    if (!game.fovClipActive && !isBotVisible(bot)) continue;
     const visible = game.revealTimer > 0 || hasLineOfSight(game.player, bot);
     const outbreakTypeLabel = bot.outbreakArchetype === "tank"
       ? "TANK"
@@ -11107,6 +11131,11 @@ function draw() {
     ctx.stroke();
   }
   ctx.globalAlpha = 1;
+
+  } finally {
+    ctx.restore();
+    game.fovClipActive = false;
+  }
 
   drawBotDebug();
   drawDamageIndicator();
