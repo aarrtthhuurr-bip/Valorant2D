@@ -434,7 +434,11 @@ async function openUpdateNotes({ automatic = false } = {}) {
         const item = document.createElement("article");
         item.className = "updates-item";
         item.dataset.type = highlight.type || "system";
-        item.style.setProperty("--update-order", `"${String(index + 1).padStart(2, "0")}"`);
+        const order = document.createElement("span");
+        order.className = "updates-item-order";
+        order.textContent = String(index + 1).padStart(2, "0");
+        const body = document.createElement("div");
+        body.className = "updates-item-body";
         const heading = document.createElement("div");
         heading.className = "updates-item-heading";
         const icon = document.createElement("i");
@@ -447,7 +451,8 @@ async function openUpdateNotes({ automatic = false } = {}) {
         const description = document.createElement("p");
         description.textContent = highlight.description || "";
         heading.append(icon, category);
-        item.append(heading, title, description);
+        body.append(heading, title, description);
+        item.append(order, body);
         return item;
       }));
     }
