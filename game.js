@@ -12932,13 +12932,13 @@ function startSelectedDifficulty() {
 }
 
 const OPTIONS_TABS = [
-  { id: "general", label: "GERAL" },
-  { id: "controls", label: "CONTROLES" },
-  { id: "crosshair", label: "MIRA" },
-  { id: "audio", label: "ÁUDIO" },
-  { id: "video", label: "VÍDEO" },
-  { id: "accessibility", label: "ACESS." },
-  { id: "developer", label: "DESENVOLVEDOR", adminOnly: true },
+  { id: "general", label: "GERAL", icon: "sliders-horizontal", description: "Perfil e interface" },
+  { id: "controls", label: "CONTROLES", icon: "gamepad-2", description: "Movimento e atalhos" },
+  { id: "crosshair", label: "MIRA", icon: "crosshair", description: "Precisão e retículo" },
+  { id: "audio", label: "ÁUDIO", icon: "volume-2", description: "Mixagem e efeitos" },
+  { id: "video", label: "VÍDEO", icon: "monitor", description: "Imagem e desempenho" },
+  { id: "accessibility", label: "ACESSIBILIDADE", icon: "accessibility", description: "Leitura e assistência" },
+  { id: "developer", label: "DESENVOLVEDOR", icon: "terminal", description: "Ferramentas de teste", adminOnly: true },
 ];
 
 const OPTIONS_STORAGE_KEY = "valorant2d-options";
@@ -13062,7 +13062,7 @@ function optionRow(label, control, hint = "") {
 
 function optionSection(title, children) {
   const section = createOptionElement("section", "options-section");
-  section.innerHTML = `<h3>${title}</h3>`;
+  section.innerHTML = `<header class="options-section-header"><span aria-hidden="true"></span><h3>${title}</h3></header>`;
   const body = createOptionElement("div", "options-section-body");
   children.forEach((child) => body.appendChild(child));
   section.appendChild(body);
@@ -13726,10 +13726,26 @@ function renderOptionsMenu(skipFade = false) {
   ui.menuButtons.innerHTML = "";
   ui.menuButtons.className = "options-shell";
   const panel = createOptionElement("div", `options-panel ${skipFade ? "" : "is-ready"}`);
-  const tabs = createOptionElement("div", "options-tabs");
+  const activeTab = visibleTabs.find((tab) => tab.id === activeOptionsTab) || visibleTabs[0];
+  const header = createOptionElement("header", "options-command-header");
+  header.innerHTML = `
+    <div class="options-command-title">
+      <span>CONFIGURAÇÃO ATIVA</span>
+      <h3>${activeTab.label}</h3>
+      <p>${activeTab.description}</p>
+    </div>
+    <div class="options-sync-state ${currentProfile?.isGuest ? "is-local" : "is-cloud"}">
+      <i data-lucide="${currentProfile?.isGuest ? "hard-drive" : "cloud"}" aria-hidden="true"></i>
+      <span>${currentProfile?.isGuest ? "SALVO NESTE DISPOSITIVO" : "SINCRONIZAÇÃO AUTOMÁTICA"}</span>
+    </div>`;
+  const workspace = createOptionElement("div", "options-workspace");
+  const tabs = createOptionElement("nav", "options-tabs");
+  tabs.setAttribute("aria-label", "Categorias de configuração");
   visibleTabs.forEach((tab) => {
-    const button = createOptionElement("button", activeOptionsTab === tab.id ? "is-active" : "", tab.label);
+    const button = createOptionElement("button", activeOptionsTab === tab.id ? "is-active" : "");
     button.type = "button";
+    button.setAttribute("aria-current", activeOptionsTab === tab.id ? "page" : "false");
+    button.innerHTML = `<span class="options-tab-icon"><i data-lucide="${tab.icon}" aria-hidden="true"></i></span><span class="options-tab-copy"><b>${tab.label}</b><small>${tab.description}</small></span><span class="options-tab-caret" aria-hidden="true">›</span>`;
     button.addEventListener("click", () => {
       if (activeOptionsTab === tab.id) return;
       panel.querySelector(".options-content")?.classList.add("is-fading");
@@ -13744,6 +13760,7 @@ function renderOptionsMenu(skipFade = false) {
   });
   const content = createOptionElement("div", "options-content");
   renderOptionsContent().forEach((section) => content.appendChild(section));
+  workspace.append(tabs, content);
   const footer = createOptionElement("footer", "options-footer");
   const footerItems = activeOptionsTab === "developer" ? [
     { label: "VOLTAR", action: backFromOptions },
@@ -13761,14 +13778,15 @@ function renderOptionsMenu(skipFade = false) {
   });
   const feedback = createOptionElement("span", "options-feedback", optionsFeedback);
   footer.appendChild(feedback);
-  panel.append(tabs, content, footer);
+  panel.append(header, workspace, footer);
   ui.menuButtons.appendChild(panel);
+  window.lucide?.createIcons();
   requestAnimationFrame(() => panel.classList.add("is-ready"));
 }
 
 function openOptionsMenu(returnState) {
   game.optionsReturnState = returnState;
-  setMenu("OPÇÕES", "", [], "", "options");
+  setMenu("CONFIGURAÇÕES", "", [], "CENTRAL DO AGENTE", "options");
   renderOptionsMenu(true);
 }
 
