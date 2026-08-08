@@ -25,6 +25,11 @@
       "title": "Autofire sob controle",
       "description": "O disparo automático pode ser ligado ou desligado nas opções e diretamente pelo HUD touch.",
       "type": "gameplay"
+    },
+    {
+      "title": "Novas animações proibidas",
+      "description": "A Injeção de Adrenalina e o Dispositivo de Camuflagem agora exibem suas animações em pixel art ao explorar os cards do Black Market.",
+      "type": "interface"
     }
   ],
   "releases": [
@@ -94,6 +99,11 @@
           "title": "Autofire sob controle",
           "description": "O disparo automático pode ser ligado ou desligado nas opções e diretamente pelo HUD touch.",
           "type": "gameplay"
+        },
+        {
+          "title": "Novas animações proibidas",
+          "description": "A Injeção de Adrenalina e o Dispositivo de Camuflagem agora exibem suas animações em pixel art ao explorar os cards do Black Market.",
+          "type": "interface"
         }
       ]
     }
