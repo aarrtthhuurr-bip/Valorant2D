@@ -3799,6 +3799,9 @@ button.click-feedback::after {
   transform: scale(2.45);
   transform-origin: center;
 }
+.black-market-card[data-gadget="cloakingDevice"] .black-market-sprite-preview {
+  transform: scale(1.35);
+}
 .black-market-card.is-previewing .black-market-sprite-preview { filter: saturate(1.15) contrast(1.04); }
 .black-market-card.is-previewing .black-market-preview-fallback { animation: blackMarketFallbackPulse .75s steps(3, end) infinite; }
 .black-market-card[data-gadget="adrenaline"].is-previewing .black-market-preview-fallback { animation-name: blackMarketFallbackCharge; color: #ff4fd8; }

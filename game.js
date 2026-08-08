@@ -2688,6 +2688,14 @@ function configureBlackMarketPreview(card, gadget) {
       event.preventDefault();
       openCrate();
     });
+    // Hover/foco atendem o desktop; clique/teclado preservam a interação em
+    // telas touch e para navegação assistiva.
+    card.addEventListener("pointerenter", openCrate);
+    card.addEventListener("pointerleave", resetCrate);
+    card.addEventListener("focusin", openCrate);
+    card.addEventListener("focusout", (event) => {
+      if (!card.contains(event.relatedTarget)) resetCrate();
+    });
     resetCrate();
     blackMarketPreviewCleanups.push(resetCrate);
     return;
