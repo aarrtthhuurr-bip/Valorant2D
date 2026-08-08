@@ -1,20 +1,25 @@
 {
-  "version": "0.9.2",
+  "version": "0.9.3",
   "status": "published",
   "channel": "stable",
-  "publishedAt": "2026-08-05T22:21:27-03:00",
-  "title": "Atualização 0.9.2 — Central do Agente",
-  "summary": "Esta versão reorganiza as configurações e simplifica a leitura das novidades do jogo.",
+  "publishedAt": "2026-08-07T21:30:00-03:00",
+  "title": "Atualização 0.9.3 — Operação Mobile",
+  "summary": "A interface mobile foi reconstruída para oferecer escala correta, controles confortáveis e combate multitouch.",
   "highlights": [
     {
-      "title": "Menu de configurações remasterizado",
-      "description": "As opções receberam navegação contextual, categorias com ícones, indicador de sincronização e layouts próprios para desktop e mobile.",
+      "title": "Interface adaptada à tela",
+      "description": "Canvas, menus, modais, loja e HUD agora preservam a proporção e se ajustam à área visível e às margens seguras do aparelho.",
       "type": "interface"
     },
     {
-      "title": "Novidades em formato de lista",
-      "description": "O antigo mosaico de cards foi substituído por um changelog contínuo, numerado e muito mais fácil de consultar.",
-      "type": "interface"
+      "title": "Controles touch reformulados",
+      "description": "Joystick, habilidades e ações receberam áreas de toque maiores, distribuição ergonômica e suporte a jogadores canhotos.",
+      "type": "gameplay"
+    },
+    {
+      "title": "Botão dedicado de disparo",
+      "description": "O novo botão de tiro permite mirar, mover e disparar simultaneamente por meio de multitouch.",
+      "type": "gameplay"
     }
   ]
 }
