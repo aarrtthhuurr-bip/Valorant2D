@@ -1591,10 +1591,17 @@ function escalarViewport() {
   const scale = Math.min(scaleX, scaleY);
   ui.gameViewport.style.transform = `translate(-50%, -50%) scale(${scale})`;
   document.documentElement.style.setProperty("--game-viewport-scale", String(scale));
+  document.documentElement.style.setProperty("--visual-viewport-width", `${viewportWidth}px`);
   document.documentElement.style.setProperty("--visual-viewport-height", `${viewportHeight}px`);
+  // Os controles pertencem à cena lógica de 1280x720. A compensação inversa
+  // preserva uma área física confortável mesmo quando a cena é reduzida.
   document.documentElement.style.setProperty(
     "--mobile-touch-target",
-    `${Math.min(104, Math.max(48, Math.ceil(48 / Math.max(scale, 0.01))))}px`,
+    `${Math.min(112, Math.max(48, Math.ceil(52 / Math.max(scale, 0.01))))}px`,
+  );
+  document.documentElement.style.setProperty(
+    "--mobile-fire-target",
+    `${Math.min(150, Math.max(80, Math.ceil(78 / Math.max(scale, 0.01))))}px`,
   );
 }
 

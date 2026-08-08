@@ -9725,3 +9725,248 @@ body.is-mobile .menu-state-options .options-footer { position: static; display: 
   body.is-mobile .menu-state-options .options-footer { min-height: 46px; padding-block: 4px; }
   body.is-mobile .menu-state-options .options-footer button { min-height: 36px; }
 }
+
+/* =========================================================================
+ * LAYOUT MOBILE CONSOLIDADO
+ * Esta camada final substitui as regras mobile históricas sem alterar a
+ * resolução lógica do jogo. O palco inteiro escala de modo uniforme, logo o
+ * Canvas e todas as camadas HTML continuam perfeitamente sincronizados.
+ * ====================================================================== */
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+#game-root {
+  width: 100vw;
+  height: var(--visual-viewport-height, 100dvh);
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* A proporção 16:9 nunca é deformada: somente uma escala uniforme é usada. */
+#game-viewport {
+  width: 1280px;
+  height: 720px;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  transform-origin: center center;
+}
+
+#game,
+.game-wrap {
+  width: 1280px;
+  height: 720px;
+  max-width: none;
+  max-height: none;
+  touch-action: none;
+}
+
+body.is-mobile {
+  width: 100vw;
+  height: var(--visual-viewport-height, 100dvh);
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+/* Modais centralizados e limitados à área segura da tela. */
+body.is-mobile .menu-overlay,
+body.is-mobile .agent-overlay,
+body.is-mobile .auth-overlay,
+body.is-mobile .welcome-overlay,
+body.is-mobile .mode-info-overlay,
+body.is-mobile .pause-menu-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: clamp(8px, 2vh, 18px) clamp(10px, 2vw, 24px);
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+body.is-mobile .menu-card,
+body.is-mobile .agent-select,
+body.is-mobile .auth-panel,
+body.is-mobile .welcome-panel,
+body.is-mobile .mode-info-panel,
+body.is-mobile .pause-menu-panel {
+  position: relative;
+  top: auto;
+  left: auto;
+  width: min(94%, 1120px);
+  max-width: 1120px;
+  max-height: 90%;
+  margin: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  transform: none;
+  scrollbar-width: none;
+  box-sizing: border-box;
+}
+
+body.is-mobile .menu-card::-webkit-scrollbar,
+body.is-mobile .agent-select::-webkit-scrollbar,
+body.is-mobile .auth-panel::-webkit-scrollbar,
+body.is-mobile .pause-menu-panel::-webkit-scrollbar {
+  display: none;
+}
+
+/* A loja usa posição fixa dentro da cena e rola somente o seu conteúdo. */
+body.is-mobile .shop,
+body.is-mobile .shop.shop-allies-active {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  right: auto;
+  bottom: auto;
+  width: min(94%, 1160px);
+  height: auto;
+  max-height: 90%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+body.is-mobile .shop.hidden { display: none; }
+body.is-mobile .shop-inner-scroll { min-height: 0; overflow-y: auto; }
+
+/* HUD superior compacto e proporcional, preso à margem superior da cena. */
+body.is-mobile.mobile-gameplay-active .top-hud {
+  top: 10px;
+  width: clamp(310px, 42%, 470px);
+  min-width: 0;
+  height: clamp(48px, 8vh, 62px);
+}
+
+body.is-mobile.mobile-gameplay-active .vitals-panel {
+  top: 72px;
+  left: max(12px, 2%);
+  width: clamp(250px, 30%, 360px);
+}
+
+body.is-mobile.mobile-gameplay-active .weapon-panel {
+  top: 72px;
+  right: max(12px, 2%);
+  width: clamp(180px, 22%, 265px);
+}
+
+/* Analógicos e ações usam safe areas e alvos físicos de pelo menos 52 px. */
+body.is-mobile .mobile-controls {
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+}
+
+body.is-mobile .mobile-stick {
+  width: clamp(132px, 13vw, 168px);
+  height: clamp(132px, 13vw, 168px);
+}
+
+body.is-mobile .mobile-move-stick {
+  left: max(5%, env(safe-area-inset-left));
+  bottom: max(5%, env(safe-area-inset-bottom));
+}
+
+body.is-mobile .mobile-aim-stick {
+  right: max(20%, env(safe-area-inset-right));
+  bottom: max(4%, env(safe-area-inset-bottom));
+}
+
+body.is-mobile .mobile-action {
+  width: max(60px, var(--mobile-touch-target, 60px));
+  height: max(60px, var(--mobile-touch-target, 60px));
+  min-width: 0;
+  min-height: 0;
+}
+
+body.is-mobile .mobile-fire {
+  right: max(5%, env(safe-area-inset-right));
+  bottom: max(15%, env(safe-area-inset-bottom));
+  width: var(--mobile-fire-target, 88px);
+  height: var(--mobile-fire-target, 88px);
+  min-width: 80px;
+  min-height: 80px;
+  border-width: 2px;
+}
+
+.mobile-fire-reticle {
+  position: relative;
+  width: 30%;
+  height: 30%;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.mobile-fire-reticle::before,
+.mobile-fire-reticle::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: currentColor;
+  transform: translate(-50%, -50%);
+}
+
+.mobile-fire-reticle::before { width: 150%; height: 2px; }
+.mobile-fire-reticle::after { width: 2px; height: 150%; }
+body.is-mobile .mobile-fire span { margin-top: 5px; font-size: 9px; }
+
+/* Arco ergonômico ao redor do disparo, sem cobrir o centro do combate. */
+body.is-mobile .mobile-ability { right: 15%; bottom: 6%; }
+body.is-mobile .mobile-ultimate { right: 17%; bottom: 20%; }
+body.is-mobile .mobile-interact { right: 8%; bottom: 31%; }
+body.is-mobile .mobile-reload {
+  right: 24%;
+  bottom: 8%;
+  width: max(54px, var(--mobile-touch-target, 54px));
+  height: max(54px, var(--mobile-touch-target, 54px));
+}
+
+body.is-mobile .mobile-utility {
+  top: max(132px, 19%);
+  min-width: var(--mobile-touch-target, 52px);
+  min-height: var(--mobile-touch-target, 52px);
+}
+
+body.is-mobile .mobile-shop-button { left: max(2%, env(safe-area-inset-left)); }
+body.is-mobile .mobile-pause-button { right: max(2%, env(safe-area-inset-right)); }
+
+/* Espelhamento completo para a preferência canhota. */
+body.is-mobile.mobile-left-handed .mobile-move-stick { right: max(5%, env(safe-area-inset-right)); left: auto; }
+body.is-mobile.mobile-left-handed .mobile-aim-stick { right: auto; left: 20%; }
+body.is-mobile.mobile-left-handed .mobile-fire { right: auto; left: max(5%, env(safe-area-inset-left)); }
+body.is-mobile.mobile-left-handed .mobile-ability { right: auto; left: 15%; }
+body.is-mobile.mobile-left-handed .mobile-ultimate { right: auto; left: 17%; }
+body.is-mobile.mobile-left-handed .mobile-interact { right: auto; left: 8%; }
+body.is-mobile.mobile-left-handed .mobile-reload { right: auto; left: 24%; }
+
+@media (orientation: portrait) {
+  body.is-mobile.mobile-gameplay-active .mobile-orientation-hint { display: flex; }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  body.is-mobile .menu-card,
+  body.is-mobile .agent-select,
+  body.is-mobile .auth-panel,
+  body.is-mobile .welcome-panel,
+  body.is-mobile .mode-info-panel,
+  body.is-mobile .pause-menu-panel,
+  body.is-mobile .shop { max-height: 90%; }
+
+  body.is-mobile .mobile-stick { width: 136px; height: 136px; }
+  body.is-mobile.mobile-gameplay-active .vitals-panel,
+  body.is-mobile.mobile-gameplay-active .weapon-panel { top: 62px; }
+}
