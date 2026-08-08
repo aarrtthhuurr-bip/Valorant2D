@@ -3569,6 +3569,25 @@ button.click-feedback::after {
   font-weight: 900;
   letter-spacing: .12em;
 }
+.updates-version-navigation { display: flex; align-items: center; gap: 7px; }
+.updates-version-arrow {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(145, 169, 183, .28);
+  border-radius: 3px;
+  background: rgba(8, 18, 27, .78);
+  color: #dce9ee;
+  font-size: 18px;
+  cursor: pointer;
+}
+.updates-version-arrow:hover:not(:disabled),
+.updates-version-arrow:focus-visible:not(:disabled) { border-color: #ff5967; color: #fff; background: rgba(255, 70, 85, .14); }
+.updates-version-arrow:disabled { cursor: default; opacity: .25; }
 .updates-content {
   min-height: 0;
   overflow-y: auto;
@@ -3766,6 +3785,9 @@ button.click-feedback::after {
 .black-market-preview img.is-missing { display: none; }
 .black-market-preview-fallback { color: #c084fc; font-size: 38px; text-shadow: 0 0 15px rgba(168, 85, 247, .52); }
 .black-market-preview.has-sprite .black-market-preview-fallback { display: none; }
+.black-market-preview[role="button"] { cursor: pointer; }
+.black-market-preview[role="button"]:focus-visible { outline: 2px solid #c084fc; outline-offset: 3px; }
+.black-market-card.is-crate-open .black-market-preview { border-color: rgba(0, 245, 212, .6); box-shadow: inset 0 0 22px rgba(0, 245, 212, .12); }
 .black-market-sprite-preview {
   position: relative;
   z-index: 2;
@@ -7391,6 +7413,183 @@ body.is-mobile .top-hud strong {
 
   body.is-mobile .auth-heading h1 {
     font-size: 25px;
+  }
+}
+
+/* =========================================================================
+ * MOBILE LANDSCAPE DENSO — telefones e emuladores até 920 px
+ * Os valores são aplicados dentro do palco lógico e compensados pela escala
+ * calculada em JavaScript, mantendo os painéis legíveis sem ocupar a tela toda.
+ * ====================================================================== */
+body.is-mobile .mobile-autofire-toggle {
+  right: max(9%, calc(env(safe-area-inset-right) + 82px));
+  color: #91a8b5;
+}
+
+body.is-mobile .mobile-autofire-toggle.is-active {
+  border-color: rgba(0, 245, 212, .72);
+  background: rgba(0, 78, 70, .78);
+  color: #bafff3;
+}
+
+body.is-mobile .mobile-controls:not(.is-action-phase) .mobile-autofire-toggle { display: none; }
+
+/* O botão manual continua acessível mesmo com a assistência ligada. */
+body.is-mobile.mobile-autofire .mobile-fire { display: grid; }
+
+@media (max-width: 920px) and (orientation: landscape) {
+  body.is-mobile .updates-overlay,
+  body.is-mobile .menu-overlay,
+  body.is-mobile .agent-overlay,
+  body.is-mobile .welcome-overlay,
+  body.is-mobile .mode-info-overlay,
+  body.is-mobile .pause-menu-overlay,
+  body.is-mobile .commerce-overlay {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    width: 100%;
+    height: 100%;
+    padding: 12px;
+    transform: translate(-50%, -50%);
+  }
+
+  body.is-mobile .updates-modal,
+  body.is-mobile .menu-card,
+  body.is-mobile .agent-select,
+  body.is-mobile .welcome-panel,
+  body.is-mobile .mode-info-panel,
+  body.is-mobile .pause-menu-panel,
+  body.is-mobile .commerce-shell,
+  body.is-mobile .black-market-shell {
+    position: relative;
+    top: auto;
+    left: auto;
+    width: min(92%, 600px);
+    max-width: 600px;
+    height: auto;
+    max-height: 85%;
+    margin: auto;
+    padding: 24px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    transform: none;
+    box-sizing: border-box;
+  }
+
+  body.is-mobile .updates-modal,
+  body.is-mobile .commerce-shell,
+  body.is-mobile .black-market-shell {
+    padding: 0;
+    overflow: hidden;
+  }
+
+  body.is-mobile .updates-header { padding: 15px 20px 13px; }
+  body.is-mobile .updates-header h2 { font-size: clamp(24px, 5.5vh, 34px); }
+  body.is-mobile .updates-header span:first-child { font-size: clamp(7px, 1.5vh, 9px); }
+  body.is-mobile .updates-content { padding: 12px 20px 14px; }
+  body.is-mobile .updates-summary { margin-bottom: 9px; padding: 9px 12px 9px 16px; font-size: clamp(10px, 2vh, 12px); }
+  body.is-mobile .updates-item { min-height: 60px; padding-block: 9px; }
+  body.is-mobile .updates-item strong { font-size: clamp(11px, 2.1vh, 13px); }
+  body.is-mobile .updates-item p { font-size: clamp(9px, 1.8vh, 11px); }
+  body.is-mobile .updates-actions { padding: 9px 20px 12px; }
+  body.is-mobile .updates-close { min-height: 44px; height: 44px; }
+  body.is-mobile .updates-version-arrow { width: 44px; height: 44px; }
+
+  body.is-mobile .menu-card h1,
+  body.is-mobile .menu-card h2,
+  body.is-mobile .welcome-panel h1,
+  body.is-mobile .agent-select h2 { font-size: clamp(24px, 6vh, 36px); }
+
+  body.is-mobile .menu-button,
+  body.is-mobile .mode-select-back,
+  body.is-mobile .difficulty-back-btn,
+  body.is-mobile .difficulty-start-btn,
+  body.is-mobile .welcome-panel button,
+  body.is-mobile .pause-menu-panel button {
+    min-height: 44px;
+    height: auto;
+    max-height: 48px;
+  }
+
+  body.is-mobile .menu-state-mode-select .menu-card {
+    width: min(92%, 600px);
+    height: auto;
+    max-height: 85%;
+    padding: 16px 18px;
+    overflow: hidden;
+  }
+
+  body.is-mobile .menu-state-mode-select .menu-copy { margin-bottom: 8px; }
+  body.is-mobile .mode-select-shell {
+    max-height: calc(85vh - 86px);
+    padding-right: 4px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+
+  body.is-mobile .mode-primary-grid,
+  body.is-mobile .mode-secondary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  body.is-mobile .mode-card-primary { min-height: 128px; }
+  body.is-mobile .mode-card-primary .mode-card-select {
+    display: grid;
+    min-height: 128px;
+    grid-template-columns: 72px minmax(0, 1fr);
+    align-items: center;
+    padding: 0 42px 0 0;
+  }
+  body.is-mobile .mode-card-primary .mode-card-visual {
+    width: 72px;
+    height: 100%;
+    min-height: 128px;
+    margin: 0 12px 0 0;
+    border-right: 1px solid rgba(var(--mode-accent-rgb), .16);
+    border-bottom: 0;
+  }
+  body.is-mobile .mode-card-primary .mode-card-action { padding-top: 5px; }
+  body.is-mobile .mode-card-copy > em { -webkit-line-clamp: 2; }
+
+  body.is-mobile .shop {
+    width: min(94%, 600px);
+    max-height: 85%;
+  }
+
+  /* Fallback por resolução: também cobre navegadores móveis que reportam
+     incorretamente zero touch points durante a primeira rotação. */
+  .updates-overlay,
+  .menu-overlay,
+  .agent-overlay,
+  .auth-overlay,
+  .welcome-overlay,
+  .mode-info-overlay,
+  .pause-menu-overlay,
+  .commerce-overlay {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    transform: translate(-50%, -50%);
+  }
+
+  .updates-modal,
+  .menu-card,
+  .agent-select,
+  .auth-panel,
+  .welcome-panel,
+  .mode-info-panel,
+  .pause-menu-panel,
+  .commerce-shell,
+  .black-market-shell {
+    width: min(92%, 600px);
+    max-width: 600px;
+    max-height: 85vh;
   }
 }
 

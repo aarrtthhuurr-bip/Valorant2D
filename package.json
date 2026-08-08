@@ -1,6 +1,6 @@
 {
   "name": "valorant2d-workspace",
-  "version": "0.9.3",
+  "version": "0.9.4",
   "private": true,
   "description": "Comandos de desenvolvimento local do Valorant2D.",
   "scripts": {

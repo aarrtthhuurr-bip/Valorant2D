@@ -9,6 +9,7 @@ const updates = JSON.parse(
   fs.readFileSync(path.join(root, 'updates.json'), 'utf8'),
 );
 const updatesVersion = updates.version;
+const releases = Array.isArray(updates.releases) ? updates.releases : [];
 const serviceWorker = fs.readFileSync(path.join(root, 'service-worker.js'), 'utf8');
 const index = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 
@@ -22,6 +23,7 @@ const checks = [
   [index.includes(`manifest.webmanifest?v=${packageVersion}`), 'index.html: manifesto'],
   [["draft", "published"].includes(updates.status), 'updates.json: status'],
   [Array.isArray(updates.highlights) && updates.highlights.length > 0, 'updates.json: alterações'],
+  [releases.some((release) => release.version === packageVersion), 'updates.json: histórico da versão atual'],
 ];
 
 if (updates.status === 'published') {

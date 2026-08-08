@@ -164,6 +164,7 @@ const ui = {
   mobileUltimateLabel: document.getElementById("mobileUltimateLabel"),
   mobileShopButton: document.getElementById("mobileShopButton"),
   mobilePauseButton: document.getElementById("mobilePauseButton"),
+  mobileAutofireToggle: document.getElementById("mobileAutofireToggle"),
   mobileOrientationHint: document.getElementById("mobileOrientationHint"),
   authOverlay: document.getElementById("authOverlay"),
   authSessionCheck: document.getElementById("authSessionCheck"),
@@ -217,6 +218,8 @@ const ui = {
   updatesOverlay: document.getElementById("updatesOverlay"),
   updatesKicker: document.getElementById("updatesKicker"),
   updatesVersion: document.getElementById("updatesVersion"),
+  updatesPreviousButton: document.getElementById("updatesPreviousButton"),
+  updatesNextButton: document.getElementById("updatesNextButton"),
   updatesSummary: document.getElementById("updatesSummary"),
   updatesList: document.getElementById("updatesList"),
   updatesCount: document.getElementById("updatesCount"),
@@ -312,6 +315,8 @@ let rankingReturnFocus = null;
 let updatesReturnFocus = null;
 let updatesPayloadPromise = null;
 let updatesAutoTimer = 0;
+let updatesReleases = [];
+let activeUpdateReleaseIndex = 0;
 const shownContextTips = new Set();
 
 const LAST_SEEN_VERSION_KEY = "valorant2d:last-seen-version";
@@ -405,6 +410,83 @@ function updateNotesTypeIcon(type) {
   })[type] || '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"></path></svg>';
 }
 
+function compareUpdateVersions(left, right) {
+  const parts = (value) => String(value || "0").split(".").map((part) => Number.parseInt(part, 10) || 0);
+  const a = parts(left);
+  const b = parts(right);
+  for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
+    if ((a[index] || 0) !== (b[index] || 0)) return (a[index] || 0) - (b[index] || 0);
+  }
+  return 0;
+}
+
+function releasesFromUpdatesPayload(payload) {
+  const releases = Array.isArray(payload?.releases) ? payload.releases : [];
+  const currentRelease = {
+    version: payload.version,
+    publishedAt: payload.publishedAt,
+    title: payload.title,
+    summary: payload.summary,
+    highlights: payload.highlights,
+  };
+  const byVersion = new Map();
+  [...releases, currentRelease].forEach((release) => {
+    if (release?.version && Array.isArray(release.highlights)) byVersion.set(release.version, release);
+  });
+  return [...byVersion.values()].sort((a, b) => compareUpdateVersions(a.version, b.version));
+}
+
+function formatUpdateDate(value) {
+  if (!value) return "DATA NÃO INFORMADA";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "America/Recife",
+  }).format(date).replace(/\./g, "").toUpperCase();
+}
+
+function renderUpdateRelease(index) {
+  if (!updatesReleases.length) return;
+  activeUpdateReleaseIndex = Math.max(0, Math.min(updatesReleases.length - 1, index));
+  const release = updatesReleases[activeUpdateReleaseIndex];
+  if (ui.updatesKicker) ui.updatesKicker.textContent = `ATUALIZAÇÃO · ${formatUpdateDate(release.publishedAt)}`;
+  if (ui.updatesVersion) ui.updatesVersion.textContent = `v${release.version}`;
+  if (ui.updatesSummary) ui.updatesSummary.textContent = release.summary || release.title || "";
+  if (ui.updatesCount) ui.updatesCount.textContent = String(release.highlights.length).padStart(2, "0");
+  if (ui.updatesPreviousButton) ui.updatesPreviousButton.disabled = activeUpdateReleaseIndex === 0;
+  if (ui.updatesNextButton) ui.updatesNextButton.disabled = activeUpdateReleaseIndex === updatesReleases.length - 1;
+  if (!ui.updatesList) return;
+  ui.updatesList.replaceChildren(...release.highlights.map((highlight, itemIndex) => {
+    const item = document.createElement("article");
+    item.className = "updates-item";
+    item.dataset.type = highlight.type || "system";
+    const order = document.createElement("span");
+    order.className = "updates-item-order";
+    order.textContent = String(itemIndex + 1).padStart(2, "0");
+    const body = document.createElement("div");
+    body.className = "updates-item-body";
+    const heading = document.createElement("div");
+    heading.className = "updates-item-heading";
+    const icon = document.createElement("i");
+    icon.className = "updates-item-icon";
+    icon.innerHTML = updateNotesTypeIcon(highlight.type);
+    const category = document.createElement("span");
+    category.textContent = updateNotesTypeLabel(highlight.type);
+    const title = document.createElement("strong");
+    title.textContent = highlight.title || "Atualização";
+    const description = document.createElement("p");
+    description.textContent = highlight.description || "";
+    heading.append(icon, category);
+    body.append(heading, title, description);
+    item.append(order, body);
+    return item;
+  }));
+  ui.updatesList.scrollTop = 0;
+}
+
 async function openUpdateNotes({ automatic = false } = {}) {
   window.clearTimeout(updatesAutoTimer);
   updatesAutoTimer = 0;
@@ -421,41 +503,8 @@ async function openUpdateNotes({ automatic = false } = {}) {
       }
       return;
     }
-    if (ui.updatesKicker) {
-      ui.updatesKicker.textContent = payload.status === "draft"
-        ? "PRÉVIA DA PRÓXIMA VERSÃO"
-        : `ATUALIZAÇÃO · ${payload.publishedAt || ""}`;
-    }
-    if (ui.updatesVersion) ui.updatesVersion.textContent = `v${payload.version}`;
-    if (ui.updatesSummary) ui.updatesSummary.textContent = payload.summary || payload.title || "";
-    if (ui.updatesCount) ui.updatesCount.textContent = String(payload.highlights.length).padStart(2, "0");
-    if (ui.updatesList) {
-      ui.updatesList.replaceChildren(...payload.highlights.map((highlight, index) => {
-        const item = document.createElement("article");
-        item.className = "updates-item";
-        item.dataset.type = highlight.type || "system";
-        const order = document.createElement("span");
-        order.className = "updates-item-order";
-        order.textContent = String(index + 1).padStart(2, "0");
-        const body = document.createElement("div");
-        body.className = "updates-item-body";
-        const heading = document.createElement("div");
-        heading.className = "updates-item-heading";
-        const icon = document.createElement("i");
-        icon.className = "updates-item-icon";
-        icon.innerHTML = updateNotesTypeIcon(highlight.type);
-        const category = document.createElement("span");
-        category.textContent = updateNotesTypeLabel(highlight.type);
-        const title = document.createElement("strong");
-        title.textContent = highlight.title || "Atualização";
-        const description = document.createElement("p");
-        description.textContent = highlight.description || "";
-        heading.append(icon, category);
-        body.append(heading, title, description);
-        item.append(order, body);
-        return item;
-      }));
-    }
+    updatesReleases = releasesFromUpdatesPayload(payload);
+    renderUpdateRelease(updatesReleases.length - 1);
     ui.updatesOverlay?.classList.remove("hidden");
     ui.updatesOverlay?.setAttribute("aria-hidden", "false");
     ui.menuUpdatesBadge?.classList.add("hidden");
@@ -1593,6 +1642,10 @@ function escalarViewport() {
   document.documentElement.style.setProperty("--game-viewport-scale", String(scale));
   document.documentElement.style.setProperty("--visual-viewport-width", `${viewportWidth}px`);
   document.documentElement.style.setProperty("--visual-viewport-height", `${viewportHeight}px`);
+  document.documentElement.style.setProperty(
+    "--mobile-modal-max-width",
+    `${Math.min(1120, Math.max(600, Math.ceil(600 / Math.max(scale, 0.01))))}px`,
+  );
   // Os controles pertencem à cena lógica de 1280x720. A compensação inversa
   // preserva uma área física confortável mesmo quando a cena é reduzida.
   document.documentElement.style.setProperty(
@@ -2424,8 +2477,20 @@ const BLACK_MARKET_GADGETS = Object.freeze([
     description: "Recupera instantaneamente 100% da vida, do escudo e da munição durante a wave.",
     chargesPerWave: 1,
     cooldown: 40,
-    preview: "./assets/black-market/supply_drop.gif",
-    staticPreview: "./assets/black-market/supply_drop.png",
+    preview: "./assets/black-market/crate_row2.png",
+    staticPreview: "./assets/black-market/crate_row2.png",
+    interactionSequence: {
+      framesPerStage: 8,
+      frameWidth: 32,
+      frameHeight: 32,
+      frameDuration: 110,
+      stagePause: 1000,
+      stages: [
+        "./assets/black-market/crate_row2.png",
+        "./assets/black-market/crate_row5.png",
+        "./assets/black-market/crate_row7.png",
+      ],
+    },
     fallback: "✚",
   },
   {
@@ -2492,6 +2557,8 @@ function setBlackMarketFeedback(message) {
   if (ui.blackMarketFeedback) ui.blackMarketFeedback.textContent = message;
 }
 
+let blackMarketPreviewCleanups = [];
+
 function configureBlackMarketPreview(card, gadget) {
   const previewContainer = card.querySelector(".black-market-preview");
   const spritePreview = card.querySelector(".black-market-sprite-preview");
@@ -2500,6 +2567,23 @@ function configureBlackMarketPreview(card, gadget) {
   let animationTimer = 0;
   let frame = 0;
   let running = false;
+  const pendingTimers = new Set();
+
+  const schedule = (callback, delay) => {
+    const timer = window.setTimeout(() => {
+      pendingTimers.delete(timer);
+      callback();
+    }, delay);
+    pendingTimers.add(timer);
+    return timer;
+  };
+
+  const clearTimers = () => {
+    pendingTimers.forEach((timer) => window.clearTimeout(timer));
+    pendingTimers.clear();
+    window.clearTimeout(animationTimer);
+    animationTimer = 0;
+  };
 
   const showSpriteFrame = (index) => {
     if (!spritePreview || !gadget.spriteSheet) return;
@@ -2511,8 +2595,7 @@ function configureBlackMarketPreview(card, gadget) {
 
   const stop = () => {
     running = false;
-    window.clearTimeout(animationTimer);
-    animationTimer = 0;
+    clearTimers();
     frame = 0;
     showSpriteFrame(0);
     card.classList.remove("is-previewing");
@@ -2521,6 +2604,74 @@ function configureBlackMarketPreview(card, gadget) {
       imagePreview.alt = `Imagem estática de ${gadget.name}`;
     }
   };
+
+  if (spritePreview && gadget.interactionSequence) {
+    const sequence = gadget.interactionSequence;
+    let stageIndex = 0;
+    let stageFrame = 0;
+    const showCrateFrame = () => {
+      spritePreview.style.backgroundImage = `url("${sequence.stages[stageIndex]}")`;
+      spritePreview.style.backgroundPosition = `${-stageFrame * sequence.frameWidth}px 0`;
+    };
+    const resetCrate = () => {
+      running = false;
+      clearTimers();
+      stageIndex = 0;
+      stageFrame = 0;
+      showCrateFrame();
+      card.classList.remove("is-previewing", "is-crate-open");
+    };
+    const advanceCrate = () => {
+      if (!running || !spritePreview.isConnected) return;
+      showCrateFrame();
+      if (stageFrame < sequence.framesPerStage - 1) {
+        stageFrame += 1;
+        schedule(advanceCrate, sequence.frameDuration);
+        return;
+      }
+      if (stageIndex >= sequence.stages.length - 1) {
+        running = false;
+        card.classList.add("is-crate-open");
+        card.classList.remove("is-previewing");
+        return;
+      }
+      schedule(() => {
+        stageIndex += 1;
+        stageFrame = 0;
+        advanceCrate();
+      }, sequence.stagePause);
+    };
+    const openCrate = () => {
+      resetCrate();
+      if (prefersReducedMotion) {
+        stageIndex = sequence.stages.length - 1;
+        stageFrame = sequence.framesPerStage - 1;
+        showCrateFrame();
+        card.classList.add("is-crate-open");
+        return;
+      }
+      running = true;
+      card.classList.add("is-previewing");
+      advanceCrate();
+    };
+    Object.assign(spritePreview.style, {
+      width: `${sequence.frameWidth}px`,
+      height: `${sequence.frameHeight}px`,
+      backgroundSize: `${sequence.frameWidth * sequence.framesPerStage}px ${sequence.frameHeight}px`,
+    });
+    previewContainer?.setAttribute("role", "button");
+    previewContainer?.setAttribute("tabindex", "0");
+    previewContainer?.setAttribute("aria-label", `Abrir animação de ${gadget.name}`);
+    previewContainer?.addEventListener("click", openCrate);
+    previewContainer?.addEventListener("keydown", (event) => {
+      if (!["Enter", " "].includes(event.key)) return;
+      event.preventDefault();
+      openCrate();
+    });
+    resetCrate();
+    blackMarketPreviewCleanups.push(resetCrate);
+    return;
+  }
 
   const advanceSprite = () => {
     if (!running || !spritePreview?.isConnected || !gadget.spriteSheet) return;
@@ -2580,10 +2731,13 @@ function configureBlackMarketPreview(card, gadget) {
     if (!card.contains(event.relatedTarget)) stop();
   });
   stop();
+  blackMarketPreviewCleanups.push(stop);
 }
 
 function renderBlackMarket() {
   if (!ui.blackMarketGrid) return;
+  blackMarketPreviewCleanups.forEach((cleanup) => cleanup());
+  blackMarketPreviewCleanups = [];
   ui.blackMarketGrid.innerHTML = "";
   for (const gadget of BLACK_MARKET_GADGETS) {
     const unlocked = blackMarketState.unlocked.includes(gadget.id);
@@ -2591,11 +2745,11 @@ function renderBlackMarket() {
     const card = document.createElement("article");
     card.className = `black-market-card${equipped ? " is-equipped" : ""}`;
     card.dataset.gadget = gadget.id;
-    const previewMarkup = gadget.spriteSheet
+    const previewMarkup = gadget.spriteSheet || gadget.interactionSequence
       ? `<span class="black-market-sprite-preview" role="img" aria-label="Primeiro frame de ${gadget.name}"></span>`
       : `<img class="black-market-image-preview" src="${gadget.staticPreview || gadget.preview}" alt="Imagem estática de ${gadget.name}">`;
     card.innerHTML = `
-      <div class="black-market-preview${gadget.spriteSheet ? " has-sprite" : ""}">
+      <div class="black-market-preview${gadget.spriteSheet || gadget.interactionSequence ? " has-sprite" : ""}">
         <span class="black-market-preview-fallback" aria-hidden="true">${gadget.fallback}</span>
         ${previewMarkup}
       </div>
@@ -2678,6 +2832,8 @@ function openBlackMarket() {
 }
 
 function closeBlackMarket() {
+  blackMarketPreviewCleanups.forEach((cleanup) => cleanup());
+  blackMarketPreviewCleanups = [];
   ui.blackMarketOverlay?.classList.add("hidden");
 }
 
@@ -13105,8 +13261,23 @@ function applyMobileControlPreferences(source) {
   const hudOpacity = Math.max(40, Math.min(100, Number(next.mobileHudOpacity) || 82));
   document.documentElement.style.setProperty("--mobile-hud-scale", String(hudScale / 100));
   document.documentElement.style.setProperty("--mobile-hud-opacity", String(hudOpacity / 100));
-  document.body?.classList.toggle("mobile-autofire", next.mobileAimMode === "autofire");
+  const autofireEnabled = next.mobileAimMode === "autofire";
+  document.body?.classList.toggle("mobile-autofire", autofireEnabled);
   document.body?.classList.toggle("mobile-left-handed", Boolean(next.mobileLeftHanded));
+  ui.mobileAutofireToggle?.classList.toggle("is-active", autofireEnabled);
+  ui.mobileAutofireToggle?.setAttribute("aria-pressed", String(autofireEnabled));
+  const toggleLabel = ui.mobileAutofireToggle?.querySelector("span");
+  if (toggleLabel) toggleLabel.textContent = autofireEnabled ? "LIG" : "DESL";
+}
+
+function setMobileAutofireEnabled(enabled) {
+  optionsSettings.mobileAimMode = enabled ? "autofire" : "analog";
+  queuePreferencesSync();
+  if (game.menuState === "options") renderOptionsMenu(true);
+  showUxToast(
+    enabled ? "O disparo automático está ligado." : "Use o botão de tiro para disparar manualmente.",
+    { title: `AUTOFIRE // ${enabled ? "LIGADO" : "DESLIGADO"}`, tone: "info", duration: 1800 },
+  );
 }
 
 function applyOptionsRuntime(source) {
@@ -13441,8 +13612,8 @@ function renderControlOptions() {
 
     sections.push(optionSection("CONTROLES MOBILE", [
       ToggleGroup("Modo de disparo", "mobileAimMode", [
-        { value: "analog", label: "MIRA MANUAL" },
-        { value: "autofire", label: "AUTOFIRE" },
+        { value: "analog", label: "DESLIGADO" },
+        { value: "autofire", label: "LIGADO" },
       ]),
       SettingSlider("Alcance do Autofire", "mobileAutofireRange", 240, 900, 20),
       SettingSlider("Tamanho do HUD", "mobileHudScale", 75, 130, 5, "%"),
@@ -15047,6 +15218,9 @@ bindMobileTapButton(ui.mobileShopButton, () => {
   if (game.menuState === "none") toggleShop();
 });
 bindMobileTapButton(ui.mobilePauseButton, togglePause);
+bindMobileTapButton(ui.mobileAutofireToggle, () => {
+  setMobileAutofireEnabled(settings.mobileAimMode !== "autofire");
+});
 
 if (canvas) canvas.addEventListener("mousemove", (event) => {
   const rect = canvas.getBoundingClientRect();
@@ -15306,6 +15480,8 @@ ui.globalRankingOverlay?.addEventListener("pointerdown", (event) => {
 ui.menuTutorialButton?.addEventListener("click", () => showWelcomeScreen({ firstAccess: false }));
 ui.menuUpdatesButton?.addEventListener("click", () => void openUpdateNotes());
 ui.updatesCloseButton?.addEventListener("click", () => void closeUpdateNotes());
+ui.updatesPreviousButton?.addEventListener("click", () => renderUpdateRelease(activeUpdateReleaseIndex - 1));
+ui.updatesNextButton?.addEventListener("click", () => renderUpdateRelease(activeUpdateReleaseIndex + 1));
 ui.welcomeTutorialButton?.addEventListener("click", () => void leaveWelcomeScreen("tutorial"));
 ui.welcomeMenuButton?.addEventListener("click", () => void leaveWelcomeScreen("menu"));
 ui.welcomeCloseButton?.addEventListener("click", closeWelcomeReview);
