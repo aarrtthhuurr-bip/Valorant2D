@@ -672,6 +672,17 @@
         </div>
       </section>
 
+      <section class="daily-login-overlay hidden" id="dailyLoginOverlay" aria-hidden="true" aria-labelledby="dailyLoginTitle">
+        <div class="daily-login-modal" role="dialog" aria-modal="true">
+          <button type="button" class="daily-login-close" id="dailyLoginClose" aria-label="Fechar">×</button>
+          <header><span>CICLO SEMANAL</span><h2 id="dailyLoginTitle">RECOMPENSA DIÁRIA</h2><p>Entre todos os dias. O próximo resgate libera à meia-noite.</p></header>
+          <div class="daily-login-days" id="dailyLoginDays"></div>
+          <div class="daily-roulette hidden" id="dailyRoulette"><span>ROLETA DE SKINS</span><strong id="dailyRouletteName">SORTEANDO...</strong></div>
+          <button type="button" class="daily-login-claim" id="dailyLoginClaim">RESGATAR RECOMPENSA</button>
+          <p class="daily-login-feedback" id="dailyLoginFeedback" aria-live="polite"></p>
+        </div>
+      </section>
+
       <div class="menu-tour-layer hidden" id="menuTourLayer" aria-hidden="true">
         <div class="menu-tour-spotlight" id="menuTourSpotlight"></div>
         <section class="menu-tour-bubble" id="menuTourBubble" role="dialog" aria-modal="true" aria-labelledby="menuTourTitle">

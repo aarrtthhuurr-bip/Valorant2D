@@ -456,6 +456,26 @@ async function initializeDatabase() {
         PRIMARY KEY (user_id, code_id)
       )
     `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS daily_login_state (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        streak INTEGER NOT NULL DEFAULT 0 CHECK (streak BETWEEN 0 AND 7),
+        last_claim_date DATE,
+        cycle_started_at DATE,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS daily_login_claims (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        claim_date DATE NOT NULL,
+        cycle_day INTEGER NOT NULL CHECK (cycle_day BETWEEN 1 AND 7),
+        reward_type VARCHAR(16) NOT NULL,
+        reward_value TEXT NOT NULL,
+        claimed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, claim_date)
+      )
+    `);
 
     // Compatibilidade com a conta administrativa criada antes da flag is_admin.
     // Novos cadastros com esse nome são bloqueados pelo controlador, portanto a

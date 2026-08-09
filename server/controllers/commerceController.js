@@ -24,6 +24,7 @@ const ERRORS = {
   GADGET_NOT_FOUND: [404, 'Utilitário não encontrado no Black Market.'],
   GADGET_ALREADY_OWNED: [409, 'Este utilitário já foi desbloqueado.'],
   GADGET_NOT_OWNED: [403, 'Desbloqueie o utilitário antes de equipá-lo.'],
+  DAILY_ALREADY_CLAIMED: [409, 'A recompensa de hoje já foi resgatada.'],
 };
 
 function sendResult(response, result, successStatus = 200) {
@@ -34,6 +35,14 @@ function sendResult(response, result, successStatus = 200) {
 
 async function getProfile(request, response, next) {
   try { const user = await userFromSession(request, response); if (user) response.json(await Commerce.profile(user.id)); } catch (error) { next(error); }
+}
+
+async function getDailyLogin(request, response, next) {
+  try { const user = await userFromSession(request, response); if (user) response.json(await Commerce.dailyLoginStatus(user.id, request.query?.date)); } catch (error) { next(error); }
+}
+
+async function claimDailyLogin(request, response, next) {
+  try { const user = await userFromSession(request, response); if (user) sendResult(response, await Commerce.claimDailyLogin(user.id, request.body?.date)); } catch (error) { next(error); }
 }
 
 async function purchaseSkin(request, response, next) {
@@ -96,11 +105,13 @@ async function createCode(request, response, next) {
 }
 
 module.exports = {
+  claimDailyLogin,
   claimMission,
   createCode,
   equipGadget,
   equipSkin,
   getProfile,
+  getDailyLogin,
   purchaseGadget,
   purchaseSkin,
   redeemCode,

@@ -346,18 +346,26 @@ const LAB_ACHIEVEMENTS = Object.freeze({
   headHunter: { title: "MIRA CIRÚRGICA", description: "Acertou 5 headshots na mesma partida.", reward: 300 },
   damageDealer: { title: "PRESSÃO MÁXIMA", description: "Causou 2.500 de dano na mesma partida.", reward: 400 },
   outbreakTen: { title: "SOBREVIVENTE", description: "Alcançou a onda 10 no Outbreak.", reward: 500 },
+  outbreakTwenty: { title: "ZONA VERMELHA", description: "Alcançou a onda 20 no Outbreak.", reward: 800 },
+  veteran: { title: "VETERANO", description: "Concluiu 10 partidas.", reward: 600 },
+  winner: { title: "IMPARÁVEL", description: "Venceu 5 partidas.", reward: 700 },
 });
 
 function unlockedLabAchievements() {
-  try { return new Set(JSON.parse(localStorage.getItem(LAB_ACHIEVEMENTS_KEY) || "[]")); } catch { return new Set(); }
+  try {
+    const stored = JSON.parse(localStorage.getItem(LAB_ACHIEVEMENTS_KEY) || "{}");
+    if (Array.isArray(stored)) return new Map(stored.map((id) => [id, { unlockedAt: null }]));
+    return new Map(Object.entries(stored || {}));
+  } catch { return new Map(); }
 }
 
 function unlockLabAchievement(id) {
   if (!labEnabled("localAchievements") || !LAB_ACHIEVEMENTS[id]) return false;
   const unlocked = unlockedLabAchievements();
   if (unlocked.has(id)) return false;
-  unlocked.add(id);
-  localStorage.setItem(LAB_ACHIEVEMENTS_KEY, JSON.stringify([...unlocked]));
+  unlocked.set(id, { unlockedAt: new Date().toISOString() });
+  localStorage.setItem(LAB_ACHIEVEMENTS_KEY, JSON.stringify(Object.fromEntries(unlocked)));
+  window.dispatchEvent(new CustomEvent("valorant2d:achievements-updated"));
   const achievement = LAB_ACHIEVEMENTS[id];
   // Recompensa local e estritamente in-game; o saldo Core do servidor nunca
   // é alterado pelo cliente.
@@ -369,6 +377,18 @@ function unlockLabAchievement(id) {
   });
   playSound("purchase");
   return true;
+}
+
+function updateCareerAchievements(victory = false) {
+  if (game.achievementMatchRecorded) return;
+  game.achievementMatchRecorded = true;
+  let career = { matches: 0, wins: 0 };
+  try { career = { ...career, ...JSON.parse(localStorage.getItem("valorant2d:local-career") || "{}") }; } catch {}
+  career.matches = Math.max(0, Number(career.matches) || 0) + 1;
+  career.wins = Math.max(0, Number(career.wins) || 0) + (victory ? 1 : 0);
+  localStorage.setItem("valorant2d:local-career", JSON.stringify(career));
+  if (career.matches >= 10) unlockLabAchievement("veteran");
+  if (career.wins >= 5) unlockLabAchievement("winner");
 }
 
 function loadUpdatesManifest() {
@@ -649,7 +669,9 @@ async function requestApi(path, options = {}) {
       requestError.coreBalance = payload.coreBalance;
       throw requestError;
     }
-
+    if (path !== "/api/leaderboard/save" && readPendingRewardsQueue().length && !pendingRewardsSyncPromise) {
+      queueMicrotask(() => void flushPendingRewardsQueue());
+    }
     return payload;
   } catch (error) {
     if (error.name === "AbortError" || error instanceof TypeError) {
@@ -753,7 +775,116 @@ function closeWelcomeReview() {
 }
 
 const commerceState = { tab: "skins", profile: null, weaponId: "pistol", busy: false };
+const DAILY_LOGIN_REWARDS = [
+  { label: "25 C", type: "core" }, { label: "MINA CRYO", type: "gadget" },
+  { label: "ROLETA DE SKIN", type: "skin" }, { label: "50 C", type: "core" },
+  { label: "ADRENALINA", type: "gadget" }, { label: "75 C", type: "core" },
+  { label: "ROLETA PREMIUM", type: "skin" },
+];
+let dailyLoginStatus = null;
+let dailyLoginCheckedFor = "";
+
+function localCalendarDate(date = new Date()) {
+  const offset = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+}
+
+function renderDailyLoginModal(status) {
+  const overlay = document.getElementById("dailyLoginOverlay");
+  const days = document.getElementById("dailyLoginDays");
+  if (!overlay || !days) return;
+  dailyLoginStatus = status;
+  days.innerHTML = DAILY_LOGIN_REWARDS.map((reward, index) => {
+    const day = index + 1;
+    const claimed = !status.available && day <= status.streak || status.available && day < status.currentDay;
+    const available = status.available && day === status.currentDay;
+    return `<article class="${claimed ? "is-claimed" : available ? "is-available" : "is-locked"}"><small>DIA ${day}</small><i>${reward.type === "skin" ? "◇" : reward.type === "gadget" ? "⌁" : "C"}</i><strong>${reward.label}</strong><span>${claimed ? "RESGATADO" : available ? "DISPONÍVEL" : "BLOQUEADO"}</span></article>`;
+  }).join("");
+  document.getElementById("dailyLoginClaim").disabled = !status.available;
+  overlay.classList.toggle("hidden", !status.available);
+  overlay.setAttribute("aria-hidden", String(!status.available));
+}
+
+async function checkDailyLogin({ force = false } = {}) {
+  if (currentProfile?.isGuest || !readStoredSession()?.token) return;
+  const date = localCalendarDate();
+  if (!force && dailyLoginCheckedFor === date) return;
+  dailyLoginCheckedFor = date;
+  try {
+    const status = await requestApi(`/api/commerce/daily-login?date=${date}`, { headers: commerceAuthorization() });
+    if (force || status.available) renderDailyLoginModal(status);
+  } catch (error) { console.warn("Recompensa diária indisponível:", error.message); }
+}
+
+async function claimDailyLoginReward() {
+  const button = document.getElementById("dailyLoginClaim");
+  const feedback = document.getElementById("dailyLoginFeedback");
+  if (!dailyLoginStatus?.available || button?.disabled) return;
+  button.disabled = true;
+  if (feedback) feedback.textContent = "Abrindo recompensa...";
+  try {
+    const payload = await requestApi("/api/commerce/daily-login/claim", { method: "POST", headers: commerceAuthorization(), body: JSON.stringify({ date: localCalendarDate() }) });
+    if (payload.reward?.type === "skin") {
+      const roulette = document.getElementById("dailyRoulette");
+      roulette?.classList.remove("hidden");
+      const name = document.getElementById("dailyRouletteName");
+      let spins = 0;
+      const timer = window.setInterval(() => {
+        const catalog = commerceState.profile?.catalog || [];
+        if (name && catalog.length) name.textContent = catalog[spins % catalog.length].name;
+        spins += 1;
+        if (spins < 14) return;
+        clearInterval(timer);
+        if (name) name.textContent = payload.reward.name;
+      }, 90);
+    }
+    if (feedback) feedback.textContent = payload.reward?.type === "core" ? `+${payload.reward.amount} C recebidos.` : `${payload.reward?.name || "Prêmio"} adicionado ao inventário.`;
+    updateCoreBalances(payload.coreBalance);
+    await refreshCommerceProfile();
+    dailyLoginStatus.available = false;
+    window.setTimeout(() => document.getElementById("dailyLoginOverlay")?.classList.add("hidden"), 2300);
+  } catch (error) {
+    if (feedback) feedback.textContent = error.message;
+    button.disabled = false;
+  }
+}
+
+document.getElementById("dailyLoginClaim")?.addEventListener("click", claimDailyLoginReward);
+document.getElementById("dailyLoginClose")?.addEventListener("click", () => document.getElementById("dailyLoginOverlay")?.classList.add("hidden"));
+function scheduleDailyLoginMidnightReset() {
+  const next = new Date();
+  next.setHours(24, 0, 1, 0);
+  window.setTimeout(() => {
+    dailyLoginCheckedFor = "";
+    void checkDailyLogin();
+    scheduleDailyLoginMidnightReset();
+  }, Math.max(1000, next.getTime() - Date.now()));
+}
+scheduleDailyLoginMidnightReset();
 let equippedWeaponSkinPaths = {};
+let confirmedCoreBalance = 0;
+const PENDING_REWARDS_STORAGE_KEY = "pendingRewardsQueue";
+let pendingRewardsSyncPromise = null;
+
+function readPendingRewardsQueue() {
+  try {
+    const queue = JSON.parse(localStorage.getItem(PENDING_REWARDS_STORAGE_KEY) || "[]");
+    return Array.isArray(queue) ? queue.filter((entry) => entry?.id && Number(entry.reward) >= 0) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writePendingRewardsQueue(queue) {
+  try { localStorage.setItem(PENDING_REWARDS_STORAGE_KEY, JSON.stringify(queue)); } catch {}
+}
+
+function currentPendingCoreTotal() {
+  const profileId = currentProfile?.id || currentProfile?.username;
+  return readPendingRewardsQueue()
+    .filter((entry) => entry.profileId === profileId)
+    .reduce((total, entry) => total + Math.max(0, Number(entry.reward) || 0), 0);
+}
 
 function renderEasterEggCodes(codes = []) {
   if (!ui.easterEggCodes) return;
@@ -773,9 +904,10 @@ function commerceAuthorization() {
 }
 
 function updateCoreBalances(balance) {
-  const safeBalance = Math.max(0, Number(balance) || 0);
-  if (ui.mainCoreBalance) ui.mainCoreBalance.textContent = safeBalance.toLocaleString("pt-BR");
-  if (ui.storeCoreBalance) ui.storeCoreBalance.textContent = safeBalance.toLocaleString("pt-BR");
+  confirmedCoreBalance = Math.max(0, Number(balance) || 0);
+  const visibleBalance = confirmedCoreBalance + currentPendingCoreTotal();
+  if (ui.mainCoreBalance) ui.mainCoreBalance.textContent = visibleBalance.toLocaleString("pt-BR");
+  if (ui.storeCoreBalance) ui.storeCoreBalance.textContent = visibleBalance.toLocaleString("pt-BR");
 }
 
 function applyCommerceProfile(profile) {
@@ -791,6 +923,7 @@ function applyCommerceProfile(profile) {
     saveBlackMarketState();
   }
   currentProfile = currentProfile ? { ...currentProfile, isAdmin: Boolean(profile?.isAdmin) } : currentProfile;
+  void checkDailyLogin();
   const catalogById = new Map((profile?.catalog || []).map((skin) => [skin.id, skin]));
   equippedWeaponSkinPaths = Object.fromEntries(Object.entries(profile?.equippedSkins || {}).map(([weaponId, skinId]) => {
     const skin = catalogById.get(skinId);
@@ -930,8 +1063,9 @@ function renderCommerceMissions() {
   for (const mission of commerceState.profile.missions || []) {
     const ratio = Math.min(100, Math.round((mission.progress / Math.max(1, mission.target)) * 100));
     const card = document.createElement("article");
-    card.className = `mission-card${mission.claimed ? " is-claimed" : ""}`;
-    card.innerHTML = `<div class="mission-reward">${mission.reward} C<small>RECOMPENSA</small></div><div class="mission-copy"><strong>${mission.description}</strong><div class="mission-progress"><i style="width:${ratio}%"></i></div><span>${mission.progress}/${mission.target}</span></div>`;
+    const claimable = mission.completed && !mission.claimed;
+    card.className = `mission-card${mission.claimed ? " is-claimed" : ""}${claimable ? " has-reward" : ""}`;
+    card.innerHTML = `${claimable ? '<span class="notification-badge" aria-label="Recompensa disponível">!</span>' : ""}<div class="mission-reward">${mission.reward} C<small>RECOMPENSA</small></div><div class="mission-copy"><strong>${mission.description}</strong><div class="mission-progress"><i style="width:${ratio}%"></i></div><span>${mission.progress}/${mission.target}</span></div>`;
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = mission.claimed ? "RESGATADO" : mission.completed ? "RESGATAR" : "EM PROGRESSO";
@@ -940,6 +1074,18 @@ function renderCommerceMissions() {
     card.appendChild(button);
     grid.appendChild(card);
   }
+}
+
+function hasClaimableMissions() {
+  return Boolean(commerceState.profile?.missions?.some((mission) => mission.completed && !mission.claimed));
+}
+
+function unseenContent(key) {
+  try { return localStorage.getItem(`valorant2d:seen:${key}`) !== "1"; } catch { return false; }
+}
+
+function markContentSeen(key) {
+  try { localStorage.setItem(`valorant2d:seen:${key}`, "1"); } catch {}
 }
 
 function renderCommerceCodes() {
@@ -993,6 +1139,7 @@ function redeemCommerceCode(code) { return commerceMutation("/api/commerce/codes
 function createCommerceCode(code, coreAmount) { return commerceMutation("/api/commerce/admin/codes", { method: "POST", body: JSON.stringify({ code, coreAmount }) }, (data) => `Código ${data.code.code_display} criado com ${data.code.core_amount} C.`); }
 
 async function openCommerceStore() {
+  markContentSeen("commerce-v2");
   hideMenuTour();
   ui.mainCoreWallet?.classList.add("hidden");
   ui.menuTutorialButton?.classList.add("hidden");
@@ -1819,6 +1966,60 @@ const audio = {
   masterGain: null,
   compressor: null,
 };
+const MENU_MUSIC_TRACKS = [
+  "./assets/musics/4 Months_1msIcFmuy8NadZMakq26Jz.mp3",
+  "./assets/musics/46_3S7RcBtWJkT2vLIIjGEak2.mp3",
+  "./assets/musics/Above The Quiet City_1XsaRWIlKXelii72Y2M9bR.mp3",
+  "./assets/musics/Afterglow_0CQgrW8jCGY3l5h37v1Rs9.mp3",
+  "./assets/musics/analog dreams_5h96Ai7Ef7ll9142dnOukV.mp3",
+  "./assets/musics/A Better Place_2KTReLwbnN6NrcM5szzFbc.mp3",
+  "./assets/musics/A Kid At Heart_50ul0XFvbbCxjuTgmBnE7z.mp3",
+  "./assets/musics/A Meditation_60IWkxGtf9Ir5bemYL1XFi.mp3",
+  "./assets/musics/Abandoned Graveyard_0ul89yEKIi4mTAy2clvBv8.mp3",
+  "./assets/musics/About Us_5oOzw7HROEVOACvuLMjE2f.mp3",
+  "./assets/musics/Afloat_0Kn7MsZCa7sxF2wYQVyutc.mp3",
+  "./assets/musics/After The Rain_4lzahF5UT5htAMSTfuGXmX.mp3",
+  "./assets/musics/Aftercare_46JLBTEQvGDCAT6Lo2Fbtd.mp3",
+  "./assets/musics/Albedo_34NmysHvigLo6tEVrdnSva.mp3",
+  "./assets/musics/Alissa_0mnry1P6y5yu92a45uSiT5.mp3",
+  "./assets/musics/Amber_2vWtgOaJWdq1ca5X6qLSn2.mp3",
+  "./assets/musics/Amber_6G0vgx6pRV8UspD63Xq1W4.mp3",
+  "./assets/musics/An Endless Dream_5EzjDtWMvDq5FXytXzHaQ3.mp3",
+  "./assets/musics/a gentle reminder_7zlGH7MbWP38wQRtLoTkhu.mp3",
+  "./assets/musics/a lonely star_2wnE16f276RZAZqC1odVBd.mp3",
+];
+const menuMusic = { element: null, index: 0, requested: false };
+
+function menuMusicVolume() {
+  const master = Math.max(0, Math.min(1, Number(optionsSettings?.masterVolume ?? settings?.masterVolume ?? 50) / 100));
+  const music = Math.max(0, Math.min(1, Number(optionsSettings?.musicVolume ?? settings?.musicVolume ?? 50) / 100));
+  return master * music * 0.42;
+}
+
+function ensureMenuMusic() {
+  if (menuMusic.element) return menuMusic.element;
+  const element = new Audio(MENU_MUSIC_TRACKS[0]);
+  element.preload = "metadata";
+  element.loop = false;
+  element.addEventListener("ended", () => {
+    menuMusic.index = (menuMusic.index + 1) % MENU_MUSIC_TRACKS.length;
+    element.src = MENU_MUSIC_TRACKS[menuMusic.index];
+    void element.play().catch(() => {});
+  });
+  menuMusic.element = element;
+  return element;
+}
+
+function syncMenuMusic(shouldPlay = game.menuState !== "none") {
+  const element = ensureMenuMusic();
+  element.volume = menuMusicVolume();
+  if (!shouldPlay || settings?.muted || optionsSettings?.muted || element.volume <= 0) {
+    element.pause();
+    return;
+  }
+  menuMusic.requested = true;
+  void element.play().catch(() => {});
+}
 const AUDIO_MASTER_HEADROOM = 0.75;
 const AUDIO_MIX = {
   shot: 0.34,
@@ -1907,12 +2108,19 @@ const agents = [
     ability: "Alta Voltagem",
     cooldown: 0,
     use(game) {
+      if (game.neonSpeedToggled) {
+        game.neonSpeedToggled = false;
+        game.neonSpeedActive = false;
+        setMessage("Neon: corrida desativada.");
+        return "noCooldown";
+      }
       if ((game.neonStamina || 0) <= 0) {
         game.neonStaminaFlash = 0.42;
         setMessage("Neon: energia esgotada.");
         return false;
       }
-      game.neonSpeedHeld = true;
+      game.neonSpeedToggled = true;
+      setMessage("Neon: corrida ativada. Pressione E novamente para desligar.");
       return "noCooldown";
     },
   },
@@ -1930,12 +2138,16 @@ const agents = [
       game.smokes.push({
         ...nearestWalkablePoint(castPoint, p),
         r: 22,
-        targetR: VIPER_CLOUD_RADIUS,
-        life: 7,
+        targetR: VIPER_CLOUD_RADIUS + 18,
+        life: 9,
+        maxLife: 9,
         poison: true,
-        damagePerSecond: 20,
+        damagePerSecond: 27,
         ownerTeam: "player",
+        visualPhase: Math.random() * Math.PI * 2,
       });
+      game.explosions.push({ x: castPoint.x, y: castPoint.y, r: 8, maxR: VIPER_CLOUD_RADIUS + 24, life: .55, maxLife: .55, color: "#52e36f" });
+      spawnParticles(castPoint.x, castPoint.y, "#8dff78", 34, 165);
       return true;
     },
   },
@@ -1965,13 +2177,15 @@ const agents = [
       game.smokes.push({
         ...nearestWalkablePoint(castPoint, p),
         r: 22,
-        targetR: 94,
-        life: 7.5,
-        maxLife: 7.5,
+        targetR: 112,
+        life: 10,
+        maxLife: 10,
         omenSmoke: true,
         ownerTeam: "player",
         visualPhase: Math.random() * Math.PI * 2,
       });
+      game.explosions.push({ x: castPoint.x, y: castPoint.y, r: 5, maxR: 122, life: .72, maxLife: .72, color: "#8b5cf6" });
+      spawnParticles(castPoint.x, castPoint.y, "#b794f6", 42, 190);
     },
   },
   {
@@ -4314,6 +4528,7 @@ const game = {
   neonStamina: 100,
   neonSpeedHeld: false,
   neonSpeedActive: false,
+  neonSpeedToggled: false,
   neonVignette: 0,
   neonStaminaFlash: 0,
   playerUltPoints: 0,
@@ -4425,6 +4640,7 @@ function respawnSandboxPlayer() {
   game.damageIndicator = null;
   game.neonSpeedHeld = false;
   game.neonSpeedActive = false;
+  game.neonSpeedToggled = false;
   resetPartialDefuse();
   sanitizeEntityPosition(player);
   spawnParticles(player.x, player.y, game.playerSide === "attackers" ? "#ff6b74" : "#55b9ff", 18, 135);
@@ -4464,8 +4680,8 @@ function makeBot(spawn, index) {
     plantProgress: 0,
     defuseProgress: 0,
     fireTimer: 0.3 + index * 0.25,
-    patrol: index,
-    routeIndex: 0,
+    patrol: index + Math.floor(Math.random() * 4),
+    routeIndex: Math.floor(Math.random() * 3),
     wait: 0,
     lastX: spawn.x,
     lastY: spawn.y,
@@ -4502,8 +4718,8 @@ function makeAlly(spawn, index) {
     side: game.playerSide,
     weapon,
     fireTimer: 0.25 + index * 0.18,
-    patrol: index + 3,
-    routeIndex: 0,
+    patrol: index + 3 + Math.floor(Math.random() * 3),
+    routeIndex: Math.floor(Math.random() * 2),
     wait: 0,
     lastX: spawn.x,
     lastY: spawn.y,
@@ -4895,6 +5111,7 @@ game.bullets = [];
   game.neonStamina = 100;
   game.neonSpeedHeld = false;
   game.neonSpeedActive = false;
+  game.neonSpeedToggled = false;
   game.neonVignette = 0;
   game.neonStaminaFlash = 0;
   game.player.ultPoints = game.playerUltPoints;
@@ -5069,6 +5286,7 @@ function fullReset() {
 }
 
 function startNewMatch() {
+  syncMenuMusic(false);
   game.scoreA = 0;
   game.scoreD = 0;
   game.playerScore = 0;
@@ -5088,6 +5306,8 @@ function startNewMatch() {
   game.playerUltPoints = 0;
   game.roundNumber = 1;
   game.statisticsRecorded = false;
+  game.achievementMatchRecorded = false;
+  game.pendingRewardId = "";
   game.matchSubmissionToken = "";
   game.matchSubmissionPromise = null;
   game.outbreakSpawnQueue = [];
@@ -5140,16 +5360,81 @@ function prepareMatchCoreReward() {
   if (!ui.matchCoreReward || !ui.matchCoreRewardText) return;
   const eligible = !currentProfile?.isGuest && !game.sandbox && !game.training && !game.tutorial;
   ui.matchCoreReward.classList.toggle("hidden", !eligible);
-  ui.matchCoreReward.classList.remove("is-confirmed", "is-error");
+  ui.matchCoreReward.classList.remove("is-error");
+  ui.matchCoreReward.classList.toggle("is-confirmed", eligible);
   if (ui.matchCoreRewardText) {
-    const completedWaves = Math.max(0, Math.round(game.outbreakWave || 1) - 1);
+    const reward = optimisticCoreRewardForMatch();
     ui.matchCoreRewardText.textContent = eligible
-      ? game.outbreak
-        ? `${completedWaves} C faturados · sincronizando...`
-        : "Validando recompensa no servidor..."
+      ? `+${reward} C · creditado agora${navigator.onLine ? "" : " (offline)"}`
       : "";
   }
 }
+
+function optimisticCoreRewardForMatch() {
+  if (game.outbreak) return Math.max(0, Math.round(game.outbreakWave || 1) - 1);
+  return game.playMode === "blackout" ? 15 : 10;
+}
+
+function queueOptimisticMatchReward() {
+  if (game.pendingRewardId || currentProfile?.isGuest || game.sandbox || game.training || game.tutorial) return null;
+  const profileId = currentProfile?.id || currentProfile?.username;
+  if (!profileId) return null;
+  const entry = {
+    id: crypto.randomUUID?.() || `reward-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    profileId,
+    reward: optimisticCoreRewardForMatch(),
+    createdAt: new Date().toISOString(),
+    submission: null,
+  };
+  const queue = readPendingRewardsQueue();
+  queue.push(entry);
+  writePendingRewardsQueue(queue);
+  game.pendingRewardId = entry.id;
+  updateCoreBalances(confirmedCoreBalance);
+  return entry;
+}
+
+function updatePendingRewardSubmission(id, submission) {
+  const queue = readPendingRewardsQueue();
+  const entry = queue.find((item) => item.id === id);
+  if (!entry) return;
+  entry.submission = submission;
+  writePendingRewardsQueue(queue);
+}
+
+async function flushPendingRewardsQueue({ silent = true } = {}) {
+  if (pendingRewardsSyncPromise || currentProfile?.isGuest || !navigator.onLine) return pendingRewardsSyncPromise;
+  const session = readStoredSession();
+  if (!session?.token) return null;
+  pendingRewardsSyncPromise = (async () => {
+    let queue = readPendingRewardsQueue();
+    const profileId = currentProfile?.id || currentProfile?.username;
+    for (const entry of queue.filter((item) => item.profileId === profileId && item.submission?.matchToken)) {
+      try {
+        const payload = await requestApi("/api/leaderboard/save", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${session.token}` },
+          body: JSON.stringify(entry.submission),
+        });
+        queue = readPendingRewardsQueue().filter((item) => item.id !== entry.id);
+        writePendingRewardsQueue(queue);
+        if (Number.isFinite(Number(payload.coreBalance))) updateCoreBalances(payload.coreBalance);
+        if (!silent) showUxToast("Recompensa e estatísticas sincronizadas.", { title: "SINCRONIZAÇÃO CONCLUÍDA", tone: "success" });
+      } catch (error) {
+        if ([404, 409, 410, 426].includes(Number(error.status))) {
+          showUxToast("Sua recompensa está segura neste dispositivo. Recarregue para atualizar o jogo.", {
+            title: "ATUALIZAÇÃO DISPONÍVEL", tone: "warning", duration: 5200,
+          });
+        }
+        break;
+      }
+    }
+    updateCoreBalances(confirmedCoreBalance);
+  })().finally(() => { pendingRewardsSyncPromise = null; });
+  return pendingRewardsSyncPromise;
+}
+
+window.addEventListener("online", () => void flushPendingRewardsQueue({ silent: false }));
 
 function confirmMatchCoreReward(payload) {
   const reward = Number(payload?.coreReward);
@@ -5212,6 +5497,7 @@ function showMatchResult() {
   updatePersonalBestBadge(game.playMode === "blackout" ? "blackout" : "default", score);
   if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = currentProfile?.isGuest ? "Partida local: entre com uma conta para salvar o desempenho." : "Sincronizando desempenho...";
   prepareMatchCoreReward();
+  updateCareerAchievements(won);
   renderMatchConfetti(won);
   ui.newGameButton.style.display = "";
   ui.newGameButton.querySelector("span").textContent = "CONTINUAR";
@@ -5249,6 +5535,7 @@ function showOutbreakGameOver(reason = "Sinal vital perdido") {
     ? "Partida local: entre com uma conta para salvar sua pontuação global."
     : "Sincronizando pontuação global...";
   prepareMatchCoreReward();
+  updateCareerAchievements(false);
   ui.matchConfetti?.replaceChildren();
   if (ui.newGameButton) {
     ui.newGameButton.style.display = "";
@@ -5279,24 +5566,17 @@ function renderMatchConfetti(won) {
 
 async function recordCompletedMatch() {
   if (game.statisticsRecorded || game.sandbox || game.training || game.tutorial || currentProfile?.isGuest) return;
-  const session = readStoredSession();
-  if (!session?.token) {
-    if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = "Sessão indisponível; desempenho salvo apenas nesta partida.";
-    failMatchCoreReward("Recompensa não sincronizada");
-    return;
-  }
+  game.statisticsRecorded = true;
+  const pendingReward = queueOptimisticMatchReward();
+  prepareMatchCoreReward();
 
-  // Impede a condição de corrida entre o início da partida e a criação
-  // do comprovante no Render.
   if (!game.matchSubmissionToken && game.matchSubmissionPromise) {
     await game.matchSubmissionPromise;
   }
   if (!game.matchSubmissionToken) {
-    if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = "Partida sem comprovante de integridade; estatísticas não enviadas.";
-    failMatchCoreReward("Partida sem comprovante de recompensa");
+    if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = "Recompensa preservada neste dispositivo; sincronização pendente.";
     return;
   }
-  game.statisticsRecorded = true;
   const gameMode = game.outbreak ? "outbreak" : game.playMode === "blackout" ? "blackout" : "default";
   const kills = Math.max(0, Math.round(game.stats?.kills || 0));
   const deaths = Math.max(0, Math.round(game.stats?.deaths || 0));
@@ -5318,36 +5598,9 @@ async function recordCompletedMatch() {
     matchToken: game.matchSubmissionToken,
   };
 
-  try {
-    let payload;
-    const maximumAttempts = 2;
-    for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
-      try {
-        payload = await requestApi("/api/leaderboard/save", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${session.token}` },
-          body: JSON.stringify(submission),
-        });
-        break;
-      } catch (error) {
-        const transientFailure = error.code === "SERVER_OFFLINE" || Number(error.status) >= 500;
-        if (!transientFailure || attempt === maximumAttempts) throw error;
-        if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = "Servidor acordando; repetindo a sincronização...";
-        await new Promise((resolve) => window.setTimeout(resolve, 1800));
-      }
-    }
-    const rewardConfirmed = confirmMatchCoreReward(payload);
-    if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = rewardConfirmed
-      ? "Pontuação e recompensa sincronizadas."
-      : "Pontuação salva; resposta de recompensa inválida.";
-    if (rewardConfirmed) showUxToast("Pontuação, estatísticas e recompensa foram salvas.", { title: "SINCRONIZAÇÃO CONCLUÍDA", tone: "success" });
-  } catch (error) {
-    // A partida permanece jogável mesmo se a sincronização estiver indisponível.
-    console.warn("Não foi possível sincronizar as estatísticas:", error.code || error.message, error);
-    if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = "A partida foi concluída, mas a sincronização está indisponível.";
-    failMatchCoreReward("Recompensa não sincronizada");
-    showUxToast("A partida terminou normalmente, mas os dados não puderam ser enviados agora.", { title: "SINCRONIZAÇÃO PENDENTE", tone: "warning", duration: 4200 });
-  }
+  updatePendingRewardSubmission(pendingReward?.id || game.pendingRewardId, submission);
+  if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = "Recompensa creditada; sincronizando em segundo plano.";
+  void flushPendingRewardsQueue({ silent: false });
 }
 
 function endRound(winner, reason, outcome = "standard") {
@@ -5659,7 +5912,7 @@ function updateNeonStamina(dt) {
     game.neonVignette = Math.max(0, game.neonVignette - dt * 3.2);
     return 1;
   }
-  const wantsBoost = keyHeld("neonRun") || keyHeld("ability1") || mouse.rightDown || game.neonSpeedHeld;
+  const wantsBoost = Boolean(game.neonSpeedToggled) || keyHeld("neonRun") || mouse.rightDown || game.neonSpeedHeld;
   const canBoost = wantsBoost && game.neonStamina > 0;
   game.neonSpeedActive = canBoost;
   if (canBoost) {
@@ -5668,6 +5921,7 @@ function updateNeonStamina(dt) {
     if (game.neonStamina <= 0) {
       game.neonStaminaFlash = 0.45;
       game.neonSpeedActive = false;
+      game.neonSpeedToggled = false;
       setMessage("Neon: stamina esgotada.");
     }
   } else {
@@ -7102,10 +7356,11 @@ function updateOrbChannel(entity, orb, dt) {
      return;
    }
    const playerHolding = entity.id === "player" && keyHeld("interact");
-   const botHolding = entity.id !== "player" && entity.aiState === "seek-ult";
+   const botHolding = entity.id !== "player" && entity.orbAssignment === orb.id;
    const holding = playerHolding || botHolding;
    const previous = entity.orbChannel;
-   const moved = entity.moving || (previous && Math.hypot(entity.x - previous.x, entity.y - previous.y) > 2.5);
+   const movedByPosition = previous && Math.hypot(entity.x - previous.x, entity.y - previous.y) > 2.5;
+   const moved = entity.id === "player" ? entity.moving || movedByPosition : movedByPosition;
    if (!holding || moved || Math.hypot(entity.x - orb.x, entity.y - orb.y) >= entity.r + 21) {
      entity.orbChannel = null;
      return;
@@ -7184,8 +7439,11 @@ function collectPickups(entity, dt) {
    }
    const orb = game.ultOrbs.find((item) => Math.hypot(entity.x - item.x, entity.y - item.y) < entity.r + 21);
    if (orb && entity.id !== "player" && entity.orbAssignment !== orb.id) {
-     entity.orbChannel = null;
-     return;
+     if (!orb.reservadaPor && reserveOrbForEntity(entity, orb)) entity.aiState = "seek-ult";
+     else {
+       entity.orbChannel = null;
+       return;
+     }
    }
    updateOrbChannel(entity, orb, dt);
  }
@@ -11824,6 +12082,7 @@ function loadSandboxConfig() {
 }
 
 function activeGuidanceDialog() {
+  if (!document.getElementById("dailyLoginOverlay")?.classList.contains("hidden")) return document.querySelector(".daily-login-modal");
   if (!ui.blackMarketOverlay?.classList.contains("hidden")) return ui.blackMarketOverlay.querySelector(".black-market-shell");
   if (!ui.playerProfileOverlay?.classList.contains("hidden")) return ui.playerProfileOverlay.querySelector(".player-profile-modal");
   if (!ui.globalRankingOverlay?.classList.contains("hidden")) return ui.globalRankingOverlay.querySelector(".global-ranking-modal");
@@ -11850,6 +12109,10 @@ function trapGuidanceFocus(event, dialog) {
 }
 
 function handleEscape() {
+  if (!document.getElementById("dailyLoginOverlay")?.classList.contains("hidden")) {
+    document.getElementById("dailyLoginOverlay")?.classList.add("hidden");
+    return;
+  }
   if (!ui.blackMarketOverlay?.classList.contains("hidden")) {
     closeBlackMarket();
     return;
@@ -11948,7 +12211,7 @@ function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
       button.title = item.label;
       button.innerHTML = "";
     } else if (state === "main") {
-      button.innerHTML = `${mainMenuIconSvg(item.icon || "star")}<span class="menu-button-copy"><b>${item.label}</b>${item.description ? `<small>${item.description}</small>` : ""}</span>`;
+      button.innerHTML = `${mainMenuIconSvg(item.icon || "star")}<span class="menu-button-copy"><b>${item.label}</b>${item.description ? `<small>${item.description}</small>` : ""}</span>${item.badge ? '<span class="notification-badge" aria-label="Novidade disponível">!</span>' : ""}`;
     } else if (state === "difficulty") {
       const stars = Math.max(1, item.stars || 1);
       button.classList.add("difficulty-button", `difficulty-button-${stars}`);
@@ -11970,6 +12233,7 @@ function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
   ui.mainCoreWallet?.classList.toggle("hidden", state !== "main" || currentProfile?.isGuest);
   ui.menuTutorialButton?.classList.toggle("hidden", state !== "main");
   ui.menuUpdatesButton?.classList.toggle("hidden", state !== "main");
+  syncMenuMusic(true);
 }
 
 function mainMenuIconSvg(icon) {
@@ -12006,6 +12270,10 @@ function mainMenuIconSvg(icon) {
       lucide: "shopping-bag",
       fallback: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h12l1 13H5L6 8Z"></path><path d="M9 9V6a3 3 0 0 1 6 0v3"></path></svg>',
     },
+    missions: {
+      lucide: "clipboard-check",
+      fallback: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h6"></path><rect x="5" y="3" width="14" height="18" rx="2"></rect><path d="m8 13 2 2 5-5"></path></svg>',
+    },
     download: {
       lucide: "download",
       fallback: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>',
@@ -12019,6 +12287,7 @@ function attachButtonFeedback(button) {
   if (!button || button.dataset.feedbackReady) return;
   button.dataset.feedbackReady = "true";
   button.addEventListener("pointerdown", () => {
+    if (game.menuState !== "none") syncMenuMusic(true);
     button.classList.remove("click-feedback");
     void button.offsetWidth;
     button.classList.add("click-feedback");
@@ -12474,9 +12743,10 @@ function showMainMenu() {
   try { lastMode = localStorage.getItem("valorant2d-last-mode") || ""; } catch {}
   const lastModeLabel = ({ default: "DEFAULT", blackout: "BLACKOUT", outbreak: "OUTBREAK", sandbox: "SANDBOX", training: "TREINO" })[lastMode];
   const mainActions = [
-    { label: "JOGAR", description: lastModeLabel ? `ÚLTIMO: ${lastModeLabel}` : "ESCOLHA SEU MODO", icon: "gamepad", action: showModeSelect, onboardingTarget: "play", audioCue: "play_action" },
+    { label: "JOGAR", description: lastModeLabel ? `ÚLTIMO: ${lastModeLabel}` : "ESCOLHA SEU MODO", icon: "gamepad", badge: unseenContent("modes-v2"), action: showModeSelect, onboardingTarget: "play", audioCue: "play_action" },
     { label: "OPÇÕES", icon: "tools", action: showOptionsMenu },
-    { label: "LOJA", icon: "store", action: openCommerceStore, onboardingTarget: "store" },
+    { label: "LOJA", icon: "store", badge: unseenContent("commerce-v2"), action: openCommerceStore, onboardingTarget: "store" },
+    { label: "MISSÕES", icon: "missions", badge: hasClaimableMissions(), action: () => { commerceState.tab = "missions"; openCommerceStore(); } },
     { label: "RANKING", icon: "trophy", action: openGlobalRanking },
   ];
   if (deferredPwaInstallPrompt && !isPwaInstalled()) {
@@ -12489,6 +12759,7 @@ function showMainMenu() {
   }
   setMenu("Valorant 2D", "", mainActions, "MENU", "main");
   updateCoreBalances(commerceState.profile?.coreBalance || currentProfile?.coreBalance || 0);
+  void flushPendingRewardsQueue();
   void maybeScheduleUpdateNotes().then(() => maybeScheduleMenuTour());
 }
 
@@ -12581,6 +12852,7 @@ function closeModeInfo() {
 }
 
 function showModeSelect(immediate = false) {
+  markContentSeen("modes-v2");
   if (!immediate && game.menuState === "main") {
     ui.menuOverlay?.classList.add("menu-carousel-out");
     window.setTimeout(() => {
@@ -12700,7 +12972,7 @@ function renderGuestProfile() {
       <article><span>DEFAULT</span><strong>Ranking global</strong><p>Vitórias, partidas, kills e K/D sincronizados.</p></article>
       <article><span>BLACKOUT</span><strong>Histórico competitivo</strong><p>Vitórias e desempenho preservados.</p></article>
       <article><span>OUTBREAK</span><strong>Maior wave</strong><p>Seu recorde disponível em qualquer computador.</p></article>
-    </div>`;
+    </div>${renderAchievementsProfilePanel()}`;
   profileField('[data-profile="username"]', currentProfile?.username || "Convidado");
   ui.playerProfileContent.querySelector("[data-profile-create-account]")?.addEventListener("click", () => {
     closePlayerProfile();
@@ -12741,7 +13013,8 @@ function renderPlayerProfile(profile) {
           <div class="profile-wave-record"><span>MAIOR WAVE SOBREVIVIDA</span><strong data-profile="outbreakWave">0</strong></div>
         </article>
       </div>
-    </section>`;
+    </section>
+    ${renderAchievementsProfilePanel()}`;
 
   const stats = profile.statistics || {};
   const number = (value) => Math.max(0, Number(value) || 0).toLocaleString("pt-BR");
@@ -12760,6 +13033,20 @@ function renderPlayerProfile(profile) {
   profileField('[data-profile="blackoutWins"]', number(stats.blackout?.wins));
   profileField('[data-profile="blackoutKills"]', number(stats.blackout?.kills));
   profileField('[data-profile="outbreakWave"]', number(stats.outbreak?.highestWave));
+}
+
+function renderAchievementsProfilePanel() {
+  const unlocked = unlockedLabAchievements();
+  const entries = Object.entries(LAB_ACHIEVEMENTS);
+  return `<section class="profile-achievements-block">
+    <header><div><span>PROGRESSÃO LOCAL</span><h3>CONQUISTAS</h3></div><strong>${unlocked.size}/${entries.length}</strong></header>
+    <div class="profile-achievements-list">${entries.map(([id, achievement]) => {
+      const progress = unlocked.get(id);
+      const completed = Boolean(progress);
+      const date = progress?.unlockedAt ? new Date(progress.unlockedAt).toLocaleDateString("pt-BR") : completed ? "REGISTRO ANTERIOR" : "REQUISITO PENDENTE";
+      return `<article class="${completed ? "is-unlocked" : "is-locked"}"><i aria-hidden="true">${completed ? "✓" : "◇"}</i><div><strong>${achievement.title}</strong><p>${achievement.description}</p><small>${completed ? `CONCLUÍDA · ${date}` : date}</small></div></article>`;
+    }).join("")}</div>
+  </section>`;
 }
 
 async function openPlayerProfile() {
@@ -13268,7 +13555,6 @@ function optionSection(title, children) {
 function setOptionValue(key, value) {
   optionsSettings[key] = value;
   queuePreferencesSync();
-  renderOptionsMenu();
 }
 
 function normalizedOptions(source) {
@@ -13301,7 +13587,10 @@ function applyMobileControlPreferences(source) {
 function setMobileAutofireEnabled(enabled) {
   optionsSettings.mobileAimMode = enabled ? "autofire" : "analog";
   queuePreferencesSync();
-  if (game.menuState === "options") renderOptionsMenu(true);
+  document.querySelectorAll('[data-option-key="mobileAimMode"]').forEach((control) => {
+    control.classList.toggle("is-active", enabled);
+    control.setAttribute("aria-pressed", String(enabled));
+  });
   showUxToast(
     enabled ? "O disparo automático está ligado." : "Use o botão de tiro para disparar manualmente.",
     { title: `AUTOFIRE // ${enabled ? "LIGADO" : "DESLIGADO"}`, tone: "info", duration: 1800 },
@@ -13325,6 +13614,7 @@ function applyOptionsRuntime(source) {
   document.documentElement.classList.toggle("ux-high-contrast", Boolean(next.highContrast));
   document.documentElement.classList.toggle("ux-large-text", Boolean(next.largeText));
   applyMobileControlPreferences(next);
+  if (menuMusic.element) syncMenuMusic(game.menuState !== "none");
   try { localStorage.setItem(OPTIONS_STORAGE_KEY, JSON.stringify(next)); } catch {}
   updateUi();
 }
@@ -13379,28 +13669,32 @@ function showOptionsFeedback(text) {
   optionsFeedback = text;
   const feedbackId = ++optionsFeedbackId;
   clearTimeout(optionsFeedbackTimer);
-  renderOptionsMenu(true);
+  const label = document.querySelector(".options-sync-feedback");
+  if (label) label.textContent = optionsFeedback;
   optionsFeedbackTimer = setTimeout(() => {
     if (feedbackId !== optionsFeedbackId) return;
     optionsFeedback = "";
-    if (game.menuState === "options") renderOptionsMenu(true);
+    const currentLabel = document.querySelector(".options-sync-feedback");
+    if (currentLabel) currentLabel.textContent = "";
   }, 2000);
 }
 
 function ToggleSwitch(label, key, activeLabel = "LIG", inactiveLabel = "DESL") {
   const active = Boolean(optionsSettings[key]);
-  const next = !active;
   const button = createOptionElement("button", `option-toggle ${active ? "is-active" : ""}`, active ? activeLabel : inactiveLabel);
   button.type = "button";
   // Este controle reproduz o feedback depois da mudança de estado. O marcador
   // impede que o listener global sobreponha o clique comum ao sinal LIG/DESL.
   button.dataset.audioCue = "handled";
   button.addEventListener("click", () => {
+    const next = !Boolean(optionsSettings[key]);
     const soundName = next ? "option_on" : "option_off";
     // Ao ativar o mudo, o sinal precisa tocar antes que a saída seja desligada;
     // ao desativá-lo, precisa tocar depois que o áudio voltar a ficar disponível.
     if (key === "muted" && next) playSound(soundName);
     setOptionValue(key, next);
+    button.classList.toggle("is-active", next);
+    button.textContent = next ? activeLabel : inactiveLabel;
     if (!(key === "muted" && next)) playSound(soundName);
   });
   attachButtonFeedback(button);
@@ -13412,7 +13706,10 @@ function ToggleGroup(label, key, options) {
   options.forEach((option) => {
     const button = createOptionElement("button", optionsSettings[key] === option.value ? "is-active" : "", option.label);
     button.type = "button";
-    button.addEventListener("click", () => setOptionValue(key, option.value));
+    button.addEventListener("click", () => {
+      setOptionValue(key, option.value);
+      group.querySelectorAll("button").forEach((candidate) => candidate.classList.toggle("is-active", candidate === button));
+    });
     attachButtonFeedback(button);
     group.appendChild(button);
   });
@@ -14026,7 +14323,7 @@ function applyDifficulty(difficulty) {
     game.allyCount = 2;
     game.enemyFireMultiplier = 1.85;
   } else if (difficulty === "normal") {
-    game.allyCount = 0;
+    game.allyCount = 1;
     game.enemyFireMultiplier = 1.35;
   } else {
     game.allyCount = 0;
@@ -14243,6 +14540,7 @@ function deployOutbreakWave(wave) {
   ui.outbreakShopFooter?.classList.add("hidden");
   game.outbreakWave = wave;
   if (wave >= 10) unlockLabAchievement("outbreakTen");
+  if (wave >= 20) unlockLabAchievement("outbreakTwenty");
   resetOutbreakGadget();
   game.outbreakWaveStartKills = Math.max(0, game.stats?.kills || 0);
   game.outbreakWaveCredits = 0;
@@ -14615,12 +14913,19 @@ function equipmentDurationLabel(item) {
   return item.outbreakOnly ? "VÁLIDO NO OUTBREAK" : "VÁLIDO NA PARTIDA";
 }
 
+function outbreakShopPrice(item, category = "equipment") {
+  if (!game.outbreak) return item.price;
+  if (category === "ally" && item.weaponId) return item.price;
+  return Math.max(0, item.price - 1000);
+}
+
 function buildShop() {
   renderWeaponCategoryTabs();
   renderWeaponCards();
 
   ui.equipmentButtons.innerHTML = "";
   for (const item of availableEquipment()) {
+    const effectivePrice = outbreakShopPrice(item);
     const button = document.createElement("button");
     button.className = "equip-card";
     const kind = item.outbreakOnly ? "Consumível Outbreak" : item.id.includes("Armor") ? "Consumível por round" : "Upgrade permanente";
@@ -14630,7 +14935,7 @@ function buildShop() {
       <b>${item.name}</b>
       <span>${kind}. ${item.desc}</span>
       <small class="equip-duration">${equipmentDurationLabel(item)}</small>
-      <span class="equip-card-action"><strong class="equip-card-state">COMPRAR</strong><em>$${item.price}</em></span>
+      <span class="equip-card-action"><strong class="equip-card-state">COMPRAR</strong><em>$${effectivePrice}</em></span>
     `;
     button.addEventListener("click", () => {
       if (game.phase !== "buy" && !game.sandbox) return;
@@ -14639,12 +14944,12 @@ function buildShop() {
         updateUi();
         return;
       }
-      if (game.money < item.price) {
-        announceShopResult(`Faltam $${item.price - game.money} para comprar ${item.name}.`);
+      if (game.money < effectivePrice) {
+        announceShopResult(`Faltam $${effectivePrice - game.money} para comprar ${item.name}.`);
         updateUi();
         return;
       }
-      game.money -= item.price;
+      game.money -= effectivePrice;
       item.apply();
       synchronizePlayerEquipment();
       game.player.ammo = Math.min(currentMagSize(), Math.max(game.player.ammo, currentMagSize()));
@@ -14696,23 +15001,24 @@ function allyCard(item, kind) {
   button.type = "button";
   button.dataset.allyItem = item.id;
   button.className = `ally-store-card ally-store-card-${kind}`;
+  const effectivePrice = outbreakShopPrice(item, "ally");
   if (kind === "unit") {
     const portrait = agentPresentation(agents[1] || agents[0]).icon;
     button.innerHTML = `
       <span class="ally-unit-visual"><i></i><img src="${portrait}" alt=""></span>
       <span class="ally-unit-copy"><small>UNIDADE DE SUPORTE</small><b>${item.name}</b><em>${item.desc}</em></span>
-      <span class="ally-card-action"><strong class="ally-card-state">RECRUTAR</strong><b class="ally-card-price">$${item.price}</b></span>`;
+      <span class="ally-card-action"><strong class="ally-card-state">RECRUTAR</strong><b class="ally-card-price">$${effectivePrice}</b></span>`;
   } else if (kind === "weapon") {
     const weapon = weapons.find((entry) => entry.id === item.weaponId) || weapons[0];
     button.innerHTML = `
       <span class="ally-weapon-art"><img src="${weaponImagePath(weapon)}" alt="${weapon.name}"></span>
       <span class="ally-card-copy"><b>${item.name}</b><small>${weapon.damage} DANO · ${weapon.mag} MUNIÇÕES</small></span>
-      <span class="ally-card-action"><strong class="ally-card-state">ADQUIRIR</strong><b class="ally-card-price">$${item.price}</b></span>`;
+      <span class="ally-card-action"><strong class="ally-card-state">ADQUIRIR</strong><b class="ally-card-price">$${effectivePrice}</b></span>`;
   } else {
     button.innerHTML = `
       <span class="ally-system-icon">${allySystemIcon(item.id)}</span>
       <span class="ally-card-copy"><b>${item.name}</b><small>${item.desc}</small></span>
-      <span class="ally-card-action"><strong class="ally-card-state">INSTALAR</strong><b class="ally-card-price">$${item.price}</b></span>`;
+      <span class="ally-card-action"><strong class="ally-card-state">INSTALAR</strong><b class="ally-card-price">$${effectivePrice}</b></span>`;
   }
   button.addEventListener("click", () => buyAllyItem(item));
   return button;
@@ -14760,6 +15066,7 @@ function buyAllyItem(item) {
     updateUi();
     return;
   }
+  const effectivePrice = outbreakShopPrice(item, "ally");
   const weaponOwned = item.weaponId && game.allyLoadout.ownedWeapons.has(item.weaponId);
   if (weaponOwned) {
     game.allyLoadout.weaponId = item.weaponId;
@@ -14769,12 +15076,12 @@ function buyAllyItem(item) {
       updateUi();
       return;
     }
-    if (game.money < item.price) {
-      announceShopResult(`Faltam $${item.price - game.money} para adquirir ${item.name}.`);
+    if (game.money < effectivePrice) {
+      announceShopResult(`Faltam $${effectivePrice - game.money} para adquirir ${item.name}.`);
       updateUi();
       return;
     }
-    game.money -= item.price;
+    game.money -= effectivePrice;
     item.apply();
   }
   const allyWeapon = weapons.find((weapon) => weapon.id === game.allyLoadout.weaponId) || weapons[0];
@@ -14815,21 +15122,22 @@ function buyOutbreakUlt(item) {
 }
 
 function updateEquipmentCardState(button, item) {
+  const effectivePrice = outbreakShopPrice(item);
   const owned = equipmentOwned(item);
-  const cantAfford = !owned && game.money < item.price;
+  const cantAfford = !owned && game.money < effectivePrice;
   button.classList.toggle("active", owned);
   button.classList.toggle("owned", owned);
   button.classList.toggle("cant-afford", cantAfford);
   button.disabled = !canUseShop() || owned;
   const state = button.querySelector(".equip-card-state");
   const price = button.querySelector(".equip-card-action em");
-  if (state) state.textContent = owned ? "ATIVO" : cantAfford ? `FALTAM $${item.price - game.money}` : "COMPRAR";
-  if (price) price.textContent = owned ? "OBTIDO" : `$${item.price}`;
+  if (state) state.textContent = owned ? "ATIVO" : cantAfford ? `FALTAM $${effectivePrice - game.money}` : "COMPRAR";
+  if (price) price.textContent = owned ? "OBTIDO" : `$${effectivePrice}`;
   const explanation = owned
     ? `${item.name} já está ativo.`
     : cantAfford
-      ? `Faltam ${item.price - game.money} créditos.`
-      : `${item.name} disponível por ${item.price} créditos.`;
+      ? `Faltam ${effectivePrice - game.money} créditos.`
+      : `${item.name} disponível por ${effectivePrice} créditos.`;
   button.title = explanation;
   button.setAttribute("aria-label", explanation);
 }
@@ -15057,26 +15365,27 @@ function updateShopState() {
   ui.allyButtons?.querySelectorAll("[data-ally-item]").forEach((button) => {
     const item = allyItemsForCurrentMode().find((entry) => entry.id === button.dataset.allyItem);
     if (!item) return;
+    const effectivePrice = outbreakShopPrice(item, "ally");
     const owned = allyItemOwned(item);
     const active = item.weaponId ? game.allyLoadout.weaponId === item.weaponId : owned;
     const locked = game.outbreak && item.id !== "allyUnit" && !game.allyLoadout.recruited;
     button.classList.toggle("active", active);
     button.classList.toggle("owned", owned);
     button.classList.toggle("locked", locked);
-    button.classList.toggle("cant-afford", !owned && game.money < item.price);
+    button.classList.toggle("cant-afford", !owned && game.money < effectivePrice);
     const status = button.querySelector(".ally-card-state");
     const price = button.querySelector(".ally-card-price");
     if (status) status.textContent = active ? "ATIVO" : owned ? "EQUIPAR" : locked ? "BLOQUEADO" : item.id === "allyUnit" ? "RECRUTAR" : "ADQUIRIR";
-    if (price) price.textContent = owned ? "OBTIDO" : `$${item.price}`;
+    if (price) price.textContent = owned ? "OBTIDO" : `$${effectivePrice}`;
     button.title = locked
       ? "Recrute primeiro uma unidade aliada."
       : active
         ? `${item.name} está ativo.`
         : owned
           ? `Equipar ${item.name} sem custo.`
-          : game.money < item.price
-            ? `Faltam ${item.price - game.money} créditos.`
-            : `Adquirir ${item.name} por ${item.price} créditos.`;
+          : game.money < effectivePrice
+            ? `Faltam ${effectivePrice - game.money} créditos.`
+            : `Adquirir ${item.name} por ${effectivePrice} créditos.`;
     button.setAttribute("aria-label", button.title);
   });
   [...(ui.ultButtons?.children || [])].forEach((card, i) => {

@@ -4,6 +4,8 @@ const { authenticatedWriteLimiter } = require('../middleware/security');
 
 const router = express.Router();
 router.get('/', controller.getProfile);
+router.get('/daily-login', controller.getDailyLogin);
+router.post('/daily-login/claim', authenticatedWriteLimiter, controller.claimDailyLogin);
 router.post('/skins/:skinId/purchase', authenticatedWriteLimiter, controller.purchaseSkin);
 router.put('/inventory/:weaponId', authenticatedWriteLimiter, controller.equipSkin);
 router.post('/gadgets/:gadgetId/purchase', authenticatedWriteLimiter, controller.purchaseGadget);

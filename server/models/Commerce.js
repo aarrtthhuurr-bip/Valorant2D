@@ -12,6 +12,13 @@ function todayUtc() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function acceptedLocalDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) return todayUtc();
+  const requested = new Date(`${value}T12:00:00Z`);
+  const today = new Date(`${todayUtc()}T12:00:00Z`);
+  return Math.abs(requested - today) <= 86400000 ? value : todayUtc();
+}
+
 function normalizeCode(value) {
   return typeof value === 'string' ? value.normalize('NFKC').trim().toUpperCase() : '';
 }
@@ -47,6 +54,58 @@ function serializeMission(row) {
 }
 
 class Commerce {
+  static async dailyLoginStatus(userId, localDate) {
+    const date = acceptedLocalDate(localDate);
+    const state = await database.get('SELECT streak, last_claim_date FROM daily_login_state WHERE user_id = $1', [userId]);
+    const lastDate = state?.last_claim_date ? new Date(state.last_claim_date).toISOString().slice(0, 10) : null;
+    const elapsed = lastDate ? Math.round((new Date(`${date}T12:00:00Z`) - new Date(`${lastDate}T12:00:00Z`)) / 86400000) : null;
+    const currentStreak = Number(state?.streak) || 0;
+    const nextDay = elapsed === 1 ? currentStreak % 7 + 1 : elapsed === 0 ? currentStreak : 1;
+    return { available: elapsed !== 0, currentDay: nextDay, streak: currentStreak, lastClaimDate: lastDate };
+  }
+
+  static async claimDailyLogin(userId, localDate) {
+    const date = acceptedLocalDate(localDate);
+    const client = await database.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const stateResult = await client.query('SELECT streak, last_claim_date FROM daily_login_state WHERE user_id = $1 FOR UPDATE', [userId]);
+      const state = stateResult.rows[0];
+      const lastDate = state?.last_claim_date ? new Date(state.last_claim_date).toISOString().slice(0, 10) : null;
+      if (lastDate === date) { await client.query('ROLLBACK'); return { error: 'DAILY_ALREADY_CLAIMED' }; }
+      if (lastDate && date < lastDate) { await client.query('ROLLBACK'); return { error: 'DAILY_ALREADY_CLAIMED' }; }
+      const elapsed = lastDate ? Math.round((new Date(`${date}T12:00:00Z`) - new Date(`${lastDate}T12:00:00Z`)) / 86400000) : null;
+      const day = elapsed === 1 ? (Number(state?.streak) || 0) % 7 + 1 : 1;
+      let reward = { type: 'core', amount: [25, 0, 0, 50, 0, 75, 0][day - 1] };
+      if (day === 2 || day === 5) {
+        const gadgetId = day === 2 ? 'cryoMine' : 'adrenaline';
+        const inserted = await client.query('INSERT INTO user_gadgets (user_id, gadget_id, paid_price) VALUES ($1, $2, 0) ON CONFLICT DO NOTHING RETURNING gadget_id', [userId, gadgetId]);
+        reward = inserted.rowCount
+          ? { type: 'gadget', id: gadgetId, name: BLACK_MARKET_BY_ID.get(gadgetId)?.name || gadgetId }
+          : { type: 'core', amount: day === 2 ? 40 : 90 };
+      } else if (day === 3 || day === 7) {
+        const owned = await client.query('SELECT skin_id FROM user_skins WHERE user_id = $1', [userId]);
+        const ownedIds = new Set(owned.rows.map((row) => row.skin_id));
+        const candidates = SKIN_CATALOG.filter((skin) => !ownedIds.has(skin.id));
+        const skin = candidates[(userId * 31 + Number(date.replaceAll('-', '')) + day) % Math.max(1, candidates.length)];
+        if (skin) {
+          await client.query('INSERT INTO user_skins (user_id, skin_id, paid_price) VALUES ($1, $2, NULL) ON CONFLICT DO NOTHING', [userId, skin.id]);
+          reward = { type: 'skin', id: skin.id, name: skin.name, imagePath: skin.imagePath };
+        } else reward = { type: 'core', amount: 150 };
+      }
+      if (reward.type === 'core') {
+        await client.query('UPDATE users SET core_balance = core_balance + $1, core_earned_total = core_earned_total + $1 WHERE id = $2', [reward.amount, userId]);
+      }
+      await client.query(`INSERT INTO daily_login_state (user_id, streak, last_claim_date, cycle_started_at)
+        VALUES ($1, $2, $3, $3) ON CONFLICT (user_id) DO UPDATE SET streak = EXCLUDED.streak, last_claim_date = EXCLUDED.last_claim_date,
+        cycle_started_at = CASE WHEN EXCLUDED.streak = 1 THEN EXCLUDED.cycle_started_at ELSE daily_login_state.cycle_started_at END, updated_at = CURRENT_TIMESTAMP`, [userId, day, date]);
+      await client.query('INSERT INTO daily_login_claims (user_id, claim_date, cycle_day, reward_type, reward_value) VALUES ($1,$2,$3,$4,$5)', [userId, date, day, reward.type, String(reward.id || reward.amount)]);
+      const balance = await client.query('SELECT core_balance FROM users WHERE id = $1', [userId]);
+      await client.query('COMMIT');
+      return { day, reward, coreBalance: Number(balance.rows[0].core_balance) };
+    } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
+  }
+
   static async profile(userId) {
     const client = await database.pool.connect();
     try {
