@@ -402,11 +402,25 @@
           <nav class="commerce-tabs" id="commerceTabs" aria-label="Módulos da loja">
             <button type="button" data-commerce-tab="skins">Skins</button>
             <button type="button" data-commerce-tab="inventory">Inventário</button>
-            <button type="button" data-commerce-tab="missions">Missões</button>
             <button type="button" data-commerce-tab="codes">Códigos</button>
           </nav>
           <div class="commerce-content" id="commerceContent" aria-live="polite"></div>
           <div class="commerce-feedback" id="commerceFeedback" role="status" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section class="commerce-overlay missions-overlay hidden" id="missionsOverlay" aria-labelledby="missionsTitle" aria-hidden="true">
+        <div class="commerce-shell missions-shell" role="dialog" aria-modal="true">
+          <header class="commerce-header missions-header">
+            <div><span>CONTRATOS DO AGENTE</span><h2 id="missionsTitle">Missões</h2></div>
+            <div class="commerce-header-actions">
+              <div class="core-wallet"><span class="core-icon" aria-hidden="true"><img src="./assets/images/core_v5_bright.png" alt=""></span><strong id="missionsCoreBalance">0</strong><em>C</em></div>
+              <button type="button" id="missionsCloseButton" aria-label="Fechar missões">×</button>
+            </div>
+          </header>
+          <div class="missions-summary"><span>CICLO DIÁRIO</span><p>Conclua objetivos durante as partidas e resgate as recompensas disponíveis.</p></div>
+          <div class="commerce-content missions-content" id="missionsContent" aria-live="polite"></div>
+          <div class="commerce-feedback" id="missionsFeedback" role="status" aria-live="polite"></div>
         </div>
       </section>
 

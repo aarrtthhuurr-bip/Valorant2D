@@ -230,6 +230,11 @@ const ui = {
   commerceFeedback: document.getElementById("commerceFeedback"),
   commerceCloseButton: document.getElementById("commerceCloseButton"),
   storeCoreBalance: document.getElementById("storeCoreBalance"),
+  missionsOverlay: document.getElementById("missionsOverlay"),
+  missionsContent: document.getElementById("missionsContent"),
+  missionsFeedback: document.getElementById("missionsFeedback"),
+  missionsCloseButton: document.getElementById("missionsCloseButton"),
+  missionsCoreBalance: document.getElementById("missionsCoreBalance"),
   blackMarketTrigger: document.getElementById("blackMarketTrigger"),
   blackMarketOverlay: document.getElementById("blackMarketOverlay"),
   blackMarketCloseButton: document.getElementById("blackMarketCloseButton"),
@@ -273,7 +278,7 @@ const ui = {
  * aplicada ao Canvas de 1280 x 720. Isso preserva a leitura em telas estreitas.
  */
 function mountViewportOverlays() {
-  for (const overlay of [ui.authOverlay, ui.welcomeOverlay, ui.updatesOverlay, ui.modeInfoOverlay, ui.menuTourLayer, ui.matchOverlay, ui.pauseOverlay, ui.playerProfileOverlay, ui.globalRankingOverlay, ui.mobileOrientationHint]) {
+  for (const overlay of [ui.authOverlay, ui.welcomeOverlay, ui.updatesOverlay, ui.modeInfoOverlay, ui.menuTourLayer, ui.matchOverlay, ui.pauseOverlay, ui.playerProfileOverlay, ui.globalRankingOverlay, ui.missionsOverlay, ui.mobileOrientationHint]) {
     if (overlay && ui.gameRoot && overlay.parentElement !== ui.gameRoot) ui.gameRoot.appendChild(overlay);
   }
 }
@@ -908,6 +913,7 @@ function updateCoreBalances(balance) {
   const visibleBalance = confirmedCoreBalance + currentPendingCoreTotal();
   if (ui.mainCoreBalance) ui.mainCoreBalance.textContent = visibleBalance.toLocaleString("pt-BR");
   if (ui.storeCoreBalance) ui.storeCoreBalance.textContent = visibleBalance.toLocaleString("pt-BR");
+  if (ui.missionsCoreBalance) ui.missionsCoreBalance.textContent = visibleBalance.toLocaleString("pt-BR");
 }
 
 function applyCommerceProfile(profile) {
@@ -989,7 +995,7 @@ function commerceSkinCard(skin, { offer = false, inventory = false } = {}) {
   const owned = commerceState.profile?.ownedSkinIds?.includes(skin.id);
   const equipped = commerceState.profile?.equippedSkins?.[skin.weaponId] === skin.id;
   const card = document.createElement("article");
-  card.className = `skin-card${owned ? " is-owned" : ""}${equipped ? " is-equipped" : ""}`;
+  card.className = `skin-card${owned ? " is-owned" : ""}${equipped ? " is-equipped" : ""}${inventory && !owned ? " is-locked" : ""}`;
   const price = Number(skin.price) || 0;
   card.innerHTML = `
     ${offer ? `<span class="skin-discount">-${Number(skin.discountPercent) || 0}%</span>` : ""}
@@ -1000,9 +1006,9 @@ function commerceSkinCard(skin, { offer = false, inventory = false } = {}) {
   action.type = "button";
   if (inventory) {
     action.className = "inventory-action";
-    action.textContent = equipped ? "EQUIPADO" : "EQUIPAR";
-    action.disabled = equipped || commerceState.busy;
-    action.addEventListener("click", () => equipCommerceSkin(skin));
+    action.textContent = !owned ? "BLOQUEADA" : equipped ? "EQUIPADA" : "EQUIPAR";
+    action.disabled = !owned || equipped || commerceState.busy;
+    if (owned) action.addEventListener("click", () => equipCommerceSkin(skin));
   } else {
     action.textContent = owned ? "ADQUIRIDA" : "COMPRAR";
     action.disabled = owned || commerceState.busy;
@@ -1040,13 +1046,13 @@ function renderCommerceSkins() {
 
 function renderCommerceInventory() {
   const profile = commerceState.profile;
-  const owned = profile.catalog.filter((skin) => profile.ownedSkinIds.includes(skin.id));
+  const collection = profile.catalog;
   ui.commerceContent.innerHTML = '<div class="commerce-section-title"><div><span>COLEÇÃO</span><h3>Inventário</h3></div></div>';
-  if (!owned.length) {
+  if (!collection.length) {
     ui.commerceContent.insertAdjacentHTML("beforeend", '<div class="inventory-empty">Sua coleção ainda está vazia.<br>Adquira skins no primeiro módulo da loja.</div>');
     return;
   }
-  const groups = Map.groupBy ? Map.groupBy(owned, (skin) => skin.weaponId) : owned.reduce((map, skin) => map.set(skin.weaponId, [...(map.get(skin.weaponId) || []), skin]), new Map());
+  const groups = Map.groupBy ? Map.groupBy(collection, (skin) => skin.weaponId) : collection.reduce((map, skin) => map.set(skin.weaponId, [...(map.get(skin.weaponId) || []), skin]), new Map());
   for (const [weaponId, skins] of groups) {
     const section = document.createElement("section");
     section.className = "inventory-group";
@@ -1057,9 +1063,10 @@ function renderCommerceInventory() {
   }
 }
 
-function renderCommerceMissions() {
-  ui.commerceContent.innerHTML = '<div class="commerce-section-title"><div><span>CICLO DIÁRIO</span><h3>Missões</h3></div></div><div class="mission-grid"></div>';
-  const grid = ui.commerceContent.querySelector(".mission-grid");
+function renderCommerceMissions(target = ui.missionsContent) {
+  if (!target) return;
+  target.innerHTML = '<div class="commerce-section-title"><div><span>OBJETIVOS ATIVOS</span><h3>Contratos disponíveis</h3></div></div><div class="mission-grid"></div>';
+  const grid = target.querySelector(".mission-grid");
   for (const mission of commerceState.profile.missions || []) {
     const ratio = Math.min(100, Math.round((mission.progress / Math.max(1, mission.target)) * 100));
     const card = document.createElement("article");
@@ -1103,8 +1110,32 @@ function renderCommerceTab() {
   }
   if (commerceState.tab === "skins") renderCommerceSkins();
   if (commerceState.tab === "inventory") renderCommerceInventory();
-  if (commerceState.tab === "missions") renderCommerceMissions();
   if (commerceState.tab === "codes") renderCommerceCodes();
+}
+
+async function openMissionsModal() {
+  hideMenuTour();
+  ui.menuOverlay?.classList.add("hidden");
+  ui.mainCoreWallet?.classList.add("hidden");
+  ui.missionsOverlay?.classList.remove("hidden");
+  ui.missionsOverlay?.setAttribute("aria-hidden", "false");
+  game.menuState = "missions";
+  game.paused = true;
+  if (ui.missionsContent) ui.missionsContent.innerHTML = '<div class="commerce-loading"><span>Atualizando missões...</span></div>';
+  if (ui.missionsFeedback) ui.missionsFeedback.textContent = "";
+  try {
+    const profile = await refreshCommerceProfile();
+    if (profile) renderCommerceMissions();
+    else if (ui.missionsContent) ui.missionsContent.innerHTML = '<div class="inventory-empty">Entre com uma conta para acompanhar e resgatar missões.</div>';
+  } catch (error) {
+    if (ui.missionsContent) ui.missionsContent.innerHTML = `<div class="inventory-empty">${error.message}</div>`;
+  }
+}
+
+function closeMissionsModal() {
+  ui.missionsOverlay?.classList.add("hidden");
+  ui.missionsOverlay?.setAttribute("aria-hidden", "true");
+  showMainMenu();
 }
 
 async function commerceMutation(path, options, successMessage, { successSound = "" } = {}) {
@@ -1134,7 +1165,16 @@ function purchaseCommerceSkin(skinId) {
 }
 function equipCommerceSkin(skin) { return commerceMutation(`/api/commerce/inventory/${encodeURIComponent(skin.weaponId)}`, { method: "PUT", body: JSON.stringify({ skinId: skin.id }) }, () => `${skin.name} equipada.`); }
 function restoreDefaultSkin(weaponId) { return commerceMutation(`/api/commerce/inventory/${encodeURIComponent(weaponId)}`, { method: "PUT", body: JSON.stringify({ skinId: null }) }, () => "Visual padrão restaurado."); }
-function claimCommerceMission(id) { return commerceMutation(`/api/commerce/missions/${encodeURIComponent(id)}/claim`, { method: "POST", body: "{}" }, (data) => `${data.reward} C adicionados à conta.`); }
+async function claimCommerceMission(id) {
+  await commerceMutation(`/api/commerce/missions/${encodeURIComponent(id)}/claim`, { method: "POST", body: "{}" }, (data) => `${data.reward} C adicionados à conta.`);
+  if (!ui.missionsOverlay?.classList.contains("hidden")) {
+    renderCommerceMissions();
+    if (ui.missionsFeedback) {
+      ui.missionsFeedback.textContent = "Recompensa resgatada e saldo atualizado.";
+      ui.missionsFeedback.className = "commerce-feedback is-success";
+    }
+  }
+}
 function redeemCommerceCode(code) { return commerceMutation("/api/commerce/codes/redeem", { method: "POST", body: JSON.stringify({ code }) }, (data) => `Código resgatado: +${data.reward} C.`); }
 function createCommerceCode(code, coreAmount) { return commerceMutation("/api/commerce/admin/codes", { method: "POST", body: JSON.stringify({ code, coreAmount }) }, (data) => `Código ${data.code.code_display} criado com ${data.code.core_amount} C.`); }
 
@@ -1968,7 +2008,6 @@ const audio = {
 };
 const MENU_MUSIC_TRACKS = [
   "./assets/musics/4 Months_1msIcFmuy8NadZMakq26Jz.mp3",
-  "./assets/musics/46_3S7RcBtWJkT2vLIIjGEak2.mp3",
   "./assets/musics/Above The Quiet City_1XsaRWIlKXelii72Y2M9bR.mp3",
   "./assets/musics/Afterglow_0CQgrW8jCGY3l5h37v1Rs9.mp3",
   "./assets/musics/analog dreams_5h96Ai7Ef7ll9142dnOukV.mp3",
@@ -2001,11 +2040,15 @@ function ensureMenuMusic() {
   const element = new Audio(MENU_MUSIC_TRACKS[0]);
   element.preload = "metadata";
   element.loop = false;
-  element.addEventListener("ended", () => {
+  const advanceTrack = () => {
     menuMusic.index = (menuMusic.index + 1) % MENU_MUSIC_TRACKS.length;
     element.src = MENU_MUSIC_TRACKS[menuMusic.index];
     void element.play().catch(() => {});
-  });
+  };
+  element.addEventListener("ended", advanceTrack);
+  // Se um asset for removido, a playlist ignora a faixa inválida em vez de
+  // interromper permanentemente toda a música do menu.
+  element.addEventListener("error", advanceTrack);
   menuMusic.element = element;
   return element;
 }
@@ -5794,18 +5837,9 @@ function moveEntity(entity, dx, dy, walls) {
     || (includeDestructibles && game.destructibles.some((wall) => circleRectCollides(entity, wall)));
   const startX = entity.x;
   const startY = entity.y;
-  if (labEnabled("slidingCollision") && entity.id === "player" && dx && dy) {
-    entity.x += dx;
-    entity.y += dy;
-    if (!collidesWithScenario()) {
-      entity.x = Math.max(entity.r, Math.min(map.width - entity.r, entity.x));
-      entity.y = Math.max(entity.r, Math.min(map.height - entity.r, entity.y));
-      return Math.hypot(entity.x - startX, entity.y - startY);
-    }
-    entity.x = startX;
-    entity.y = startY;
-    // Resolve primeiro o eixo com maior intenção e preserva o tangencial.
-    // Isso evita prender o círculo nas quinas sem permitir atravessar paredes.
+  if (labEnabled("slidingCollision") && entity.id === "player") {
+    // Resolve cada componente separadamente. A componente perpendicular à
+    // parede é cancelada, enquanto a tangencial continua produzindo movimento.
     const attempts = Math.abs(dx) >= Math.abs(dy)
       ? [{ x: dx, y: 0 }, { x: 0, y: dy }]
       : [{ x: 0, y: dy }, { x: dx, y: 0 }];
@@ -5815,6 +5849,22 @@ function moveEntity(entity, dx, dy, walls) {
       if (collidesWithScenario()) {
         entity.x -= attempt.x;
         entity.y -= attempt.y;
+      }
+    }
+    // Uma tolerância subpixel evita que erros de arredondamento mantenham o
+    // círculo encostado dentro da quina após mudanças rápidas de direção.
+    if (Math.hypot(entity.x - startX, entity.y - startY) < 0.001 && dx && dy) {
+      const tangentAttempts = [
+        { x: Math.sign(dx) * Math.min(1.25, Math.abs(dx)), y: 0 },
+        { x: 0, y: Math.sign(dy) * Math.min(1.25, Math.abs(dy)) },
+      ];
+      for (const tangent of tangentAttempts) {
+        entity.x += tangent.x;
+        entity.y += tangent.y;
+        if (collidesWithScenario()) {
+          entity.x -= tangent.x;
+          entity.y -= tangent.y;
+        }
       }
     }
     entity.x = Math.max(entity.r, Math.min(map.width - entity.r, entity.x));
@@ -7344,6 +7394,7 @@ function completeOrbCollection(entity, orb) {
    }
    entity.orbChannel = null;
    entity.orbAssignment = null;
+   entity.orbSeekStartedAt = 0;
    if (orb) orb.reservadaPor = null;
    game.ultOrbs = game.ultOrbs.filter((item) => item !== orb);
    game.ultimateEffects.push({ type: "orb-beam", x: orb.x, y: orb.y, color: "#bd67ff", life: 1.5, maxLife: 1.5, radius: 12 });
@@ -7391,6 +7442,7 @@ function releaseEntityOrbReservation(entity) {
   if (reservedOrb?.reservadaPor === entity.id) reservedOrb.reservadaPor = null;
   entity.orbAssignment = null;
   entity.orbChannel = null;
+  entity.orbSeekStartedAt = 0;
 }
 
 function updateOrbReservations() {
@@ -7415,8 +7467,10 @@ function reserveOrbForEntity(entity, orb) {
   const owner = orbReservationOwner(orb);
   if (owner && owner.id !== entity.id) return false;
   if (entity.orbAssignment && entity.orbAssignment !== orb.id) releaseEntityOrbReservation(entity);
+  const changedTarget = entity.orbAssignment !== orb.id;
   orb.reservadaPor = entity.id;
   entity.orbAssignment = orb.id;
+  if (changedTarget) entity.orbSeekStartedAt = 0;
   return true;
 }
 
@@ -8447,6 +8501,8 @@ function seekCriticalMedkit(entity, dt, danger) {
 }
 
 function seekUltimateOrb(entity, dt) {
+   const now = performance.now();
+   if ((entity.orbRetryAfter || 0) > now) return false;
    if (game.spike.state === "planted" || getUltimatePoints(entity) >= ULT_MAX_POINTS || !game.ultOrbs.length) {
      releaseEntityOrbReservation(entity);
      return false;
@@ -8458,11 +8514,26 @@ function seekUltimateOrb(entity, dt) {
      .sort((a, b) => Math.hypot(entity.x - a.x, entity.y - a.y) - Math.hypot(entity.x - b.x, entity.y - b.y))[0];
    if (!targetOrb || !reserveOrbForEntity(entity, targetOrb)) return false;
    entity.aiState = "seek-ult";
-   if (Math.hypot(entity.x - targetOrb.x, entity.y - targetOrb.y) > entity.r + 22) {
+   const distance = Math.hypot(entity.x - targetOrb.x, entity.y - targetOrb.y);
+   if (distance <= entity.r + 34 && !entity.orbSeekStartedAt) entity.orbSeekStartedAt = now;
+   if (distance > entity.r + 34) entity.orbSeekStartedAt = 0;
+   if (entity.orbSeekStartedAt && now - entity.orbSeekStartedAt > 2500) {
+     releaseEntityOrbReservation(entity);
+     entity.orbRetryAfter = now + 1400;
+     entity.aiState = "patrol";
+     entity.moving = true;
+     return false;
+   }
+   if (distance > entity.r + 22) {
      moveBotToward(entity, targetOrb, dt, 1.04);
    } else {
      entity.moving = false;
      entity.angle = Math.atan2(targetOrb.y - entity.y, targetOrb.x - entity.x);
+     // Bots concluem a interação ao alcançar o raio; não dependem de uma
+     // tecla virtual nem permanecem presos num loop de canalização.
+     completeOrbCollection(entity, targetOrb);
+     entity.aiState = "patrol";
+     entity.orbRetryAfter = now + 450;
    }
    return true;
  }
@@ -12082,6 +12153,7 @@ function loadSandboxConfig() {
 }
 
 function activeGuidanceDialog() {
+  if (!ui.missionsOverlay?.classList.contains("hidden")) return ui.missionsOverlay.querySelector(".missions-shell");
   if (!document.getElementById("dailyLoginOverlay")?.classList.contains("hidden")) return document.querySelector(".daily-login-modal");
   if (!ui.blackMarketOverlay?.classList.contains("hidden")) return ui.blackMarketOverlay.querySelector(".black-market-shell");
   if (!ui.playerProfileOverlay?.classList.contains("hidden")) return ui.playerProfileOverlay.querySelector(".player-profile-modal");
@@ -12109,6 +12181,10 @@ function trapGuidanceFocus(event, dialog) {
 }
 
 function handleEscape() {
+  if (!ui.missionsOverlay?.classList.contains("hidden")) {
+    closeMissionsModal();
+    return;
+  }
   if (!document.getElementById("dailyLoginOverlay")?.classList.contains("hidden")) {
     document.getElementById("dailyLoginOverlay")?.classList.add("hidden");
     return;
@@ -12746,7 +12822,7 @@ function showMainMenu() {
     { label: "JOGAR", description: lastModeLabel ? `ÚLTIMO: ${lastModeLabel}` : "ESCOLHA SEU MODO", icon: "gamepad", badge: unseenContent("modes-v2"), action: showModeSelect, onboardingTarget: "play", audioCue: "play_action" },
     { label: "OPÇÕES", icon: "tools", action: showOptionsMenu },
     { label: "LOJA", icon: "store", badge: unseenContent("commerce-v2"), action: openCommerceStore, onboardingTarget: "store" },
-    { label: "MISSÕES", icon: "missions", badge: hasClaimableMissions(), action: () => { commerceState.tab = "missions"; openCommerceStore(); } },
+    { label: "MISSÕES", icon: "missions", badge: hasClaimableMissions(), action: openMissionsModal },
     { label: "RANKING", icon: "trophy", action: openGlobalRanking },
   ];
   if (deferredPwaInstallPrompt && !isPwaInstalled()) {
@@ -13313,6 +13389,7 @@ const difficultyIdByMode = {
 };
 
 let currentDifficulty = "medio";
+let difficultyLaunchPending = false;
 
 function difficultyStarSvg(filled) {
   const fill = filled ? "#ff4655" : "none";
@@ -13326,6 +13403,7 @@ function difficultyStarSvg(filled) {
 
 function renderDifficultyMenu() {
   if (!ui.menuButtons) return;
+  difficultyLaunchPending = false;
   currentDifficulty = difficultyIdByMode[game.difficulty] || "medio";
   ui.menuButtons.innerHTML = "";
   ui.menuButtons.className = "difficulty-wrap";
@@ -13350,10 +13428,12 @@ function renderDifficultyMenu() {
         ${[1, 2, 3].map((star) => difficultyStarSvg(star <= option.stars)).join("")}
       </div>
       <div class="difficulty-card-name">${option.label}</div>`;
-    card.addEventListener("click", () => pickDifficulty(option.id));
-    card.addEventListener("dblclick", () => {
+    card.addEventListener("click", () => {
+      if (difficultyLaunchPending) return;
+      difficultyLaunchPending = true;
       pickDifficulty(option.id);
-      startSelectedDifficulty();
+      card.classList.add("is-confirming");
+      window.setTimeout(startSelectedDifficulty, 140);
     });
     cards.appendChild(card);
   }
@@ -13410,7 +13490,11 @@ function animateDifficultyStars(id, count) {
 }
 
 function startSelectedDifficulty() {
+  if (game.menuState !== "difficulty") return;
   const option = DIFFICULTY_OPTIONS.find((item) => item.id === currentDifficulty) || DIFFICULTY_OPTIONS[1];
+  // Trava imediatamente o estado para impedir dois inícios caso o jogador
+  // toque no card e no botão de confirmação durante a curta transição visual.
+  game.menuState = "difficulty-launch";
   startMode(option.mode, option.difficulty);
 }
 
@@ -15830,6 +15914,10 @@ ui.modeInfoOverlay?.addEventListener("pointerdown", (event) => {
 ui.menuTourNextButton?.addEventListener("click", advanceMenuTour);
 ui.menuTourSkipButton?.addEventListener("click", () => void finishMenuTour());
 ui.commerceCloseButton?.addEventListener("click", closeCommerceStore);
+ui.missionsCloseButton?.addEventListener("click", closeMissionsModal);
+ui.missionsOverlay?.addEventListener("pointerdown", (event) => {
+  if (event.target === ui.missionsOverlay) closeMissionsModal();
+});
 let lastBlackMarketPreviewSoundAt = 0;
 const previewBlackMarketAccess = () => {
   const now = performance.now();
