@@ -8517,7 +8517,11 @@ function seekUltimateOrb(entity, dt) {
    const distance = Math.hypot(entity.x - targetOrb.x, entity.y - targetOrb.y);
    if (distance <= entity.r + 34 && !entity.orbSeekStartedAt) entity.orbSeekStartedAt = now;
    if (distance > entity.r + 34) entity.orbSeekStartedAt = 0;
-   if (entity.orbSeekStartedAt && now - entity.orbSeekStartedAt > 2500) {
+   // A tolerância adicional ocorre somente depois do tempo normal de
+   // canalização. Assim o bot coleta durante os mesmos 3 segundos do jogador,
+   // mas ainda abandona a tentativa caso a interação realmente emperre.
+   const orbCollectionTimeout = ORB_CHANNEL_TIME * 1000 + 2500;
+   if (entity.orbSeekStartedAt && now - entity.orbSeekStartedAt > orbCollectionTimeout) {
      releaseEntityOrbReservation(entity);
      entity.orbRetryAfter = now + 1400;
      entity.aiState = "patrol";
@@ -8529,11 +8533,13 @@ function seekUltimateOrb(entity, dt) {
    } else {
      entity.moving = false;
      entity.angle = Math.atan2(targetOrb.y - entity.y, targetOrb.x - entity.x);
-     // Bots concluem a interação ao alcançar o raio; não dependem de uma
-     // tecla virtual nem permanecem presos num loop de canalização.
-     completeOrbCollection(entity, targetOrb);
-     entity.aiState = "patrol";
-     entity.orbRetryAfter = now + 450;
+     updateOrbChannel(entity, targetOrb, dt);
+     if (!game.ultOrbs.includes(targetOrb)) {
+       entity.aiState = "patrol";
+       entity.orbRetryAfter = now + 450;
+     } else {
+       entity.aiState = "collect-ult";
+     }
    }
    return true;
  }
