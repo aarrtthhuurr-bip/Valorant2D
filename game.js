@@ -278,7 +278,28 @@ const ui = {
  * aplicada ao Canvas de 1280 x 720. Isso preserva a leitura em telas estreitas.
  */
 function mountViewportOverlays() {
-  for (const overlay of [ui.authOverlay, ui.welcomeOverlay, ui.updatesOverlay, ui.modeInfoOverlay, ui.menuTourLayer, ui.matchOverlay, ui.pauseOverlay, ui.playerProfileOverlay, ui.globalRankingOverlay, ui.missionsOverlay, ui.mobileOrientationHint]) {
+  // Menus e modais não podem herdar a escala do palco lógico de 1280x720.
+  // Fora de #game-viewport eles respondem diretamente à viewport física,
+  // enquanto HUD, controles e Canvas continuam sincronizados no mesmo palco.
+  const viewportOverlays = [
+    ui.authOverlay,
+    ui.menuOverlay,
+    ui.agentOverlay,
+    ui.welcomeOverlay,
+    ui.updatesOverlay,
+    ui.modeInfoOverlay,
+    ui.menuTourLayer,
+    ui.commerceOverlay,
+    ui.missionsOverlay,
+    ui.blackMarketOverlay,
+    document.getElementById("dailyLoginOverlay"),
+    ui.matchOverlay,
+    ui.pauseOverlay,
+    ui.playerProfileOverlay,
+    ui.globalRankingOverlay,
+    ui.mobileOrientationHint,
+  ];
+  for (const overlay of viewportOverlays) {
     if (overlay && ui.gameRoot && overlay.parentElement !== ui.gameRoot) ui.gameRoot.appendChild(overlay);
   }
 }
@@ -1822,13 +1843,30 @@ function escalarViewport() {
   const viewport = window.visualViewport || window;
   const viewportWidth = viewport.width || window.innerWidth;
   const viewportHeight = viewport.height || window.innerHeight;
-  const scaleX = viewportWidth / BASE_WIDTH;
-  const scaleY = viewportHeight / BASE_HEIGHT;
+  const viewportOffsetLeft = Number(viewport.offsetLeft || 0);
+  const viewportOffsetTop = Number(viewport.offsetTop || 0);
+  const rootStyle = ui.gameRoot ? window.getComputedStyle(ui.gameRoot) : null;
+  const safeLeft = Number.parseFloat(rootStyle?.paddingLeft) || 0;
+  const safeRight = Number.parseFloat(rootStyle?.paddingRight) || 0;
+  const safeTop = Number.parseFloat(rootStyle?.paddingTop) || 0;
+  const safeBottom = Number.parseFloat(rootStyle?.paddingBottom) || 0;
+  const availableWidth = Math.max(1, viewportWidth - safeLeft - safeRight);
+  const availableHeight = Math.max(1, viewportHeight - safeTop - safeBottom);
+  const scaleX = availableWidth / BASE_WIDTH;
+  const scaleY = availableHeight / BASE_HEIGHT;
   const scale = Math.min(scaleX, scaleY);
+  const centerX = viewportOffsetLeft + safeLeft + availableWidth / 2;
+  const centerY = viewportOffsetTop + safeTop + availableHeight / 2;
+  ui.gameViewport.style.left = `${centerX}px`;
+  ui.gameViewport.style.top = `${centerY}px`;
   ui.gameViewport.style.transform = `translate(-50%, -50%) scale(${scale})`;
   document.documentElement.style.setProperty("--game-viewport-scale", String(scale));
   document.documentElement.style.setProperty("--visual-viewport-width", `${viewportWidth}px`);
   document.documentElement.style.setProperty("--visual-viewport-height", `${viewportHeight}px`);
+  document.documentElement.style.setProperty("--visual-viewport-left", `${viewportOffsetLeft}px`);
+  document.documentElement.style.setProperty("--visual-viewport-top", `${viewportOffsetTop}px`);
+  document.documentElement.style.setProperty("--visual-viewport-center-x", `${viewportOffsetLeft + viewportWidth / 2}px`);
+  document.documentElement.style.setProperty("--visual-viewport-center-y", `${viewportOffsetTop + viewportHeight / 2}px`);
   document.documentElement.style.setProperty(
     "--mobile-modal-max-width",
     `${Math.min(1120, Math.max(600, Math.ceil(600 / Math.max(scale, 0.01))))}px`,
@@ -15630,6 +15668,7 @@ if (window) window.addEventListener("resize", () => {
 });
 if (window) window.addEventListener("orientationchange", escalarViewportAposOrientacao);
 if (window.visualViewport) window.visualViewport.addEventListener("resize", escalarViewport);
+if (window.visualViewport) window.visualViewport.addEventListener("scroll", escalarViewport, { passive: true });
 if (document) document.addEventListener("fullscreenchange", escalarViewport);
 coarsePointerQuery?.addEventListener?.("change", () => applyDeviceMode());
 standaloneDisplayQuery?.addEventListener?.("change", () => applyDeviceMode());

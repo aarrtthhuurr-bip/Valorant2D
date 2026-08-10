@@ -10247,3 +10247,218 @@ body.is-mobile.mobile-left-handed .mobile-reload { right: auto; left: 24%; }
 @media (max-width: 920px), (pointer: coarse) {
   .mode-card .mode-info-button { width: 34px; height: 34px; flex-basis: 34px; font-size: 12px; opacity: .9; }
 }
+
+/* =========================================================================
+ * VIEWPORT RESPONSIVO V2
+ * O Canvas conserva a cena lógica 16:9. Menus e modais vivem fora do palco
+ * escalado e utilizam a viewport visual real, inclusive barras e safe areas.
+ * ====================================================================== */
+html,
+body,
+#game-root,
+#game-container {
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  position: fixed;
+  inset: 0;
+}
+
+#game-root {
+  box-sizing: border-box;
+  padding:
+    env(safe-area-inset-top, 0px)
+    env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px)
+    env(safe-area-inset-left, 0px);
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+#game-viewport {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 1280px;
+  height: 720px;
+  max-width: none;
+  max-height: none;
+  aspect-ratio: 16 / 9;
+  transform: translate(-50%, -50%) scale(var(--game-viewport-scale, 1));
+  transform-origin: center;
+  contain: layout paint;
+}
+
+#game,
+.game-wrap {
+  width: 1280px;
+  height: 720px;
+  max-width: none;
+  max-height: none;
+}
+
+#game {
+  display: block;
+  object-fit: contain;
+  touch-action: none;
+}
+
+/* Os overlays abaixo são filhos diretos de #game-root. Isso impede que a
+   escala do Canvas encolha menus em aparelhos com viewport estreita. */
+body.is-mobile :is(
+  .menu-overlay,
+  .agent-overlay,
+  .auth-overlay,
+  .welcome-overlay,
+  .updates-overlay,
+  .mode-info-overlay,
+  .pause-menu-overlay,
+  .commerce-overlay,
+  .player-profile-overlay,
+  .global-ranking-overlay,
+  .daily-login-overlay,
+  .match-overlay
+) {
+  position: fixed;
+  top: var(--visual-viewport-center-y, 50%);
+  left: var(--visual-viewport-center-x, 50%);
+  right: auto;
+  bottom: auto;
+  width: var(--visual-viewport-width, 100vw);
+  height: var(--visual-viewport-height, 100dvh);
+  padding:
+    max(clamp(.45rem, 1.8vh, 1rem), env(safe-area-inset-top, 0px))
+    max(clamp(.55rem, 1.8vw, 1.15rem), env(safe-area-inset-right, 0px))
+    max(clamp(.45rem, 1.8vh, 1rem), env(safe-area-inset-bottom, 0px))
+    max(clamp(.55rem, 1.8vw, 1.15rem), env(safe-area-inset-left, 0px));
+  overflow: hidden;
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+}
+
+body.is-mobile :is(
+  .menu-card,
+  .agent-select,
+  .auth-panel,
+  .welcome-panel,
+  .updates-modal,
+  .mode-info-panel,
+  .pause-menu-panel,
+  .commerce-shell,
+  .player-profile-modal,
+  .global-ranking-modal,
+  .daily-login-modal,
+  .match-card
+) {
+  position: relative;
+  top: auto;
+  left: auto;
+  width: min(90vw, 70rem);
+  height: auto;
+  max-width: 90vw;
+  max-height: 85vh;
+  max-height: 85dvh;
+  margin: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  transform: none;
+  box-sizing: border-box;
+  scrollbar-width: none;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+body.is-mobile :is(
+  .menu-card,
+  .agent-select,
+  .auth-panel,
+  .welcome-panel,
+  .updates-modal,
+  .mode-info-panel,
+  .pause-menu-panel,
+  .commerce-shell,
+  .player-profile-modal,
+  .global-ranking-modal,
+  .daily-login-modal,
+  .match-card
+)::-webkit-scrollbar {
+  display: none;
+}
+
+body.is-mobile :is(
+  .menu-card,
+  .agent-select,
+  .auth-panel,
+  .welcome-panel,
+  .updates-modal,
+  .mode-info-panel,
+  .pause-menu-panel,
+  .commerce-shell,
+  .player-profile-modal,
+  .global-ranking-modal,
+  .daily-login-modal
+) :is(p, label, input, select, button) {
+  font-size: clamp(12px, 1.65vw, 18px);
+}
+
+body.is-mobile :is(
+  .menu-card,
+  .agent-select,
+  .auth-panel,
+  .welcome-panel,
+  .updates-modal,
+  .mode-info-panel,
+  .pause-menu-panel,
+  .commerce-shell,
+  .player-profile-modal,
+  .global-ranking-modal,
+  .daily-login-modal
+) :is(h1, h2) {
+  font-size: clamp(1.5rem, 4.5vw, 2.6rem);
+}
+
+/* Safe areas dos controles permanecem dentro da cena escalada. Os valores
+   são convertidos para alvos confortáveis pela função escalarViewport. */
+body.is-mobile .mobile-controls {
+  padding:
+    env(safe-area-inset-top, 0px)
+    env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px)
+    env(safe-area-inset-left, 0px);
+}
+
+@media (max-width: 920px) and (orientation: landscape),
+       (pointer: coarse) and (orientation: landscape) {
+  body.is-mobile :is(
+    .menu-card,
+    .agent-select,
+    .auth-panel,
+    .welcome-panel,
+    .updates-modal,
+    .mode-info-panel,
+    .pause-menu-panel,
+    .commerce-shell,
+    .player-profile-modal,
+    .global-ranking-modal,
+    .daily-login-modal,
+    .match-card
+  ) {
+    width: min(90vw, 70rem);
+    max-width: 90vw;
+    max-height: 85vh;
+    max-height: 85dvh;
+  }
+
+  body.is-mobile .menu-state-mode-select .menu-card {
+    width: min(90vw, 70rem);
+    max-width: 90vw;
+    max-height: 85dvh;
+  }
+
+  body.is-mobile .mode-select-shell {
+    max-height: calc(85dvh - clamp(4.5rem, 16vh, 7rem));
+  }
+}
