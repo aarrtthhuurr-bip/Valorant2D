@@ -10462,3 +10462,243 @@ body.is-mobile .mobile-controls {
     max-height: calc(85dvh - clamp(4.5rem, 16vh, 7rem));
   }
 }
+
+/* =========================================================================
+ * ESCALA MOBILE COMPACTA
+ * Os controles do gameplay mantêm seus alvos grandes; somente menus e
+ * modais neutralizam a antiga compensação inversa do Canvas.
+ * ====================================================================== */
+body.is-mobile :is(
+  .menu-card,
+  .agent-select,
+  .auth-panel,
+  .welcome-panel,
+  .updates-modal,
+  .mode-info-panel,
+  .pause-menu-panel,
+  .commerce-shell,
+  .player-profile-modal,
+  .global-ranking-modal,
+  .daily-login-modal,
+  .match-card
+) {
+  width: min(95vw, 70rem);
+  min-width: 0;
+  max-width: 95vw;
+  min-height: 0;
+  max-height: 90vh;
+  max-height: 90dvh;
+  margin: auto;
+  box-sizing: border-box;
+  transform: none;
+}
+
+body.is-mobile :is(
+  .menu-card,
+  .agent-select,
+  .auth-panel,
+  .welcome-panel,
+  .updates-modal,
+  .mode-info-panel,
+  .pause-menu-panel,
+  .commerce-shell,
+  .player-profile-modal,
+  .global-ranking-modal,
+  .daily-login-modal
+) :is(p, label, input, select, button, small, span) {
+  font-size: clamp(11px, 2vw, 15px);
+}
+
+body.is-mobile :is(
+  .menu-card,
+  .agent-select,
+  .auth-panel,
+  .welcome-panel,
+  .updates-modal,
+  .mode-info-panel,
+  .pause-menu-panel,
+  .commerce-shell,
+  .player-profile-modal,
+  .global-ranking-modal,
+  .daily-login-modal
+) :is(h1, h2) {
+  font-size: clamp(1.25rem, 4vw, 2rem);
+}
+
+body.is-mobile :is(
+  .menu-button,
+  .difficulty-card,
+  .difficulty-back-btn,
+  .difficulty-start-btn,
+  .mode-select-back,
+  .commerce-tabs button,
+  .skin-category-tabs button,
+  .inventory-filters button
+) {
+  min-height: clamp(36px, 9vh, 44px);
+  height: auto;
+}
+
+body.is-mobile .menu-state-main .menu-card,
+body.is-mobile .menu-state-pause .menu-card,
+body.is-mobile .menu-state-mode-select .menu-card,
+body.is-mobile .menu-state-difficulty .menu-card {
+  width: min(95vw, 70rem);
+  height: auto;
+  max-width: 95vw;
+  max-height: 90dvh;
+  padding: clamp(.55rem, 2vh, .9rem) clamp(.7rem, 2vw, 1.1rem);
+}
+
+body.is-mobile .menu-state-main .menu-button {
+  min-height: clamp(38px, 10vh, 48px);
+  padding-block: clamp(.25rem, 1.2vh, .5rem);
+}
+
+body.is-mobile .menu-state-mode-select .mode-card-primary,
+body.is-mobile .menu-state-mode-select .mode-card-primary .mode-card-select {
+  min-height: clamp(76px, 24vh, 104px);
+}
+
+body.is-mobile .menu-state-mode-select .mode-card-primary .mode-card-select {
+  padding: clamp(.45rem, 1.6vh, .8rem) clamp(3.7rem, 10vw, 5.2rem) clamp(.45rem, 1.6vh, .8rem) clamp(.55rem, 1.8vw, .9rem);
+}
+
+body.is-mobile .menu-state-mode-select .mode-card-primary .mode-card-visual {
+  right: clamp(.5rem, 1.8vw, .9rem);
+  width: clamp(42px, 8vw, 58px);
+  height: clamp(48px, 14vh, 66px);
+  min-height: 0;
+  margin: 0;
+  border: 0;
+}
+
+body.is-mobile .menu-state-mode-select .mode-card-primary .mode-card-icon,
+body.is-mobile .menu-state-mode-select .mode-card-primary .mode-card-icon svg {
+  width: clamp(36px, 7vw, 50px);
+  height: clamp(36px, 7vw, 50px);
+}
+
+body.is-mobile .menu-state-mode-select .mode-card-copy strong {
+  font-size: clamp(16px, 3.4vw, 24px);
+}
+
+/* =========================================================================
+ * INVENTÁRIO UNIFICADO
+ * Somente itens adquiridos entram no DOM; o card completo equipa em um toque.
+ * ====================================================================== */
+.inventory-toolbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.inventory-toolbar .commerce-section-title { flex: 0 0 auto; margin: 0; }
+
+.inventory-filters {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.inventory-filters button {
+  min-height: 32px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  color: #8296a5;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.inventory-filters button.is-active {
+  border-color: rgba(0,243,255,.62);
+  background: rgba(0,243,255,.1);
+  color: #c5fbff;
+}
+
+.inventory-unified-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  align-content: start;
+  gap: 10px;
+}
+
+.inventory-unified-grid.is-empty {
+  min-height: 260px;
+  place-items: center;
+  align-content: center;
+  color: #718895;
+  text-align: center;
+}
+
+.inventory-skin-card {
+  position: relative;
+  min-height: 174px;
+  grid-template-rows: minmax(86px, 1fr) auto;
+  gap: 8px;
+  padding: 9px;
+  cursor: pointer;
+  outline: none;
+}
+
+.inventory-skin-card .skin-card-art { min-height: 86px; }
+.inventory-skin-card .skin-card-art img { height: 82px; }
+
+.inventory-skin-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.inventory-skin-copy b,
+.inventory-skin-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inventory-equipped-tag {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  padding: 3px 6px;
+  border: 1px solid rgba(130,158,174,.22);
+  border-radius: 999px;
+  background: rgba(5,12,18,.82);
+  color: #728794;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+
+.inventory-skin-card:hover,
+.inventory-skin-card:focus-visible {
+  border-color: rgba(0,243,255,.56);
+  transform: translateY(-2px);
+}
+
+.inventory-skin-card.is-equipped {
+  border-color: #62e6a0;
+  background: linear-gradient(145deg, rgba(18,65,55,.72), rgba(7,19,21,.94));
+  box-shadow: inset 0 0 0 1px rgba(98,230,160,.16), 0 0 18px rgba(98,230,160,.12);
+}
+
+.inventory-skin-card.is-equipped .inventory-equipped-tag {
+  border-color: rgba(98,230,160,.62);
+  background: rgba(18,76,60,.9);
+  color: #aaffd5;
+}
+
+@media (max-width: 720px) {
+  .inventory-toolbar { align-items: stretch; flex-direction: column; }
+  .inventory-filters { justify-content: flex-start; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .inventory-filters::-webkit-scrollbar { display: none; }
+  .inventory-unified-grid { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); }
+}

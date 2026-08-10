@@ -800,7 +800,15 @@ function closeWelcomeReview() {
   showMainMenu();
 }
 
-const commerceState = { tab: "skins", profile: null, weaponId: "pistol", busy: false };
+const commerceState = { tab: "skins", profile: null, weaponId: "pistol", inventoryFilter: "all", busy: false };
+
+const INVENTORY_FILTERS = Object.freeze([
+  { id: "all", label: "Todas", weaponIds: null },
+  { id: "light", label: "Leves", weaponIds: ["pistol", "light-pistol", "revolver", "smg"] },
+  { id: "rifles", label: "Rifles", weaponIds: ["carbine", "rifle", "dmr"] },
+  { id: "special", label: "Especiais", weaponIds: ["shotgun", "sniper", "lmg"] },
+  { id: "knives", label: "Facas", weaponIds: ["knife", "melee", "jett-knife"] },
+]);
 const DAILY_LOGIN_REWARDS = [
   { label: "25 C", type: "core" }, { label: "MINA CRYO", type: "gadget" },
   { label: "ROLETA DE SKIN", type: "skin" }, { label: "50 C", type: "core" },
@@ -1016,25 +1024,38 @@ function commerceSkinCard(skin, { offer = false, inventory = false } = {}) {
   const owned = commerceState.profile?.ownedSkinIds?.includes(skin.id);
   const equipped = commerceState.profile?.equippedSkins?.[skin.weaponId] === skin.id;
   const card = document.createElement("article");
-  card.className = `skin-card${owned ? " is-owned" : ""}${equipped ? " is-equipped" : ""}${inventory && !owned ? " is-locked" : ""}`;
+  card.className = `skin-card${inventory ? " inventory-skin-card" : ""}${owned ? " is-owned" : ""}${equipped ? " is-equipped" : ""}`;
   const price = Number(skin.price) || 0;
-  card.innerHTML = `
-    ${offer ? `<span class="skin-discount">-${Number(skin.discountPercent) || 0}%</span>` : ""}
-    <span class="skin-card-art"><img src="${skin.imagePath}" alt="${skin.name} para ${skin.weaponName}"></span>
-    <span><b>${skin.name}</b><small>${skin.weaponName} · ${skin.rarity}</small></span>
-    <span class="skin-price">${offer ? `<del>${Number(skin.originalPrice)} C</del>` : ""}<span>${price} C</span></span>`;
+  card.innerHTML = inventory
+    ? `<span class="skin-card-art"><img src="${skin.imagePath}" alt="${skin.name} para ${skin.weaponName}"></span>
+       <span class="inventory-skin-copy"><b>${skin.name}</b><small>${skin.weaponName}</small></span>
+       <span class="inventory-equipped-tag">${equipped ? "EQUIPADO" : "EQUIPAR"}</span>`
+    : `${offer ? `<span class="skin-discount">-${Number(skin.discountPercent) || 0}%</span>` : ""}
+       <span class="skin-card-art"><img src="${skin.imagePath}" alt="${skin.name} para ${skin.weaponName}"></span>
+       <span><b>${skin.name}</b><small>${skin.weaponName} · ${skin.rarity}</small></span>
+       <span class="skin-price">${offer ? `<del>${Number(skin.originalPrice)} C</del>` : ""}<span>${price} C</span></span>`;
+  if (inventory) {
+    card.tabIndex = equipped ? -1 : 0;
+    card.setAttribute("role", "button");
+    card.setAttribute("aria-label", equipped ? `${skin.name} equipada em ${skin.weaponName}` : `Equipar ${skin.name} em ${skin.weaponName}`);
+    card.setAttribute("aria-pressed", String(equipped));
+    const equip = () => {
+      if (!equipped && !commerceState.busy) void equipCommerceSkinInstant(skin);
+    };
+    card.addEventListener("click", equip);
+    card.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      equip();
+    });
+    attachSkinPreviewMotion(card);
+    return card;
+  }
   const action = document.createElement("button");
   action.type = "button";
-  if (inventory) {
-    action.className = "inventory-action";
-    action.textContent = !owned ? "BLOQUEADA" : equipped ? "EQUIPADA" : "EQUIPAR";
-    action.disabled = !owned || equipped || commerceState.busy;
-    if (owned) action.addEventListener("click", () => equipCommerceSkin(skin));
-  } else {
-    action.textContent = owned ? "ADQUIRIDA" : "COMPRAR";
-    action.disabled = owned || commerceState.busy;
-    action.addEventListener("click", () => purchaseCommerceSkin(skin.id));
-  }
+  action.textContent = owned ? "ADQUIRIDA" : "COMPRAR";
+  action.disabled = owned || commerceState.busy;
+  action.addEventListener("click", () => purchaseCommerceSkin(skin.id));
   card.appendChild(action);
   attachSkinPreviewMotion(card);
   return card;
@@ -1067,21 +1088,43 @@ function renderCommerceSkins() {
 
 function renderCommerceInventory() {
   const profile = commerceState.profile;
-  const collection = profile.catalog;
-  ui.commerceContent.innerHTML = '<div class="commerce-section-title"><div><span>COLEÇÃO</span><h3>Inventário</h3></div></div>';
+  const ownedIds = new Set(profile.ownedSkinIds || []);
+  const collection = profile.catalog.filter((skin) => ownedIds.has(skin.id));
+  const activeFilter = INVENTORY_FILTERS.find((filter) => filter.id === commerceState.inventoryFilter) || INVENTORY_FILTERS[0];
+  const visibleCollection = activeFilter.weaponIds
+    ? collection.filter((skin) => activeFilter.weaponIds.includes(skin.weaponId))
+    : collection;
+  ui.commerceContent.innerHTML = `
+    <div class="inventory-toolbar">
+      <div class="commerce-section-title"><div><span>COLEÇÃO</span><h3>Inventário</h3></div></div>
+      <nav class="inventory-filters" aria-label="Filtrar inventário"></nav>
+    </div>
+    <div class="inventory-unified-grid" aria-live="polite"></div>`;
+  const filters = ui.commerceContent.querySelector(".inventory-filters");
+  for (const filter of INVENTORY_FILTERS) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = filter.id === activeFilter.id ? "is-active" : "";
+    button.textContent = filter.label;
+    button.setAttribute("aria-pressed", String(filter.id === activeFilter.id));
+    button.addEventListener("click", () => {
+      commerceState.inventoryFilter = filter.id;
+      renderCommerceInventory();
+    });
+    filters.appendChild(button);
+  }
+  const grid = ui.commerceContent.querySelector(".inventory-unified-grid");
   if (!collection.length) {
-    ui.commerceContent.insertAdjacentHTML("beforeend", '<div class="inventory-empty">Sua coleção ainda está vazia.<br>Adquira skins no primeiro módulo da loja.</div>');
+    grid.classList.add("is-empty");
+    grid.innerHTML = 'Sua coleção ainda está vazia.<br>Adquira skins no primeiro módulo da loja.';
     return;
   }
-  const groups = Map.groupBy ? Map.groupBy(collection, (skin) => skin.weaponId) : collection.reduce((map, skin) => map.set(skin.weaponId, [...(map.get(skin.weaponId) || []), skin]), new Map());
-  for (const [weaponId, skins] of groups) {
-    const section = document.createElement("section");
-    section.className = "inventory-group";
-    section.innerHTML = `<header><strong>${skins[0].weaponName}</strong><button type="button" class="inventory-action">RESTAURAR PADRÃO</button></header>`;
-    section.querySelector("button").addEventListener("click", () => restoreDefaultSkin(weaponId));
-    section.appendChild(skinGrid(skins, { inventory: true }));
-    ui.commerceContent.appendChild(section);
+  if (!visibleCollection.length) {
+    grid.classList.add("is-empty");
+    grid.textContent = "Nenhuma skin adquirida neste filtro.";
+    return;
   }
+  visibleCollection.forEach((skin) => grid.appendChild(commerceSkinCard(skin, { inventory: true })));
 }
 
 function renderCommerceMissions(target = ui.missionsContent) {
@@ -1184,7 +1227,45 @@ function purchaseCommerceSkin(skinId) {
     { successSound: "skin_purchase" },
   );
 }
-function equipCommerceSkin(skin) { return commerceMutation(`/api/commerce/inventory/${encodeURIComponent(skin.weaponId)}`, { method: "PUT", body: JSON.stringify({ skinId: skin.id }) }, () => `${skin.name} equipada.`); }
+async function equipCommerceSkinInstant(skin) {
+  if (commerceState.busy || !commerceState.profile?.ownedSkinIds?.includes(skin.id)) return;
+  const previousSkinId = commerceState.profile.equippedSkins?.[skin.weaponId] || null;
+  const previousPath = equippedWeaponSkinPaths[skin.weaponId] || "";
+
+  // Atualização otimista: a coleção responde no mesmo frame do toque. Se o
+  // servidor recusar a operação, o estado anterior é restaurado integralmente.
+  commerceState.busy = true;
+  commerceState.profile.equippedSkins = {
+    ...(commerceState.profile.equippedSkins || {}),
+    [skin.weaponId]: skin.id,
+  };
+  equippedWeaponSkinPaths[skin.weaponId] = skin.imagePath;
+  getWeaponSprite({ id: skin.weaponId }, skin.imagePath);
+  renderCommerceInventory();
+  setCommerceFeedback(`${skin.name} equipada. Sincronizando...`);
+
+  try {
+    await requestApi(`/api/commerce/inventory/${encodeURIComponent(skin.weaponId)}`, {
+      method: "PUT",
+      headers: commerceAuthorization(),
+      body: JSON.stringify({ skinId: skin.id }),
+    });
+    await refreshCommerceProfile();
+    setCommerceFeedback(`${skin.name} equipada.`, "success");
+  } catch (error) {
+    commerceState.profile.equippedSkins = {
+      ...(commerceState.profile.equippedSkins || {}),
+      [skin.weaponId]: previousSkinId,
+    };
+    if (previousPath) equippedWeaponSkinPaths[skin.weaponId] = previousPath;
+    else delete equippedWeaponSkinPaths[skin.weaponId];
+    setCommerceFeedback(error.message, "error");
+  } finally {
+    commerceState.busy = false;
+    renderCommerceInventory();
+  }
+}
+function equipCommerceSkin(skin) { return equipCommerceSkinInstant(skin); }
 function restoreDefaultSkin(weaponId) { return commerceMutation(`/api/commerce/inventory/${encodeURIComponent(weaponId)}`, { method: "PUT", body: JSON.stringify({ skinId: null }) }, () => "Visual padrão restaurado."); }
 async function claimCommerceMission(id) {
   await commerceMutation(`/api/commerce/missions/${encodeURIComponent(id)}/claim`, { method: "POST", body: "{}" }, (data) => `${data.reward} C adicionados à conta.`);
