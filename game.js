@@ -2146,7 +2146,31 @@ const MENU_MUSIC_TRACKS = [
   "./assets/musics/a gentle reminder_7zlGH7MbWP38wQRtLoTkhu.mp3",
   "./assets/musics/a lonely star_2wnE16f276RZAZqC1odVBd.mp3",
 ];
-const menuMusic = { element: null, index: 0, requested: false };
+const menuMusic = { element: null, index: -1, requested: false };
+
+function randomMenuMusicIndex(previousIndex = menuMusic.index) {
+  const trackCount = MENU_MUSIC_TRACKS.length;
+  if (trackCount <= 1) return trackCount ? 0 : -1;
+  if (previousIndex < 0 || previousIndex >= trackCount) {
+    return Math.floor(Math.random() * trackCount);
+  }
+  // Sorteia entre N-1 posições e desloca o resultado ao ultrapassar a faixa
+  // atual. Assim a próxima música nunca repete imediatamente, sem loops.
+  const candidate = Math.floor(Math.random() * (trackCount - 1));
+  return candidate >= previousIndex ? candidate + 1 : candidate;
+}
+
+function selectRandomMenuMusic({ restart = true } = {}) {
+  if (!MENU_MUSIC_TRACKS.length) return null;
+  const previousIndex = menuMusic.index;
+  const nextIndex = randomMenuMusicIndex(previousIndex);
+  menuMusic.index = nextIndex;
+  if (menuMusic.element) {
+    menuMusic.element.src = MENU_MUSIC_TRACKS[nextIndex];
+    if (restart) menuMusic.element.currentTime = 0;
+  }
+  return MENU_MUSIC_TRACKS[nextIndex];
+}
 
 function menuMusicVolume() {
   const master = Math.max(0, Math.min(1, Number(optionsSettings?.masterVolume ?? settings?.masterVolume ?? 50) / 100));
@@ -2156,12 +2180,12 @@ function menuMusicVolume() {
 
 function ensureMenuMusic() {
   if (menuMusic.element) return menuMusic.element;
-  const element = new Audio(MENU_MUSIC_TRACKS[0]);
+  const initialTrack = selectRandomMenuMusic({ restart: false });
+  const element = new Audio(initialTrack || "");
   element.preload = "metadata";
   element.loop = false;
   const advanceTrack = () => {
-    menuMusic.index = (menuMusic.index + 1) % MENU_MUSIC_TRACKS.length;
-    element.src = MENU_MUSIC_TRACKS[menuMusic.index];
+    selectRandomMenuMusic();
     void element.play().catch(() => {});
   };
   element.addEventListener("ended", advanceTrack);
@@ -12428,6 +12452,7 @@ function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
   });
   window.lucide?.createIcons();
   ui.menuOverlay.className = `menu-overlay menu-state-${state}`;
+  document.body?.classList.toggle("mobile-main-layout", state === "main");
   ui.menuOverlay?.classList.remove("hidden");
   game.paused = true;
   game.menuState = state;
@@ -12594,6 +12619,7 @@ function advanceMenuTour() {
 
 function hideMenuOverlay() {
   ui.menuOverlay.classList.add("hidden");
+  document.body?.classList.remove("mobile-main-layout");
   game.menuState = "none";
 }
 
@@ -12958,6 +12984,9 @@ function showMainMenu() {
       action: requestPwaInstallation,
     });
   }
+  // Cada retorno ao menu inicia uma faixa diferente da anterior. A reprodução
+  // efetiva continua respeitando mute, volume e a exigência de gesto do browser.
+  if (menuMusic.element) selectRandomMenuMusic();
   setMenu("Valorant 2D", "", mainActions, "MENU", "main");
   updateCoreBalances(commerceState.profile?.coreBalance || currentProfile?.coreBalance || 0);
   void flushPendingRewardsQueue();

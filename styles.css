@@ -10702,3 +10702,135 @@ body.is-mobile .menu-state-mode-select .mode-card-copy strong {
   .inventory-filters::-webkit-scrollbar { display: none; }
   .inventory-unified-grid { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); }
 }
+
+/* =========================================================================
+ * MENU PRINCIPAL MOBILE = COMPOSIÇÃO DESKTOP ESCALADA
+ * Em landscape o layout lógico permanece 1280x720: navegação à esquerda,
+ * novidades à direita e atalhos no topo. Somente a moldura completa escala.
+ * ====================================================================== */
+body.is-mobile.mobile-main-layout .menu-overlay.menu-state-main {
+  position: fixed;
+  top: var(--visual-viewport-center-y, 50%);
+  left: var(--visual-viewport-center-x, 50%);
+  right: auto;
+  bottom: auto;
+  display: flex;
+  width: 1280px;
+  height: 720px;
+  padding: 0;
+  align-items: stretch;
+  justify-content: flex-start;
+  overflow: hidden;
+  transform: translate(-50%, -50%) scale(var(--game-viewport-scale, 1));
+  transform-origin: center;
+}
+
+body.is-mobile.mobile-main-layout .menu-state-main .menu-card {
+  order: 1;
+  width: 350px;
+  min-width: 350px;
+  max-width: 350px;
+  height: 720px;
+  min-height: 720px;
+  max-height: 720px;
+  margin: 0;
+  padding: 30px 24px;
+  overflow: hidden;
+  border-width: 0 1px 0 0;
+  border-radius: 0;
+}
+
+body.is-mobile.mobile-main-layout .menu-state-main .menu-art {
+  display: block;
+  order: 2;
+  min-width: 0;
+  height: 720px;
+  flex: 1 1 auto;
+}
+
+body.is-mobile.mobile-main-layout .menu-state-main .menu-copy {
+  margin-bottom: 20px;
+  padding-top: 8px;
+}
+
+body.is-mobile.mobile-main-layout .menu-state-main .menu-card h2 {
+  font-size: 46px;
+}
+
+body.is-mobile.mobile-main-layout .menu-state-main .menu-grid {
+  gap: 10px;
+}
+
+body.is-mobile.mobile-main-layout .menu-state-main .menu-button {
+  width: 100%;
+  min-height: 58px;
+  height: 58px;
+  padding: 12px 18px;
+  gap: 16px;
+}
+
+body.is-mobile.mobile-main-layout .menu-state-main .menu-button b {
+  font-size: 14px;
+}
+
+body.is-mobile.mobile-main-layout .menu-state-main .menu-button-copy small {
+  font-size: 8px;
+}
+
+body.is-mobile.mobile-main-layout .menu-state-main .menu-button .menu-icon,
+body.is-mobile.mobile-main-layout .menu-state-main .menu-button .menu-icon svg {
+  width: 24px;
+  height: 24px;
+  flex-basis: 24px;
+}
+
+/* O painel aberto de novidades ocupa exclusivamente a coluna direita. */
+body.is-mobile.mobile-main-layout .updates-overlay {
+  position: fixed;
+  top: var(--visual-viewport-center-y, 50%);
+  left: var(--visual-viewport-center-x, 50%);
+  right: auto;
+  bottom: auto;
+  display: grid;
+  width: 1280px;
+  height: 720px;
+  padding: 64px 28px 28px 382px;
+  place-items: stretch;
+  overflow: hidden;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transform: translate(-50%, -50%) scale(var(--game-viewport-scale, 1));
+  transform-origin: center;
+}
+
+body.is-mobile.mobile-main-layout .updates-overlay.hidden { display: none; }
+
+body.is-mobile.mobile-main-layout .updates-modal {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  height: 628px;
+  min-height: 0;
+  max-height: 628px;
+  margin: 0;
+  overflow: hidden;
+  transform: none;
+}
+
+body.is-mobile.mobile-main-layout .updates-header { padding: 24px 28px 19px; }
+body.is-mobile.mobile-main-layout .updates-header h2 { font-size: 40px; }
+body.is-mobile.mobile-main-layout .updates-content { padding: 18px 28px 22px; }
+body.is-mobile.mobile-main-layout .updates-actions { padding: 14px 28px 18px; }
+body.is-mobile.mobile-main-layout .updates-item { min-height: 72px; }
+body.is-mobile.mobile-main-layout .updates-close { min-height: 46px; }
+
+@media (orientation: portrait) {
+  /* O jogo solicita landscape, mas a composição continua inteira durante
+     a rotação para evitar saltos e sobreposições intermediárias. */
+  body.is-mobile.mobile-main-layout .menu-overlay.menu-state-main,
+  body.is-mobile.mobile-main-layout .updates-overlay {
+    transform: translate(-50%, -50%) scale(var(--game-viewport-scale, 1));
+  }
+}
