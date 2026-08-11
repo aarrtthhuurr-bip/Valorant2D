@@ -1299,18 +1299,18 @@ function commerceSkinCard(skin, { offer = false, inventory = false } = {}) {
   card.innerHTML = inventory
     ? `<span class="skin-card-art"><img src="${skin.imagePath}" alt="${skin.name} para ${skin.weaponName}"></span>
        <span class="inventory-skin-copy"><b>${skin.name}</b><small>${skin.weaponName}</small></span>
-       <span class="inventory-equipped-tag">${equipped ? "EQUIPADO" : "EQUIPAR"}</span>`
+       <span class="inventory-equipped-tag">${equipped ? "DESEQUIPAR" : "EQUIPAR"}</span>`
     : `${offer ? `<span class="skin-discount">-${Number(skin.discountPercent) || 0}%</span>` : ""}
        <span class="skin-card-art"><img src="${skin.imagePath}" alt="${skin.name} para ${skin.weaponName}"></span>
        <span><b>${skin.name}</b><small>${skin.weaponName} · ${skin.rarity}</small></span>
        <span class="skin-price">${offer ? `<del>${Number(skin.originalPrice)} C</del>` : ""}<span>${price} C</span></span>`;
   if (inventory) {
-    card.tabIndex = equipped ? -1 : 0;
+    card.tabIndex = 0;
     card.setAttribute("role", "button");
-    card.setAttribute("aria-label", equipped ? `${skin.name} equipada em ${skin.weaponName}` : `Equipar ${skin.name} em ${skin.weaponName}`);
+    card.setAttribute("aria-label", equipped ? `Desequipar ${skin.name} de ${skin.weaponName} e restaurar o visual padrão` : `Equipar ${skin.name} em ${skin.weaponName}`);
     card.setAttribute("aria-pressed", String(equipped));
     const equip = () => {
-      if (!equipped && !commerceState.busy) void equipCommerceSkinInstant(skin);
+      if (!commerceState.busy) void equipCommerceSkinInstant(skin);
     };
     card.addEventListener("click", equip);
     card.addEventListener("keydown", (event) => {
@@ -1501,32 +1501,39 @@ async function equipCommerceSkinInstant(skin) {
   if (commerceState.busy || !commerceState.profile?.ownedSkinIds?.includes(skin.id)) return;
   const previousSkinId = commerceState.profile.equippedSkins?.[skin.weaponId] || null;
   const previousPath = equippedWeaponSkinPaths[skin.weaponId] || "";
+  const restoringDefault = previousSkinId === skin.id;
+  const nextSkinId = restoringDefault ? null : skin.id;
 
   // Atualização otimista: a coleção responde no mesmo frame do toque. Se o
   // servidor recusar a operação, o estado anterior é restaurado integralmente.
   commerceState.busy = true;
-  commerceState.profile.equippedSkins = {
-    ...(commerceState.profile.equippedSkins || {}),
-    [skin.weaponId]: skin.id,
-  };
-  equippedWeaponSkinPaths[skin.weaponId] = skin.imagePath;
-  getWeaponSprite({ id: skin.weaponId }, skin.imagePath);
+  const optimisticSkins = { ...(commerceState.profile.equippedSkins || {}) };
+  if (restoringDefault) {
+    delete optimisticSkins[skin.weaponId];
+    delete equippedWeaponSkinPaths[skin.weaponId];
+    getWeaponSprite({ id: skin.weaponId });
+  } else {
+    optimisticSkins[skin.weaponId] = skin.id;
+    equippedWeaponSkinPaths[skin.weaponId] = skin.imagePath;
+    getWeaponSprite({ id: skin.weaponId }, skin.imagePath);
+  }
+  commerceState.profile.equippedSkins = optimisticSkins;
   renderCommerceInventory();
-  setCommerceFeedback(`${skin.name} equipada. Sincronizando...`);
+  setCommerceFeedback(restoringDefault ? "Visual padrão restaurado. Sincronizando..." : `${skin.name} equipada. Sincronizando...`);
 
   try {
     await requestApi(`/api/commerce/inventory/${encodeURIComponent(skin.weaponId)}`, {
       method: "PUT",
       headers: commerceAuthorization(),
-      body: JSON.stringify({ skinId: skin.id }),
+      body: JSON.stringify({ skinId: nextSkinId }),
     });
     await refreshCommerceProfile();
-    setCommerceFeedback(`${skin.name} equipada.`, "success");
+    setCommerceFeedback(restoringDefault ? `Visual padrão de ${skin.weaponName} restaurado.` : `${skin.name} equipada.`, "success");
   } catch (error) {
-    commerceState.profile.equippedSkins = {
-      ...(commerceState.profile.equippedSkins || {}),
-      [skin.weaponId]: previousSkinId,
-    };
+    const restoredSkins = { ...(commerceState.profile.equippedSkins || {}) };
+    if (previousSkinId) restoredSkins[skin.weaponId] = previousSkinId;
+    else delete restoredSkins[skin.weaponId];
+    commerceState.profile.equippedSkins = restoredSkins;
     if (previousPath) equippedWeaponSkinPaths[skin.weaponId] = previousPath;
     else delete equippedWeaponSkinPaths[skin.weaponId];
     setCommerceFeedback(error.message, "error");
