@@ -544,7 +544,7 @@ async function openUpdateNotes({ automatic = false } = {}) {
   updatesReturnFocus = automatic ? null : document.activeElement;
   try {
     const payload = await loadUpdatesManifest();
-    if (payload.status !== "published" && !isIntegratedLocalDevelopment) {
+    if (payload.status !== "published" && !usesLocalApi) {
       if (!automatic) {
         showUxToast("Nenhuma atualização nova foi publicada.", {
           title: "ATUALIZAÇÕES",
