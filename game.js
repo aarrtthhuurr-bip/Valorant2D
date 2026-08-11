@@ -212,9 +212,12 @@ const ui = {
   currentPlayerRanking: document.getElementById("currentPlayerRanking"),
   mainCoreWallet: document.getElementById("mainCoreWallet"),
   mainCoreBalance: document.getElementById("mainCoreBalance"),
+  menuUtilityDock: document.getElementById("menuUtilityDock"),
   menuTutorialButton: document.getElementById("menuTutorialButton"),
   menuUpdatesButton: document.getElementById("menuUpdatesButton"),
   menuUpdatesBadge: document.getElementById("menuUpdatesBadge"),
+  menuDailyLoginButton: document.getElementById("menuDailyLoginButton"),
+  menuDailyLoginIndicator: document.getElementById("menuDailyLoginIndicator"),
   updatesOverlay: document.getElementById("updatesOverlay"),
   updatesKicker: document.getElementById("updatesKicker"),
   updatesVersion: document.getElementById("updatesVersion"),
@@ -667,6 +670,7 @@ function clearStoredSession() {
   dailyLoginStatus = null;
   window.clearTimeout(dailyLoginRetryTimer);
   dailyLoginRetryTimer = 0;
+  ui.menuDailyLoginIndicator?.classList.add("hidden");
   const dailyOverlay = document.getElementById("dailyLoginOverlay");
   dailyOverlay?.classList.add("hidden");
   dailyOverlay?.setAttribute("aria-hidden", "true");
@@ -864,7 +868,7 @@ function persistDailyLoginCache(status, claim = null) {
   localStorage.setItem(dailyLoginStorageKey(), JSON.stringify(snapshot));
 }
 
-function renderDailyLoginModal(status) {
+function renderDailyLoginModal(status, { forceOpen = false } = {}) {
   const overlay = document.getElementById("dailyLoginOverlay");
   const days = document.getElementById("dailyLoginDays");
   if (!overlay || !days) return;
@@ -880,8 +884,10 @@ function renderDailyLoginModal(status) {
     return `<article class="${claimed ? "is-claimed" : available ? "is-available" : "is-locked"}"><small>DIA ${day}</small><i>${reward.type === "skin" ? "◇" : reward.type === "gadget" ? "⌁" : "C"}</i><strong>${reward.label}</strong><span>${claimed ? "RESGATADO" : available ? "DISPONÍVEL" : "BLOQUEADO"}</span></article>`;
   }).join("");
   document.getElementById("dailyLoginClaim").disabled = !status.available;
-  overlay.classList.toggle("hidden", !status.available);
-  overlay.setAttribute("aria-hidden", String(!status.available));
+  ui.menuDailyLoginIndicator?.classList.toggle("hidden", !status.available);
+  const shouldOpen = forceOpen || status.available;
+  overlay.classList.toggle("hidden", !shouldOpen);
+  overlay.setAttribute("aria-hidden", String(!shouldOpen));
 }
 
 async function checkDailyLogin({ force = false } = {}) {
@@ -910,6 +916,41 @@ async function checkDailyLogin({ force = false } = {}) {
       dailyLoginRetryTimer = 0;
       if (!currentProfile?.isGuest && readStoredSession()?.token) void checkDailyLogin({ force: true });
     }, 8000);
+  }
+}
+
+async function openDailyLoginCenter() {
+  if (currentProfile?.isGuest || !readStoredSession()?.token) {
+    showUxToast("Crie ou acesse uma conta para receber e salvar recompensas diárias.", {
+      title: "RECOMPENSAS DIÁRIAS",
+      tone: "info",
+      duration: 3600,
+    });
+    return;
+  }
+  const feedback = document.getElementById("dailyLoginFeedback");
+  if (feedback) feedback.textContent = "Atualizando ciclo de recompensas...";
+  const cached = readDailyLoginCache();
+  renderDailyLoginModal(cached || dailyLoginStatus || {
+    available: false,
+    currentDay: 1,
+    streak: 0,
+  }, { forceOpen: true });
+  try {
+    const date = localCalendarDate();
+    const status = await requestApi(`/api/commerce/daily-login?date=${date}`, { headers: commerceAuthorization() });
+    dailyLoginCheckedFor = dailyLoginCheckKey(date);
+    persistDailyLoginCache(status);
+    renderDailyLoginModal(status, { forceOpen: true });
+    if (feedback) feedback.textContent = status.available
+      ? "Sua recompensa de hoje está pronta."
+      : "Recompensa de hoje já resgatada. Volte após a meia-noite.";
+  } catch (error) {
+    if (cached) {
+      if (feedback) feedback.textContent = "Exibindo o último estado salvo. O servidor está indisponível.";
+      return;
+    }
+    showUxToast(error.message, { title: "RECOMPENSAS INDISPONÍVEIS", tone: "warning", duration: 3800 });
   }
 }
 
@@ -968,16 +1009,23 @@ async function claimDailyLoginReward() {
     await refreshCommerceProfile();
     dailyLoginStatus.available = false;
     dailyLoginStatus.streak = payload.day;
+    ui.menuDailyLoginIndicator?.classList.add("hidden");
     persistDailyLoginCache(dailyLoginStatus, { date: localCalendarDate(), timestamp: Date.now() });
-    window.setTimeout(() => document.getElementById("dailyLoginOverlay")?.classList.add("hidden"), payload.reward?.type === "skin" ? 4300 : 2300);
+    window.setTimeout(closeDailyLoginCenter, payload.reward?.type === "skin" ? 4300 : 2300);
   } catch (error) {
     if (feedback) feedback.textContent = error.message;
     button.disabled = false;
   }
 }
 
+function closeDailyLoginCenter() {
+  const overlay = document.getElementById("dailyLoginOverlay");
+  overlay?.classList.add("hidden");
+  overlay?.setAttribute("aria-hidden", "true");
+}
+
 document.getElementById("dailyLoginClaim")?.addEventListener("click", claimDailyLoginReward);
-document.getElementById("dailyLoginClose")?.addEventListener("click", () => document.getElementById("dailyLoginOverlay")?.classList.add("hidden"));
+document.getElementById("dailyLoginClose")?.addEventListener("click", closeDailyLoginCenter);
 function scheduleDailyLoginMidnightReset() {
   const next = new Date();
   next.setHours(24, 0, 0, 0);
@@ -12519,6 +12567,29 @@ function canOpenPauseMenu() {
     && ["buy", "action"].includes(game.phase);
 }
 
+const MENU_UTILITY_BLOCKING_OVERLAYS = Object.freeze([
+  "authOverlay", "welcomeOverlay", "updatesOverlay", "modeInfoOverlay",
+  "dailyLoginOverlay", "commerceOverlay", "missionsOverlay", "blackMarketOverlay",
+  "playerProfileOverlay", "globalRankingOverlay", "agentOverlay", "introOverlay",
+  "tutorialOverlay", "matchOverlay", "pauseMenuOverlay",
+]);
+
+function isOverlayOpen(element) {
+  if (!element || element.classList.contains("hidden")) return false;
+  return element.getAttribute("aria-hidden") !== "true";
+}
+
+function syncMainMenuUtilities() {
+  const menuIsOpen = game.menuState === "main"
+    && ui.menuOverlay
+    && !ui.menuOverlay.classList.contains("hidden");
+  const modalIsOpen = MENU_UTILITY_BLOCKING_OVERLAYS.some((id) => isOverlayOpen(document.getElementById(id)));
+  const shouldShow = Boolean(menuIsOpen && !modalIsOpen);
+  document.body?.classList.toggle("menu-utilities-suppressed", !shouldShow);
+  ui.menuUtilityDock?.classList.toggle("hidden", !shouldShow);
+  ui.mainCoreWallet?.classList.toggle("hidden", !shouldShow || Boolean(currentProfile?.isGuest));
+}
+
 function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
   hidePauseOverlay();
   if (state !== "main") hideMenuTour();
@@ -12561,9 +12632,7 @@ function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
   ui.menuOverlay?.classList.remove("hidden");
   game.paused = true;
   game.menuState = state;
-  ui.mainCoreWallet?.classList.toggle("hidden", state !== "main" || currentProfile?.isGuest);
-  ui.menuTutorialButton?.classList.toggle("hidden", state !== "main");
-  ui.menuUpdatesButton?.classList.toggle("hidden", state !== "main");
+  syncMainMenuUtilities();
   syncMenuMusic(true);
 }
 
@@ -16160,6 +16229,7 @@ ui.globalRankingOverlay?.addEventListener("pointerdown", (event) => {
 });
 ui.menuTutorialButton?.addEventListener("click", () => showWelcomeScreen({ firstAccess: false }));
 ui.menuUpdatesButton?.addEventListener("click", () => void openUpdateNotes());
+ui.menuDailyLoginButton?.addEventListener("click", () => void openDailyLoginCenter());
 ui.updatesCloseButton?.addEventListener("click", () => void closeUpdateNotes());
 ui.updatesPreviousButton?.addEventListener("click", () => renderUpdateRelease(activeUpdateReleaseIndex - 1));
 ui.updatesNextButton?.addEventListener("click", () => renderUpdateRelease(activeUpdateReleaseIndex + 1));
@@ -16171,6 +16241,14 @@ ui.modeInfoConfirmButton?.addEventListener("click", closeModeInfo);
 ui.modeInfoOverlay?.addEventListener("pointerdown", (event) => {
   if (event.target === ui.modeInfoOverlay) closeModeInfo();
 });
+
+const menuUtilityVisibilityObserver = new MutationObserver(syncMainMenuUtilities);
+[ui.menuOverlay, ...MENU_UTILITY_BLOCKING_OVERLAYS.map((id) => document.getElementById(id))]
+  .filter(Boolean)
+  .forEach((element) => menuUtilityVisibilityObserver.observe(element, {
+    attributes: true,
+    attributeFilter: ["class", "aria-hidden"],
+  }));
 ui.menuTourNextButton?.addEventListener("click", advanceMenuTour);
 ui.menuTourSkipButton?.addEventListener("click", () => void finishMenuTour());
 ui.commerceCloseButton?.addEventListener("click", closeCommerceStore);

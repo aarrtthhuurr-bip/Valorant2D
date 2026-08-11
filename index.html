@@ -344,14 +344,22 @@
         <div class="core-wallet main-core-wallet hidden" id="mainCoreWallet" aria-label="Saldo de Core">
           <span class="core-icon" aria-hidden="true"><img src="./assets/images/core_v5_bright.png" alt=""></span><strong id="mainCoreBalance">0</strong><em>C</em>
         </div>
-        <button type="button" class="menu-tutorial-shortcut hidden" id="menuTutorialButton" aria-label="Abrir ajuda do jogo">?</button>
-        <button type="button" class="menu-updates-shortcut hidden" id="menuUpdatesButton" aria-label="Ver novidades da versão" title="Novidades">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M5 13V9l11-4v12L5 13Z"></path>
-            <path d="M8 14v5h3l1-4M18 8v6"></path>
-          </svg>
-          <span class="menu-updates-badge hidden" id="menuUpdatesBadge">NOVO</span>
-        </button>
+        <nav class="menu-utility-dock hidden" id="menuUtilityDock" aria-label="Atalhos do menu">
+          <button type="button" class="menu-utility-shortcut menu-tutorial-shortcut" id="menuTutorialButton" aria-label="Abrir ajuda do jogo" title="Ajuda">?</button>
+          <button type="button" class="menu-utility-shortcut menu-updates-shortcut" id="menuUpdatesButton" aria-label="Ver novidades da versão" title="Novidades">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M5 13V9l11-4v12L5 13Z"></path>
+              <path d="M8 14v5h3l1-4M18 8v6"></path>
+            </svg>
+            <span class="menu-updates-badge hidden" id="menuUpdatesBadge">NOVO</span>
+          </button>
+          <button type="button" class="menu-utility-shortcut menu-daily-shortcut" id="menuDailyLoginButton" aria-label="Ver recompensas diárias" title="Recompensas diárias">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 9h16v11H4Z"></path><path d="M3 6h18v3H3ZM12 6v14M7.5 6C5 4.5 6 2 8 3c1.5.7 2.7 3 4 3ZM16.5 6C19 4.5 18 2 16 3c-1.5.7-2.7 3-4 3Z"></path>
+            </svg>
+            <span class="menu-daily-indicator hidden" id="menuDailyLoginIndicator" aria-label="Recompensa disponível"></span>
+          </button>
+        </nav>
         <div class="menu-card glass">
           <div class="account-summary hidden" id="accountSummary">
             <button type="button" class="account-profile-trigger" id="profileButton" aria-label="Abrir perfil do jogador">
