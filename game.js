@@ -831,6 +831,7 @@ let dailyLoginStatus = null;
 let dailyLoginCheckedFor = "";
 let dailyRouletteTimer = 0;
 let dailyLoginRetryTimer = 0;
+let dailyClaimAnimationTimer = 0;
 const DAILY_LOGIN_STORAGE_PREFIX = "valorant2d:daily-login";
 
 function localCalendarDate(date = new Date()) {
@@ -877,7 +878,12 @@ function renderDailyLoginModal(status, { forceOpen = false } = {}) {
   if (!status.loading) persistDailyLoginCache(status);
   window.clearTimeout(dailyRouletteTimer);
   dailyRouletteTimer = 0;
+  window.clearTimeout(dailyClaimAnimationTimer);
+  dailyClaimAnimationTimer = 0;
   document.getElementById("dailyRoulette")?.classList.add("hidden");
+  document.getElementById("dailyClaimCelebration")?.classList.add("hidden");
+  document.getElementById("dailyTomorrow")?.classList.add("hidden");
+  document.querySelector(".daily-login-modal")?.classList.remove("is-celebrating", "is-showing-tomorrow");
   days.innerHTML = DAILY_LOGIN_REWARDS.map((reward, index) => {
     const day = index + 1;
     const loading = Boolean(status.loading);
@@ -885,7 +891,7 @@ function renderDailyLoginModal(status, { forceOpen = false } = {}) {
     const available = !loading && status.available && day === status.currentDay;
     const stateClass = loading ? "is-pending" : claimed ? "is-claimed" : available ? "is-available" : "is-locked";
     const stateLabel = loading ? "VERIFICANDO" : claimed ? "RESGATADO" : available ? "DISPONÍVEL" : "BLOQUEADO";
-    return `<article class="${stateClass} reward-${reward.type}" data-reward-type="${reward.type}"><small>DIA ${day}</small><i>${reward.type === "skin" ? "◇" : reward.type === "gadget" ? "⌁" : "C"}</i><strong>${reward.label}</strong><span>${stateLabel}</span></article>`;
+    return `<article class="${stateClass} reward-${reward.type}" data-reward-type="${reward.type}">${available ? '<b class="daily-reward-alert" aria-label="Recompensa pendente">!</b>' : ""}<small>DIA ${day}</small><i>${reward.type === "skin" ? "◇" : reward.type === "gadget" ? "⌁" : "C"}</i><strong>${reward.label}</strong><span>${stateLabel}</span></article>`;
   }).join("");
   document.getElementById("dailyLoginClaim").disabled = Boolean(status.loading) || !status.available;
   ui.menuDailyLoginIndicator?.classList.toggle("hidden", !status.available);
@@ -949,7 +955,7 @@ async function openDailyLoginCenter() {
     renderDailyLoginModal(status, { forceOpen: true });
     if (feedback) feedback.textContent = status.available
       ? "Sua recompensa de hoje está pronta."
-      : "Recompensa de hoje já resgatada. Volte após a meia-noite.";
+      : "Recompensa de hoje já resgatada. Volte amanhã!";
   } catch (error) {
     if (cached) {
       if (feedback) feedback.textContent = "Exibindo o último estado salvo. O servidor está indisponível.";
@@ -957,6 +963,43 @@ async function openDailyLoginCenter() {
     }
     showUxToast(error.message, { title: "RECOMPENSAS INDISPONÍVEIS", tone: "warning", duration: 3800 });
   }
+}
+
+function dailyRewardGlyph(reward) {
+  return reward?.type === "skin" ? "◇" : reward?.type === "gadget" ? "⌁" : "C";
+}
+
+function playDailyClaimCelebration(reward, day) {
+  const modal = document.querySelector(".daily-login-modal");
+  const celebration = document.getElementById("dailyClaimCelebration");
+  const icon = document.getElementById("dailyClaimCelebrationIcon");
+  const name = document.getElementById("dailyClaimCelebrationName");
+  if (!modal || !celebration || !icon || !name) return;
+  window.clearTimeout(dailyClaimAnimationTimer);
+  icon.textContent = dailyRewardGlyph(reward);
+  name.textContent = reward?.name || (reward?.type === "core" ? `${reward.amount} C` : DAILY_LOGIN_REWARDS[day - 1]?.label || "RECOMPENSA");
+  celebration.className = `daily-claim-celebration reward-${reward?.type || "core"}`;
+  modal.classList.add("is-celebrating");
+  dailyClaimAnimationTimer = window.setTimeout(() => {
+    celebration.classList.add("hidden");
+    modal.classList.remove("is-celebrating");
+    dailyClaimAnimationTimer = 0;
+    if (day === 1) showDailyTomorrowReward();
+    else closeDailyLoginCenter();
+  }, 1900);
+}
+
+function showDailyTomorrowReward() {
+  const modal = document.querySelector(".daily-login-modal");
+  const panel = document.getElementById("dailyTomorrow");
+  const preview = document.getElementById("dailyTomorrowReward");
+  const reward = DAILY_LOGIN_REWARDS[1];
+  if (!modal || !panel || !preview || !reward) return;
+  preview.className = `reward-${reward.type}`;
+  preview.innerHTML = `<b class="daily-reward-alert" aria-hidden="true">!</b><small>DIA 2</small><i>${dailyRewardGlyph(reward)}</i><strong>${reward.label}</strong><span>PRÓXIMA RECOMPENSA</span>`;
+  modal.classList.add("is-showing-tomorrow");
+  panel.classList.remove("hidden");
+  document.getElementById("dailyTomorrowClose")?.focus();
 }
 
 function playDailySkinRoulette(reward) {
@@ -1016,7 +1059,17 @@ async function claimDailyLoginReward() {
     dailyLoginStatus.streak = payload.day;
     ui.menuDailyLoginIndicator?.classList.add("hidden");
     persistDailyLoginCache(dailyLoginStatus, { date: localCalendarDate(), timestamp: Date.now() });
-    window.setTimeout(closeDailyLoginCenter, payload.reward?.type === "skin" ? 4300 : 2300);
+    const claimedCard = document.querySelector(".daily-login-days .is-available");
+    claimedCard?.classList.remove("is-available");
+    claimedCard?.classList.add("is-claimed");
+    claimedCard?.querySelector(".daily-reward-alert")?.remove();
+    const claimedState = claimedCard?.querySelector("span");
+    if (claimedState) claimedState.textContent = "RESGATADO";
+    if (payload.reward?.type === "skin") {
+      dailyClaimAnimationTimer = window.setTimeout(() => playDailyClaimCelebration(payload.reward, payload.day), 3200);
+    } else {
+      playDailyClaimCelebration(payload.reward, payload.day);
+    }
   } catch (error) {
     if (feedback) feedback.textContent = error.message;
     button.disabled = false;
@@ -1025,12 +1078,18 @@ async function claimDailyLoginReward() {
 
 function closeDailyLoginCenter() {
   const overlay = document.getElementById("dailyLoginOverlay");
+  window.clearTimeout(dailyClaimAnimationTimer);
+  dailyClaimAnimationTimer = 0;
+  document.querySelector(".daily-login-modal")?.classList.remove("is-celebrating", "is-showing-tomorrow");
+  document.getElementById("dailyClaimCelebration")?.classList.add("hidden");
+  document.getElementById("dailyTomorrow")?.classList.add("hidden");
   overlay?.classList.add("hidden");
   overlay?.setAttribute("aria-hidden", "true");
 }
 
 document.getElementById("dailyLoginClaim")?.addEventListener("click", claimDailyLoginReward);
 document.getElementById("dailyLoginClose")?.addEventListener("click", closeDailyLoginCenter);
+document.getElementById("dailyTomorrowClose")?.addEventListener("click", closeDailyLoginCenter);
 function scheduleDailyLoginMidnightReset() {
   const next = new Date();
   next.setHours(24, 0, 0, 0);
