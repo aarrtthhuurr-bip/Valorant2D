@@ -1,35 +1,110 @@
 {
-  "version": "0.9.4",
+  "version": "0.9.5",
   "status": "published",
   "channel": "stable",
-  "publishedAt": "2026-08-08T18:45:00-03:00",
-  "title": "Atualização 0.9.4 — Controle Total",
-  "summary": "O mobile recebeu painéis mais densos, autofire controlável e novas interações visuais no Black Market.",
+  "publishedAt": "2026-08-11T21:10:00-03:00",
+  "title": "Atualização 0.9.5 — Progressão do Agente",
+  "summary": "Recompensas diárias, missões, conquistas, roletas de skins e uma coleção mais ágil formam o maior ciclo de progressão do Valorant2D até agora.",
   "highlights": [
     {
-      "title": "Histórico de atualizações",
-      "description": "Agora é possível navegar pelas versões anteriores diretamente no painel O Que Há de Novo.",
+      "title": "Ciclo de recompensas diárias",
+      "description": "Uma sequência de sete dias entrega Core, Utilitários Proibidos e skins, com liberação diária baseada na data local.",
       "type": "system"
     },
     {
-      "title": "Crate animado no Black Market",
-      "description": "O Sinalizador de Suprimentos recebeu uma abertura interativa em três estágios, com pausas e estado final persistente.",
+      "title": "Primeiro presente imediato",
+      "description": "Contas novas podem resgatar o Dia 1 assim que concluem sua introdução, sem precisar esperar pela próxima meia-noite.",
+      "type": "system"
+    },
+    {
+      "title": "Central de recompensas",
+      "description": "O novo atalho no canto inferior direito permite consultar o ciclo a qualquer momento e exibe um alerta enquanto houver um presente pendente.",
       "type": "interface"
     },
     {
-      "title": "Menus mobile mais compactos",
-      "description": "Modais, tipografia, botões e seleção de modos foram recalibrados para celulares em landscape.",
+      "title": "Painel diário revitalizado",
+      "description": "Cards maiores, textos mais legíveis, cores por tipo de prêmio e estados claros distinguem recompensas disponíveis, resgatadas e bloqueadas.",
       "type": "interface"
     },
     {
-      "title": "Autofire sob controle",
-      "description": "O disparo automático pode ser ligado ou desligado nas opções e diretamente pelo HUD touch.",
+      "title": "Celebração de resgate",
+      "description": "Animações, confirmações visuais e a apresentação especial do próximo dia tornam cada recompensa mais satisfatória.",
+      "type": "interface"
+    },
+    {
+      "title": "Roleta de skins cinematográfica",
+      "description": "A faixa agora parece infinita, desacelera gradualmente e termina em uma posição variável, sempre mantendo o item correto sob o seletor.",
+      "type": "interface"
+    },
+    {
+      "title": "Raridade legível na roleta",
+      "description": "Somente skins de maior valor recebem o tratamento dourado; o prêmio deixa de ser denunciado antecipadamente pela cor.",
+      "type": "interface"
+    },
+    {
+      "title": "Revelação do item sorteado",
+      "description": "Ao final do giro, a arma vencedora ocupa o centro em tamanho ampliado e recebe uma chuva de confetes.",
+      "type": "interface"
+    },
+    {
+      "title": "Laboratório administrativo de skins",
+      "description": "Administradores podem testar a roleta sem alterar o inventário e reivindicar o resultado manualmente quando desejarem.",
+      "type": "development"
+    },
+    {
+      "title": "Inventário unificado",
+      "description": "A coleção exibe somente itens adquiridos em uma grade compacta, com filtros rápidos por categoria de arma.",
+      "type": "interface"
+    },
+    {
+      "title": "Equipamento de skins em um clique",
+      "description": "O primeiro clique equipa imediatamente; clicar novamente na mesma skin restaura o visual padrão da arma.",
+      "type": "system"
+    },
+    {
+      "title": "Missões em painel próprio",
+      "description": "Contratos, progresso e resgate de Core foram separados da loja para oferecer uma navegação mais direta.",
+      "type": "interface"
+    },
+    {
+      "title": "Conquistas locais",
+      "description": "Marcos de partidas, vitórias e sobrevivência agora aparecem no perfil e concedem recompensas de progressão.",
       "type": "gameplay"
     },
     {
-      "title": "Novas animações proibidas",
-      "description": "A Injeção de Adrenalina e o Dispositivo de Camuflagem agora exibem suas animações em pixel art ao explorar os cards do Black Market.",
+      "title": "Recompensas resilientes",
+      "description": "Ganhos pendentes são preservados localmente e sincronizados quando a conexão retorna, reduzindo perdas em instabilidades do servidor.",
+      "type": "system"
+    },
+    {
+      "title": "Bots e orbes corrigidos",
+      "description": "Bots voltaram a respeitar o tempo normal de canalização e abandonam alvos inválidos sem permanecer travados ao lado dos orbes.",
+      "type": "gameplay"
+    },
+    {
+      "title": "Movimentação mais suave nas quinas",
+      "description": "A resposta de colisão foi refinada para reduzir engates e manter o deslizamento natural junto às paredes.",
+      "type": "gameplay"
+    },
+    {
+      "title": "Menu mobile fiel ao desktop",
+      "description": "A composição de colunas do menu principal foi preservada e escalada para landscape, evitando sobreposições e espaços mortos.",
       "type": "interface"
+    },
+    {
+      "title": "Viewport e modais recalibrados",
+      "description": "Safe areas, escala do Canvas, menus e janelas receberam novos limites responsivos para celulares e tablets.",
+      "type": "interface"
+    },
+    {
+      "title": "Playlist ampliada e aleatória",
+      "description": "O menu ganhou uma seleção maior de faixas, reproduzidas em ordem aleatória sem repetição imediata.",
+      "type": "system"
+    },
+    {
+      "title": "Ambiente local de testes",
+      "description": "Live Server, CSP e API local foram alinhados para testar novas versões sem depender do deploy público.",
+      "type": "development"
     }
   ],
   "releases": [

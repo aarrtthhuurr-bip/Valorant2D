@@ -522,7 +522,7 @@ function renderUpdateRelease(index) {
   if (ui.updatesNextButton) ui.updatesNextButton.disabled = activeUpdateReleaseIndex === updatesReleases.length - 1;
   if (!ui.updatesList) return;
   ui.updatesList.replaceChildren(...release.highlights.map((highlight, itemIndex) => {
-    const item = document.createElement("article");
+    const item = document.createElement("li");
     item.className = "updates-item";
     item.dataset.type = highlight.type || "system";
     const order = document.createElement("span");
