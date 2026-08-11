@@ -60,6 +60,11 @@ class Commerce {
     const lastDate = state?.last_claim_date ? new Date(state.last_claim_date).toISOString().slice(0, 10) : null;
     const elapsed = lastDate ? Math.round((new Date(`${date}T12:00:00Z`) - new Date(`${lastDate}T12:00:00Z`)) / 86400000) : null;
     const currentStreak = Number(state?.streak) || 0;
+    // A primeira visita já libera o Dia 1. Somente quem efetivamente resgatou
+    // uma recompensa precisa aguardar a virada da data local.
+    if (!lastDate && currentStreak === 0) {
+      return { available: true, currentDay: 1, streak: 0, lastClaimDate: null };
+    }
     // O ciclo não depende de uma janela móvel de 24 horas nem pune dias
     // ausentes: a cada nova data local avança um passo e reinicia após o dia 7.
     const nextDay = elapsed === 0 ? currentStreak : currentStreak % 7 + 1;

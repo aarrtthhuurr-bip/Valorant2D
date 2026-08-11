@@ -873,17 +873,20 @@ function renderDailyLoginModal(status, { forceOpen = false } = {}) {
   const days = document.getElementById("dailyLoginDays");
   if (!overlay || !days) return;
   dailyLoginStatus = status;
-  persistDailyLoginCache(status);
+  if (!status.loading) persistDailyLoginCache(status);
   window.clearTimeout(dailyRouletteTimer);
   dailyRouletteTimer = 0;
   document.getElementById("dailyRoulette")?.classList.add("hidden");
   days.innerHTML = DAILY_LOGIN_REWARDS.map((reward, index) => {
     const day = index + 1;
-    const claimed = !status.available && day <= status.streak || status.available && day < status.currentDay;
-    const available = status.available && day === status.currentDay;
-    return `<article class="${claimed ? "is-claimed" : available ? "is-available" : "is-locked"}"><small>DIA ${day}</small><i>${reward.type === "skin" ? "◇" : reward.type === "gadget" ? "⌁" : "C"}</i><strong>${reward.label}</strong><span>${claimed ? "RESGATADO" : available ? "DISPONÍVEL" : "BLOQUEADO"}</span></article>`;
+    const loading = Boolean(status.loading);
+    const claimed = !loading && (!status.available && day <= status.streak || status.available && day < status.currentDay);
+    const available = !loading && status.available && day === status.currentDay;
+    const stateClass = loading ? "is-pending" : claimed ? "is-claimed" : available ? "is-available" : "is-locked";
+    const stateLabel = loading ? "VERIFICANDO" : claimed ? "RESGATADO" : available ? "DISPONÍVEL" : "BLOQUEADO";
+    return `<article class="${stateClass} reward-${reward.type}" data-reward-type="${reward.type}"><small>DIA ${day}</small><i>${reward.type === "skin" ? "◇" : reward.type === "gadget" ? "⌁" : "C"}</i><strong>${reward.label}</strong><span>${stateLabel}</span></article>`;
   }).join("");
-  document.getElementById("dailyLoginClaim").disabled = !status.available;
+  document.getElementById("dailyLoginClaim").disabled = Boolean(status.loading) || !status.available;
   ui.menuDailyLoginIndicator?.classList.toggle("hidden", !status.available);
   const shouldOpen = forceOpen || status.available;
   overlay.classList.toggle("hidden", !shouldOpen);
@@ -935,6 +938,7 @@ async function openDailyLoginCenter() {
     available: false,
     currentDay: 1,
     streak: 0,
+    loading: true,
   }, { forceOpen: true });
   try {
     const date = localCalendarDate();

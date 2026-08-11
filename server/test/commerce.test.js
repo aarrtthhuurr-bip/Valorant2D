@@ -100,6 +100,22 @@ test('login diário avança por data local e reinicia somente depois do dia 7', 
   }
 });
 
+test('primeiro login libera o Dia 1 imediatamente', async () => {
+  const originalGet = database.get;
+  database.get = async () => undefined;
+  try {
+    const status = await Commerce.dailyLoginStatus(91, new Date().toISOString().slice(0, 10));
+    assert.deepEqual(status, {
+      available: true,
+      currentDay: 1,
+      streak: 0,
+      lastClaimDate: null,
+    });
+  } finally {
+    database.get = originalGet;
+  }
+});
+
 test('perfil comercial exige uma sessão válida', async () => {
   const original = Session.findValid;
   Session.findValid = async () => undefined;
