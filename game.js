@@ -663,6 +663,13 @@ function clearStoredSession() {
   localStorage.removeItem(AUTH_STORAGE_KEY);
   commerceState.profile = null;
   equippedWeaponSkinPaths = {};
+  dailyLoginCheckedFor = "";
+  dailyLoginStatus = null;
+  window.clearTimeout(dailyLoginRetryTimer);
+  dailyLoginRetryTimer = 0;
+  const dailyOverlay = document.getElementById("dailyLoginOverlay");
+  dailyOverlay?.classList.add("hidden");
+  dailyOverlay?.setAttribute("aria-hidden", "true");
   renderEasterEggCodes([]);
 }
 
@@ -818,6 +825,7 @@ const DAILY_LOGIN_REWARDS = [
 let dailyLoginStatus = null;
 let dailyLoginCheckedFor = "";
 let dailyRouletteTimer = 0;
+let dailyLoginRetryTimer = 0;
 const DAILY_LOGIN_STORAGE_PREFIX = "valorant2d:daily-login";
 
 function localCalendarDate(date = new Date()) {
@@ -828,6 +836,10 @@ function localCalendarDate(date = new Date()) {
 function dailyLoginStorageKey() {
   const accountId = currentProfile?.id || currentProfile?.username || readStoredSession()?.user?.id || readStoredSession()?.user?.username || "guest";
   return `${DAILY_LOGIN_STORAGE_PREFIX}:${String(accountId).toLowerCase()}`;
+}
+
+function dailyLoginCheckKey(date = localCalendarDate()) {
+  return `${dailyLoginStorageKey()}:${date}`;
 }
 
 function readDailyLoginCache() {
@@ -875,19 +887,30 @@ function renderDailyLoginModal(status) {
 async function checkDailyLogin({ force = false } = {}) {
   if (currentProfile?.isGuest || !readStoredSession()?.token) return;
   const date = localCalendarDate();
-  if (!force && dailyLoginCheckedFor === date) return;
+  const checkKey = dailyLoginCheckKey(date);
+  if (!force && dailyLoginCheckedFor === checkKey) return;
   const cached = readDailyLoginCache();
   if (!force && cached?.lastCheckedDate === date && cached.available) {
     renderDailyLoginModal(cached);
   }
-  dailyLoginCheckedFor = date;
   try {
     const status = await requestApi(`/api/commerce/daily-login?date=${date}`, { headers: commerceAuthorization() });
+    dailyLoginCheckedFor = checkKey;
+    window.clearTimeout(dailyLoginRetryTimer);
+    dailyLoginRetryTimer = 0;
     persistDailyLoginCache(status);
     if (force || status.available || !document.getElementById("dailyLoginOverlay")?.classList.contains("hidden")) {
       renderDailyLoginModal(status);
     }
-  } catch (error) { console.warn("Recompensa diária indisponível:", error.message); }
+  } catch (error) {
+    dailyLoginCheckedFor = "";
+    console.warn("Recompensa diária indisponível:", error.message);
+    window.clearTimeout(dailyLoginRetryTimer);
+    dailyLoginRetryTimer = window.setTimeout(() => {
+      dailyLoginRetryTimer = 0;
+      if (!currentProfile?.isGuest && readStoredSession()?.token) void checkDailyLogin({ force: true });
+    }, 8000);
+  }
 }
 
 function playDailySkinRoulette(reward) {
@@ -966,13 +989,13 @@ function scheduleDailyLoginMidnightReset() {
 }
 scheduleDailyLoginMidnightReset();
 window.addEventListener("focus", () => {
-  if (dailyLoginCheckedFor !== localCalendarDate()) {
+  if (dailyLoginCheckedFor !== dailyLoginCheckKey()) {
     dailyLoginCheckedFor = "";
     void checkDailyLogin();
   }
 });
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden && dailyLoginCheckedFor !== localCalendarDate()) {
+  if (!document.hidden && dailyLoginCheckedFor !== dailyLoginCheckKey()) {
     dailyLoginCheckedFor = "";
     void checkDailyLogin();
   }
