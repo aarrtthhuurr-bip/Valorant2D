@@ -1036,6 +1036,19 @@ function showDailyTomorrowReward() {
   dailyClaimAnimationTimer = window.setTimeout(closeDailyLoginCenter, 2800);
 }
 
+function rouletteItemClass(skin, selected = false) {
+  const referencePrice = Number(skin?.originalPrice ?? skin?.price) || 0;
+  const isHighValue = referencePrice >= 180 || skin?.rarity === "premium" || skin?.rarity === "exclusive";
+  return `daily-roulette-item${selected ? " is-selected" : ""}${isHighValue ? " is-high-value" : ""}`;
+}
+
+function rouletteLandingOffset(index, step) {
+  // O marcador termina em um ponto diferente do card a cada giro, mas sempre
+  // permanece dentro dele para não criar ambiguidade sobre o item sorteado.
+  const landingJitter = Math.round((Math.random() * 64) - 32);
+  return -(index * step) + landingJitter;
+}
+
 function playDailySkinRoulette(reward) {
   const roulette = document.getElementById("dailyRoulette");
   const track = document.getElementById("dailyRouletteTrack");
@@ -1043,18 +1056,19 @@ function playDailySkinRoulette(reward) {
   if (!roulette || !track || !name) return;
   window.clearTimeout(dailyRouletteTimer);
   const catalog = commerceState.profile?.catalog || [];
-  const pool = catalog.length ? catalog : [reward];
+  const resolvedReward = catalog.find((skin) => skin.id === reward.id) || reward;
+  const pool = catalog.length ? catalog : [resolvedReward];
   const randomSkin = () => pool[Math.floor(Math.random() * pool.length)];
   // Mantém cards antes do ponto inicial e depois do prêmio para que o trilho
   // nunca revele suas extremidades durante a animação.
   const initialIndex = 6;
-  const winnerIndex = 34;
+  const winnerIndex = 32 + Math.floor(Math.random() * 5);
   const candidates = Array.from({ length: 43 }, randomSkin);
-  candidates[winnerIndex] = reward;
+  candidates[winnerIndex] = resolvedReward;
   track.classList.remove("is-spinning", "is-complete");
   track.replaceChildren(...candidates.map((skin, index) => {
     const item = document.createElement("article");
-    item.className = `daily-roulette-item${index === winnerIndex ? " is-winner" : ""}`;
+    item.className = rouletteItemClass(skin, index === winnerIndex);
     const image = document.createElement("img");
     image.src = skin.imagePath || "./assets/Favicon/V2D_transparent.png";
     image.alt = "";
@@ -1070,7 +1084,7 @@ function playDailySkinRoulette(reward) {
     const gap = Number.parseFloat(getComputedStyle(track).columnGap) || 8;
     const step = itemWidth + gap;
     track.style.setProperty("--roulette-start", `${-(initialIndex * step)}px`);
-    track.style.setProperty("--roulette-offset", `${-(winnerIndex * step)}px`);
+    track.style.setProperty("--roulette-offset", `${rouletteLandingOffset(winnerIndex, step)}px`);
     requestAnimationFrame(() => track.classList.add("is-spinning"));
   });
   dailyRouletteTimer = window.setTimeout(() => {
@@ -14662,7 +14676,7 @@ async function openAdminSkinRoulette() {
     if (!catalog.length) throw new Error("O catálogo de skins está indisponível.");
     const winner = catalog[Math.floor(Math.random() * catalog.length)];
     const initialIndex = 6;
-    const winnerIndex = 35;
+    const winnerIndex = 33 + Math.floor(Math.random() * 5);
     const sequence = Array.from({ length: 44 }, () => catalog[Math.floor(Math.random() * catalog.length)]);
     sequence[winnerIndex] = winner;
     adminRouletteWinner = winner;
@@ -14679,7 +14693,7 @@ async function openAdminSkinRoulette() {
     ui.adminRouletteTrack.style.removeProperty("--roulette-offset");
     ui.adminRouletteTrack.replaceChildren(...sequence.map((skin, index) => {
       const item = document.createElement("article");
-      item.className = `daily-roulette-item${index === winnerIndex ? " is-winner" : ""}`;
+      item.className = rouletteItemClass(skin, index === winnerIndex);
       const image = document.createElement("img");
       image.src = skin.imagePath;
       image.alt = "";
@@ -14695,7 +14709,7 @@ async function openAdminSkinRoulette() {
       const gap = Number.parseFloat(getComputedStyle(ui.adminRouletteTrack).columnGap) || 8;
       const step = itemWidth + gap;
       ui.adminRouletteTrack.style.setProperty("--roulette-start", `${-(initialIndex * step)}px`);
-      ui.adminRouletteTrack.style.setProperty("--roulette-offset", `${-(winnerIndex * step)}px`);
+      ui.adminRouletteTrack.style.setProperty("--roulette-offset", `${rouletteLandingOffset(winnerIndex, step)}px`);
       requestAnimationFrame(() => ui.adminRouletteTrack.classList.add("is-spinning"));
     });
     adminRouletteTimer = window.setTimeout(() => {

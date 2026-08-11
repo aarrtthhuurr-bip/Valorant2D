@@ -6208,9 +6208,11 @@ button.click-feedback::after {
 .daily-roulette-item { display:grid; width:140px; height:76px; flex:0 0 140px; padding:5px; place-items:center; grid-template-rows:50px auto; border:1px solid rgba(130,158,174,.18); background:rgba(13,24,33,.92); opacity:.72; }
 .daily-roulette-item img { width:120px; height:48px; object-fit:contain; image-rendering:auto; }
 .daily-roulette-item span { overflow:hidden; max-width:126px; color:#9aabb3; font-size:7px; letter-spacing:.06em; text-overflow:ellipsis; white-space:nowrap; }
-.daily-roulette-item.is-winner { border-color:rgba(255,209,102,.78); background:rgba(74,59,19,.72); opacity:1; }
-.daily-roulette-track.is-complete .daily-roulette-item.is-winner { animation:dailyRouletteWinner .8s ease-in-out infinite alternate; }
-@keyframes dailyRouletteWinner { to { border-color:#fff0a8; box-shadow:0 0 22px rgba(255,209,102,.35); filter:brightness(1.18); } }
+.daily-roulette-item.is-high-value { border-color:rgba(255,209,102,.7); background:rgba(74,59,19,.58); opacity:.94; }
+.daily-roulette-track.is-complete .daily-roulette-item.is-selected:not(.is-high-value) { border-color:rgba(84,214,231,.75); background:rgba(20,72,82,.58); opacity:1; animation:dailyRouletteWinner .8s ease-in-out infinite alternate; }
+.daily-roulette-track.is-complete .daily-roulette-item.is-selected.is-high-value { opacity:1; animation:dailyRouletteRareWinner .8s ease-in-out infinite alternate; }
+@keyframes dailyRouletteWinner { to { border-color:#baf8ff; box-shadow:0 0 22px rgba(84,214,231,.34); filter:brightness(1.16); } }
+@keyframes dailyRouletteRareWinner { to { border-color:#fff0a8; box-shadow:0 0 24px rgba(255,209,102,.42); filter:brightness(1.2); } }
 @media(max-width:760px){.daily-login-days{grid-template-columns:repeat(4,1fr);max-height:52vh;overflow-y:auto}.daily-login-days article{min-height:105px}.profile-achievements-list{grid-template-columns:1fr}}
 
 
