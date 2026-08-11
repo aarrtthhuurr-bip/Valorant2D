@@ -6204,7 +6204,7 @@ button.click-feedback::after {
 .daily-roulette-window::before { content:""; position:absolute; z-index:3; top:0; bottom:0; left:50%; width:142px; border-inline:1px solid #ffd166; background:linear-gradient(90deg,transparent,rgba(255,209,102,.07),transparent); transform:translateX(-50%); pointer-events:none; }
 .daily-roulette-window::after { content:""; position:absolute; z-index:4; inset:0; background:linear-gradient(90deg,#060d14,transparent 18%,transparent 82%,#060d14); pointer-events:none; }
 .daily-roulette-track { display:flex; width:max-content; height:100%; align-items:center; gap:8px; padding-inline:calc(50% - 70px); transform:translateX(0); will-change:transform; }
-.daily-roulette-track.is-spinning { transform:translateX(var(--roulette-offset, 0px)); transition:transform 2.85s cubic-bezier(.12,.68,.08,1); }
+.daily-roulette-track.is-spinning { transform:translateX(var(--roulette-offset, 0px)); transition:transform 5.15s cubic-bezier(.08,.72,.06,1); }
 .daily-roulette-item { display:grid; width:140px; height:76px; flex:0 0 140px; padding:5px; place-items:center; grid-template-rows:50px auto; border:1px solid rgba(130,158,174,.18); background:rgba(13,24,33,.92); opacity:.72; }
 .daily-roulette-item img { width:120px; height:48px; object-fit:contain; image-rendering:auto; }
 .daily-roulette-item span { overflow:hidden; max-width:126px; color:#9aabb3; font-size:7px; letter-spacing:.06em; text-overflow:ellipsis; white-space:nowrap; }

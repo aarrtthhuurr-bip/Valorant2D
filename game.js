@@ -1063,8 +1063,9 @@ function playDailySkinRoulette(reward) {
   requestAnimationFrame(() => {
     const itemWidth = track.firstElementChild?.getBoundingClientRect().width || 140;
     const gap = Number.parseFloat(getComputedStyle(track).columnGap) || 8;
-    const viewportWidth = track.parentElement?.clientWidth || itemWidth;
-    const offset = Math.max(0, (candidates.length - 1) * (itemWidth + gap) - (viewportWidth - itemWidth) / 2);
+    // O padding do trilho já posiciona o primeiro card no centro. Portanto,
+    // basta deslocar exatamente a quantidade de passos até o vencedor.
+    const offset = Math.max(0, (candidates.length - 1) * (itemWidth + gap));
     track.style.setProperty("--roulette-offset", `${-offset}px`);
     requestAnimationFrame(() => track.classList.add("is-spinning"));
   });
@@ -1072,7 +1073,7 @@ function playDailySkinRoulette(reward) {
     track.classList.add("is-complete");
     name.textContent = reward.name;
     dailyRouletteTimer = 0;
-  }, 3100);
+  }, 5400);
 }
 
 async function claimDailyLoginReward() {
@@ -1100,7 +1101,7 @@ async function claimDailyLoginReward() {
     const claimedState = claimedCard?.querySelector("span");
     if (claimedState) claimedState.textContent = "RESGATADO";
     if (payload.reward?.type === "skin") {
-      dailyClaimAnimationTimer = window.setTimeout(() => playDailyClaimCelebration(payload.reward, payload.day), 3200);
+      dailyClaimAnimationTimer = window.setTimeout(() => playDailyClaimCelebration(payload.reward, payload.day), 5550);
     } else {
       playDailyClaimCelebration(payload.reward, payload.day);
     }
@@ -14686,8 +14687,9 @@ async function openAdminSkinRoulette() {
     requestAnimationFrame(() => {
       const itemWidth = ui.adminRouletteTrack.firstElementChild?.getBoundingClientRect().width || 140;
       const gap = Number.parseFloat(getComputedStyle(ui.adminRouletteTrack).columnGap) || 8;
-      const viewportWidth = ui.adminRouletteTrack.parentElement?.clientWidth || itemWidth;
-      const offset = Math.max(0, (sequence.length - 1) * (itemWidth + gap) - (viewportWidth - itemWidth) / 2);
+      // Assim como na roleta diária, o padding centraliza o primeiro card.
+      // Um passo completo por item faz o vencedor parar entre os marcadores.
+      const offset = Math.max(0, (sequence.length - 1) * (itemWidth + gap));
       ui.adminRouletteTrack.style.setProperty("--roulette-offset", `${-offset}px`);
       requestAnimationFrame(() => ui.adminRouletteTrack.classList.add("is-spinning"));
     });
@@ -14698,7 +14700,7 @@ async function openAdminSkinRoulette() {
       ui.adminRouletteActions.classList.remove("hidden");
       ui.adminRouletteKeep.focus();
       adminRouletteTimer = 0;
-    }, 3050);
+    }, 5400);
   } catch (error) {
     showOptionsFeedback(error.message);
   }
