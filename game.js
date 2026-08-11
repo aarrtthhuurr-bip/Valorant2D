@@ -269,6 +269,10 @@ const ui = {
   adminRouletteTrack: document.getElementById("adminRouletteTrack"),
   adminRouletteName: document.getElementById("adminRouletteName"),
   adminRouletteActions: document.getElementById("adminRouletteActions"),
+  adminRouletteReveal: document.getElementById("adminRouletteReveal"),
+  adminRouletteConfetti: document.getElementById("adminRouletteConfetti"),
+  adminRouletteWinnerImage: document.getElementById("adminRouletteWinnerImage"),
+  adminRouletteWinnerName: document.getElementById("adminRouletteWinnerName"),
   adminRouletteKeep: document.getElementById("adminRouletteKeep"),
   adminRouletteDiscard: document.getElementById("adminRouletteDiscard"),
   adminRouletteClose: document.getElementById("adminRouletteClose"),
@@ -14619,6 +14623,28 @@ function closeAdminSkinRoulette() {
   ui.adminRouletteOverlay?.classList.add("hidden");
   ui.adminRouletteOverlay?.setAttribute("aria-hidden", "true");
   ui.adminRouletteActions?.classList.add("hidden");
+  ui.adminRouletteReveal?.classList.add("hidden");
+  ui.adminRouletteConfetti?.replaceChildren();
+  document.querySelector(".admin-skin-roulette")?.classList.remove("is-revealed");
+}
+
+function revealAdminRouletteWinner(winner) {
+  if (!winner || !ui.adminRouletteReveal) return;
+  ui.adminRouletteWinnerImage.src = winner.imagePath;
+  ui.adminRouletteWinnerImage.alt = `${winner.name}, skin sorteada`;
+  ui.adminRouletteWinnerName.textContent = winner.name;
+  ui.adminRouletteConfetti.replaceChildren(...Array.from({ length: 34 }, (_, index) => {
+    const particle = document.createElement("i");
+    particle.style.setProperty("--confetti-index", index);
+    particle.style.setProperty("--confetti-x", `${8 + Math.random() * 84}%`);
+    particle.style.setProperty("--confetti-drift", `${-65 + Math.random() * 130}px`);
+    particle.style.setProperty("--confetti-delay", `${Math.random() * 0.28}s`);
+    particle.style.setProperty("--confetti-duration", `${1.25 + Math.random() * 0.75}s`);
+    particle.style.setProperty("--confetti-rotation", `${180 + Math.random() * 620}deg`);
+    return particle;
+  }));
+  document.querySelector(".admin-skin-roulette")?.classList.add("is-revealed");
+  ui.adminRouletteReveal.classList.remove("hidden");
 }
 
 async function openAdminSkinRoulette() {
@@ -14638,6 +14664,9 @@ async function openAdminSkinRoulette() {
     ui.adminRouletteFeedback.textContent = "A roleta não altera o inventário até sua confirmação.";
     ui.adminRouletteName.textContent = "SORTEANDO...";
     ui.adminRouletteActions.classList.add("hidden");
+    ui.adminRouletteReveal.classList.add("hidden");
+    ui.adminRouletteConfetti.replaceChildren();
+    document.querySelector(".admin-skin-roulette")?.classList.remove("is-revealed");
     ui.adminRouletteKeep.disabled = false;
     ui.adminRouletteKeep.textContent = "FICAR COM A SKIN";
     ui.adminRouletteTrack.classList.remove("is-spinning", "is-complete");
@@ -14666,6 +14695,7 @@ async function openAdminSkinRoulette() {
     adminRouletteTimer = window.setTimeout(() => {
       ui.adminRouletteTrack.classList.add("is-complete");
       ui.adminRouletteName.textContent = winner.name;
+      revealAdminRouletteWinner(winner);
       ui.adminRouletteActions.classList.remove("hidden");
       ui.adminRouletteKeep.focus();
       adminRouletteTimer = 0;
