@@ -6186,7 +6186,7 @@ button.click-feedback::after {
 .admin-roulette-confetti i:nth-child(4n+2) { --confetti-color:#54d6e7; width:9px; height:7px; }
 .admin-roulette-confetti i:nth-child(4n+3) { --confetti-color:#d7ad58; }
 .admin-roulette-confetti i:nth-child(4n+4) { --confetti-color:#a783e6; width:6px; height:10px; }
-.admin-roulette-actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; }
+.admin-roulette-actions { display:grid; grid-template-columns:minmax(220px,420px); justify-content:center; gap:10px; margin-top:14px; }
 .admin-roulette-actions.hidden { display:none; }
 .admin-roulette-actions button { min-height:46px; font-weight:900; letter-spacing:.08em; }
 .admin-roulette-keep { border-color:#56bd83; background:rgba(53,137,89,.2); color:#b8f4ce; }

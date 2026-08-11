@@ -274,7 +274,6 @@ const ui = {
   adminRouletteWinnerImage: document.getElementById("adminRouletteWinnerImage"),
   adminRouletteWinnerName: document.getElementById("adminRouletteWinnerName"),
   adminRouletteKeep: document.getElementById("adminRouletteKeep"),
-  adminRouletteDiscard: document.getElementById("adminRouletteDiscard"),
   adminRouletteClose: document.getElementById("adminRouletteClose"),
   adminRouletteFeedback: document.getElementById("adminRouletteFeedback"),
   menuTourLayer: document.getElementById("menuTourLayer"),
@@ -14668,7 +14667,7 @@ async function openAdminSkinRoulette() {
     ui.adminRouletteConfetti.replaceChildren();
     document.querySelector(".admin-skin-roulette")?.classList.remove("is-revealed");
     ui.adminRouletteKeep.disabled = false;
-    ui.adminRouletteKeep.textContent = "FICAR COM A SKIN";
+    ui.adminRouletteKeep.textContent = "REIVINDICAR";
     ui.adminRouletteTrack.classList.remove("is-spinning", "is-complete");
     ui.adminRouletteTrack.style.removeProperty("--roulette-offset");
     ui.adminRouletteTrack.replaceChildren(...sequence.map((skin, index) => {
@@ -14708,7 +14707,6 @@ async function openAdminSkinRoulette() {
 async function keepAdminRouletteSkin() {
   if (!adminRouletteWinner || !isAdminProfile()) return;
   ui.adminRouletteKeep.disabled = true;
-  ui.adminRouletteDiscard.disabled = true;
   ui.adminRouletteFeedback.textContent = "Adicionando skin ao inventário...";
   try {
     const result = await requestApi(`/api/commerce/admin/skins/${encodeURIComponent(adminRouletteWinner.id)}/grant`, {
@@ -14720,13 +14718,10 @@ async function keepAdminRouletteSkin() {
     ui.adminRouletteFeedback.textContent = result.added
       ? `${result.skin.name} foi adicionada ao inventário.`
       : `${result.skin.name} já estava no inventário.`;
-    ui.adminRouletteKeep.textContent = "ADICIONADA";
-    ui.adminRouletteDiscard.textContent = "FECHAR";
+    ui.adminRouletteKeep.textContent = "REIVINDICADA";
   } catch (error) {
     ui.adminRouletteFeedback.textContent = error.message;
     ui.adminRouletteKeep.disabled = false;
-  } finally {
-    ui.adminRouletteDiscard.disabled = false;
   }
 }
 
@@ -16455,7 +16450,6 @@ ui.menuTutorialButton?.addEventListener("click", () => showWelcomeScreen({ first
 ui.menuUpdatesButton?.addEventListener("click", () => void openUpdateNotes());
 ui.menuDailyLoginButton?.addEventListener("click", () => void openDailyLoginCenter());
 ui.adminRouletteClose?.addEventListener("click", closeAdminSkinRoulette);
-ui.adminRouletteDiscard?.addEventListener("click", closeAdminSkinRoulette);
 ui.adminRouletteKeep?.addEventListener("click", () => void keepAdminRouletteSkin());
 ui.adminRouletteOverlay?.addEventListener("pointerdown", (event) => {
   if (event.target === ui.adminRouletteOverlay) closeAdminSkinRoulette();
