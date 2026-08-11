@@ -315,13 +315,14 @@ const configuredApiUrl = document
   .querySelector('meta[name="valorant2d-api-url"]')
   ?.getAttribute("content")
   ?.trim();
-// Somente o servidor integrado em :3000 ativa a API local. Live Server e
-// GitHub Pages continuam usando a produção, evitando ambientes ambíguos.
-const isIntegratedLocalDevelopment = ["localhost", "127.0.0.1"].includes(window.location.hostname)
-  && window.location.port === "3000";
+// Tanto o servidor integrado quanto o Live Server oficial do projeto usam a
+// API local. Qualquer outra origem, incluindo o GitHub Pages, permanece ligada
+// ao Render para não misturar os ambientes de desenvolvimento e produção.
+const isLocalDevelopmentHost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+const usesLocalApi = isLocalDevelopmentHost && ["3000", "5500"].includes(window.location.port);
 const API_BASE_URL = (
-  isIntegratedLocalDevelopment
-    ? window.location.origin
+  usesLocalApi
+    ? "http://localhost:3000"
     : configuredApiUrl || "https://valorant2d.onrender.com"
 ).replace(/\/$/, "");
 // O Render pode precisar de alguns segundos extras para sair do estado de suspensão.
