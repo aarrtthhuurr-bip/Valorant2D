@@ -13,6 +13,7 @@ const { BLACK_MARKET_CATALOG, STARTER_GADGET_ID } = require('../data/blackMarket
 const { app } = require('../index');
 const Commerce = require('../models/Commerce');
 const Session = require('../models/Session');
+const database = require('../config/database');
 
 test('catálogo contém skins únicas e respeita o teto de 240 Core', () => {
   assert.equal(SKIN_CATALOG.length, 83);
@@ -77,6 +78,26 @@ test('banco de missões possui 30 objetivos em cada nível interno', () => {
   const daily = missionsForUser(7, new Date('2026-07-19T12:00:00.000Z'));
   assert.equal(daily.length, 3);
   assert.deepEqual(daily.map((mission) => mission.difficulty), ['easy', 'medium', 'hard']);
+});
+
+test('login diário avança por data local e reinicia somente depois do dia 7', async () => {
+  const originalGet = database.get;
+  const today = new Date();
+  const localToday = new Date(today.getTime() - today.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  const missedDate = new Date(`${localToday}T12:00:00Z`);
+  missedDate.setUTCDate(missedDate.getUTCDate() - 3);
+  database.get = async () => ({ streak: 3, last_claim_date: missedDate.toISOString().slice(0, 10) });
+  try {
+    const continued = await Commerce.dailyLoginStatus(7, localToday);
+    assert.equal(continued.available, true);
+    assert.equal(continued.currentDay, 4);
+
+    database.get = async () => ({ streak: 7, last_claim_date: missedDate.toISOString().slice(0, 10) });
+    const restarted = await Commerce.dailyLoginStatus(7, localToday);
+    assert.equal(restarted.currentDay, 1);
+  } finally {
+    database.get = originalGet;
+  }
 });
 
 test('perfil comercial exige uma sessão válida', async () => {

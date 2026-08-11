@@ -691,7 +691,11 @@
           <button type="button" class="daily-login-close" id="dailyLoginClose" aria-label="Fechar">×</button>
           <header><span>CICLO SEMANAL</span><h2 id="dailyLoginTitle">RECOMPENSA DIÁRIA</h2><p>Entre todos os dias. O próximo resgate libera à meia-noite.</p></header>
           <div class="daily-login-days" id="dailyLoginDays"></div>
-          <div class="daily-roulette hidden" id="dailyRoulette"><span>ROLETA DE SKINS</span><strong id="dailyRouletteName">SORTEANDO...</strong></div>
+          <div class="daily-roulette hidden" id="dailyRoulette">
+            <span>ROLETA DE SKINS</span>
+            <div class="daily-roulette-window" aria-hidden="true"><div class="daily-roulette-track" id="dailyRouletteTrack"></div></div>
+            <strong id="dailyRouletteName">SORTEANDO...</strong>
+          </div>
           <button type="button" class="daily-login-claim" id="dailyLoginClaim">RESGATAR RECOMPENSA</button>
           <p class="daily-login-feedback" id="dailyLoginFeedback" aria-live="polite"></p>
         </div>

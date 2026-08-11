@@ -817,10 +817,39 @@ const DAILY_LOGIN_REWARDS = [
 ];
 let dailyLoginStatus = null;
 let dailyLoginCheckedFor = "";
+let dailyRouletteTimer = 0;
+const DAILY_LOGIN_STORAGE_PREFIX = "valorant2d:daily-login";
 
 function localCalendarDate(date = new Date()) {
   const offset = date.getTimezoneOffset() * 60000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+}
+
+function dailyLoginStorageKey() {
+  const accountId = currentProfile?.id || currentProfile?.username || readStoredSession()?.user?.id || readStoredSession()?.user?.username || "guest";
+  return `${DAILY_LOGIN_STORAGE_PREFIX}:${String(accountId).toLowerCase()}`;
+}
+
+function readDailyLoginCache() {
+  try {
+    const cached = JSON.parse(localStorage.getItem(dailyLoginStorageKey()) || "null");
+    return cached && typeof cached === "object" ? cached : null;
+  } catch { return null; }
+}
+
+function persistDailyLoginCache(status, claim = null) {
+  if (!status) return;
+  const previous = readDailyLoginCache() || {};
+  const snapshot = {
+    ...previous,
+    available: Boolean(status.available),
+    currentDay: Math.max(1, Math.min(7, Number(status.currentDay) || 1)),
+    streak: Math.max(0, Math.min(7, Number(status.streak) || 0)),
+    lastClaimDate: claim?.date || status.lastClaimDate || previous.lastClaimDate || null,
+    lastClaimTimestamp: claim?.timestamp || previous.lastClaimTimestamp || null,
+    lastCheckedDate: localCalendarDate(),
+  };
+  localStorage.setItem(dailyLoginStorageKey(), JSON.stringify(snapshot));
 }
 
 function renderDailyLoginModal(status) {
@@ -828,6 +857,10 @@ function renderDailyLoginModal(status) {
   const days = document.getElementById("dailyLoginDays");
   if (!overlay || !days) return;
   dailyLoginStatus = status;
+  persistDailyLoginCache(status);
+  window.clearTimeout(dailyRouletteTimer);
+  dailyRouletteTimer = 0;
+  document.getElementById("dailyRoulette")?.classList.add("hidden");
   days.innerHTML = DAILY_LOGIN_REWARDS.map((reward, index) => {
     const day = index + 1;
     const claimed = !status.available && day <= status.streak || status.available && day < status.currentDay;
@@ -843,11 +876,57 @@ async function checkDailyLogin({ force = false } = {}) {
   if (currentProfile?.isGuest || !readStoredSession()?.token) return;
   const date = localCalendarDate();
   if (!force && dailyLoginCheckedFor === date) return;
+  const cached = readDailyLoginCache();
+  if (!force && cached?.lastCheckedDate === date && cached.available) {
+    renderDailyLoginModal(cached);
+  }
   dailyLoginCheckedFor = date;
   try {
     const status = await requestApi(`/api/commerce/daily-login?date=${date}`, { headers: commerceAuthorization() });
-    if (force || status.available) renderDailyLoginModal(status);
+    persistDailyLoginCache(status);
+    if (force || status.available || !document.getElementById("dailyLoginOverlay")?.classList.contains("hidden")) {
+      renderDailyLoginModal(status);
+    }
   } catch (error) { console.warn("Recompensa diária indisponível:", error.message); }
+}
+
+function playDailySkinRoulette(reward) {
+  const roulette = document.getElementById("dailyRoulette");
+  const track = document.getElementById("dailyRouletteTrack");
+  const name = document.getElementById("dailyRouletteName");
+  if (!roulette || !track || !name) return;
+  window.clearTimeout(dailyRouletteTimer);
+  const catalog = commerceState.profile?.catalog || [];
+  const candidates = Array.from({ length: 17 }, (_, index) => catalog[(Math.floor(Math.random() * Math.max(1, catalog.length)) + index) % Math.max(1, catalog.length)])
+    .filter(Boolean);
+  candidates.push(reward);
+  track.classList.remove("is-spinning", "is-complete");
+  track.replaceChildren(...candidates.map((skin, index) => {
+    const item = document.createElement("article");
+    item.className = `daily-roulette-item${index === candidates.length - 1 ? " is-winner" : ""}`;
+    const image = document.createElement("img");
+    image.src = skin.imagePath || "./assets/Favicon/V2D_transparent.png";
+    image.alt = "";
+    const label = document.createElement("span");
+    label.textContent = skin.name || "Skin";
+    item.append(image, label);
+    return item;
+  }));
+  roulette.classList.remove("hidden");
+  name.textContent = "SORTEANDO...";
+  requestAnimationFrame(() => {
+    const itemWidth = track.firstElementChild?.getBoundingClientRect().width || 140;
+    const gap = Number.parseFloat(getComputedStyle(track).columnGap) || 8;
+    const viewportWidth = track.parentElement?.clientWidth || itemWidth;
+    const offset = Math.max(0, (candidates.length - 1) * (itemWidth + gap) - (viewportWidth - itemWidth) / 2);
+    track.style.setProperty("--roulette-offset", `${-offset}px`);
+    requestAnimationFrame(() => track.classList.add("is-spinning"));
+  });
+  dailyRouletteTimer = window.setTimeout(() => {
+    track.classList.add("is-complete");
+    name.textContent = reward.name;
+    dailyRouletteTimer = 0;
+  }, 3100);
 }
 
 async function claimDailyLoginReward() {
@@ -859,24 +938,15 @@ async function claimDailyLoginReward() {
   try {
     const payload = await requestApi("/api/commerce/daily-login/claim", { method: "POST", headers: commerceAuthorization(), body: JSON.stringify({ date: localCalendarDate() }) });
     if (payload.reward?.type === "skin") {
-      const roulette = document.getElementById("dailyRoulette");
-      roulette?.classList.remove("hidden");
-      const name = document.getElementById("dailyRouletteName");
-      let spins = 0;
-      const timer = window.setInterval(() => {
-        const catalog = commerceState.profile?.catalog || [];
-        if (name && catalog.length) name.textContent = catalog[spins % catalog.length].name;
-        spins += 1;
-        if (spins < 14) return;
-        clearInterval(timer);
-        if (name) name.textContent = payload.reward.name;
-      }, 90);
+      playDailySkinRoulette(payload.reward);
     }
     if (feedback) feedback.textContent = payload.reward?.type === "core" ? `+${payload.reward.amount} C recebidos.` : `${payload.reward?.name || "Prêmio"} adicionado ao inventário.`;
     updateCoreBalances(payload.coreBalance);
     await refreshCommerceProfile();
     dailyLoginStatus.available = false;
-    window.setTimeout(() => document.getElementById("dailyLoginOverlay")?.classList.add("hidden"), 2300);
+    dailyLoginStatus.streak = payload.day;
+    persistDailyLoginCache(dailyLoginStatus, { date: localCalendarDate(), timestamp: Date.now() });
+    window.setTimeout(() => document.getElementById("dailyLoginOverlay")?.classList.add("hidden"), payload.reward?.type === "skin" ? 4300 : 2300);
   } catch (error) {
     if (feedback) feedback.textContent = error.message;
     button.disabled = false;
@@ -887,7 +957,7 @@ document.getElementById("dailyLoginClaim")?.addEventListener("click", claimDaily
 document.getElementById("dailyLoginClose")?.addEventListener("click", () => document.getElementById("dailyLoginOverlay")?.classList.add("hidden"));
 function scheduleDailyLoginMidnightReset() {
   const next = new Date();
-  next.setHours(24, 0, 1, 0);
+  next.setHours(24, 0, 0, 0);
   window.setTimeout(() => {
     dailyLoginCheckedFor = "";
     void checkDailyLogin();
@@ -895,6 +965,18 @@ function scheduleDailyLoginMidnightReset() {
   }, Math.max(1000, next.getTime() - Date.now()));
 }
 scheduleDailyLoginMidnightReset();
+window.addEventListener("focus", () => {
+  if (dailyLoginCheckedFor !== localCalendarDate()) {
+    dailyLoginCheckedFor = "";
+    void checkDailyLogin();
+  }
+});
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && dailyLoginCheckedFor !== localCalendarDate()) {
+    dailyLoginCheckedFor = "";
+    void checkDailyLogin();
+  }
+});
 let equippedWeaponSkinPaths = {};
 let confirmedCoreBalance = 0;
 const PENDING_REWARDS_STORAGE_KEY = "pendingRewardsQueue";

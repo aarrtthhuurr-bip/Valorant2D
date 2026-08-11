@@ -60,7 +60,9 @@ class Commerce {
     const lastDate = state?.last_claim_date ? new Date(state.last_claim_date).toISOString().slice(0, 10) : null;
     const elapsed = lastDate ? Math.round((new Date(`${date}T12:00:00Z`) - new Date(`${lastDate}T12:00:00Z`)) / 86400000) : null;
     const currentStreak = Number(state?.streak) || 0;
-    const nextDay = elapsed === 1 ? currentStreak % 7 + 1 : elapsed === 0 ? currentStreak : 1;
+    // O ciclo não depende de uma janela móvel de 24 horas nem pune dias
+    // ausentes: a cada nova data local avança um passo e reinicia após o dia 7.
+    const nextDay = elapsed === 0 ? currentStreak : currentStreak % 7 + 1;
     return { available: elapsed !== 0, currentDay: nextDay, streak: currentStreak, lastClaimDate: lastDate };
   }
 
@@ -75,7 +77,7 @@ class Commerce {
       if (lastDate === date) { await client.query('ROLLBACK'); return { error: 'DAILY_ALREADY_CLAIMED' }; }
       if (lastDate && date < lastDate) { await client.query('ROLLBACK'); return { error: 'DAILY_ALREADY_CLAIMED' }; }
       const elapsed = lastDate ? Math.round((new Date(`${date}T12:00:00Z`) - new Date(`${lastDate}T12:00:00Z`)) / 86400000) : null;
-      const day = elapsed === 1 ? (Number(state?.streak) || 0) % 7 + 1 : 1;
+      const day = (Number(state?.streak) || 0) % 7 + 1;
       let reward = { type: 'core', amount: [25, 0, 0, 50, 0, 75, 0][day - 1] };
       if (day === 2 || day === 5) {
         const gadgetId = day === 2 ? 'cryoMine' : 'adrenaline';
@@ -87,7 +89,11 @@ class Commerce {
         const owned = await client.query('SELECT skin_id FROM user_skins WHERE user_id = $1', [userId]);
         const ownedIds = new Set(owned.rows.map((row) => row.skin_id));
         const candidates = SKIN_CATALOG.filter((skin) => !ownedIds.has(skin.id));
-        const skin = candidates[(userId * 31 + Number(date.replaceAll('-', '')) + day) % Math.max(1, candidates.length)];
+        const premiumCandidates = day === 7
+          ? candidates.filter((skin) => ['premium', 'exclusive'].includes(skin.rarity))
+          : [];
+        const roulettePool = premiumCandidates.length ? premiumCandidates : candidates;
+        const skin = roulettePool.length ? roulettePool[crypto.randomInt(roulettePool.length)] : null;
         if (skin) {
           await client.query('INSERT INTO user_skins (user_id, skin_id, paid_price) VALUES ($1, $2, NULL) ON CONFLICT DO NOTHING', [userId, skin.id]);
           reward = { type: 'skin', id: skin.id, name: skin.name, imagePath: skin.imagePath };
