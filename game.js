@@ -669,8 +669,11 @@ function clearStoredSession() {
   equippedWeaponSkinPaths = {};
   dailyLoginCheckedFor = "";
   dailyLoginStatus = null;
+  dailyLoginDeferredUntilOnboarding = false;
   window.clearTimeout(dailyLoginRetryTimer);
   dailyLoginRetryTimer = 0;
+  window.clearTimeout(dailyClaimAnimationTimer);
+  dailyClaimAnimationTimer = 0;
   ui.menuDailyLoginIndicator?.classList.add("hidden");
   const dailyOverlay = document.getElementById("dailyLoginOverlay");
   dailyOverlay?.classList.add("hidden");
@@ -832,6 +835,7 @@ let dailyLoginCheckedFor = "";
 let dailyRouletteTimer = 0;
 let dailyLoginRetryTimer = 0;
 let dailyClaimAnimationTimer = 0;
+let dailyLoginDeferredUntilOnboarding = false;
 const DAILY_LOGIN_STORAGE_PREFIX = "valorant2d:daily-login";
 
 function localCalendarDate(date = new Date()) {
@@ -884,6 +888,10 @@ function renderDailyLoginModal(status, { forceOpen = false } = {}) {
   document.getElementById("dailyClaimCelebration")?.classList.add("hidden");
   document.getElementById("dailyTomorrow")?.classList.add("hidden");
   document.querySelector(".daily-login-modal")?.classList.remove("is-celebrating", "is-showing-tomorrow");
+  const dailyTitle = document.getElementById("dailyLoginTitle");
+  if (dailyTitle) dailyTitle.textContent = Number(status.currentDay) >= 2 || Number(status.streak) >= 1
+    ? "BEM-VINDO DE VOLTA!"
+    : "RECOMPENSA DIÁRIA";
   days.innerHTML = DAILY_LOGIN_REWARDS.map((reward, index) => {
     const day = index + 1;
     const loading = Boolean(status.loading);
@@ -902,6 +910,10 @@ function renderDailyLoginModal(status, { forceOpen = false } = {}) {
 
 async function checkDailyLogin({ force = false } = {}) {
   if (currentProfile?.isGuest || !readStoredSession()?.token) return;
+  if (currentProfile?.onboardingCompleted === false || welcomeFirstAccess) {
+    dailyLoginDeferredUntilOnboarding = true;
+    return;
+  }
   const date = localCalendarDate();
   const checkKey = dailyLoginCheckKey(date);
   if (!force && dailyLoginCheckedFor === checkKey) return;
@@ -927,6 +939,15 @@ async function checkDailyLogin({ force = false } = {}) {
       if (!currentProfile?.isGuest && readStoredSession()?.token) void checkDailyLogin({ force: true });
     }, 8000);
   }
+}
+
+function resumeDeferredDailyLogin() {
+  if (!dailyLoginDeferredUntilOnboarding
+    || currentProfile?.onboardingCompleted !== true
+    || game.menuState !== "main"
+    || !ui.welcomeOverlay?.classList.contains("hidden")) return;
+  dailyLoginDeferredUntilOnboarding = false;
+  void checkDailyLogin({ force: true });
 }
 
 async function openDailyLoginCenter() {
@@ -1000,6 +1021,7 @@ function showDailyTomorrowReward() {
   modal.classList.add("is-showing-tomorrow");
   panel.classList.remove("hidden");
   document.getElementById("dailyTomorrowClose")?.focus();
+  dailyClaimAnimationTimer = window.setTimeout(closeDailyLoginCenter, 2800);
 }
 
 function playDailySkinRoulette(reward) {
@@ -13229,6 +13251,7 @@ function showMainMenu() {
   updateCoreBalances(commerceState.profile?.coreBalance || currentProfile?.coreBalance || 0);
   void flushPendingRewardsQueue();
   void maybeScheduleUpdateNotes().then(() => maybeScheduleMenuTour());
+  window.setTimeout(resumeDeferredDailyLogin, 120);
 }
 
 const PLAY_MODE_OPTIONS = [
