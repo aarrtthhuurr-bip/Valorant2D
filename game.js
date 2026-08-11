@@ -265,6 +265,14 @@ const ui = {
   modeInfoOutcomeLabel: document.getElementById("modeInfoOutcomeLabel"),
   modeInfoOutcome: document.getElementById("modeInfoOutcome"),
   modeInfoNote: document.getElementById("modeInfoNote"),
+  adminRouletteOverlay: document.getElementById("adminRouletteOverlay"),
+  adminRouletteTrack: document.getElementById("adminRouletteTrack"),
+  adminRouletteName: document.getElementById("adminRouletteName"),
+  adminRouletteActions: document.getElementById("adminRouletteActions"),
+  adminRouletteKeep: document.getElementById("adminRouletteKeep"),
+  adminRouletteDiscard: document.getElementById("adminRouletteDiscard"),
+  adminRouletteClose: document.getElementById("adminRouletteClose"),
+  adminRouletteFeedback: document.getElementById("adminRouletteFeedback"),
   menuTourLayer: document.getElementById("menuTourLayer"),
   menuTourSpotlight: document.getElementById("menuTourSpotlight"),
   menuTourBubble: document.getElementById("menuTourBubble"),
@@ -296,6 +304,7 @@ function mountViewportOverlays() {
     ui.missionsOverlay,
     ui.blackMarketOverlay,
     document.getElementById("dailyLoginOverlay"),
+    ui.adminRouletteOverlay,
     ui.matchOverlay,
     ui.pauseOverlay,
     ui.playerProfileOverlay,
@@ -12656,6 +12665,7 @@ function canOpenPauseMenu() {
 const MENU_UTILITY_BLOCKING_OVERLAYS = Object.freeze([
   "authOverlay", "welcomeOverlay", "updatesOverlay", "modeInfoOverlay",
   "dailyLoginOverlay", "commerceOverlay", "missionsOverlay", "blackMarketOverlay",
+  "adminRouletteOverlay",
   "playerProfileOverlay", "globalRankingOverlay", "agentOverlay", "introOverlay",
   "tutorialOverlay", "matchOverlay", "pauseMenuOverlay",
 ]);
@@ -14012,11 +14022,11 @@ let preferencesSyncedRevision = 0;
 
 /**
  * O painel é uma ferramenta local de testes, não um mecanismo de autorização
- * do servidor. A comparação é propositalmente exata e diferencia maiúsculas de
- * minúsculas: apenas a conta autenticada com username "Admin" recebe a aba.
+ * do servidor. A aba depende da flag isAdmin entregue pela sessão autenticada;
+ * o nome visível da conta nunca concede privilégios por conta própria.
  */
 function isAdminProfile() {
-  return Boolean(currentProfile && !currentProfile.isGuest && currentProfile.username === "Admin");
+  return Boolean(currentProfile && !currentProfile.isGuest && currentProfile.isAdmin);
 }
 
 function availableOptionsTabs() {
@@ -14599,6 +14609,97 @@ function adminGrantCredits() {
   showOptionsFeedback(`10.000 créditos adicionados. Saldo: $${game.money}.`);
 }
 
+let adminRouletteWinner = null;
+let adminRouletteTimer = 0;
+
+function closeAdminSkinRoulette() {
+  window.clearTimeout(adminRouletteTimer);
+  adminRouletteTimer = 0;
+  adminRouletteWinner = null;
+  ui.adminRouletteOverlay?.classList.add("hidden");
+  ui.adminRouletteOverlay?.setAttribute("aria-hidden", "true");
+  ui.adminRouletteActions?.classList.add("hidden");
+}
+
+async function openAdminSkinRoulette() {
+  if (!isAdminProfile()) {
+    showOptionsFeedback("Acesso administrativo necessário.");
+    return;
+  }
+  try {
+    if (!commerceState.profile?.catalog?.length) await refreshCommerceProfile();
+    const catalog = commerceState.profile?.catalog || [];
+    if (!catalog.length) throw new Error("O catálogo de skins está indisponível.");
+    const winner = catalog[Math.floor(Math.random() * catalog.length)];
+    const sequence = Array.from({ length: 18 }, () => catalog[Math.floor(Math.random() * catalog.length)]);
+    sequence.push(winner);
+    adminRouletteWinner = winner;
+    window.clearTimeout(adminRouletteTimer);
+    ui.adminRouletteFeedback.textContent = "A roleta não altera o inventário até sua confirmação.";
+    ui.adminRouletteName.textContent = "SORTEANDO...";
+    ui.adminRouletteActions.classList.add("hidden");
+    ui.adminRouletteKeep.disabled = false;
+    ui.adminRouletteKeep.textContent = "FICAR COM A SKIN";
+    ui.adminRouletteTrack.classList.remove("is-spinning", "is-complete");
+    ui.adminRouletteTrack.style.removeProperty("--roulette-offset");
+    ui.adminRouletteTrack.replaceChildren(...sequence.map((skin, index) => {
+      const item = document.createElement("article");
+      item.className = `daily-roulette-item${index === sequence.length - 1 ? " is-winner" : ""}`;
+      const image = document.createElement("img");
+      image.src = skin.imagePath;
+      image.alt = "";
+      const label = document.createElement("span");
+      label.textContent = skin.name;
+      item.append(image, label);
+      return item;
+    }));
+    ui.adminRouletteOverlay.classList.remove("hidden");
+    ui.adminRouletteOverlay.setAttribute("aria-hidden", "false");
+    requestAnimationFrame(() => {
+      const itemWidth = ui.adminRouletteTrack.firstElementChild?.getBoundingClientRect().width || 140;
+      const gap = Number.parseFloat(getComputedStyle(ui.adminRouletteTrack).columnGap) || 8;
+      const viewportWidth = ui.adminRouletteTrack.parentElement?.clientWidth || itemWidth;
+      const offset = Math.max(0, (sequence.length - 1) * (itemWidth + gap) - (viewportWidth - itemWidth) / 2);
+      ui.adminRouletteTrack.style.setProperty("--roulette-offset", `${-offset}px`);
+      requestAnimationFrame(() => ui.adminRouletteTrack.classList.add("is-spinning"));
+    });
+    adminRouletteTimer = window.setTimeout(() => {
+      ui.adminRouletteTrack.classList.add("is-complete");
+      ui.adminRouletteName.textContent = winner.name;
+      ui.adminRouletteActions.classList.remove("hidden");
+      ui.adminRouletteKeep.focus();
+      adminRouletteTimer = 0;
+    }, 3050);
+  } catch (error) {
+    showOptionsFeedback(error.message);
+  }
+}
+
+async function keepAdminRouletteSkin() {
+  if (!adminRouletteWinner || !isAdminProfile()) return;
+  ui.adminRouletteKeep.disabled = true;
+  ui.adminRouletteDiscard.disabled = true;
+  ui.adminRouletteFeedback.textContent = "Adicionando skin ao inventário...";
+  try {
+    const result = await requestApi(`/api/commerce/admin/skins/${encodeURIComponent(adminRouletteWinner.id)}/grant`, {
+      method: "POST",
+      headers: commerceAuthorization(),
+      body: "{}",
+    });
+    await refreshCommerceProfile();
+    ui.adminRouletteFeedback.textContent = result.added
+      ? `${result.skin.name} foi adicionada ao inventário.`
+      : `${result.skin.name} já estava no inventário.`;
+    ui.adminRouletteKeep.textContent = "ADICIONADA";
+    ui.adminRouletteDiscard.textContent = "FECHAR";
+  } catch (error) {
+    ui.adminRouletteFeedback.textContent = error.message;
+    ui.adminRouletteKeep.disabled = false;
+  } finally {
+    ui.adminRouletteDiscard.disabled = false;
+  }
+}
+
 function renderDeveloperOptions() {
   // Defesa em profundidade: mesmo uma chamada manual ao renderizador não deve
   // expor controles funcionais para perfis comuns ou convidados.
@@ -14645,11 +14746,17 @@ function renderDeveloperOptions() {
   creditsButton.addEventListener("click", adminGrantCredits);
   attachButtonFeedback(creditsButton);
 
+  const rouletteButton = createOptionElement("button", "admin-tool-button", "ABRIR ROLETA DE SKINS");
+  rouletteButton.type = "button";
+  rouletteButton.addEventListener("click", () => void openAdminSkinRoulette());
+  attachButtonFeedback(rouletteButton);
+
   const section = optionSection("ADMIN TOOLS", [
     status,
     optionRow("Selecionar wave", waveControls, "Remove os inimigos atuais e inicia a wave informada."),
     optionRow("Loja Outbreak", shopButton, "Pausa o combate e preserva a wave atual até continuar."),
     optionRow("Créditos de teste", creditsButton, "Adiciona créditos somente à partida local em andamento."),
+    optionRow("Laboratório de roleta", rouletteButton, "Sorteie uma skin e decida somente no final se deseja adicioná-la."),
   ]);
   section.classList.add("options-developer-section");
   return [section];
@@ -16317,6 +16424,12 @@ ui.globalRankingOverlay?.addEventListener("pointerdown", (event) => {
 ui.menuTutorialButton?.addEventListener("click", () => showWelcomeScreen({ firstAccess: false }));
 ui.menuUpdatesButton?.addEventListener("click", () => void openUpdateNotes());
 ui.menuDailyLoginButton?.addEventListener("click", () => void openDailyLoginCenter());
+ui.adminRouletteClose?.addEventListener("click", closeAdminSkinRoulette);
+ui.adminRouletteDiscard?.addEventListener("click", closeAdminSkinRoulette);
+ui.adminRouletteKeep?.addEventListener("click", () => void keepAdminRouletteSkin());
+ui.adminRouletteOverlay?.addEventListener("pointerdown", (event) => {
+  if (event.target === ui.adminRouletteOverlay) closeAdminSkinRoulette();
+});
 ui.updatesCloseButton?.addEventListener("click", () => void closeUpdateNotes());
 ui.updatesPreviousButton?.addEventListener("click", () => renderUpdateRelease(activeUpdateReleaseIndex - 1));
 ui.updatesNextButton?.addEventListener("click", () => renderUpdateRelease(activeUpdateReleaseIndex + 1));

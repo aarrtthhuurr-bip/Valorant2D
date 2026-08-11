@@ -721,6 +721,23 @@
         </div>
       </section>
 
+      <section class="admin-roulette-overlay hidden" id="adminRouletteOverlay" aria-hidden="true" aria-labelledby="adminRouletteTitle">
+        <div class="admin-roulette-modal" role="dialog" aria-modal="true">
+          <button type="button" class="daily-login-close" id="adminRouletteClose" aria-label="Fechar roleta">×</button>
+          <header><span>LABORATÓRIO DE SKINS</span><h2 id="adminRouletteTitle">ROLETA DE ARMAS</h2><p>Teste o sorteio sem alterar o inventário automaticamente.</p></header>
+          <div class="daily-roulette admin-skin-roulette">
+            <span>SORTEIO ADMINISTRATIVO</span>
+            <div class="daily-roulette-window" aria-hidden="true"><div class="daily-roulette-track" id="adminRouletteTrack"></div></div>
+            <strong id="adminRouletteName">PREPARANDO...</strong>
+          </div>
+          <div class="admin-roulette-actions hidden" id="adminRouletteActions">
+            <button type="button" class="admin-roulette-keep" id="adminRouletteKeep">FICAR COM A SKIN</button>
+            <button type="button" class="admin-roulette-discard" id="adminRouletteDiscard">APENAS TESTAR</button>
+          </div>
+          <p class="daily-login-feedback" id="adminRouletteFeedback" aria-live="polite"></p>
+        </div>
+      </section>
+
       <div class="menu-tour-layer hidden" id="menuTourLayer" aria-hidden="true">
         <div class="menu-tour-spotlight" id="menuTourSpotlight"></div>
         <section class="menu-tour-bubble" id="menuTourBubble" role="dialog" aria-modal="true" aria-labelledby="menuTourTitle">

@@ -13,5 +13,6 @@ router.put('/gadgets/:gadgetId/equip', authenticatedWriteLimiter, controller.equ
 router.post('/missions/:assignmentId/claim', authenticatedWriteLimiter, controller.claimMission);
 router.post('/codes/redeem', authenticatedWriteLimiter, controller.redeemCode);
 router.post('/admin/codes', authenticatedWriteLimiter, controller.createCode);
+router.post('/admin/skins/:skinId/grant', authenticatedWriteLimiter, controller.grantAdminSkin);
 
 module.exports = router;

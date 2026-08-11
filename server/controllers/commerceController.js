@@ -104,6 +104,16 @@ async function createCode(request, response, next) {
   } catch (error) { next(error); }
 }
 
+async function grantAdminSkin(request, response, next) {
+  try {
+    const user = await userFromSession(request, response); if (!user) return;
+    const skinId = String(request.params.skinId || '');
+    const result = await Commerce.grantAdminSkin(user.id, skinId);
+    securityAudit('admin_skin_grant', request, { userId: user.id, skinId, success: !result.error });
+    sendResult(response, result, 201);
+  } catch (error) { next(error); }
+}
+
 module.exports = {
   claimDailyLogin,
   claimMission,
@@ -112,6 +122,7 @@ module.exports = {
   equipSkin,
   getProfile,
   getDailyLogin,
+  grantAdminSkin,
   purchaseGadget,
   purchaseSkin,
   redeemCode,

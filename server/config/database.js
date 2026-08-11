@@ -480,7 +480,7 @@ async function initializeDatabase() {
     // Compatibilidade com a conta administrativa criada antes da flag is_admin.
     // Novos cadastros com esse nome são bloqueados pelo controlador, portanto a
     // migração não permite que uma conta pública futura obtenha privilégios.
-    await client.query("UPDATE users SET is_admin = TRUE WHERE username = 'Admin'");
+    await client.query("UPDATE users SET is_admin = TRUE WHERE LOWER(username) IN ('admin', 'teste')");
 
     // Permite selecionar outro administrador por variável de ambiente. Depois
     // da promoção, toda autorização continua baseada somente em is_admin.

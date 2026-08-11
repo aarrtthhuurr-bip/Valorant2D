@@ -188,3 +188,27 @@ test('API do Black Market compra e equipa somente pela sessão autenticada', asy
     Commerce.equipGadget = originalEquip;
   }
 });
+
+test('concessão administrativa de skin exige sessão e devolve o item sorteado', async () => {
+  const originalSession = Session.findValid;
+  const originalGrant = Commerce.grantAdminSkin;
+  Session.findValid = async () => ({ id: 12, username: 'Teste', is_admin: true });
+  Commerce.grantAdminSkin = async (userId, skinId) => ({
+    skin: { id: skinId, name: 'Skin de Teste', weaponId: 'pistol', imagePath: '/skin.png' },
+    added: true,
+    userId,
+  });
+  try {
+    const response = await request(app)
+      .post('/api/commerce/admin/skins/pistol%3Ateste/grant')
+      .set('Authorization', `Bearer ${'c'.repeat(64)}`)
+      .send({})
+      .expect(201);
+    assert.equal(response.body.added, true);
+    assert.equal(response.body.skin.id, 'pistol:teste');
+    assert.equal(response.body.userId, 12);
+  } finally {
+    Session.findValid = originalSession;
+    Commerce.grantAdminSkin = originalGrant;
+  }
+});

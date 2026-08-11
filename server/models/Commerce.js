@@ -331,6 +331,24 @@ class Commerce {
     }
   }
 
+  static async grantAdminSkin(userId, skinId) {
+    const skin = SKINS_BY_ID.get(String(skinId || ''));
+    if (!skin) return { error: 'SKIN_NOT_FOUND' };
+    const admin = await database.get('SELECT is_admin FROM users WHERE id = $1', [userId]);
+    if (!admin?.is_admin) return { error: 'ADMIN_REQUIRED' };
+    const inserted = await database.get(
+      `INSERT INTO user_skins (user_id, skin_id, paid_price)
+       VALUES ($1, $2, NULL)
+       ON CONFLICT (user_id, skin_id) DO NOTHING
+       RETURNING skin_id`,
+      [userId, skin.id],
+    );
+    return {
+      skin: { id: skin.id, name: skin.name, weaponId: skin.weaponId, imagePath: skin.imagePath },
+      added: Boolean(inserted),
+    };
+  }
+
   static async redeemCode(userId, rawCode) {
     const code = normalizeCode(rawCode);
     if (!/^[A-Z0-9_-]{4,32}$/.test(code)) return { error: 'INVALID_CODE' };
