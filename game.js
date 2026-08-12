@@ -19,6 +19,9 @@ const ui = {
   abilityFeedback: document.getElementById("abilityFeedback"),
   abilityPrimaryState: document.getElementById("abilityPrimaryState"),
   abilityUltimateState: document.getElementById("abilityUltimateState"),
+  dashCooldownWipe: document.getElementById("dashCooldownWipe"),
+  primaryCooldownWipe: document.getElementById("primaryCooldownWipe"),
+  ultimateCooldownWipe: document.getElementById("ultimateCooldownWipe"),
   ultLabel: document.getElementById("ultLabel"),
   ultPoints: document.getElementById("ultPointsText"),
   ammo: document.getElementById("ammoText"),
@@ -222,6 +225,7 @@ const ui = {
   audioMiniPrevious: document.getElementById("audioMiniPrevious"),
   audioMiniPlay: document.getElementById("audioMiniPlay"),
   audioMiniNext: document.getElementById("audioMiniNext"),
+  currencyRewardLayer: document.getElementById("currencyRewardLayer"),
   menuUtilityDock: document.getElementById("menuUtilityDock"),
   menuTutorialButton: document.getElementById("menuTutorialButton"),
   menuUpdatesButton: document.getElementById("menuUpdatesButton"),
@@ -370,6 +374,7 @@ let updatesAutoTimer = 0;
 let updatesReleases = [];
 let activeUpdateReleaseIndex = 0;
 const shownContextTips = new Set();
+const V2D_SPINNER_MARKUP = '<span class="v2d-spinner v2d-spinner--compact" aria-hidden="true"><i></i><i></i><i></i></span>';
 
 const LAST_SEEN_VERSION_KEY = "valorant2d:last-seen-version";
 
@@ -401,7 +406,53 @@ const LAB_ACHIEVEMENTS = Object.freeze({
   outbreakTwenty: { title: "ZONA VERMELHA", description: "Alcançou a onda 20 no Outbreak.", reward: 800 },
   veteran: { title: "VETERANO", description: "Concluiu 10 partidas.", reward: 600 },
   winner: { title: "IMPARÁVEL", description: "Venceu 5 partidas.", reward: 700 },
+  kills10: { title: "ESQUADRÃO ABATIDO", description: "Elimine 10 ameaças em uma partida.", reward: 180, test: (s) => s.kills >= 10 },
+  kills25: { title: "ZONA LIMPA", description: "Elimine 25 ameaças em uma partida.", reward: 320, test: (s) => s.kills >= 25 },
+  kills50: { title: "SEM TESTEMUNHAS", description: "Elimine 50 ameaças em uma partida.", reward: 520, test: (s) => s.kills >= 50 },
+  headshot1: { title: "NA CABEÇA", description: "Consiga seu primeiro headshot.", reward: 120, test: (s) => s.headshots >= 1 },
+  headshot10: { title: "PRECISÃO LETAL", description: "Consiga 10 headshots em uma partida.", reward: 360, test: (s) => s.headshots >= 10 },
+  damage1000: { title: "PRESSÃO CONSTANTE", description: "Cause 1.000 de dano em uma partida.", reward: 180, test: (s) => s.damage >= 1000 },
+  damage5000: { title: "FORÇA BRUTA", description: "Cause 5.000 de dano em uma partida.", reward: 580, test: (s) => s.damage >= 5000 },
+  assist1: { title: "FOGO CRUZADO", description: "Consiga uma assistência.", reward: 120, test: (s) => s.assists >= 1 },
+  assist5: { title: "COBERTURA TOTAL", description: "Consiga 5 assistências em uma partida.", reward: 260, test: (s) => s.assists >= 5 },
+  plant1: { title: "CARGA ARMADA", description: "Plante a Spike.", reward: 150, test: (s) => s.plants >= 1 },
+  plant3: { title: "ESPECIALISTA EM PLANT", description: "Plante a Spike 3 vezes.", reward: 300, test: (s) => s.plants >= 3 },
+  defuse1: { title: "DESARME PRECISO", description: "Desarme a Spike.", reward: 180, test: (s) => s.defuses >= 1 },
+  defuse3: { title: "SANGUE FRIO", description: "Desarme a Spike 3 vezes.", reward: 360, test: (s) => s.defuses >= 3 },
+  flawless: { title: "INTOCÁVEL", description: "Conclua uma partida sem morrer.", reward: 450, endOnly: true, test: (s) => s.deaths === 0 && s.kills >= 3 },
+  survivor5: { title: "PRIMEIRO SURTO", description: "Alcance a onda 5 no Outbreak.", reward: 220, test: (_s, g) => g.outbreak && g.outbreakWave >= 5 },
+  survivor15: { title: "CONTENÇÃO ROMPIDA", description: "Alcance a onda 15 no Outbreak.", reward: 650, test: (_s, g) => g.outbreak && g.outbreakWave >= 15 },
+  survivor30: { title: "ALÉM DO LIMITE", description: "Alcance a onda 30 no Outbreak.", reward: 1100, test: (_s, g) => g.outbreak && g.outbreakWave >= 30 },
+  credits5000: { title: "ARSENAL ABASTECIDO", description: "Acumule 5.000 créditos em uma partida.", reward: 300, test: (_s, g) => g.money >= 5000 },
+  credits10000: { title: "ECONOMIA DE GUERRA", description: "Acumule 10.000 créditos em uma partida.", reward: 520, test: (_s, g) => g.money >= 10000 },
+  ultUse: { title: "PODER LIBERADO", description: "Ative uma Ultimate.", reward: 170, test: (_s, g) => g.achievementUltUses >= 1 },
+  ultTriple: { title: "ENERGIA INSTÁVEL", description: "Ative 3 Ultimates em uma partida.", reward: 420, test: (_s, g) => g.achievementUltUses >= 3 },
+  ability10: { title: "KIT COMPLETO", description: "Use habilidades 10 vezes.", reward: 280, test: (_s, g) => g.achievementAbilityUses >= 10 },
+  dash10: { title: "MOVIMENTO TÁTICO", description: "Use o dash 10 vezes.", reward: 240, test: (_s, g) => g.achievementDashUses >= 10 },
+  reload20: { title: "DISCIPLINA DE TIRO", description: "Recarregue 20 vezes.", reward: 240, test: (_s, g) => g.achievementReloads >= 20 },
+  round3: { title: "OPERAÇÃO EM CURSO", description: "Chegue ao round 3.", reward: 140, test: (_s, g) => !g.outbreak && g.roundNumber >= 3 },
+  round7: { title: "LINHA DE FRENTE", description: "Chegue ao round 7.", reward: 360, test: (_s, g) => !g.outbreak && g.roundNumber >= 7 },
+  winNoDeath: { title: "VITÓRIA PERFEITA", description: "Vença sem morrer.", reward: 720, endOnly: true, test: (s, g, won) => won && s.deaths === 0 },
+  comeback: { title: "VIRADA TÁTICA", description: "Vença depois de perder rounds consecutivos.", reward: 420, endOnly: true, test: (_s, g, won) => won && g.lossStreak >= 2 },
+  accuracy: { title: "RAJADA CONTROLADA", description: "Faça 5 headshots com no máximo 20 abates.", reward: 380, test: (s) => s.headshots >= 5 && s.kills <= 20 },
+  collector: { title: "COLETOR DE ENERGIA", description: "Colete 4 orbes em uma partida.", reward: 260, test: (_s, g) => g.achievementOrbs >= 4 },
+  shopper: { title: "PRONTO PARA O COMBATE", description: "Faça 5 compras em uma partida.", reward: 200, test: (_s, g) => g.achievementPurchases >= 5 },
+  medic: { title: "SEGUNDA CHANCE", description: "Recupere 100 pontos de vida.", reward: 220, test: (_s, g) => g.achievementHealing >= 100 },
+  closeCall: { title: "POR UM FIO", description: "Sobreviva com 10 HP ou menos.", reward: 240, test: (_s, g) => g.player?.alive && g.player.hp > 0 && g.player.hp <= 10 },
+  sandboxer: { title: "LABORATÓRIO ABERTO", description: "Entre no modo Sandbox.", reward: 100, test: (_s, g) => g.sandbox },
+  trainee: { title: "AQUECIMENTO", description: "Elimine 10 alvos no Treino.", reward: 180, test: (s, g) => g.training && s.kills >= 10 },
 });
+
+let lastAchievementEvaluationAt = 0;
+function evaluateLabAchievements({ endOnly = false, victory = false, force = false } = {}) {
+  const now = performance.now();
+  if (!force && !endOnly && now - lastAchievementEvaluationAt < 750) return;
+  lastAchievementEvaluationAt = now;
+  for (const [id, achievement] of Object.entries(LAB_ACHIEVEMENTS)) {
+    if (typeof achievement.test !== "function" || Boolean(achievement.endOnly) !== Boolean(endOnly)) continue;
+    if (achievement.test(game.stats || {}, game, victory)) unlockLabAchievement(id);
+  }
+}
 
 function unlockedLabAchievements() {
   try {
@@ -1113,7 +1164,12 @@ async function claimDailyLoginReward() {
       playDailySkinRoulette(payload.reward);
     }
     if (feedback) feedback.textContent = payload.reward?.type === "core" ? `+${payload.reward.amount} C recebidos.` : `${payload.reward?.name || "Prêmio"} adicionado ao inventário.`;
+    const balanceBeforeReward = confirmedCoreBalance;
     updateCoreBalances(payload.coreBalance);
+    if (payload.reward?.type === "core") {
+      animateCurrencyReward(payload.reward.amount);
+      animateCoreBalanceTo(payload.coreBalance, balanceBeforeReward);
+    }
     await refreshCommerceProfile();
     dailyLoginStatus.available = false;
     dailyLoginStatus.streak = payload.day;
@@ -1220,6 +1276,43 @@ function updateCoreBalances(balance) {
   if (ui.mainCoreBalance) ui.mainCoreBalance.textContent = visibleBalance.toLocaleString("pt-BR");
   if (ui.storeCoreBalance) ui.storeCoreBalance.textContent = visibleBalance.toLocaleString("pt-BR");
   if (ui.missionsCoreBalance) ui.missionsCoreBalance.textContent = visibleBalance.toLocaleString("pt-BR");
+}
+
+let coreCountAnimationFrame = 0;
+function animateCurrencyReward(amount, { fromX = innerWidth / 2, fromY = innerHeight / 2 } = {}) {
+  const reward = Math.max(0, Math.round(Number(amount) || 0));
+  const layer = ui.currencyRewardLayer;
+  const wallet = ui.mainCoreWallet && !ui.mainCoreWallet.classList.contains("hidden") ? ui.mainCoreWallet : null;
+  if (!layer || !wallet || reward === 0 || settings.reduceMotion) return;
+  const walletRect = wallet.getBoundingClientRect();
+  const burst = document.createElement("div");
+  burst.className = "currency-reward-burst";
+  burst.style.setProperty("--reward-x", `${fromX}px`);
+  burst.style.setProperty("--reward-y", `${fromY}px`);
+  burst.style.setProperty("--wallet-x", `${walletRect.left + walletRect.width / 2}px`);
+  burst.style.setProperty("--wallet-y", `${walletRect.top + walletRect.height / 2}px`);
+  burst.innerHTML = `<strong>+${reward} C</strong>${Array.from({ length: 10 }, (_, index) => `<i class="currency-reward-particle" style="--angle:${index * 36}deg;--distance:${52 + index % 3 * 16}px"></i>`).join("")}`;
+  layer.appendChild(burst);
+  window.setTimeout(() => wallet.classList.add("is-absorbing"), 1050);
+  window.setTimeout(() => wallet.classList.remove("is-absorbing"), 1500);
+  window.setTimeout(() => burst.remove(), 1700);
+}
+
+function animateCoreBalanceTo(targetBalance, previousBalance = confirmedCoreBalance) {
+  const target = Math.max(0, Math.round(Number(targetBalance) || 0));
+  const start = Math.max(0, Math.round(Number(previousBalance) || 0));
+  cancelAnimationFrame(coreCountAnimationFrame);
+  const startedAt = performance.now();
+  const tick = (now) => {
+    const progress = Math.min(1, (now - startedAt) / 900);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const value = Math.round(start + (target - start) * eased) + currentPendingCoreTotal();
+    for (const element of [ui.mainCoreBalance, ui.storeCoreBalance, ui.missionsCoreBalance]) {
+      if (element) element.textContent = value.toLocaleString("pt-BR");
+    }
+    if (progress < 1) coreCountAnimationFrame = requestAnimationFrame(tick);
+  };
+  coreCountAnimationFrame = requestAnimationFrame(tick);
 }
 
 function applyCommerceProfile(profile) {
@@ -1331,7 +1424,7 @@ function commerceSkinCard(skin, { offer = false, inventory = false } = {}) {
   }
   const action = document.createElement("button");
   action.type = "button";
-  action.innerHTML = owned ? "ADQUIRIDA" : pending ? '<i class="inline-spinner" aria-hidden="true"></i> SINCRONIZANDO' : "COMPRAR";
+  action.innerHTML = owned ? "ADQUIRIDA" : pending ? `${V2D_SPINNER_MARKUP} SINCRONIZANDO` : "COMPRAR";
   action.disabled = owned || pending;
   action.addEventListener("click", () => purchaseCommerceSkin(skin));
   card.appendChild(action);
@@ -1463,7 +1556,7 @@ async function openMissionsModal() {
   ui.missionsOverlay?.setAttribute("aria-hidden", "false");
   game.menuState = "missions";
   game.paused = true;
-  if (ui.missionsContent) ui.missionsContent.innerHTML = '<div class="commerce-loading"><span>Atualizando missões...</span></div>';
+  if (ui.missionsContent) ui.missionsContent.innerHTML = `<div class="commerce-loading">${V2D_SPINNER_MARKUP}<span>Atualizando missões...</span></div>`;
   if (ui.missionsFeedback) ui.missionsFeedback.textContent = "";
   try {
     const profile = await refreshCommerceProfile();
@@ -1595,7 +1688,7 @@ async function openCommerceStore() {
   ui.commerceOverlay?.classList.remove("hidden", "is-leaving");
   game.menuState = "commerce";
   game.paused = true;
-  ui.commerceContent.innerHTML = '<div class="commerce-loading"><span>Sincronizando loja e inventário...</span></div>';
+  ui.commerceContent.innerHTML = `<div class="commerce-loading">${V2D_SPINNER_MARKUP}<span>Sincronizando loja e inventário...</span></div>`;
   setCommerceFeedback("");
   try { await refreshCommerceProfile({ render: true }); } catch (error) { setCommerceFeedback(error.message, "error"); renderCommerceTab(); }
 }
@@ -2734,7 +2827,28 @@ const agents = [
     ability: "Cura",
     cooldown: 9,
     use(game) {
+      const before = game.player.hp;
       game.player.hp = Math.min(game.player.maxHp, game.player.hp + 35);
+      game.achievementHealing = (game.achievementHealing || 0) + Math.max(0, game.player.hp - before);
+      game.ultimateEffects.push({
+        type: "sage-heal",
+        entityId: game.player.id,
+        x: game.player.x,
+        y: game.player.y,
+        color: "#62e6c0",
+        life: 1.15,
+        maxLife: 1.15,
+        radius: 12,
+      });
+      game.screenTint = { color: "rgba(98,230,192,.14)", life: .45, maxLife: .45 };
+      for (let ring = 0; ring < 3; ring++) {
+        window.setTimeout(() => {
+          if (!game.player?.alive) return;
+          spawnParticles(game.player.x, game.player.y, ring % 2 ? "#eafff8" : "#62e6c0", 14, 115 + ring * 22);
+        }, ring * 120);
+      }
+      setMessage(`Sage restaurou ${Math.round(game.player.hp - before)} HP.`);
+      return true;
     },
   },
   {
@@ -5764,6 +5878,7 @@ function announceShopResult(text, { success = false, title = "ARSENAL", purchase
   setShopFeedback(text, success ? "success" : "warning");
   showUxToast(text, { title, tone: success ? "success" : "warning", duration: success ? 2200 : 3200 });
   if (purchaseSound) playSound("ingame_purchase");
+  if (success && purchaseSound) game.achievementPurchases = (game.achievementPurchases || 0) + 1;
   else if (!success) playSound("denied");
   if (labEnabled("enhancedShopFeedback") && pendingShopFeedbackCard) {
     const stateClass = success ? "purchase-confirmed" : "purchase-denied";
@@ -5896,6 +6011,13 @@ function startNewMatch() {
   game.roundNumber = 1;
   game.statisticsRecorded = false;
   game.achievementMatchRecorded = false;
+  game.achievementUltUses = 0;
+  game.achievementAbilityUses = 0;
+  game.achievementDashUses = 0;
+  game.achievementReloads = 0;
+  game.achievementOrbs = 0;
+  game.achievementPurchases = 0;
+  game.achievementHealing = 0;
   game.pendingRewardId = "";
   game.matchSubmissionToken = "";
   game.matchSubmissionPromise = null;
@@ -6035,7 +6157,12 @@ function confirmMatchCoreReward(payload) {
     ? `+${reward} C · Core faturado na partida`
     : `+${reward} ${reward === 1 ? "Core obtido" : "Cores obtidos"}`;
   // O valor exibido vem diretamente da transação concluída no servidor.
+  const balanceBeforeReward = confirmedCoreBalance;
   updateCoreBalances(balance);
+  if (reward > 0) {
+    animateCurrencyReward(reward);
+    animateCoreBalanceTo(balance, balanceBeforeReward);
+  }
   return true;
 }
 
@@ -6087,6 +6214,7 @@ function showMatchResult() {
   if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = currentProfile?.isGuest ? "Partida local: entre com uma conta para salvar o desempenho." : "Sincronizando desempenho...";
   prepareMatchCoreReward();
   updateCareerAchievements(won);
+  evaluateLabAchievements({ endOnly: true, victory: won, force: true });
   renderMatchConfetti(won);
   ui.newGameButton.style.display = "";
   ui.newGameButton.querySelector("span").textContent = "CONTINUAR";
@@ -6125,6 +6253,7 @@ function showOutbreakGameOver(reason = "Sinal vital perdido") {
     : "Sincronizando pontuação global...";
   prepareMatchCoreReward();
   updateCareerAchievements(false);
+  evaluateLabAchievements({ endOnly: true, victory: false, force: true });
   ui.matchConfetti?.replaceChildren();
   if (ui.newGameButton) {
     ui.newGameButton.style.display = "";
@@ -6521,6 +6650,7 @@ function performGlobalDash() {
     return false;
   }
   game.globalDashCooldown = game.sandbox ? 0 : GLOBAL_DASH.cooldown;
+  game.achievementDashUses = (game.achievementDashUses || 0) + 1;
   spawnDashTrail(player, fromX, fromY, player.x, player.y, GLOBAL_DASH.color);
   game.screenTint = { color: "rgba(0, 240, 255, 0.12)", life: 0.14, maxLife: 0.14 };
   playSound("ability");
@@ -6548,13 +6678,22 @@ function updateAgentDash(dt) {
 }
 
 function launchViperGrenade(owner) {
-  const angle = owner.angle;
+  const target = owner.id === "player" ? mouse : {
+    x: owner.x + Math.cos(owner.angle) * VIPER_CAST_RANGE,
+    y: owner.y + Math.sin(owner.angle) * VIPER_CAST_RANGE,
+  };
+  const castPoint = limitedCastPoint(owner, target, VIPER_CAST_RANGE);
+  const dx = castPoint.x - owner.x;
+  const dy = castPoint.y - owner.y;
+  const travelDistance = Math.max(24, Math.hypot(dx, dy));
+  const angle = Math.atan2(dy, dx);
+  const launchSpeed = 470 * GAME_CONFIG.projectiles.utilitySpeedMultiplier;
   game.grenades.push({
     kind: "viper",
     x: owner.x + Math.cos(angle) * (owner.r + 10), y: owner.y + Math.sin(angle) * (owner.r + 10),
     vx: Math.cos(angle) * 470 * GAME_CONFIG.projectiles.utilitySpeedMultiplier,
     vy: Math.sin(angle) * 470 * GAME_CONFIG.projectiles.utilitySpeedMultiplier,
-    life: 1.05, maxLife: 1.05, r: 8, color: "#57ef79",
+    life: travelDistance / launchSpeed, maxLife: travelDistance / launchSpeed, r: 8, color: "#57ef79",
   });
   spawnParticles(owner.x, owner.y, "#8dff78", 12, 100);
 }
@@ -7637,6 +7776,7 @@ function reload() {
   if (game.reloadTimer > 0) return;
   if (game.player.ammo >= currentMagSize()) return;
   game.reloadTimer = currentReloadTime();
+  game.achievementReloads = (game.achievementReloads || 0) + 1;
   playWeaponSound(game.selectedWeapon, "reload", game.player);
 }
 
@@ -7854,6 +7994,7 @@ function activateUltimate(entity) {
     return false;
   }
   const agent = agentById(purchasedUlt?.agentId || entity.agentId);
+  if (entity.id === "player") game.achievementUltUses = (game.achievementUltUses || 0) + 1;
   const team = entityTeam(entity);
   if (infiniteSandboxUlt) entity.ultimate = null;
   else if (tutorialFreeUlt) {
@@ -7996,6 +8137,7 @@ function nearestPickup(entity, pickups) {
 function completeOrbCollection(entity, orb) {
    setUltimatePoints(entity, getUltimatePoints(entity) + 1);
    if (entity.id === "player") {
+     game.achievementOrbs = (game.achievementOrbs || 0) + 1;
      game.ultFlashTimer = 0.28;
      playSound("pickup");
    }
@@ -8264,6 +8406,7 @@ function updatePlayer(dt) {
   if (keyPressed("ability1") && game.abilityCooldown <= 0 && game.phase === "action") {
     const used = game.selectedAgent.use(game);
     if (used !== false) {
+      game.achievementAbilityUses = (game.achievementAbilityUses || 0) + 1;
       if (used !== "noCooldown") game.abilityCooldown = game.sandbox ? 0 : game.tutorial ? 2 : game.selectedAgent.cooldown;
       if (game.tutorial && game.tutorialStep === 4) {
         game.tutorialAbilityUsed = true;
@@ -10035,6 +10178,8 @@ function updateTimers(dt) {
   }
   game.explosions = game.explosions.filter((explosion) => explosion.life > 0);
 
+  evaluateLabAchievements();
+
   if (game.phase === "buy" && game.phaseTime <= 0 && !game.outbreak) startActionRound();
   if (game.phase === "action" && game.phaseTime <= 0 && game.spike.state !== "planted") {
     endRound("defenders", "Tempo acabou. Defensores venceram.");
@@ -10199,6 +10344,7 @@ function updateReplayRecorder(dt) {
     hostileBullets: game.bullets
       .filter((bullet) => bullet.team === "bot")
       .map((bullet) => ({ x: bullet.x, y: bullet.y, startX: bullet.startX, startY: bullet.startY })),
+    hostiles: game.bots.filter((bot) => bot.alive).map((bot) => ({ x: bot.x, y: bot.y, r: bot.r || 18 })),
   });
   const cutoff = performance.now() - 4200;
   while (game.replayBuffer[0]?.at < cutoff) game.replayBuffer.shift();
@@ -10222,9 +10368,27 @@ function drawSyntheticKillcam() {
   const replay = game.syntheticKillcam;
   if (!replay || replay.life <= 0) return;
   const progress = 1 - replay.life / replay.maxLife;
+  const frameIndex = Math.min(replay.samples.length - 1, Math.max(0, Math.floor(progress * replay.samples.length)));
+  const frame = replay.samples[frameIndex];
   const endX = replay.fromX + (replay.toX - replay.fromX) * Math.min(1, progress * 2.2);
   const endY = replay.fromY + (replay.toY - replay.fromY) * Math.min(1, progress * 2.2);
   ctx.save();
+  ctx.fillStyle = "rgba(2,7,12,.5)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (frame) {
+    ctx.globalAlpha = .52;
+    ctx.fillStyle = "#ff6370";
+    for (const hostile of frame.hostiles || []) {
+      ctx.beginPath(); ctx.arc(hostile.x, hostile.y, hostile.r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = "#f7fbfd";
+    for (const bullet of frame.hostileBullets || []) {
+      ctx.beginPath(); ctx.arc(bullet.x, bullet.y, 3, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.strokeStyle = "#54d6e7";
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(frame.player.x, frame.player.y, 20, 0, Math.PI * 2); ctx.stroke();
+  }
   ctx.globalAlpha = Math.min(1, replay.life * 1.5);
   ctx.strokeStyle = "#ff4655";
   ctx.lineWidth = 3;
@@ -10238,6 +10402,11 @@ function drawSyntheticKillcam() {
   ctx.beginPath();
   ctx.arc(replay.toX, replay.toY, 22 + Math.sin(performance.now() / 90) * 4, 0, Math.PI * 2);
   ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = "#eef7fa";
+  ctx.font = "900 15px Rajdhani, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(`REPLAY // ${Math.max(0, replay.life).toFixed(1)}S`, canvas.width / 2, 36);
   ctx.restore();
 }
 
@@ -11407,6 +11576,26 @@ function drawUltimateEffects() {
       ctx.textAlign = "center";
       ctx.fillText(effect.detonated ? "LOCK" : `${Math.ceil(effect.countdown || 0)}`, effect.x, effect.y + 7);
       ctx.textAlign = "left";
+    } else if (effect.type === "sage-heal") {
+      const pulse = 1 + Math.sin(performance.now() / 80) * .08;
+      ctx.strokeStyle = "#b9fff0";
+      ctx.fillStyle = `rgba(98,230,192,${alpha * .12})`;
+      for (let ring = 0; ring < 3; ring++) {
+        ctx.lineWidth = 2 + ring;
+        ctx.beginPath();
+        ctx.ellipse(effect.x, effect.y - ring * 8, (24 + ring * 13) * pulse, (10 + ring * 4) * pulse, 0, 0, Math.PI * 2);
+        ctx.fill(); ctx.stroke();
+      }
+      for (let rune = 0; rune < 6; rune++) {
+        const angle = performance.now() / 420 + rune * Math.PI / 3;
+        const radius = 34 + Math.sin(performance.now() / 130 + rune) * 8;
+        ctx.fillStyle = rune % 2 ? "#eafff8" : "#62e6c0";
+        ctx.save();
+        ctx.translate(effect.x + Math.cos(angle) * radius, effect.y + Math.sin(angle) * radius - 12);
+        ctx.rotate(angle + Math.PI / 4);
+        ctx.fillRect(-4, -4, 8, 8);
+        ctx.restore();
+      }
     } else if (effect.type === "healing-beam" || effect.type === "orb-beam") {
       ctx.fillStyle = effect.color;
       const width = effect.type === "healing-beam" ? 34 : 12;
@@ -12421,6 +12610,25 @@ function updateUi() {
   } else {
     toggleClass(ui.abilityFeedback, "hidden", true);
   }
+  const updateCooldownWipe = (element, remaining, total, label, { ready = remaining <= 0, empty = false } = {}) => {
+    if (!element) return;
+    const duration = Math.max(.001, Number(total) || 1);
+    const progress = ready ? 1 : Math.max(0, Math.min(1, 1 - Math.max(0, remaining) / duration));
+    element.style.setProperty("--cooldown-progress", `${progress * 360}deg`);
+    element.style.setProperty("--ready", String(progress));
+    element.classList.toggle("is-ready", Boolean(ready));
+    element.classList.toggle("is-empty", Boolean(empty));
+    const status = element.querySelector("small");
+    if (status) status.textContent = label;
+  };
+  updateCooldownWipe(ui.dashCooldownWipe, game.globalDashCooldown || 0, GLOBAL_DASH.cooldown,
+    game.globalDashCooldown > 0 ? `${Math.ceil(game.globalDashCooldown)}S` : "PRONTO");
+  updateCooldownWipe(ui.primaryCooldownWipe, game.abilityCooldown || 0, game.selectedAgent.cooldown || 1,
+    game.abilityCooldown > 0 ? `${Math.ceil(game.abilityCooldown)}S` : "PRONTO");
+  const ultimateRemaining = outbreakGadgetDefinition ? outbreakGadgetCooldown : ultimateReady ? 0 : 1;
+  updateCooldownWipe(ui.ultimateCooldownWipe, ultimateRemaining, outbreakGadgetDefinition ? outbreakGadgetDefinition.cooldown : 1,
+    ultimateReady ? "PRONTO" : ultimateEmpty ? "SEM CARGA" : outbreakGadgetCooldown > 0 ? `${Math.ceil(outbreakGadgetCooldown)}S` : `${getUltimatePoints(game.player)}/${ultCost}`,
+    { ready: ultimateReady, empty: ultimateEmpty });
   if (!outbreakGadgetDefinition && ultReady && !game.tutorial && !game.sandbox) {
     showContextTipOnce("ultimate-ready", `Ultimate de ${game.selectedAgent?.name || "agente"} pronta. Pressione ${settings.keys?.ability2 || "Q"} para usar.`);
   }
@@ -13820,7 +14028,7 @@ async function openPlayerProfile() {
   if (currentProfile?.isGuest) {
     renderGuestProfile();
   } else {
-    ui.playerProfileContent.innerHTML = '<div class="player-modal-loading"><span class="auth-loader"></span><strong>Sincronizando perfil</strong></div>';
+    ui.playerProfileContent.innerHTML = `<div class="player-modal-loading">${V2D_SPINNER_MARKUP}<strong>Sincronizando perfil</strong></div>`;
     try {
       const session = readStoredSession();
       const payload = await requestApi("/api/profile", {
@@ -13908,7 +14116,7 @@ function renderGlobalRanking(payload = {}) {
 async function loadGlobalRanking(mode) {
   if (!LEADERBOARD_MODES.some((item) => item.id === mode) || !ui.globalRankingRows) return;
   activeLeaderboardMode = mode;
-  ui.globalRankingRows.innerHTML = '<div class="player-modal-loading"><span class="auth-loader"></span><strong>Atualizando classificação</strong></div>';
+  ui.globalRankingRows.innerHTML = `<div class="player-modal-loading">${V2D_SPINNER_MARKUP}<strong>Atualizando classificação</strong></div>`;
   try {
     const session = readStoredSession();
     const headers = session?.token && !currentProfile?.isGuest
@@ -14032,7 +14240,7 @@ async function loadLeaderboardMode(mode) {
   if (!LEADERBOARD_MODES.some((item) => item.id === mode)) return;
   activeLeaderboardMode = mode;
   ui.menuButtons.className = "leaderboard-shell";
-  ui.menuButtons.innerHTML = '<div class="statistics-loading"><span class="auth-loader"></span><strong>Atualizando ranking global</strong></div>';
+  ui.menuButtons.innerHTML = `<div class="statistics-loading">${V2D_SPINNER_MARKUP}<strong>Atualizando ranking global</strong></div>`;
   try {
     const session = readStoredSession();
     const headers = session?.token && !currentProfile?.isGuest

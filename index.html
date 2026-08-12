@@ -19,6 +19,7 @@
   <title>Valorant2D</title>
   <link rel="manifest" href="./manifest.webmanifest?v=0.9.7">
   <link id="gameStylesheet" rel="stylesheet" href="./styles.css?v=0.9.7">
+  <link rel="stylesheet" href="./server/thespinner.css?v=0.9.7">
   <script src="./version-manager.js?v=0.9.7"></script>
   <script src="https://unpkg.com/lucide@1.24.0" integrity="sha384-mooE85Luwgx+AyykX7e90VcN8/QCFTSIwPuHLmvcsLVoA0en7lKYb9XlOzn5G2co" crossorigin="anonymous"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -55,6 +56,11 @@
           <div><span>CRÉDITOS</span><strong id="outbreakHudCredits">0</strong></div>
           <div class="outbreak-hud-effect hidden" id="outbreakHudEffect"><span>MODIFICADOR</span><strong id="outbreakHudEffectText">ATIVO</strong></div>
         </div>
+        <div class="ability-cooldown-dock" id="abilityCooldownDock" aria-label="Recargas das habilidades">
+          <div class="cooldown-wipe" id="dashCooldownWipe" data-key="Q"><i></i><b>Q</b><small>PRONTO</small></div>
+          <div class="cooldown-wipe" id="primaryCooldownWipe" data-key="E"><i></i><b>E</b><small>PRONTO</small></div>
+          <div class="cooldown-wipe" id="ultimateCooldownWipe" data-key="V"><i></i><b>V</b><small>SEM CARGA</small></div>
+        </div>
         <div class="vitals-panel glass" id="hud-player-info">
           <div class="status-main">
             <div class="agent-dot" id="agentDot"></div>
@@ -73,7 +79,7 @@
           </div>
           <div class="ability-feedback" id="abilityFeedback" aria-label="Estado das habilidades">
             <span id="abilityPrimaryState"><kbd>E</kbd><b>PRONTA</b></span>
-            <span id="abilityUltimateState"><kbd>Q</kbd><b>SEM CARGA</b></span>
+            <span id="abilityUltimateState"><kbd>V</kbd><b>SEM CARGA</b></span>
           </div>
         </div>
         <div class="weapon-panel glass" id="hud-weapon-info">
@@ -330,13 +336,13 @@
 
       <div class="pause-menu-overlay" id="pauseMenuOverlay" aria-hidden="true">
         <div class="pause-menu-panel" role="dialog" aria-modal="true" aria-labelledby="pauseMenuTitle">
-          <h2 id="pauseMenuTitle">PAUSE</h2>
+          <header class="pause-menu-heading"><span>PARTIDA EM ANDAMENTO</span><h2 id="pauseMenuTitle">PAUSADO</h2><p>Respire. O campo aguarda seu retorno.</p></header>
           <div class="pause-menu-actions" aria-label="Pause actions">
-            <button type="button" id="pauseResumeButton">Resume</button>
-            <button type="button" id="pauseOptionsButton">Options</button>
-            <button type="button" id="pauseSandboxButton" class="hidden">Cheats</button>
-            <button type="button" id="pauseRestartButton">Restart</button>
-            <button type="button" id="pauseQuitButton">Quit</button>
+            <button type="button" id="pauseResumeButton"><b>CONTINUAR</b><small>Voltar ao combate</small></button>
+            <button type="button" id="pauseOptionsButton"><b>OPÇÕES</b><small>Controles, áudio e vídeo</small></button>
+            <button type="button" id="pauseSandboxButton" class="hidden"><b>FERRAMENTAS</b><small>Controles do laboratório</small></button>
+            <button type="button" id="pauseRestartButton"><b>REINICIAR</b><small>Começar esta operação novamente</small></button>
+            <button type="button" id="pauseQuitButton"><b>MENU PRINCIPAL</b><small>Encerrar a operação atual</small></button>
           </div>
           <img class="pause-menu-logo" src="./assets/Favicon/Favicon_V2D.png" alt="Valorant2D">
         </div>
@@ -569,7 +575,7 @@
         </div>
 
         <div class="auth-session-check" id="authSessionCheck" role="status" aria-live="polite">
-          <span class="auth-loader" aria-hidden="true"></span>
+          <span class="v2d-spinner v2d-spinner--compact" aria-hidden="true"><i></i><i></i><i></i></span>
           <strong>Inicializando conexão segura</strong>
         </div>
       </section>
@@ -586,7 +592,7 @@
             <label for="signupSecurityQuestion"><span>Pergunta de segurança</span><select id="signupSecurityQuestion" required><option value="">Selecione uma pergunta</option><option>Qual sua cor favorita?</option><option>Qual o nome do seu primeiro animal de estimação?</option><option>Em qual cidade você nasceu?</option><option>Qual era seu apelido de infância?</option></select></label>
             <label for="signupSecurityAnswer"><span>Resposta de segurança</span><input id="signupSecurityAnswer" type="text" minlength="2" maxlength="100" autocomplete="off" required></label>
             <div class="auth-feedback" id="signupFeedback" role="status" aria-live="polite"></div>
-            <button class="auth-primary" id="signupSubmitButton" type="submit"><span>CRIAR CONTA</span><i class="inline-spinner" aria-hidden="true"></i></button>
+            <button class="auth-primary" id="signupSubmitButton" type="submit"><span>CRIAR CONTA</span><i class="v2d-spinner v2d-spinner--inline" aria-hidden="true"><i></i><i></i><i></i></i></button>
             <button class="auth-secondary" id="signupBackButton" type="button">JÁ TENHO UMA CONTA</button>
           </form>
         </div>
@@ -599,6 +605,8 @@
           <div><button type="button" id="audioMiniPrevious" aria-label="Música anterior">‹</button><button type="button" id="audioMiniPlay" aria-label="Pausar música">‖</button><button type="button" id="audioMiniNext" aria-label="Próxima música">›</button></div>
         </div>
       </aside>
+
+      <div class="currency-reward-layer" id="currencyRewardLayer" aria-live="polite" aria-atomic="true"></div>
 
       <section class="player-profile-overlay hidden" id="playerProfileOverlay" aria-hidden="true">
         <div class="player-profile-modal" role="dialog" aria-modal="true" aria-labelledby="playerProfileTitle">

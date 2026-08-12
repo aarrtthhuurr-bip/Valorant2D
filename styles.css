@@ -123,10 +123,9 @@ input {
 .signup-header h2 { margin:8px 0 4px; color:#eff8fb; font-size:clamp(28px, 5vw, 42px); }
 .signup-header p { margin:0; color:#8298a5; font-size:13px; }
 .signup-header button { width:38px; height:38px; border:1px solid #314655; color:#d8e9ef; background:#14212b; }
-.inline-spinner { display:none; width:14px; height:14px; border:2px solid rgba(255,255,255,.32); border-top-color:#fff; border-radius:50%; animation:authSpin .7s linear infinite; }
-.is-loading .inline-spinner { display:inline-block; margin-left:8px; }
+.inline-spinner { display:none; }
 .skin-card.is-loading { pointer-events:none; border-color:rgba(0,240,255,.5); }
-.skin-card.is-loading .inline-spinner { display:inline-block; vertical-align:middle; }
+.skin-card.is-loading .v2d-spinner { --spinner-size:14px; margin-right:6px; vertical-align:middle; }
 @keyframes authSpin { to { transform:rotate(360deg); } }
 
 .menu-fullscreen-toggle {
@@ -143,6 +142,44 @@ input {
   transition:border-color .18s ease, color .18s ease, transform .18s ease;
 }
 .menu-fullscreen-toggle:hover,.menu-fullscreen-toggle.is-active { color:#fff; border-color:#00f0ff; transform:translateY(-1px); }
+
+/* Cooldowns compactos: ficam à esquerda dos vitais sem cobrir o campo. */
+.ability-cooldown-dock { display:flex; align-items:flex-end; gap:6px; margin-right:8px; }
+.cooldown-wipe { --cooldown-progress:0%; --cooldown-color:#ff4655; position:relative; display:grid; width:46px; height:50px; place-items:center; overflow:hidden; border:1px solid rgba(132,154,168,.28); background:rgba(5,12,19,.9); color:#eef6f8; }
+.cooldown-wipe::before { content:""; position:absolute; inset:0; background:conic-gradient(from 0deg,transparent var(--cooldown-progress),rgba(255,70,85,.46) var(--cooldown-progress)); }
+.cooldown-wipe::after { content:""; position:absolute; inset:4px; border:1px solid rgba(255,255,255,.08); }
+.cooldown-wipe>i { position:absolute; inset:auto 5px 4px; height:2px; background:var(--cooldown-color); transform:scaleX(calc(var(--ready,0))); transform-origin:left; transition:transform .12s linear; }
+.cooldown-wipe>b,.cooldown-wipe>small { position:relative; z-index:1; }
+.cooldown-wipe>b { font-size:14px; }
+.cooldown-wipe>small { align-self:end; margin-bottom:7px; max-width:40px; overflow:hidden; color:#8499a5; font-size:6px; font-weight:900; letter-spacing:.06em; text-overflow:ellipsis; white-space:nowrap; }
+.cooldown-wipe.is-ready { --cooldown-color:#65e6ad; border-color:rgba(101,230,173,.48); }
+.cooldown-wipe.is-empty { opacity:.58; }
+
+/* Feedback de Core: impacto central, trajetória e absorção no contador. */
+.currency-reward-layer { position:fixed; z-index:1900; inset:0; overflow:hidden; pointer-events:none; }
+.currency-reward-burst { --reward-x:50vw; --reward-y:50vh; --wallet-x:calc(100vw - 72px); --wallet-y:36px; position:absolute; left:var(--reward-x); top:var(--reward-y); color:#74e9f6; transform:translate(-50%,-50%); animation:currencyFly 1.4s cubic-bezier(.55,.02,.45,1) forwards; }
+.currency-reward-burst>strong { display:block; font-size:clamp(32px,6vw,62px); letter-spacing:.06em; text-shadow:0 0 22px rgba(84,214,231,.58); animation:currencyImpact .5s ease both; }
+.currency-reward-particle { --angle:0deg; --distance:70px; position:absolute; left:50%; top:50%; width:12px; height:12px; border:2px solid #54d6e7; transform:translate(-50%,-50%) rotate(45deg); animation:currencyParticle .62s ease-out both; }
+.core-wallet.is-absorbing { animation:walletAbsorb .42s ease; }
+@keyframes currencyImpact { 0%{opacity:0;transform:scale(.35)} 70%{opacity:1;transform:scale(1.16)} 100%{transform:scale(1)} }
+@keyframes currencyParticle { to{opacity:0;transform:translate(-50%,-50%) rotate(var(--angle)) translateX(var(--distance)) rotate(45deg)} }
+@keyframes currencyFly { 0%,36%{transform:translate(-50%,-50%) scale(1)} 100%{left:var(--wallet-x);top:var(--wallet-y);opacity:0;transform:translate(-50%,-50%) scale(.2)} }
+@keyframes walletAbsorb { 50%{filter:brightness(1.8);transform:scale(1.13)} }
+
+/* Remaster tático do pause. */
+.pause-menu-panel { width:min(680px,92vw); padding:clamp(24px,4vw,42px); align-items:stretch; border-color:rgba(255,70,85,.34); background:linear-gradient(145deg,rgba(12,23,33,.97),rgba(4,9,15,.98)); box-shadow:0 34px 90px rgba(0,0,0,.72),inset 3px 0 #ff4655; }
+.pause-menu-heading { text-align:left; }
+.pause-menu-heading>span { color:#ff6875;font-size:8px;font-weight:900;letter-spacing:.24em; }
+.pause-menu-heading h2 { margin:7px 0 3px; }
+.pause-menu-heading p { margin:0;color:#8195a0;font-size:11px; }
+.pause-menu-actions { display:grid;grid-template-columns:repeat(2,minmax(0,1fr)); }
+.pause-menu-actions button { min-height:76px;align-items:flex-start;flex-direction:column;text-align:left; }
+.pause-menu-actions button:first-child { grid-column:1/-1;border-color:rgba(255,70,85,.7);background:linear-gradient(100deg,rgba(255,70,85,.22),rgba(255,255,255,.035)); }
+.pause-menu-actions button b { font-size:12px;letter-spacing:.14em; }
+.pause-menu-actions button small { margin-top:4px;color:#718590;font-size:8px;letter-spacing:.04em;text-transform:none; }
+.pause-menu-logo { position:absolute;right:34px;top:32px;width:72px;opacity:.16; }
+
+@media(max-width:760px){.ability-cooldown-dock{gap:3px}.cooldown-wipe{width:38px;height:42px}.pause-menu-actions{grid-template-columns:1fr 1fr}.pause-menu-actions button{min-height:58px}.pause-menu-panel{max-height:90vh;overflow-y:auto}}
 .menu-fullscreen-toggle.hidden { display:none; }
 
 .audio-mini-player {
@@ -4008,7 +4045,7 @@ button.click-feedback::after {
 .skin-card button, .inventory-action { min-height:30px; padding:6px 9px; border-radius:4px; font-size:10px; text-align:center; }
 .inventory-group { margin-bottom:20px; }
 .inventory-group > header { display:flex; justify-content:space-between; margin-bottom:9px; color:#dce8eb; }
-.inventory-empty, .commerce-loading { min-height:280px; display:grid; place-items:center; color:#718895; text-align:center; }
+.inventory-empty, .commerce-loading { min-height:280px; display:grid; place-items:center; align-content:center; gap:14px; color:#718895; text-align:center; }
 .mission-grid { display:grid; gap:10px; }
 .mission-card { display:grid; grid-template-columns:90px 1fr auto; align-items:center; gap:16px; padding:15px; border:1px solid rgba(132,170,190,.17); border-radius:7px; background:rgba(12,23,33,.76); }
 .mission-reward { color:#ffd166; font-size:20px; font-weight:900; }

@@ -1,0 +1,30 @@
+/* Spinner oficial do Valorant2D. Os três losangos remetem ao retículo do jogo. */
+.v2d-spinner {
+  --spinner-size: 38px;
+  --spinner-color: #ff4655;
+  position: relative;
+  display: inline-grid;
+  width: var(--spinner-size);
+  aspect-ratio: 1;
+  place-items: center;
+  animation: v2d-spinner-turn 1.1s infinite cubic-bezier(.55,.08,.35,1);
+}
+.v2d-spinner > i {
+  position: absolute;
+  width: 31%;
+  aspect-ratio: 1;
+  border: 1px solid color-mix(in srgb,var(--spinner-color) 80%,white 8%);
+  background: color-mix(in srgb,var(--spinner-color) 72%,transparent);
+  box-shadow: 0 0 10px color-mix(in srgb,var(--spinner-color) 32%,transparent);
+  transform: rotate(45deg) translateY(calc(var(--spinner-size) * -.29));
+  transform-origin: 50% calc(50% + var(--spinner-size) * .29);
+  animation: v2d-spinner-pulse 1.1s infinite ease-in-out;
+}
+.v2d-spinner > i:nth-child(2) { transform:rotate(165deg) translateY(calc(var(--spinner-size) * -.29)); animation-delay:-.36s; }
+.v2d-spinner > i:nth-child(3) { transform:rotate(285deg) translateY(calc(var(--spinner-size) * -.29)); animation-delay:-.72s; }
+.v2d-spinner--compact { --spinner-size:32px; }
+.v2d-spinner--inline { --spinner-size:16px; display:none; margin-left:9px; vertical-align:middle; }
+.is-loading .v2d-spinner--inline { display:inline-grid; }
+@keyframes v2d-spinner-turn { 70% { transform:rotate(120deg); } 100% { transform:rotate(360deg); } }
+@keyframes v2d-spinner-pulse { 0%,100% { opacity:.24; filter:brightness(.7); } 44% { opacity:1; filter:brightness(1.25); } }
+@media (prefers-reduced-motion:reduce) { .v2d-spinner,.v2d-spinner>i { animation-duration:2.4s; } }
