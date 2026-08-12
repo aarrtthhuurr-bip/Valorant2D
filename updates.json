@@ -27,8 +27,23 @@
       "type": "interface"
     },
     {
+      "title": "Menu mais direto",
+      "description": "A seleção de modos foi refinada, Loja e Missões ganharam acesso direto e alertas indicam quando existe conteúdo novo ou recompensa pendente.",
+      "type": "interface"
+    },
+    {
+      "title": "Economia do Outbreak reajustada",
+      "description": "Equipamentos e aliados ficaram $1000 mais baratos no Outbreak. As armas dos aliados mantêm seus preços originais.",
+      "type": "gameplay"
+    },
+    {
       "title": "Conquistas do agente",
       "description": "Partidas, vitórias e marcos de sobrevivência agora desbloqueiam conquistas e recompensas exibidas no seu perfil.",
+      "type": "gameplay"
+    },
+    {
+      "title": "Agentes aprimorados",
+      "description": "A corrida da Neon agora liga e desliga com o E, enquanto Omen e Viper receberam habilidades mais polidas e impactantes.",
       "type": "gameplay"
     },
     {
@@ -39,6 +54,11 @@
     {
       "title": "Partidas mais fluidas",
       "description": "A movimentação junto às paredes está mais suave, e os bots interagem com os orbes sem ficarem presos ou interromperem a partida.",
+      "type": "gameplay"
+    },
+    {
+      "title": "Combates menos previsíveis",
+      "description": "Os bots variam suas rotas de patrulha, e a dificuldade Média agora coloca apenas um aliado ao seu lado.",
       "type": "gameplay"
     },
     {
