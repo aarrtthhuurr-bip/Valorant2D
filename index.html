@@ -13,13 +13,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Valorant2D">
-  <meta name="valorant2d-version" content="0.9.7">
+  <meta name="valorant2d-version" content="0.9.6">
   <!-- Altere apenas este valor caso o endereço definitivo do Render mude. -->
   <meta name="valorant2d-api-url" content="https://valorant2d.onrender.com">
   <title>Valorant2D</title>
-  <link rel="manifest" href="./manifest.webmanifest?v=0.9.7">
-  <link id="gameStylesheet" rel="stylesheet" href="./styles.css?v=0.9.7">
-  <script src="./version-manager.js?v=0.9.7"></script>
+  <link rel="manifest" href="./manifest.webmanifest?v=0.9.6">
+  <link id="gameStylesheet" rel="stylesheet" href="./styles.css?v=0.9.6">
+  <script src="./version-manager.js?v=0.9.6"></script>
   <script src="https://unpkg.com/lucide@1.24.0" integrity="sha384-mooE85Luwgx+AyykX7e90VcN8/QCFTSIwPuHLmvcsLVoA0en7lKYb9XlOzn5G2co" crossorigin="anonymous"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="shortcut icon" href="./assets/Favicon/favicon.ico" type="image/x-icon">
@@ -109,11 +109,8 @@
           <button type="button" class="mobile-action mobile-ability" data-touch-action="ability1" aria-label="Usar habilidade">
             <b>E</b><span>HABILIDADE</span>
           </button>
-          <button type="button" class="mobile-action mobile-dash" data-touch-action="dash" aria-label="Usar dash global">
-            <b>Q</b><span>DASH</span>
-          </button>
           <button type="button" class="mobile-action mobile-ultimate" id="mobileUltimateButton" data-touch-action="ability2" aria-label="Usar ultimate">
-            <b>V</b><span id="mobileUltimateLabel">ULT</span>
+            <b>Q</b><span id="mobileUltimateLabel">ULT</span>
           </button>
           <button type="button" class="mobile-action mobile-interact" data-touch-action="interact" data-touch-hold="true" aria-label="Interagir com objetivo">
             <b>F</b><span>OBJETIVO</span>
@@ -344,9 +341,6 @@
 
       <div class="menu-overlay hidden" id="menuOverlay">
         <div class="menu-art" aria-hidden="true"></div>
-        <button type="button" class="menu-fullscreen-toggle hidden" id="menuFullscreenButton" aria-label="Entrar em tela cheia" title="Tela cheia">
-          <span aria-hidden="true">⛶</span>
-        </button>
         <div class="core-wallet main-core-wallet hidden" id="mainCoreWallet" aria-label="Saldo de Core">
           <span class="core-icon" aria-hidden="true"><img src="./assets/images/core_v5_bright.png" alt=""></span><strong id="mainCoreBalance">0</strong><em>C</em>
         </div>
@@ -508,6 +502,12 @@
             <p>Entre para sincronizar seu perfil e seus futuros recordes globais.</p>
           </div>
 
+          <div class="server-status is-connecting" id="serverStatus" role="status" aria-live="polite">
+            <span class="server-status-dot" aria-hidden="true"></span>
+            <div><strong id="serverStatusTitle">Conectando ao servidor</strong><small id="serverStatusText">Preparando sua sessão online.</small></div>
+            <button type="button" class="hidden" id="serverRetryButton">Tentar novamente</button>
+          </div>
+
           <form class="auth-form" id="authForm" novalidate>
             <label for="authUsername">
               <span>Usuário</span>
@@ -533,6 +533,23 @@
                 <button type="button" class="password-toggle" data-password-toggle="authPassword" aria-label="Mostrar senha">Mostrar</button>
               </span>
             </label>
+
+            <div class="auth-registration-fields hidden" id="authRegistrationFields">
+              <label for="authSecurityQuestion">
+                <span>Pergunta de segurança</span>
+                <select id="authSecurityQuestion" name="securityQuestion">
+                  <option value="">Selecione uma pergunta</option>
+                  <option>Qual sua cor favorita?</option>
+                  <option>Qual o nome do seu primeiro animal de estimação?</option>
+                  <option>Em qual cidade você nasceu?</option>
+                  <option>Qual era seu apelido de infância?</option>
+                </select>
+              </label>
+              <label for="authSecurityAnswer">
+                <span>Resposta de segurança</span>
+                <input id="authSecurityAnswer" name="securityAnswer" type="text" maxlength="100" autocomplete="off" placeholder="Sua resposta pessoal">
+              </label>
+            </div>
 
             <div class="auth-feedback" id="authFeedback" role="status" aria-live="polite"></div>
 
@@ -568,37 +585,11 @@
           <p class="auth-guest-note">No modo convidado, seus recordes não serão salvos no leaderboard global.</p>
         </div>
 
-        <div class="auth-session-check" id="authSessionCheck" role="status" aria-live="polite">
+        <div class="auth-session-check hidden" id="authSessionCheck" role="status" aria-live="polite">
           <span class="auth-loader" aria-hidden="true"></span>
-          <strong>Inicializando conexão segura</strong>
+          <strong>Validando sessão</strong>
         </div>
       </section>
-
-      <section class="signup-overlay hidden" id="signupOverlay" aria-hidden="true" aria-labelledby="signupTitle">
-        <div class="signup-panel" role="dialog" aria-modal="true">
-          <header class="signup-header">
-            <div><span>NOVO REGISTRO</span><h2 id="signupTitle">CRIAR CONTA</h2><p>Seu progresso ficará protegido e sincronizado.</p></div>
-            <button type="button" id="signupCloseButton" aria-label="Voltar ao login">×</button>
-          </header>
-          <form class="auth-form signup-form" id="signupForm" novalidate>
-            <label for="signupUsername"><span>Usuário</span><input id="signupUsername" type="text" minlength="3" maxlength="24" pattern="[A-Za-z0-9_]+" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
-            <label for="signupPassword"><span>Senha</span><span class="password-field"><input id="signupPassword" type="password" minlength="8" maxlength="72" autocomplete="new-password" required><button type="button" class="password-toggle" data-password-toggle="signupPassword">Mostrar</button></span></label>
-            <label for="signupSecurityQuestion"><span>Pergunta de segurança</span><select id="signupSecurityQuestion" required><option value="">Selecione uma pergunta</option><option>Qual sua cor favorita?</option><option>Qual o nome do seu primeiro animal de estimação?</option><option>Em qual cidade você nasceu?</option><option>Qual era seu apelido de infância?</option></select></label>
-            <label for="signupSecurityAnswer"><span>Resposta de segurança</span><input id="signupSecurityAnswer" type="text" minlength="2" maxlength="100" autocomplete="off" required></label>
-            <div class="auth-feedback" id="signupFeedback" role="status" aria-live="polite"></div>
-            <button class="auth-primary" id="signupSubmitButton" type="submit"><span>CRIAR CONTA</span><i class="inline-spinner" aria-hidden="true"></i></button>
-            <button class="auth-secondary" id="signupBackButton" type="button">JÁ TENHO UMA CONTA</button>
-          </form>
-        </div>
-      </section>
-
-      <aside class="audio-mini-player is-collapsed" id="audioMiniPlayer" aria-label="Controle da trilha do menu">
-        <button type="button" class="audio-mini-toggle" id="audioMiniToggle" aria-expanded="false" aria-label="Abrir controles de música">♫</button>
-        <div class="audio-mini-content">
-          <span>TRILHA ATUAL</span><strong id="audioMiniTrack">CARREGANDO</strong>
-          <div><button type="button" id="audioMiniPrevious" aria-label="Música anterior">‹</button><button type="button" id="audioMiniPlay" aria-label="Pausar música">‖</button><button type="button" id="audioMiniNext" aria-label="Próxima música">›</button></div>
-        </div>
-      </aside>
 
       <section class="player-profile-overlay hidden" id="playerProfileOverlay" aria-hidden="true">
         <div class="player-profile-modal" role="dialog" aria-modal="true" aria-labelledby="playerProfileTitle">
@@ -771,6 +762,6 @@
     </div>
   </main>
 
-  <script src="./game.js?v=0.9.7"></script>
+  <script src="./game.js?v=0.9.6"></script>
 </body>
 </html>

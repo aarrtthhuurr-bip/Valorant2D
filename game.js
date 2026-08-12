@@ -168,6 +168,10 @@ const ui = {
   mobileOrientationHint: document.getElementById("mobileOrientationHint"),
   authOverlay: document.getElementById("authOverlay"),
   authSessionCheck: document.getElementById("authSessionCheck"),
+  serverStatus: document.getElementById("serverStatus"),
+  serverStatusTitle: document.getElementById("serverStatusTitle"),
+  serverStatusText: document.getElementById("serverStatusText"),
+  serverRetryButton: document.getElementById("serverRetryButton"),
   authForm: document.getElementById("authForm"),
   authUsername: document.getElementById("authUsername"),
   authPassword: document.getElementById("authPassword"),
@@ -181,16 +185,9 @@ const ui = {
   accountType: document.getElementById("accountType"),
   accountUsername: document.getElementById("accountUsername"),
   logoutButton: document.getElementById("logoutButton"),
-  signupOverlay: document.getElementById("signupOverlay"),
-  signupForm: document.getElementById("signupForm"),
-  signupUsername: document.getElementById("signupUsername"),
-  signupPassword: document.getElementById("signupPassword"),
-  signupSecurityQuestion: document.getElementById("signupSecurityQuestion"),
-  signupSecurityAnswer: document.getElementById("signupSecurityAnswer"),
-  signupFeedback: document.getElementById("signupFeedback"),
-  signupSubmitButton: document.getElementById("signupSubmitButton"),
-  signupBackButton: document.getElementById("signupBackButton"),
-  signupCloseButton: document.getElementById("signupCloseButton"),
+  authRegistrationFields: document.getElementById("authRegistrationFields"),
+  authSecurityQuestion: document.getElementById("authSecurityQuestion"),
+  authSecurityAnswer: document.getElementById("authSecurityAnswer"),
   forgotPasswordButton: document.getElementById("forgotPasswordButton"),
   recoveryForm: document.getElementById("recoveryForm"),
   recoveryUsername: document.getElementById("recoveryUsername"),
@@ -215,13 +212,6 @@ const ui = {
   currentPlayerRanking: document.getElementById("currentPlayerRanking"),
   mainCoreWallet: document.getElementById("mainCoreWallet"),
   mainCoreBalance: document.getElementById("mainCoreBalance"),
-  menuFullscreenButton: document.getElementById("menuFullscreenButton"),
-  audioMiniPlayer: document.getElementById("audioMiniPlayer"),
-  audioMiniToggle: document.getElementById("audioMiniToggle"),
-  audioMiniTrack: document.getElementById("audioMiniTrack"),
-  audioMiniPrevious: document.getElementById("audioMiniPrevious"),
-  audioMiniPlay: document.getElementById("audioMiniPlay"),
-  audioMiniNext: document.getElementById("audioMiniNext"),
   menuUtilityDock: document.getElementById("menuUtilityDock"),
   menuTutorialButton: document.getElementById("menuTutorialButton"),
   menuUpdatesButton: document.getElementById("menuUpdatesButton"),
@@ -834,7 +824,7 @@ function closeWelcomeReview() {
   showMainMenu();
 }
 
-const commerceState = { tab: "skins", profile: null, weaponId: "pistol", inventoryFilter: "all", busy: false, pendingSkinIds: new Set() };
+const commerceState = { tab: "skins", profile: null, weaponId: "pistol", inventoryFilter: "all", busy: false };
 
 const INVENTORY_FILTERS = Object.freeze([
   { id: "all", label: "Todas", weaponIds: null },
@@ -1301,8 +1291,7 @@ function commerceSkinCard(skin, { offer = false, inventory = false } = {}) {
   const owned = commerceState.profile?.ownedSkinIds?.includes(skin.id);
   const equipped = commerceState.profile?.equippedSkins?.[skin.weaponId] === skin.id;
   const card = document.createElement("article");
-  const pending = commerceState.pendingSkinIds.has(skin.id);
-  card.className = `skin-card${inventory ? " inventory-skin-card" : ""}${owned ? " is-owned" : ""}${equipped ? " is-equipped" : ""}${pending ? " is-loading" : ""}`;
+  card.className = `skin-card${inventory ? " inventory-skin-card" : ""}${owned ? " is-owned" : ""}${equipped ? " is-equipped" : ""}`;
   const price = Number(skin.price) || 0;
   card.innerHTML = inventory
     ? `<span class="skin-card-art"><img src="${skin.imagePath}" alt="${skin.name} para ${skin.weaponName}"></span>
@@ -1331,9 +1320,9 @@ function commerceSkinCard(skin, { offer = false, inventory = false } = {}) {
   }
   const action = document.createElement("button");
   action.type = "button";
-  action.innerHTML = owned ? "ADQUIRIDA" : pending ? '<i class="inline-spinner" aria-hidden="true"></i> SINCRONIZANDO' : "COMPRAR";
-  action.disabled = owned || pending;
-  action.addEventListener("click", () => purchaseCommerceSkin(skin));
+  action.textContent = owned ? "ADQUIRIDA" : "COMPRAR";
+  action.disabled = owned || commerceState.busy;
+  action.addEventListener("click", () => purchaseCommerceSkin(skin.id));
   card.appendChild(action);
   attachSkinPreviewMotion(card);
   return card;
@@ -1497,34 +1486,13 @@ async function commerceMutation(path, options, successMessage, { successSound = 
   } finally { commerceState.busy = false; renderCommerceTab(); }
 }
 
-async function purchaseCommerceSkin(skin) {
-  if (!skin || commerceState.pendingSkinIds.has(skin.id) || commerceState.profile?.ownedSkinIds?.includes(skin.id)) return;
-  const previousBalance = Number(commerceState.profile?.coreBalance) || 0;
-  const price = Math.max(0, Number(skin.price) || 0);
-  if (previousBalance < price) {
-    showUxToast("Core insuficiente para esta skin.", { title: "COMPRA NÃO CONCLUÍDA", tone: "warning" });
-    return;
-  }
-  commerceState.pendingSkinIds.add(skin.id);
-  commerceState.profile.ownedSkinIds = [...(commerceState.profile.ownedSkinIds || []), skin.id];
-  commerceState.profile.coreBalance = previousBalance - price;
-  updateCoreBalances(commerceState.profile.coreBalance);
-  renderCommerceSkins();
-  try {
-    const payload = await requestApi(`/api/commerce/skins/${encodeURIComponent(skin.id)}/purchase`, { method: "POST", headers: commerceAuthorization(), body: "{}" });
-    await refreshCommerceProfile();
-    playSound("skin_purchase");
-    setCommerceFeedback(`${payload.skin.name} adicionada ao inventário por ${payload.paid} C.`, "success");
-  } catch (error) {
-    commerceState.profile.ownedSkinIds = (commerceState.profile.ownedSkinIds || []).filter((id) => id !== skin.id);
-    commerceState.profile.coreBalance = previousBalance;
-    updateCoreBalances(previousBalance);
-    showUxToast("A compra foi desfeita; tente novamente.", { title: "FALHA DE SINCRONIZAÇÃO", tone: "warning" });
-    setCommerceFeedback(error.message, "error");
-  } finally {
-    commerceState.pendingSkinIds.delete(skin.id);
-    renderCommerceSkins();
-  }
+function purchaseCommerceSkin(skinId) {
+  return commerceMutation(
+    `/api/commerce/skins/${encodeURIComponent(skinId)}/purchase`,
+    { method: "POST", body: "{}" },
+    (data) => `${data.skin.name} adicionada ao inventário por ${data.paid} C.`,
+    { successSound: "skin_purchase" },
+  );
 }
 async function equipCommerceSkinInstant(skin) {
   if (commerceState.busy || !commerceState.profile?.ownedSkinIds?.includes(skin.id)) return;
@@ -1623,42 +1591,35 @@ function setAuthBusy(isBusy, action = "login") {
     ui.registerButton.textContent = authMode === "register" ? "Voltar para entrar" : "Cadastrar nova conta";
   }
   ui.googleAuthBlock?.classList.toggle("is-busy", isBusy);
-  if (ui.signupSubmitButton) {
-    ui.signupSubmitButton.disabled = isBusy;
-    ui.signupSubmitButton.classList.toggle("is-loading", isBusy && action === "register");
-  }
 }
 
 function validateAuthForm(action) {
-  const registering = action === "register";
-  const usernameInput = registering ? ui.signupUsername : ui.authUsername;
-  const passwordInput = registering ? ui.signupPassword : ui.authPassword;
-  const username = usernameInput?.value.trim() || "";
-  const password = passwordInput?.value || "";
+  const username = ui.authUsername?.value.trim() || "";
+  const password = ui.authPassword?.value || "";
   const usernameIsValid = /^[A-Za-z0-9_]{3,24}$/.test(username);
   const passwordIsValid = password.length >= 8 && password.length <= 72;
 
-  usernameInput?.setAttribute("aria-invalid", String(!usernameIsValid));
-  passwordInput?.setAttribute("aria-invalid", String(!passwordIsValid));
+  ui.authUsername?.setAttribute("aria-invalid", String(!usernameIsValid));
+  ui.authPassword?.setAttribute("aria-invalid", String(!passwordIsValid));
 
   if (!usernameIsValid) {
     setAuthFeedback("Use de 3 a 24 letras, números ou sublinhados no nome de usuário.", "error");
-    usernameInput?.focus();
+    ui.authUsername?.focus();
     return null;
   }
 
   if (!passwordIsValid) {
     setAuthFeedback("A senha deve ter entre 8 e 72 caracteres.", "error");
-    passwordInput?.focus();
+    ui.authPassword?.focus();
     return null;
   }
 
   const credentials = { username, password };
   if (action === "register") {
-    const securityQuestion = ui.signupSecurityQuestion?.value || "";
-    const securityAnswer = ui.signupSecurityAnswer?.value.trim() || "";
+    const securityQuestion = ui.authSecurityQuestion?.value || "";
+    const securityAnswer = ui.authSecurityAnswer?.value.trim() || "";
     if (!securityQuestion || securityAnswer.length < 2) {
-      if (ui.signupFeedback) ui.signupFeedback.textContent = "Selecione uma pergunta e informe sua resposta de segurança.";
+      setAuthFeedback("Selecione uma pergunta e informe sua resposta de segurança.", "error");
       return null;
     }
     credentials.securityQuestion = securityQuestion;
@@ -1698,8 +1659,6 @@ function enterGameWithProfile(profile) {
   }
 
   if (!ui.authOverlay) return;
-  replaceAuthRoute("");
-  closeSignupRoute({ updateHistory: false });
   ui.authOverlay.classList.add("is-leaving");
   window.setTimeout(() => {
     ui.authOverlay.classList.add("hidden");
@@ -1713,8 +1672,7 @@ async function submitAuthentication(action) {
   if (!credentials) return;
 
   setAuthBusy(true, action);
-  if (action === "register" && ui.signupFeedback) ui.signupFeedback.textContent = "Criando sua conta segura...";
-  else setAuthFeedback("Validando credenciais...");
+  setAuthFeedback(action === "register" ? "Criando sua conta segura..." : "Validando credenciais...");
 
   try {
     const payload = await requestApi(`/api/${action}`, {
@@ -1722,16 +1680,14 @@ async function submitAuthentication(action) {
       body: JSON.stringify(credentials),
     });
     saveSession(payload);
-    if (action === "register" && ui.signupFeedback) ui.signupFeedback.textContent = payload.message || "Conta criada.";
-    else setAuthFeedback(payload.message || "Acesso autorizado.", "success");
+    setAuthFeedback(payload.message || "Acesso autorizado.", "success");
     enterGameWithProfile({ ...payload.user, isGuest: false, token: payload.token });
     showUxToast(action === "register" ? "Conta criada e perfil online ativado." : `Bem-vindo de volta, ${payload.user?.username || "agente"}.`, {
       title: action === "register" ? "CONTA CRIADA" : "SESSÃO CONECTADA",
       tone: "success",
     });
   } catch (error) {
-    if (action === "register" && ui.signupFeedback) ui.signupFeedback.textContent = error.message;
-    else setAuthFeedback(error.message, "error");
+    setAuthFeedback(error.message, "error");
     showUxToast(error.message, { title: error.code === "SERVER_OFFLINE" ? "SERVIDOR INDISPONÍVEL" : "ACESSO NÃO CONCLUÍDO", tone: "warning", duration: 3800 });
   } finally {
     setAuthBusy(false);
@@ -1810,48 +1766,12 @@ function initializeGoogleIdentity(attempt = 0) {
   setGoogleAuthStatus("");
 }
 
-const APP_ROUTE_BASE = (() => {
-  const path = window.location.pathname;
-  const knownRoute = path.match(/\/(login|signup)\/?$/i);
-  const looksLikeFile = /\/[^/]+\.[a-z0-9]+$/i.test(path);
-  const base = knownRoute
-    ? path.slice(0, knownRoute.index + 1)
-    : path.endsWith("/") ? path : looksLikeFile ? path.replace(/[^/]*$/, "") : `${path}/`;
-  return base || "/";
-})();
-
-function authRouteUrl(route = "") {
-  return `${APP_ROUTE_BASE}${String(route).replace(/^\//, "")}`;
-}
-
-function replaceAuthRoute(route) {
-  window.history.replaceState({ valorant2dRoute: route || "main" }, "", authRouteUrl(route));
-}
-
-function pushAuthRoute(route) {
-  window.history.pushState({ valorant2dRoute: route || "main" }, "", authRouteUrl(route));
-}
-
-function openSignupRoute({ updateHistory = true } = {}) {
-  authMode = "register";
-  if (ui.signupUsername && !ui.signupUsername.value) ui.signupUsername.value = ui.authUsername?.value.trim() || "";
-  ui.signupOverlay?.classList.remove("hidden");
-  ui.signupOverlay?.setAttribute("aria-hidden", "false");
-  if (updateHistory) pushAuthRoute("signup");
-  window.setTimeout(() => ui.signupUsername?.focus(), 30);
-}
-
-function closeSignupRoute({ updateHistory = true } = {}) {
-  authMode = "login";
-  ui.signupOverlay?.classList.add("hidden");
-  ui.signupOverlay?.setAttribute("aria-hidden", "true");
-  if (updateHistory) pushAuthRoute("login");
-  ui.authUsername?.focus();
-}
-
-function syncAuthRouteFromLocation() {
-  if (/\/signup\/?$/i.test(window.location.pathname)) openSignupRoute({ updateHistory: false });
-  else closeSignupRoute({ updateHistory: false });
+function toggleRegistrationMode() {
+  authMode = authMode === "login" ? "register" : "login";
+  ui.authRegistrationFields?.classList.toggle("hidden", authMode !== "register");
+  if (ui.authPassword) ui.authPassword.autocomplete = authMode === "register" ? "new-password" : "current-password";
+  setAuthFeedback("");
+  setAuthBusy(false);
 }
 
 function setRecoveryFeedback(message = "", type = "") {
@@ -1946,9 +1866,6 @@ async function bootstrapAuthentication() {
   const storedSession = readStoredSession();
   if (!storedSession) {
     ui.authSessionCheck?.classList.add("hidden");
-    ui.authOverlay?.classList.add("is-resolved");
-    if (!/\/(?:login|signup)\/?$/i.test(window.location.pathname)) replaceAuthRoute("login");
-    syncAuthRouteFromLocation();
     ui.authUsername?.focus();
     return;
   }
@@ -1964,8 +1881,6 @@ async function bootstrapAuthentication() {
   } catch (error) {
     clearStoredSession();
     ui.authSessionCheck?.classList.add("hidden");
-    ui.authOverlay?.classList.add("is-resolved");
-    replaceAuthRoute("login");
     setAuthFeedback(
       error.code === "SERVER_OFFLINE"
         ? error.message
@@ -2000,8 +1915,6 @@ async function logoutCurrentProfile() {
   ui.authPassword.value = "";
   setAuthFeedback("");
   ui.authOverlay?.classList.remove("hidden", "is-leaving");
-  ui.authOverlay?.classList.add("is-resolved");
-  replaceAuthRoute("login");
   ui.authUsername?.focus();
 }
 
@@ -2509,21 +2422,6 @@ const MENU_MUSIC_TRACKS = [
 ];
 const menuMusic = { element: null, index: -1, requested: false };
 
-function menuTrackLabel(path = "") {
-  const filename = decodeURIComponent(String(path).split("/").pop() || "Trilha do menu");
-  return filename.replace(/_[A-Za-z0-9]+\.mp3$/i, "").replace(/\.mp3$/i, "").replaceAll("_", " ").trim().toUpperCase();
-}
-
-function syncAudioMiniPlayer() {
-  const element = menuMusic.element;
-  if (ui.audioMiniTrack) ui.audioMiniTrack.textContent = menuTrackLabel(MENU_MUSIC_TRACKS[menuMusic.index]);
-  if (ui.audioMiniPlay) {
-    const paused = !element || element.paused;
-    ui.audioMiniPlay.textContent = paused ? "▶" : "‖";
-    ui.audioMiniPlay.setAttribute("aria-label", paused ? "Reproduzir música" : "Pausar música");
-  }
-}
-
 function randomMenuMusicIndex(previousIndex = menuMusic.index) {
   const trackCount = MENU_MUSIC_TRACKS.length;
   if (trackCount <= 1) return trackCount ? 0 : -1;
@@ -2545,7 +2443,6 @@ function selectRandomMenuMusic({ restart = true } = {}) {
     menuMusic.element.src = MENU_MUSIC_TRACKS[nextIndex];
     if (restart) menuMusic.element.currentTime = 0;
   }
-  syncAudioMiniPlayer();
   return MENU_MUSIC_TRACKS[nextIndex];
 }
 
@@ -2563,7 +2460,6 @@ function ensureMenuMusic() {
   element.loop = false;
   const advanceTrack = () => {
     selectRandomMenuMusic();
-    syncAudioMiniPlayer();
     void element.play().catch(() => {});
   };
   element.addEventListener("ended", advanceTrack);
@@ -2571,10 +2467,6 @@ function ensureMenuMusic() {
   // interromper permanentemente toda a música do menu.
   element.addEventListener("error", advanceTrack);
   menuMusic.element = element;
-  element.addEventListener("play", syncAudioMiniPlayer);
-  element.addEventListener("pause", syncAudioMiniPlayer);
-  element.addEventListener("loadedmetadata", syncAudioMiniPlayer);
-  syncAudioMiniPlayer();
   return element;
 }
 
@@ -2583,30 +2475,10 @@ function syncMenuMusic(shouldPlay = game.menuState !== "none") {
   element.volume = menuMusicVolume();
   if (!shouldPlay || settings?.muted || optionsSettings?.muted || element.volume <= 0) {
     element.pause();
-    syncAudioMiniPlayer();
     return;
   }
   menuMusic.requested = true;
   void element.play().catch(() => {});
-}
-
-function stepMenuMusic(direction = 1) {
-  const element = ensureMenuMusic();
-  const count = MENU_MUSIC_TRACKS.length;
-  if (!count) return;
-  menuMusic.index = (menuMusic.index + direction + count) % count;
-  element.src = MENU_MUSIC_TRACKS[menuMusic.index];
-  element.currentTime = 0;
-  syncAudioMiniPlayer();
-  void element.play().catch(() => {});
-}
-
-function toggleAudioMiniPlayer(forceExpanded) {
-  const expanded = typeof forceExpanded === "boolean"
-    ? forceExpanded
-    : ui.audioMiniPlayer?.classList.contains("is-collapsed");
-  ui.audioMiniPlayer?.classList.toggle("is-collapsed", !expanded);
-  ui.audioMiniToggle?.setAttribute("aria-expanded", String(expanded));
 }
 const AUDIO_MASTER_HEADROOM = 0.75;
 const AUDIO_MIX = {
@@ -2721,7 +2593,21 @@ const agents = [
     ability: "Nuvem de veneno",
     cooldown: 9,
     use(game) {
-      launchViperGrenade(game.player);
+      const p = game.player;
+      const castPoint = limitedCastPoint(p, mouse, VIPER_CAST_RANGE);
+      game.smokes.push({
+        ...nearestWalkablePoint(castPoint, p),
+        r: 22,
+        targetR: VIPER_CLOUD_RADIUS + 18,
+        life: 9,
+        maxLife: 9,
+        poison: true,
+        damagePerSecond: 27,
+        ownerTeam: "player",
+        visualPhase: Math.random() * Math.PI * 2,
+      });
+      game.explosions.push({ x: castPoint.x, y: castPoint.y, r: 8, maxR: VIPER_CLOUD_RADIUS + 24, life: .55, maxLife: .55, color: "#52e36f" });
+      spawnParticles(castPoint.x, castPoint.y, "#8dff78", 34, 165);
       return true;
     },
   },
@@ -2771,7 +2657,15 @@ const agents = [
     ability: "Brisa de Impulso",
     cooldown: 7,
     use(game) {
-      return startJettDirectionalDash();
+      const p = game.player;
+      const length = Math.hypot(p.moveX || 0, p.moveY || 0);
+      const angle = length > 0.1 ? Math.atan2(p.moveY, p.moveX) : p.angle;
+      const fromX = p.x;
+      const fromY = p.y;
+      safeDisplaceEntity(p, Math.cos(angle) * 170, Math.sin(angle) * 170, 12);
+      spawnDashTrail(p, fromX, fromY, p.x, p.y, "#d7f7ff");
+      game.screenTint = { color: "rgba(120, 220, 255, 0.22)", life: 0.22, maxLife: 0.22 };
+      return Math.hypot(p.x - fromX, p.y - fromY) > 8;
     },
   },
   {
@@ -2818,27 +2712,6 @@ const agents = [
     use(game) {
       const p = game.player;
       launchRazeGrenade(p, p.angle, false);
-      return true;
-    },
-  },
-  {
-    id: "sova", name: "Sova", role: "Iniciador", color: "#68b5ff", ultCost: 7,
-    ability: "Pulso de Reconhecimento", cooldown: 11,
-    use(game) {
-      game.revealTimer = Math.max(game.revealTimer, 4.5);
-      const p = game.player;
-      game.explosions.push({ x: p.x, y: p.y, r: 0, maxR: 320, life: .7, maxLife: .7, color: "#68b5ff" });
-      spawnParticles(p.x, p.y, "#68b5ff", 28, 200);
-      return true;
-    },
-  },
-  {
-    id: "gekko", name: "Gekko", role: "Iniciador", color: "#b7f34a", ultCost: 7,
-    ability: "Companheiro Tático", cooldown: 12,
-    use(game) {
-      const p = game.player;
-      game.turrets.push({ x: p.x + Math.cos(p.angle) * 36, y: p.y + Math.sin(p.angle) * 36, r: 12, angle: p.angle, ownerTeam: "player", ownerId: "gekko", fireTimer: .3, burst: 0, burstTimer: 0, life: 9, maxLife: 9, targetId: null });
-      spawnParticles(p.x, p.y, "#b7f34a", 20, 140);
       return true;
     },
   },
@@ -5003,8 +4876,6 @@ const game = {
   },
   outbreakUltInventory: { agentId: null, charges: 0 },
   outbreakGadget: { id: "pulseBomb", charges: 2, cooldownRemaining: 0 },
-  globalDashCooldown: 0,
-  agentDash: null,
   airdrops: [],
   airdropVisuals: [],
   outbreakOverdriveTrailTimer: 0,
@@ -6498,65 +6369,6 @@ function spawnDashTrail(entity, fromX, fromY, toX, toY, color) {
   }
   spawnParticles(fromX, fromY, color, 6, 120);
   spawnParticles(toX, toY, color, 10, 180);
-}
-
-const GLOBAL_DASH = Object.freeze({ distance: 82, cooldown: 2.1, color: "#67e8f9" });
-
-function movementDirection(entity = game.player) {
-  const moving = Math.hypot(entity?.moveX || 0, entity?.moveY || 0);
-  const angle = moving > 0.08 ? Math.atan2(entity.moveY, entity.moveX) : entity?.angle || 0;
-  return { x: Math.cos(angle), y: Math.sin(angle), angle };
-}
-
-function performGlobalDash() {
-  const player = game.player;
-  if (!player?.alive || game.globalDashCooldown > 0 || game.phase !== "action") return false;
-  const direction = movementDirection(player);
-  const fromX = player.x;
-  const fromY = player.y;
-  safeDisplaceEntity(player, direction.x * GLOBAL_DASH.distance, direction.y * GLOBAL_DASH.distance, 8);
-  const distance = Math.hypot(player.x - fromX, player.y - fromY);
-  if (distance < 5) {
-    setMessage("Dash bloqueado.");
-    return false;
-  }
-  game.globalDashCooldown = game.sandbox ? 0 : GLOBAL_DASH.cooldown;
-  spawnDashTrail(player, fromX, fromY, player.x, player.y, GLOBAL_DASH.color);
-  game.screenTint = { color: "rgba(0, 240, 255, 0.12)", life: 0.14, maxLife: 0.14 };
-  playSound("ability");
-  return true;
-}
-
-function startJettDirectionalDash() {
-  const player = game.player;
-  const direction = movementDirection(player);
-  game.agentDash = { x: direction.x, y: direction.y, life: .18, maxLife: .18, speed: 920, color: "#d7f7ff", lastX: player.x, lastY: player.y };
-  game.screenTint = { color: "rgba(120, 220, 255, 0.2)", life: .24, maxLife: .24 };
-  return true;
-}
-
-function updateAgentDash(dt) {
-  const dash = game.agentDash;
-  const player = game.player;
-  if (!dash || !player?.alive) return;
-  const beforeX = player.x;
-  const beforeY = player.y;
-  const moved = moveEntity(player, dash.x * dash.speed * dt, dash.y * dash.speed * dt, map.walls);
-  if (moved > 0.5) spawnDashTrail(player, beforeX, beforeY, player.x, player.y, dash.color);
-  dash.life = Math.max(0, dash.life - dt);
-  if (dash.life === 0 || moved < 0.5) game.agentDash = null;
-}
-
-function launchViperGrenade(owner) {
-  const angle = owner.angle;
-  game.grenades.push({
-    kind: "viper",
-    x: owner.x + Math.cos(angle) * (owner.r + 10), y: owner.y + Math.sin(angle) * (owner.r + 10),
-    vx: Math.cos(angle) * 470 * GAME_CONFIG.projectiles.utilitySpeedMultiplier,
-    vy: Math.sin(angle) * 470 * GAME_CONFIG.projectiles.utilitySpeedMultiplier,
-    life: 1.05, maxLife: 1.05, r: 8, color: "#57ef79",
-  });
-  spawnParticles(owner.x, owner.y, "#8dff78", 12, 100);
 }
 
 function updateNeonStamina(dt) {
@@ -8220,8 +8032,7 @@ function updatePlayer(dt) {
   const ultimateSpeed = 1;
   const shadowSlow = shadowSlowMultiplier(p);
   if (!movementLocked) {
-    if (game.agentDash) updateAgentDash(dt);
-    else moveEntity(p, (dx / len) * p.speed * ultimateSpeed * neonSpeed * shadowSlow * dt, (dy / len) * p.speed * ultimateSpeed * neonSpeed * shadowSlow * dt, map.walls);
+    moveEntity(p, (dx / len) * p.speed * ultimateSpeed * neonSpeed * shadowSlow * dt, (dy / len) * p.speed * ultimateSpeed * neonSpeed * shadowSlow * dt, map.walls);
   }
   const aimActive = game.isMobile
     && touchControls.aim.active
@@ -8258,7 +8069,6 @@ function updatePlayer(dt) {
 
   if (mouse.down || keyHeld("fire")) shoot(p, mouse.x, mouse.y, game.selectedWeapon, "player");
   if (keyHeld("reload")) reload();
-  if (keyPressed("dash")) performGlobalDash();
   if (keyPressed("ability1") && game.abilityCooldown <= 0 && game.phase === "action") {
     const used = game.selectedAgent.use(game);
     if (used !== false) {
@@ -9808,17 +9618,10 @@ function updateAgentObjects(dt) {
     grenade.life -= dt;
     if (lineIntersectsAnyWall(oldX, oldY, grenade.x, grenade.y)) grenade.life = 0;
     if (grenade.life <= 0) {
-      if (grenade.kind === "viper") {
-        const point = nearestWalkablePoint({ x: grenade.x, y: grenade.y }, game.player);
-        game.smokes.push({ ...point, r: 16, targetR: VIPER_CLOUD_RADIUS + 18, life: 10, maxLife: 10, poison: true, damagePerSecond: 29, ownerTeam: "player", visualPhase: Math.random() * Math.PI * 2 });
-        game.explosions.push({ x: point.x, y: point.y, r: 8, maxR: VIPER_CLOUD_RADIUS + 24, life: .62, maxLife: .62, color: "#52e36f" });
-        spawnParticles(point.x, point.y, "#8dff78", 42, 190);
-        continue;
-      }
       explodeArea(grenade.x, grenade.y, grenade.mini ? 62 : 104, grenade.mini ? 42 : 78, grenade.mini ? "#ffcf45" : "#ff6b2f", { weaponName: grenade.mini ? "Mini Granada" : "Cartuchos de Tinta", particles: grenade.mini ? 18 : 34, power: grenade.mini ? 170 : 250, shake: grenade.mini ? 0.16 : 0.32 });
       if (!grenade.mini) {
-        for (let i = 0; i < 6; i++) {
-          launchRazeGrenade({ x: grenade.x, y: grenade.y, r: 0 }, i * Math.PI / 3 + Math.PI / 6, true);
+        for (let i = 0; i < 4; i++) {
+          launchRazeGrenade({ x: grenade.x, y: grenade.y, r: 0 }, i * Math.PI / 2 + Math.PI / 4, true);
         }
       }
     }
@@ -9876,7 +9679,6 @@ function updateTimers(dt) {
     if (game.roundBannerTimer === 0) ui.roundBanner.classList.add("hidden");
   }
   game.abilityCooldown = game.sandbox ? 0 : Math.max(0, game.abilityCooldown - dt);
-  game.globalDashCooldown = game.sandbox ? 0 : Math.max(0, (game.globalDashCooldown || 0) - dt);
   game.shake = Math.max(0, game.shake - dt);
   game.damageFlash = Math.max(0, game.damageFlash - dt * 1.9);
   const wasReloading = game.reloadTimer > 0;
@@ -10187,7 +9989,7 @@ function update(dt) {
 }
 
 function updateReplayRecorder(dt) {
-  if (!settings.killcamEnabled || !game.player?.alive || game.phase !== "action") return;
+  if (!labEnabled("syntheticKillcam") || !game.player?.alive || game.phase !== "action") return;
   game.replaySampleTimer = (game.replaySampleTimer || 0) - dt;
   if (game.replaySampleTimer > 0) return;
   game.replaySampleTimer = 0.08;
@@ -10203,10 +10005,10 @@ function updateReplayRecorder(dt) {
 }
 
 function startSyntheticKillcam(bullet, target) {
-  if (!settings.killcamEnabled || !bullet || !target) return;
+  if (!labEnabled("syntheticKillcam") || !bullet || !target) return;
   game.syntheticKillcam = {
-    life: 3,
-    maxLife: 3,
+    life: 2.4,
+    maxLife: 2.4,
     fromX: Number.isFinite(bullet.startX) ? bullet.startX : bullet.x - bullet.vx * 0.25,
     fromY: Number.isFinite(bullet.startY) ? bullet.startY : bullet.y - bullet.vy * 0.25,
     toX: target.x,
@@ -11156,26 +10958,26 @@ function drawMedkitsAndOrbs() {
     ctx.restore();
   }
   for (const orb of game.ultOrbs) {
-    if (!estaNoCampoDeVisao(orb, 25)) continue;
-    const pulse = 1 + Math.sin(now * 3.1 + orb.phase) * 0.1;
-    const bounce = Math.sin(now * 2.2 + orb.phase) * 5;
+    if (!estaNoCampoDeVisao(orb, 32)) continue;
+    const pulse = 1 + Math.sin(now * 1.5 + orb.phase) * 0.12;
     ctx.save();
-    ctx.translate(orb.x, orb.y + bounce);
-    ctx.strokeStyle = "rgba(189,103,255,0.52)";
-    ctx.lineWidth = 2;
-    for (let i = 0; i < 2; i++) {
+    ctx.translate(orb.x, orb.y);
+    ctx.strokeStyle = "rgba(189,103,255,0.5)";
+    ctx.lineWidth = 3;
+    for (let i = 0; i < 3; i++) {
       ctx.beginPath();
-      ctx.arc(0, 0, 16 + i * 7 + Math.sin(now * 2 + i) * 2, 0, Math.PI * 2);
+      ctx.arc(0, 0, 22 + i * 8 + Math.sin(now + i) * 3, 0, Math.PI * 2);
       ctx.stroke();
     }
-    ctx.rotate(Math.PI / 4 + now * .35);
-    ctx.fillStyle = "#090311";
+    ctx.fillStyle = "#000";
     ctx.shadowColor = "#bd67ff";
-    ctx.shadowBlur = 18 + pulse * 6;
-    ctx.fillRect(-9 * pulse, -9 * pulse, 18 * pulse, 18 * pulse);
+    ctx.shadowBlur = 28;
+    ctx.beginPath();
+    ctx.arc(0, 0, 15 * pulse, 0, Math.PI * 2);
+    ctx.fill();
     ctx.strokeStyle = "#d7a0ff";
-    ctx.lineWidth = 2.5;
-    ctx.strokeRect(-9 * pulse, -9 * pulse, 18 * pulse, 18 * pulse);
+    ctx.lineWidth = 4;
+    ctx.stroke();
     ctx.restore();
   }
 }
@@ -12908,28 +12710,6 @@ function syncMainMenuUtilities() {
   document.body?.classList.toggle("menu-utilities-suppressed", !shouldShow);
   ui.menuUtilityDock?.classList.toggle("hidden", !shouldShow);
   ui.mainCoreWallet?.classList.toggle("hidden", !shouldShow || Boolean(currentProfile?.isGuest));
-  ui.menuFullscreenButton?.classList.toggle("hidden", !shouldShow);
-  ui.audioMiniPlayer?.classList.toggle("hidden", !shouldShow);
-}
-
-async function toggleGameFullscreen() {
-  try {
-    if (document.fullscreenElement) await document.exitFullscreen();
-    else await document.documentElement.requestFullscreen();
-  } catch {
-    showUxToast("O navegador bloqueou a alteração de tela.", { title: "TELA CHEIA", tone: "warning" });
-  }
-}
-
-function syncFullscreenState() {
-  const active = Boolean(document.fullscreenElement);
-  if (ui.menuFullscreenButton) {
-    ui.menuFullscreenButton.classList.toggle("is-active", active);
-    ui.menuFullscreenButton.querySelector("span").textContent = active ? "🗗" : "⛶";
-    ui.menuFullscreenButton.setAttribute("aria-label", active ? "Sair da tela cheia" : "Entrar em tela cheia");
-  }
-  if (settings) settings.displayMode = active ? "fullscreen" : "window";
-  if (optionsSettings) optionsSettings.displayMode = active ? "fullscreen" : "window";
 }
 
 function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
@@ -14203,7 +13983,7 @@ const OPTIONS_DEFAULTS = {
   mobileHudScale: 100,
   mobileHudOpacity: 82,
   mobileLeftHanded: false,
-  keys: { fire: "Mouse1", reload: "R", ability1: "E", dash: "Q", ability2: "V", interact: "F", neonRun: "Shift" },
+  keys: { fire: "Mouse1", reload: "R", ability1: "E", ability2: "Q", interact: "F", neonRun: "Shift" },
   crosshairType: "default",
   crosshairColor: "#ffffff",
   crosshairCustomColor: "#ffffff",
@@ -14227,7 +14007,6 @@ const OPTIONS_DEFAULTS = {
   particles: true,
   bloodEffects: true,
   shadows: true,
-  killcamEnabled: true,
 };
 
 function loadOptionsSettings() {
@@ -14630,13 +14409,6 @@ function renderGeneralOptions() {
       })()),
       ToggleSwitch("Mostrar FPS", "showFps"),
       ToggleSwitch("Mostrar Ping", "showPing"),
-      (() => {
-        const button = createOptionElement("button", "option-keybind restore-defaults-button", "RESTAURAR PADRÕES");
-        button.type = "button";
-        button.addEventListener("click", resetAllOptionsSettings);
-        attachButtonFeedback(button);
-        return optionRow("Configuração original", button, "Restaura e aplica todas as categorias imediatamente.");
-      })(),
     ]),
     optionSection("INTERFACE", [
       ToggleSwitch("Mostrar Kill Feed", "showKillFeed"),
@@ -14663,7 +14435,6 @@ function renderAccessibilityOptions() {
       ToggleSwitch("Reduzir animações", "reduceMotion"),
       ToggleSwitch("Alto contraste", "highContrast"),
       ToggleSwitch("Texto ampliado", "largeText"),
-      ToggleSwitch("Killcam de 3 segundos", "killcamEnabled"),
     ]),
     optionSection("ASSISTÊNCIA", [
       ToggleSwitch("Mostrar dicas", "showTips"),
@@ -14717,8 +14488,7 @@ function renderControlOptions() {
       KeyBind("Atirar", "fire"),
       KeyBind("Recarregar", "reload"),
       KeyBind("Habilidade 1", "ability1"),
-      KeyBind("Dash global", "dash"),
-      KeyBind("Ultimate", "ability2"),
+      KeyBind("Habilidade 2", "ability2"),
       KeyBind("Usar/Interagir", "interact"),
     ]),
   );
@@ -15113,14 +14883,6 @@ function resetOptionsSettings() {
   showOptionsFeedback("Padrões restaurados!");
 }
 
-function resetAllOptionsSettings() {
-  optionsSettings = cloneOptions(OPTIONS_DEFAULTS);
-  pendingKeyBind = null;
-  applyOptionsSettings();
-  renderOptionsMenu(true);
-  showOptionsFeedback("Todos os padrões foram restaurados e aplicados.");
-}
-
 function renderOptionsMenu(skipFade = false) {
   if (!ui.menuButtons) return;
   const visibleTabs = availableOptionsTabs();
@@ -15167,6 +14929,7 @@ function renderOptionsMenu(skipFade = false) {
   const footerItems = activeOptionsTab === "developer" ? [
     { label: "VOLTAR", action: backFromOptions },
   ] : [
+    { label: "REPOR PADRÕES", action: resetOptionsSettings },
     { label: "APLICAR", action: applyOptionsSettings, primary: true },
     { label: "VOLTAR", action: backFromOptions },
   ];
@@ -16434,10 +16197,7 @@ if (window) window.addEventListener("resize", () => {
 if (window) window.addEventListener("orientationchange", escalarViewportAposOrientacao);
 if (window.visualViewport) window.visualViewport.addEventListener("resize", escalarViewport);
 if (window.visualViewport) window.visualViewport.addEventListener("scroll", escalarViewport, { passive: true });
-if (document) document.addEventListener("fullscreenchange", () => {
-  escalarViewport();
-  syncFullscreenState();
-});
+if (document) document.addEventListener("fullscreenchange", escalarViewport);
 coarsePointerQuery?.addEventListener?.("change", () => applyDeviceMode());
 standaloneDisplayQuery?.addEventListener?.("change", () => applyDeviceMode());
 if (document) document.addEventListener("visibilitychange", () => {
@@ -16680,15 +16440,9 @@ if (ui.pauseQuitButton) ui.pauseQuitButton.addEventListener("click", quitToMainM
 
 ui.authForm?.addEventListener("submit", (event) => {
   event.preventDefault();
-  submitAuthentication("login");
+  submitAuthentication(authMode);
 });
-ui.registerButton?.addEventListener("click", () => openSignupRoute());
-ui.signupForm?.addEventListener("submit", (event) => {
-  event.preventDefault();
-  void submitAuthentication("register");
-});
-ui.signupBackButton?.addEventListener("click", () => closeSignupRoute());
-ui.signupCloseButton?.addEventListener("click", () => closeSignupRoute());
+ui.registerButton?.addEventListener("click", toggleRegistrationMode);
 ui.forgotPasswordButton?.addEventListener("click", () => showPasswordRecovery(true));
 ui.recoveryBackButton?.addEventListener("click", () => showPasswordRecovery(false));
 ui.recoveryForm?.addEventListener("submit", (event) => {
@@ -16706,16 +16460,7 @@ document.querySelectorAll("[data-password-toggle]").forEach((button) => {
   });
 });
 ui.guestButton?.addEventListener("click", enterAsGuest);
-window.addEventListener("popstate", syncAuthRouteFromLocation);
-ui.menuFullscreenButton?.addEventListener("click", () => void toggleGameFullscreen());
-ui.audioMiniToggle?.addEventListener("click", () => toggleAudioMiniPlayer());
-ui.audioMiniPrevious?.addEventListener("click", () => stepMenuMusic(-1));
-ui.audioMiniNext?.addEventListener("click", () => stepMenuMusic(1));
-ui.audioMiniPlay?.addEventListener("click", () => {
-  const element = ensureMenuMusic();
-  if (element.paused) void element.play().catch(() => {});
-  else element.pause();
-});
+ui.serverRetryButton?.addEventListener("click", () => void wakeRenderServer({ force: true }));
 ui.logoutButton?.addEventListener("click", logoutCurrentProfile);
 ui.profileButton?.addEventListener("click", openPlayerProfile);
 ui.playerProfileClose?.addEventListener("click", closePlayerProfile);
@@ -16785,10 +16530,6 @@ ui.authUsername?.addEventListener("input", () => {
   ui.authUsername.removeAttribute("aria-invalid");
   setAuthFeedback("");
 });
-[ui.signupUsername, ui.signupPassword, ui.signupSecurityQuestion, ui.signupSecurityAnswer].forEach((input) => input?.addEventListener("input", () => {
-  input.removeAttribute("aria-invalid");
-  if (ui.signupFeedback) ui.signupFeedback.textContent = "";
-}));
 ui.authPassword?.addEventListener("input", () => {
   ui.authPassword.removeAttribute("aria-invalid");
   setAuthFeedback("");

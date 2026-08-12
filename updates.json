@@ -1,46 +1,11 @@
 {
-  "version": "0.9.7",
+  "version": "0.9.6",
   "status": "published",
   "channel": "stable",
-  "publishedAt": "2026-08-12T21:10:00-03:00",
-  "title": "Atualização 0.9.7 — Ação Tática",
-  "summary": "Movimentação mais expressiva, agentes renovados e uma navegação mais rápida dentro e fora das partidas.",
+  "publishedAt": "2026-08-11T21:10:00-03:00",
+  "title": "Atualização 0.9.6 — Progressão do Agente",
+  "summary": "Novas formas de ganhar recompensas, organizar sua coleção e acompanhar seu progresso, com uma experiência mais fluida no computador e no celular.",
   "highlights": [
-    {
-      "title": "Dash para todos os agentes",
-      "description": "Use Q para executar um impulso curto em qualquer modo. A Ultimate agora fica no V, deixando os comandos mais claros.",
-      "type": "gameplay"
-    },
-    {
-      "title": "Agentes em evolução",
-      "description": "Jett recebeu um dash direcional real, a Viper agora arremessa fisicamente sua granada e Sova e Gekko chegaram ao elenco.",
-      "type": "gameplay"
-    },
-    {
-      "title": "Killcam de 3 segundos",
-      "description": "Reveja a trajetória do disparo que eliminou seu agente. A função pode ser desligada nas opções de acessibilidade.",
-      "type": "gameplay"
-    },
-    {
-      "title": "Acesso e navegação renovados",
-      "description": "Login e cadastro agora possuem fluxos separados e transições instantâneas, sem recarregar a página nem exibir telas intermediárias.",
-      "type": "interface"
-    },
-    {
-      "title": "Trilha sempre sob controle",
-      "description": "Um mini-player discreto permite pausar e trocar as músicas do menu, enquanto um novo atalho alterna a tela cheia.",
-      "type": "interface"
-    },
-    {
-      "title": "Loja mais responsiva",
-      "description": "Compras e equipamentos respondem imediatamente; se houver falha na sincronização, o jogo restaura o estado anterior com um aviso sutil.",
-      "type": "system"
-    },
-    {
-      "title": "Orbes de Ultimate remasterizados",
-      "description": "Os colecionáveis ganharam proporções menores, brilho energético e movimento flutuante mais legível durante o combate.",
-      "type": "interface"
-    },
     {
       "title": "Recompensas todos os dias",
       "description": "Entre diariamente para completar um ciclo de sete dias e receber Core, Utilitários Proibidos e skins. O primeiro presente fica disponível imediatamente.",
