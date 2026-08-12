@@ -6807,6 +6807,8 @@ function tutorialAgentDescription(agent) {
     viper: ["Controle de espaço", "Nuvem venenosa e Ultimate química para negar áreas."],
     sage: ["Suporte da equipe", "Cura direta e Ultimate que restaura vida e escudos aliados."],
     omen: ["Controle tático", "Smoke para cortar visão e criar rotas seguras."],
+    sova: ["Reconhecimento tático", "Revela ameaças próximas e facilita a leitura do campo."],
+    gekko: ["Iniciador versátil", "Envia um companheiro para pressionar inimigos e abrir espaço."],
   };
   return descriptions[agent.id] || [agent.role, agent.ability];
 }
@@ -13221,6 +13223,20 @@ function agentPresentation(agent) {
       icon: "./assets/images/Raze_icon.webp",
       artwork: "./assets/images/Raze_Artwork_Full.webp",
     },
+    sova: {
+      className: "Iniciador",
+      tagline: "Reconhecimento, leitura de terreno e precisão a distância",
+      ultimate: "Fúria do Caçador",
+      icon: "./assets/images/Sova_icon.webp",
+      artwork: "./assets/images/Sova_Artwork_Full.webp",
+    },
+    gekko: {
+      className: "Iniciador",
+      tagline: "Companheiros táticos e controle criativo do combate",
+      ultimate: "Thrash",
+      icon: "./assets/images/Gekko_icon.webp",
+      artwork: "./assets/images/Gekko_Artwork_Full.webp",
+    },
     yoru: {
       className: "Duelista",
       tagline: "Infiltração, fendas dimensionais e reposicionamento",
@@ -13310,7 +13326,7 @@ function showAgentSelect(onPick, returnState = "main") {
            <i>E</i><span><small>Habilidade</small><b></b><span class="agent-ability-cooldown"></span></span>
          </div>
          <div class="ability-chip ability-chip-ultimate agent-preview-ability">
-           <i>Q</i><span><small>Ultimate</small><b></b></span>
+           <i>V</i><span><small>Ultimate</small><b></b></span>
          </div>
        </div>
        <button type="button" class="agent-confirm" disabled>Confirmar agente</button>
