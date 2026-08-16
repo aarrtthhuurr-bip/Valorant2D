@@ -2599,16 +2599,18 @@ window.Valorant2DLab = Object.freeze({
 
 // Custo de orbs por agente para ativar a ultimate
 const ULT_COSTS = {
-  neon:     5,
-  viper:    6,
-  sage:     5,
-  omen:     6,
-  jett:     4,
-  killjoy:  4,
+  neon:     8,
+  viper:    9,
+  sage:     8,
+  omen:     7,
+  jett:     8,
+  killjoy:  9,
   raze:     8,
-  yoru:     5,
+  sova:     8,
+  gekko:    8,
+  yoru:     8,
 };
-const ULT_MAX_POINTS = 8; // máximo de orbs que o jogador pode acumular
+const ULT_MAX_POINTS = 9; // maior custo atual entre os agentes disponíveis
 const MEDKIT_HEAL = 50;
 const ORB_CHANNEL_TIME = 3;
 const VIPER_CAST_RANGE = 330;
@@ -2855,7 +2857,7 @@ const agents = [
     name: "Neon",
     role: "Entrada",
     color: "#00d9ff",
-    ultCost: 5,
+    ultCost: 8,
     ability: "Alta Voltagem",
     cooldown: 0,
     use(game) {
@@ -2880,7 +2882,7 @@ const agents = [
     name: "Viper",
     role: "Controle",
     color: "#0f7f3b",
-    ultCost: 6,
+    ultCost: 9,
     ability: "Nuvem de veneno",
     cooldown: 9,
     use(game) {
@@ -2893,7 +2895,7 @@ const agents = [
     name: "Sage",
     role: "Suporte",
     color: "#00cfa6",
-    ultCost: 5,
+    ultCost: 8,
     ability: "Cura",
     cooldown: 9,
     use(game) {
@@ -2926,7 +2928,7 @@ const agents = [
     name: "Omen",
     role: "Controle",
     color: "#5a2b9e",
-    ultCost: 6,
+    ultCost: 7,
     ability: "Smoke",
     cooldown: 8,
     use(game) {
@@ -2951,7 +2953,7 @@ const agents = [
     name: "Jett",
     role: "Duelista",
     color: "#9fe8ff",
-    ultCost: 4,
+    ultCost: 8,
     ability: "Brisa de Impulso",
     cooldown: 7,
     use(game) {
@@ -2963,7 +2965,7 @@ const agents = [
     name: "Killjoy",
     role: "Sentinela",
     color: "#f7d84a",
-    ultCost: 4,
+    ultCost: 9,
     ability: "Torreta",
     cooldown: 12,
     use(game) {
@@ -3006,24 +3008,17 @@ const agents = [
     },
   },
   {
-    id: "sova", name: "Sova", role: "Iniciador", color: "#68b5ff", ultCost: 7,
-    ability: "Pulso de Reconhecimento", cooldown: 11,
+    id: "sova", name: "Sova", role: "Iniciador", color: "#68b5ff", ultCost: 8,
+    ability: "Dardo de Choque", cooldown: 11,
     use(game) {
-      game.revealTimer = Math.max(game.revealTimer, 4.5);
-      const p = game.player;
-      game.explosions.push({ x: p.x, y: p.y, r: 0, maxR: 320, life: .7, maxLife: .7, color: "#68b5ff" });
-      spawnParticles(p.x, p.y, "#68b5ff", 28, 200);
-      return true;
+      return equipSovaShockDart();
     },
   },
   {
-    id: "gekko", name: "Gekko", role: "Iniciador", color: "#b7f34a", ultCost: 7,
-    ability: "Companheiro Tático", cooldown: 12,
+    id: "gekko", name: "Gekko", role: "Iniciador", color: "#b7f34a", ultCost: 8,
+    ability: "Mosh Pit", cooldown: 12,
     use(game) {
-      const p = game.player;
-      game.turrets.push({ x: p.x + Math.cos(p.angle) * 36, y: p.y + Math.sin(p.angle) * 36, r: 12, angle: p.angle, ownerTeam: "player", ownerId: "gekko", fireTimer: .3, burst: 0, burstTimer: 0, life: 9, maxLife: 9, targetId: null });
-      spawnParticles(p.x, p.y, "#b7f34a", 20, 140);
-      return true;
+      return equipGekkoMosh();
     },
   },
   {
@@ -3031,7 +3026,7 @@ const agents = [
     name: "Yoru",
     role: "Duelista",
     color: "#3e6bff",
-    ultCost: 5,
+    ultCost: 8,
     ability: "Passagem Dimensional",
     cooldown: 8,
     use(game) {
@@ -5284,6 +5279,11 @@ const game = {
   ultimateEffects: [],
   turrets: [],
   grenades: [],
+  moshZones: [],
+  sovaBeams: [],
+  equippedAbility: null,
+  gekkoThrash: null,
+  mobileAgentFireHeld: false,
   rockets: [],
   paintDecals: [],
   yoruGatecrash: null,
@@ -5851,6 +5851,11 @@ game.bullets = [];
    game.ultimateEffects = [];
    game.turrets = [];
    game.grenades = [];
+   game.moshZones = [];
+   game.sovaBeams = [];
+   game.equippedAbility = null;
+   game.gekkoThrash = null;
+   game.mobileAgentFireHeld = false;
    game.rockets = [];
    game.paintDecals = [];
    game.yoruGatecrash = null;
@@ -6768,6 +6773,121 @@ function launchViperGrenade(owner) {
   spawnParticles(owner.x, owner.y, "#8dff78", 12, 100);
 }
 
+function equipSovaShockDart() {
+  if (game.equippedAbility) return false;
+  game.equippedAbility = { type: "sova-shock", charge: 0, charging: false, bounces: 0 };
+  setMessage("Sova: segure o disparo para carregar; clique direito adiciona até 2 ricochetes.");
+  return "noCooldown";
+}
+
+function fireSovaShockDart() {
+  const equipped = game.equippedAbility;
+  const owner = game.player;
+  if (equipped?.type !== "sova-shock" || !owner?.alive) return false;
+  const ratio = clamp01(equipped.charge / 1.35);
+  const speed = (360 + ratio * 520) * GAME_CONFIG.projectiles.utilitySpeedMultiplier;
+  const angle = owner.angle;
+  game.grenades.push({
+    kind: "sova-shock",
+    x: owner.x + Math.cos(angle) * (owner.r + 10),
+    y: owner.y + Math.sin(angle) * (owner.r + 10),
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed,
+    life: 1.15 + ratio * .85,
+    maxLife: 2,
+    r: 6,
+    color: "#68b5ff",
+    bounces: equipped.bounces,
+  });
+  game.equippedAbility = null;
+  game.abilityCooldown = game.sandbox ? 0 : game.selectedAgent.cooldown;
+  playAgentAbilitySound("sova");
+  setMessage(`Dardo de Choque disparado${equipped.bounces ? ` com ${equipped.bounces} ricochete(s)` : ""}.`);
+  return true;
+}
+
+function equipGekkoMosh() {
+  if (game.equippedAbility) return false;
+  game.equippedAbility = { type: "gekko-mosh" };
+  setMessage("Gekko: clique para lançar Mosh; clique direito faz um arremesso curto.");
+  return "noCooldown";
+}
+
+function throwGekkoMosh(alternate = false) {
+  if (game.equippedAbility?.type !== "gekko-mosh" || !game.player?.alive) return false;
+  const owner = game.player;
+  const target = alternate
+    ? { x: owner.x + Math.cos(owner.angle) * 145, y: owner.y + Math.sin(owner.angle) * 145 }
+    : limitedCastPoint(owner, mouse, 520);
+  const angle = Math.atan2(target.y - owner.y, target.x - owner.x);
+  const distance = Math.max(40, Math.hypot(target.x - owner.x, target.y - owner.y));
+  const speed = (alternate ? 330 : 520) * GAME_CONFIG.projectiles.utilitySpeedMultiplier;
+  game.grenades.push({
+    kind: "gekko-mosh",
+    x: owner.x + Math.cos(angle) * (owner.r + 10), y: owner.y + Math.sin(angle) * (owner.r + 10),
+    vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+    life: distance / speed, maxLife: distance / speed, r: 10, color: "#b7f34a",
+  });
+  game.equippedAbility = null;
+  game.abilityCooldown = game.sandbox ? 0 : game.selectedAgent.cooldown;
+  playAgentAbilitySound("gekko");
+  setMessage(alternate ? "Mosh lançado em arco curto." : "Mosh lançado.");
+  return true;
+}
+
+function detonateSovaShock(grenade) {
+  explodeArea(grenade.x, grenade.y, 112, 82, "#68b5ff", {
+    weaponName: "Dardo de Choque", particles: 38, power: 260, shake: .3,
+  });
+  game.ultimateEffects.push({ type: "sova-shock", x: grenade.x, y: grenade.y, color: "#68b5ff", life: .55, maxLife: .55, radius: 18, maxRadius: 118 });
+}
+
+function deployMoshPit(grenade) {
+  const point = nearestWalkablePoint({ x: grenade.x, y: grenade.y }, game.player);
+  game.moshZones.push({ ...point, r: 142, life: 3.15, maxLife: 3.15, tick: 0, exploded: false });
+  spawnParticles(point.x, point.y, "#b7f34a", 34, 190);
+}
+
+function fireSovaHunterFury() {
+  const p = game.player;
+  const ultimate = p?.ultimate;
+  if (ultimate?.type !== "sova" || ultimate.shots <= 0 || ultimate.fireCooldown > 0) return false;
+  const length = Math.hypot(map.width, map.height) * 1.5;
+  const x2 = p.x + Math.cos(p.angle) * length;
+  const y2 = p.y + Math.sin(p.angle) * length;
+  for (const bot of game.bots) {
+    if (!bot.alive || !segmentCircleHit(p.x, p.y, x2, y2, bot, 24)) continue;
+    const damage = applyDamage(bot, 180);
+    game.stats.damage += Math.round(damage);
+    spawnDamageNumber(bot, damage, false);
+    if (bot.hp <= 0) eliminateBot(bot, { playerCredit: true, weaponName: "Fúria do Caçador" });
+  }
+  ultimate.shots -= 1;
+  ultimate.fireCooldown = .72;
+  game.sovaBeams.push({ x1: p.x, y1: p.y, x2, y2, life: .42, maxLife: .42 });
+  game.shake = Math.max(game.shake, .48);
+  spawnParticles(p.x, p.y, "#9ad8ff", 34, 260);
+  if (ultimate.shots <= 0) ultimate.life = Math.min(ultimate.life, .5);
+  return true;
+}
+
+function detonateGekkoThrash() {
+  const thrash = game.gekkoThrash;
+  if (!thrash) return false;
+  safeDisplaceEntity(thrash, Math.cos(thrash.angle) * 92, Math.sin(thrash.angle) * 92, 6);
+  for (const bot of game.bots) {
+    if (!bot.alive || Math.hypot(bot.x - thrash.x, bot.y - thrash.y) > 105 + bot.r) continue;
+    bot.detainedTimer = Math.max(bot.detainedTimer || 0, 6);
+    bot.disarmedTimer = Math.max(bot.disarmedTimer || 0, 6);
+    spawnParticles(bot.x, bot.y, "#d9ff69", 26, 170);
+  }
+  game.explosions.push({ x: thrash.x, y: thrash.y, r: 0, maxR: 115, life: .62, maxLife: .62, color: "#b7f34a" });
+  spawnParticles(thrash.x, thrash.y, "#b7f34a", 52, 280);
+  game.gekkoThrash = null;
+  if (game.player?.ultimate?.type === "gekko") game.player.ultimate.life = 0;
+  return true;
+}
+
 function updateNeonStamina(dt) {
   const isNeon = game.selectedAgent?.id === "neon" && game.player?.alive && game.phase === "action";
   if (!isNeon) {
@@ -7367,7 +7487,7 @@ function updateTutorial(dt) {
       game.tutorialTimer = 0;
       game.tutorialFreeUlts = 3;
       setUltimatePoints(game.player, ULT_MAX_POINTS);
-      setTutorialPrompt("Fase 6 - Ultimate", "Aperte Q para testar a Ultimate escolhida", "3 ultimates gratis");
+      setTutorialPrompt("Fase 6 - Ultimate", "Aperte V para testar a Ultimate escolhida", "3 ultimates grátis");
       return;
     }
     if (game.tutorialStage === "ult-test" && (game.tutorialFreeUlts <= 0 || game.tutorialTimer > 10)) completeTutorialPhase(6);
@@ -7876,7 +7996,8 @@ function getUltimatePoints(entity) {
 }
 
 function setUltimatePoints(entity, value) {
-  const points = Math.max(0, Math.min(ULT_MAX_POINTS, Number(value) || 0));
+  const cap = Math.max(1, Math.min(ULT_MAX_POINTS, getUltCost(entity)));
+  const points = Math.max(0, Math.min(cap, Number(value) || 0));
   if (entity.id === "player") {
     entity.ultPoints = points;
     game.playerUltPoints = points;
@@ -8170,6 +8291,15 @@ function activateUltimate(entity) {
       game.screenTint = { color: "rgba(0, 207, 166, 0.24)", life: 0.72, maxLife: 0.72 };
     }
     addUltimateEffect("healing-beam", entity, "#62e6a0", 0.9);
+  } else if (agent.id === "sova") {
+    entity.ultimate = { type: "sova", life: 10, maxLife: 10, shots: 3, fireCooldown: 0 };
+    setMessage("Fúria do Caçador: dispare até 3 raios que atravessam paredes.");
+    spawnParticles(entity.x, entity.y, "#9ad8ff", 42, 250);
+  } else if (agent.id === "gekko") {
+    entity.ultimate = { type: "gekko", life: 9, maxLife: 9 };
+    game.gekkoThrash = { x: entity.x, y: entity.y, r: 14, speed: 285, angle: entity.angle, life: 9, maxLife: 9 };
+    setMessage("Thrash conectada: guie com WASD e dispare para avançar e deter inimigos.");
+    spawnParticles(entity.x, entity.y, "#b7f34a", 38, 230);
   } else {
     if (agent.id === "omen" && entity.id === "player" && beginOmenUltimate(entity)) {
       playAgentUltimateSound(agent.id);
@@ -8220,8 +8350,18 @@ function completeOrbCollection(entity, orb) {
    spawnParticles(orb.x, orb.y, "#bd67ff", 28, 180);
  }
 
+function awardUltimatePoint(entity, reason = "ação") {
+  if (!entity || game.outbreak) return;
+  const before = getUltimatePoints(entity);
+  setUltimatePoints(entity, before + 1);
+  if (entity.id === "player" && getUltimatePoints(entity) > before) {
+    game.ultFlashTimer = Math.max(game.ultFlashTimer, .24);
+    setMessage(`+1 ponto de Ultimate: ${reason}.`);
+  }
+}
+
 function updateOrbChannel(entity, orb, dt) {
-   if (!orb || getUltimatePoints(entity) >= ULT_MAX_POINTS) {
+   if (!orb || getUltimatePoints(entity) >= getUltCost(entity)) {
      entity.orbChannel = null;
      return;
    }
@@ -8342,6 +8482,7 @@ function plantOrDefuse(dt) {
       if (complete) {
         spawnParticles(game.spike.x, game.spike.y, "#66e48f", 28, 180);
         game.stats.defuses += 1;
+        awardUltimatePoint(p, "Spike desarmada");
         if (!game.sandbox) game.money += ECONOMY.objective;
         endRound("defenders", "Spike desarmada. Defensores venceram.", "defuse");
       }
@@ -8391,6 +8532,7 @@ function plantOrDefuse(dt) {
     spawnParticles(p.x, p.y, "#ffd166", 22, 160);
     game.shake = 0.18;
     game.stats.plants += 1;
+    awardUltimatePoint(p, "Spike plantada");
     if (!game.sandbox) game.money += ECONOMY.objective;
     playSound("plant");
     setMessage(`Spike plantada no site ${game.spike.site}. Defenda.`);
@@ -8426,7 +8568,7 @@ function updatePlayer(dt) {
    const dx = joystickActive ? touchControls.move.x : keyboardDx;
    const dy = joystickActive ? touchControls.move.y : keyboardDy;
    const len = joystickActive ? 1 : (Math.hypot(dx, dy) || 1);
-   const movementLocked = (p.detainedTimer || 0) > 0;
+   const movementLocked = (p.detainedTimer || 0) > 0 || Boolean(game.gekkoThrash);
    p.moving = !movementLocked && Math.hypot(dx, dy) > 0.08;
   p.moveX = p.moving ? dx / len : 0;
   p.moveY = p.moving ? dy / len : 0;
@@ -8470,7 +8612,31 @@ function updatePlayer(dt) {
     game.spike.y = p.y;
   }
 
-  if (mouse.down || keyHeld("fire")) shoot(p, mouse.x, mouse.y, game.selectedWeapon, "player");
+  if (game.equippedAbility?.type === "sova-shock" && game.equippedAbility.charging) {
+    game.equippedAbility.charge = Math.min(1.35, game.equippedAbility.charge + dt);
+  }
+  if (game.isMobile && game.equippedAbility?.type === "sova-shock") {
+    const equipped = game.equippedAbility;
+    if (touchControls.firing) equipped.charging = true;
+    if (equipped.touchWasFiring && !touchControls.firing && equipped.charging) {
+      equipped.charging = false;
+      fireSovaShockDart();
+    } else {
+      equipped.touchWasFiring = Boolean(touchControls.firing);
+    }
+  }
+  const mobileAgentFire = Boolean(game.isMobile && touchControls.firing);
+  let mobileAgentActionConsumed = false;
+  if (mobileAgentFire && !game.mobileAgentFireHeld) {
+    if (game.equippedAbility?.type === "gekko-mosh") mobileAgentActionConsumed = throwGekkoMosh(false);
+    else if (p.ultimate?.type === "sova") mobileAgentActionConsumed = fireSovaHunterFury();
+    else if (p.ultimate?.type === "gekko") mobileAgentActionConsumed = detonateGekkoThrash();
+  }
+  game.mobileAgentFireHeld = mobileAgentFire;
+  const agentWeaponActive = Boolean(game.equippedAbility)
+    || p.ultimate?.type === "sova"
+    || p.ultimate?.type === "gekko";
+  if (!agentWeaponActive && !mobileAgentActionConsumed && (mouse.down || keyHeld("fire"))) shoot(p, mouse.x, mouse.y, game.selectedWeapon, "player");
   if (keyHeld("reload")) reload();
   if (keyPressed("dash")) performGlobalDash();
   if (keyPressed("ability1") && game.abilityCooldown <= 0 && game.phase === "action") {
@@ -9096,6 +9262,7 @@ function botPlantSpike(bot, dt) {
     game.spike.defuseProgress = 0;
     game.spike.defuseCheckpoint = 0;
     game.spike.defuserId = null;
+    awardUltimatePoint(bot, "Spike plantada");
     spawnParticles(bot.x, bot.y, "#ffd166", 24, 150);
     setMessage(`Bots plantaram no site ${site.id}. Desarme a spike.`);
   } else {
@@ -9130,6 +9297,7 @@ function botDefuseSpike(bot, dt) {
   setMessage("Um bot esta desarmando a spike. Derrube ele.");
   if (complete) {
     spawnParticles(game.spike.x, game.spike.y, "#66e48f", 28, 180);
+    awardUltimatePoint(bot, "Spike desarmada");
     endRound("defenders", "Bot desarmou a spike. Defensores venceram.", "defuse");
   }
   return true;
@@ -9325,7 +9493,7 @@ function seekCriticalMedkit(entity, dt, danger) {
 function seekUltimateOrb(entity, dt) {
    const now = performance.now();
    if ((entity.orbRetryAfter || 0) > now) return false;
-   if (game.spike.state === "planted" || getUltimatePoints(entity) >= ULT_MAX_POINTS || !game.ultOrbs.length) {
+   if (game.spike.state === "planted" || getUltimatePoints(entity) >= getUltCost(entity) || !game.ultOrbs.length) {
      releaseEntityOrbReservation(entity);
      return false;
    }
@@ -9432,6 +9600,7 @@ function updateAllies(dt) {
         if (complete) {
           spawnParticles(game.spike.x, game.spike.y, "#66e48f", 28, 180);
           game.stats.defuses += 1;
+          awardUltimatePoint(ally, "Spike desarmada");
           endRound("defenders", "Aliado desarmou a spike. Defensores venceram.", "defuse");
         }
       }
@@ -9677,6 +9846,7 @@ function eliminateBot(bot, { playerCredit = false, weaponName = "Poison Cloud", 
    if (playerCredit) {
      playSound("bot_kill");
      game.stats.kills += 1;
+     awardUltimatePoint(game.player, "abate");
      if (game.stats.kills === 1) unlockLabAchievement("firstBlood");
      if (game.stats.headshots >= 5) unlockLabAchievement("headHunter");
      if (game.stats.damage >= 2500) unlockLabAchievement("damageDealer");
@@ -9854,6 +10024,7 @@ function updateBullets(dt) {
           }
           if (target.id === "player") {
             game.stats.deaths += 1;
+            awardUltimatePoint(game.player, "morte na rodada");
             addKillFeedEntry(false, "", false);
             if (game.tutorial) {
               game.player.alive = true;
@@ -9920,6 +10091,7 @@ function updateSpike(dt) {
         game.player.hp = 0;
         game.player.alive = false;
         game.stats.deaths += 1;
+        awardUltimatePoint(game.player, "morte na rodada");
       }
       if (game.sandbox) {
         if (playerCaught) respawnSandboxPlayer();
@@ -10021,13 +10193,33 @@ function updateAgentObjects(dt) {
     grenade.vx *= grenadeDrag;
     grenade.vy *= grenadeDrag;
     grenade.life -= dt;
-    if (lineIntersectsAnyWall(oldX, oldY, grenade.x, grenade.y)) grenade.life = 0;
+    const hitWall = lineIntersectsAnyWall(oldX, oldY, grenade.x, grenade.y);
+    const hitEnemy = grenade.kind === "sova-shock"
+      && game.bots.some((bot) => bot.alive && segmentCircleHit(oldX, oldY, grenade.x, grenade.y, bot, 5));
+    if (hitWall && grenade.kind === "sova-shock" && grenade.bounces > 0) {
+      const blockedX = lineIntersectsAnyWall(oldX, oldY, grenade.x, oldY);
+      const blockedY = lineIntersectsAnyWall(oldX, oldY, oldX, grenade.y);
+      if (blockedX || !blockedY) grenade.vx *= -1;
+      if (blockedY || !blockedX) grenade.vy *= -1;
+      grenade.x = oldX;
+      grenade.y = oldY;
+      grenade.bounces -= 1;
+      spawnParticles(oldX, oldY, "#68b5ff", 10, 100);
+    } else if (hitWall || hitEnemy) grenade.life = 0;
     if (grenade.life <= 0) {
       if (grenade.kind === "viper") {
         const point = nearestWalkablePoint({ x: grenade.x, y: grenade.y }, game.player);
         game.smokes.push({ ...point, r: 16, targetR: VIPER_CLOUD_RADIUS + 18, life: 10, maxLife: 10, poison: true, damagePerSecond: 29, ownerTeam: "player", visualPhase: Math.random() * Math.PI * 2 });
         game.explosions.push({ x: point.x, y: point.y, r: 8, maxR: VIPER_CLOUD_RADIUS + 24, life: .62, maxLife: .62, color: "#52e36f" });
         spawnParticles(point.x, point.y, "#8dff78", 42, 190);
+        continue;
+      }
+      if (grenade.kind === "sova-shock") {
+        detonateSovaShock(grenade);
+        continue;
+      }
+      if (grenade.kind === "gekko-mosh") {
+        deployMoshPit(grenade);
         continue;
       }
       explodeArea(grenade.x, grenade.y, grenade.mini ? 62 : 104, grenade.mini ? 42 : 78, grenade.mini ? "#ffcf45" : "#ff6b2f", { weaponName: grenade.mini ? "Mini Granada" : "Cartuchos de Tinta", particles: grenade.mini ? 18 : 34, power: grenade.mini ? 170 : 250, shake: grenade.mini ? 0.16 : 0.32 });
@@ -10039,6 +10231,43 @@ function updateAgentObjects(dt) {
     }
   }
   game.grenades = game.grenades.filter((grenade) => grenade.life > 0);
+
+  for (const zone of game.moshZones) {
+    zone.life -= dt;
+    zone.tick -= dt;
+    if (zone.life > .38 && zone.tick <= 0) {
+      zone.tick = .22;
+      for (const bot of game.bots) {
+        if (!bot.alive || Math.hypot(bot.x - zone.x, bot.y - zone.y) > zone.r + bot.r) continue;
+        const damage = applyDamage(bot, 7);
+        game.stats.damage += Math.round(damage);
+        spawnDamageNumber(bot, damage, false);
+        if (bot.hp <= 0) eliminateBot(bot, { playerCredit: true, weaponName: "Mosh Pit" });
+      }
+    }
+    if (!zone.exploded && zone.life <= .38) {
+      zone.exploded = true;
+      explodeArea(zone.x, zone.y, zone.r, 145, "#b7f34a", { weaponName: "Mosh Pit", particles: 58, power: 290, shake: .46 });
+    }
+  }
+  game.moshZones = game.moshZones.filter((zone) => zone.life > 0);
+
+  if (game.gekkoThrash) {
+    const thrash = game.gekkoThrash;
+    thrash.life -= dt;
+    const inputX = (keys.has("d") ? 1 : 0) - (keys.has("a") ? 1 : 0);
+    const inputY = (keys.has("s") ? 1 : 0) - (keys.has("w") ? 1 : 0);
+    const length = Math.hypot(inputX, inputY);
+    const direction = length > .05
+      ? { x: inputX / length, y: inputY / length }
+      : { x: Math.cos(game.player.angle), y: Math.sin(game.player.angle) };
+    moveEntity(thrash, direction.x * thrash.speed * dt, direction.y * thrash.speed * dt, map.walls);
+    thrash.angle = Math.atan2(direction.y, direction.x);
+    if (thrash.life <= 0) detonateGekkoThrash();
+  }
+
+  for (const beam of game.sovaBeams) beam.life -= dt;
+  game.sovaBeams = game.sovaBeams.filter((beam) => beam.life > 0);
 
   for (const rocket of game.rockets) {
     const oldX = rocket.x;
@@ -10154,6 +10383,7 @@ function updateTimers(dt) {
           target.alive = false;
           if (target.id === "player") {
             game.stats.deaths += 1;
+            awardUltimatePoint(game.player, "morte na rodada");
             if (respawnSandboxPlayer()) continue;
             if (game.outbreak) showOutbreakGameOver("CONTAMINAÇÃO CRÍTICA");
             else endRound(opposingSide(game.playerSide), "A névoa química eliminou você.");
@@ -10176,6 +10406,9 @@ function updateTimers(dt) {
       continue;
     }
     entity.ultimate.life -= dt;
+    if (entity.ultimate.type === "sova") {
+      entity.ultimate.fireCooldown = Math.max(0, (entity.ultimate.fireCooldown || 0) - dt);
+    }
     if (entity.ultimate.life <= 0) entity.ultimate = null;
   }
   for (const effect of game.ultimateEffects) {
@@ -11804,6 +12037,67 @@ function drawAgentObjects() {
     ctx.restore();
   }
 
+  for (const zone of game.moshZones) {
+    if (!estaNoCampoDeVisao(zone, zone.r)) continue;
+    const ratio = Math.max(0, zone.life / zone.maxLife);
+    ctx.save();
+    ctx.globalAlpha = .28 + (1 - ratio) * .28;
+    ctx.fillStyle = "#93d62f";
+    ctx.strokeStyle = "#d9ff69";
+    ctx.shadowColor = "#b7f34a";
+    ctx.shadowBlur = 22;
+    ctx.lineWidth = 3;
+    for (let cell = 0; cell < 13; cell++) {
+      const angle = cell * 2.399 + zone.x;
+      const distance = zone.r * Math.sqrt(cell / 13) * .78;
+      const radius = 28 + (cell % 3) * 9 + Math.sin(performance.now() / 120 + cell) * 3;
+      ctx.beginPath();
+      ctx.arc(zone.x + Math.cos(angle) * distance, zone.y + Math.sin(angle) * distance, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  for (const beam of game.sovaBeams) {
+    const alpha = Math.max(0, beam.life / beam.maxLife);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = "#bfe8ff";
+    ctx.shadowColor = "#4eb8ff";
+    ctx.shadowBlur = 34;
+    ctx.lineWidth = 18 * alpha + 5;
+    ctx.beginPath();
+    ctx.moveTo(beam.x1, beam.y1);
+    ctx.lineTo(beam.x2, beam.y2);
+    ctx.stroke();
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  if (game.gekkoThrash && estaNoCampoDeVisao(game.gekkoThrash, 28)) {
+    const thrash = game.gekkoThrash;
+    ctx.save();
+    ctx.translate(thrash.x, thrash.y);
+    ctx.rotate(thrash.angle);
+    ctx.fillStyle = "#b7f34a";
+    ctx.strokeStyle = "#efffb8";
+    ctx.shadowColor = "#b7f34a";
+    ctx.shadowBlur = 20;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(22, 0);
+    ctx.lineTo(-10, -13);
+    ctx.lineTo(-4, 0);
+    ctx.lineTo(-10, 13);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
   for (const rocket of game.rockets) {
     if (!estaNoCampoDeVisao(rocket, 18)) continue;
     const angle = Math.atan2(rocket.vy, rocket.vx);
@@ -12683,7 +12977,7 @@ function updateUi() {
   } else {
     toggleClass(ui.abilityFeedback, "hidden", true);
   }
-  const updateCooldownWipe = (element, remaining, total, label, { ready = remaining <= 0, empty = false } = {}) => {
+  const updateCooldownWipe = (element, remaining, total, label, { ready = remaining <= 0, empty = false, visible = remaining > 0 } = {}) => {
     if (!element) return;
     const duration = Math.max(.001, Number(total) || 1);
     const progress = ready ? 1 : Math.max(0, Math.min(1, 1 - Math.max(0, remaining) / duration));
@@ -12691,19 +12985,22 @@ function updateUi() {
     element.style.setProperty("--ready", String(progress));
     element.classList.toggle("is-ready", Boolean(ready));
     element.classList.toggle("is-empty", Boolean(empty));
+    element.classList.toggle("is-visible", Boolean(visible));
     const status = element.querySelector("small");
     if (status) status.textContent = label;
   };
   updateCooldownWipe(ui.dashCooldownWipe, game.globalDashCooldown || 0, GLOBAL_DASH.cooldown,
-    game.globalDashCooldown > 0 ? `${Math.ceil(game.globalDashCooldown)}S` : "PRONTO");
+    game.globalDashCooldown > 0 ? `${Math.ceil(game.globalDashCooldown)}S` : "PRONTO",
+    { visible: game.globalDashCooldown > 0 });
   updateCooldownWipe(ui.primaryCooldownWipe, game.abilityCooldown || 0, game.selectedAgent.cooldown || 1,
-    game.abilityCooldown > 0 ? `${Math.ceil(game.abilityCooldown)}S` : "PRONTO");
+    game.abilityCooldown > 0 ? `${Math.ceil(game.abilityCooldown)}S` : "PRONTO",
+    { visible: game.abilityCooldown > 0 || Boolean(game.equippedAbility) });
   const ultimateRemaining = outbreakGadgetDefinition ? outbreakGadgetCooldown : ultimateReady ? 0 : 1;
   updateCooldownWipe(ui.ultimateCooldownWipe, ultimateRemaining, outbreakGadgetDefinition ? outbreakGadgetDefinition.cooldown : 1,
     ultimateReady ? "PRONTO" : ultimateEmpty ? "SEM CARGA" : outbreakGadgetCooldown > 0 ? `${Math.ceil(outbreakGadgetCooldown)}S` : `${getUltimatePoints(game.player)}/${ultCost}`,
-    { ready: ultimateReady, empty: ultimateEmpty });
+    { ready: ultimateReady, empty: ultimateEmpty, visible: outbreakGadgetCooldown > 0 || Boolean(game.player?.ultimate) });
   if (!outbreakGadgetDefinition && ultReady && !game.tutorial && !game.sandbox) {
-    showContextTipOnce("ultimate-ready", `Ultimate de ${game.selectedAgent?.name || "agente"} pronta. Pressione ${settings.keys?.ability2 || "Q"} para usar.`);
+    showContextTipOnce("ultimate-ready", `Ultimate de ${game.selectedAgent?.name || "agente"} pronta. Pressione V para usar.`);
   }
   const ultimateAmmo = game.player.ultimate?.type === "jett"
     ? `${game.player.ultimate.knives || 0}/${game.player.ultimate.maxKnives || 6} dardos`
@@ -12781,8 +13078,8 @@ function updateUi() {
     : game.isMobile
       ? "Use os controles touch para mover, mirar, atirar e interagir."
     : game.playerSide === "attackers"
-      ? "WASD move, E habilidade, Q Ultimate, F planta, B loja, Esc pause."
-      : "WASD move, E habilidade, Q Ultimate, F desarma, B loja, Esc pause.");
+      ? "WASD move, E habilidade, Q dash, V Ultimate, F planta, B loja, Esc pause."
+      : "WASD move, E habilidade, Q dash, V Ultimate, F desarma, B loja, Esc pause.");
   toggleClass(ui.sandboxTools, "hidden", !game.sandbox || game.menuState !== "none");
   toggleClass(ui.sandboxPanel, "hidden", !game.sandbox || !game.sandboxPanelOpen);
   toggleClass(ui.pauseSandboxButton, "hidden", !game.sandbox);
@@ -14535,7 +14832,12 @@ function loadOptionsSettings() {
     // preservando o valor escolhido pelo jogador como volume dos disparos.
     if (saved.gunshotVolume == null && saved.voiceVolume != null) saved.gunshotVolume = saved.voiceVolume;
     delete saved.voiceVolume;
-    return { ...cloneOptions(OPTIONS_DEFAULTS), ...saved, keys: { ...OPTIONS_DEFAULTS.keys, ...(saved.keys || {}) } };
+    const merged = { ...cloneOptions(OPTIONS_DEFAULTS), ...saved, keys: { ...OPTIONS_DEFAULTS.keys, ...(saved.keys || {}) } };
+    // Q e V são contratos de gameplay: Q nunca aciona Ultimate e V nunca
+    // aciona dash, inclusive para perfis que carregam atalhos antigos.
+    merged.keys.dash = "Q";
+    merged.keys.ability2 = "V";
+    return merged;
   } catch {
     return cloneOptions(OPTIONS_DEFAULTS);
   }
@@ -14812,10 +15114,14 @@ function SettingDropdown(label, key, options) {
 }
 
 function KeyBind(label, key) {
+  const fixedGameplayKey = key === "dash" || key === "ability2";
   const button = createOptionElement("button", `option-keybind ${pendingKeyBind === key ? "is-listening" : ""}`);
   button.type = "button";
+  button.disabled = fixedGameplayKey;
+  if (fixedGameplayKey) button.title = key === "dash" ? "Q é reservado ao dash global" : "V é reservado à Ultimate";
   button.textContent = pendingKeyBind === key ? "PRESSIONE UMA TECLA..." : optionsSettings.keys[key];
   button.addEventListener("click", () => {
+    if (fixedGameplayKey) return;
     pendingKeyBind = key;
     renderOptionsMenu();
   });
@@ -16789,6 +17095,32 @@ if (canvas) canvas.addEventListener("mousedown", (event) => {
     }
     return;
   }
+  if (game.player?.ultimate?.type === "sova" && event.button === 0) {
+    event.preventDefault();
+    fireSovaHunterFury();
+    return;
+  }
+  if (game.player?.ultimate?.type === "gekko" && event.button === 0) {
+    event.preventDefault();
+    detonateGekkoThrash();
+    return;
+  }
+  if (game.equippedAbility?.type === "sova-shock") {
+    event.preventDefault();
+    if (event.button === 2) {
+      game.equippedAbility.bounces = Math.min(2, game.equippedAbility.bounces + 1);
+      setMessage(`Sova: ${game.equippedAbility.bounces} ricochete(s) configurado(s).`);
+    } else if (event.button === 0) {
+      game.equippedAbility.charging = true;
+      mouse.down = false;
+    }
+    return;
+  }
+  if (game.equippedAbility?.type === "gekko-mosh" && (event.button === 0 || event.button === 2)) {
+    event.preventDefault();
+    throwGekkoMosh(event.button === 2);
+    return;
+  }
   if (game.sandbox && game.phase === "action" && game.sandboxPlacement && event.button === 0) {
     event.preventDefault();
     const point = { x: mouse.x, y: mouse.y };
@@ -16822,6 +17154,10 @@ if (canvas) canvas.addEventListener("mousedown", (event) => {
 });
 
 if (window) window.addEventListener("mouseup", (event) => {
+  if ((!event || event.button === 0) && game.equippedAbility?.type === "sova-shock" && game.equippedAbility.charging) {
+    game.equippedAbility.charging = false;
+    fireSovaShockDart();
+  }
   if (!event || event.button === 0) mouse.down = false;
   if (!event || event.button === 2) mouse.rightDown = false;
 });

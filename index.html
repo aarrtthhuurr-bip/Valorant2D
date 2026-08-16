@@ -78,10 +78,6 @@
             <span class="ult-counter" id="ultCounter"><span id="ultLabel">ULT</span> <b id="ultPointsText">0/7</b></span>
             <span id="jettKnifeHud" class="jett-knife-hud hidden">0/6</span>
           </div>
-          <div class="ability-feedback" id="abilityFeedback" aria-label="Estado das habilidades">
-            <span id="abilityPrimaryState"><kbd>E</kbd><b>PRONTA</b></span>
-            <span id="abilityUltimateState"><kbd>V</kbd><b>SEM CARGA</b></span>
-          </div>
         </div>
         <div class="weapon-panel glass" id="hud-weapon-info">
           <div class="weapon-line">
@@ -351,11 +347,13 @@
 
       <div class="menu-overlay hidden" id="menuOverlay">
         <div class="menu-art" aria-hidden="true"></div>
-        <button type="button" class="menu-fullscreen-toggle hidden" id="menuFullscreenButton" aria-label="Entrar em tela cheia" title="Tela cheia">
-          <span aria-hidden="true">⛶</span>
-        </button>
-        <div class="core-wallet main-core-wallet hidden" id="mainCoreWallet" aria-label="Saldo de Core">
-          <span class="core-icon" aria-hidden="true"><img src="./assets/images/core_v5_bright.png" alt=""></span><strong id="mainCoreBalance">0</strong><em>C</em>
+        <div class="menu-header-tools" aria-label="Ações da conta">
+          <button type="button" class="menu-fullscreen-toggle hidden" id="menuFullscreenButton" aria-label="Entrar em tela cheia" title="Tela cheia">
+            <span aria-hidden="true">⛶</span>
+          </button>
+          <div class="core-wallet main-core-wallet hidden" id="mainCoreWallet" aria-label="Saldo de Core">
+            <span class="core-icon" aria-hidden="true"><img src="./assets/images/core_v5_bright.png" alt=""></span><strong id="mainCoreBalance">0</strong><em>C</em>
+          </div>
         </div>
         <nav class="menu-utility-dock hidden" id="menuUtilityDock" aria-label="Atalhos do menu">
           <button type="button" class="menu-utility-shortcut menu-tutorial-shortcut" id="menuTutorialButton" aria-label="Abrir ajuda do jogo" title="Ajuda">?</button>
