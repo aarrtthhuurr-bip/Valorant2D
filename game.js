@@ -1177,12 +1177,9 @@ async function claimDailyLoginReward() {
       playDailySkinRoulette(payload.reward);
     }
     if (feedback) feedback.textContent = payload.reward?.type === "core" ? `+${payload.reward.amount} C recebidos.` : `${payload.reward?.name || "Prêmio"} adicionado ao inventário.`;
-    const balanceBeforeReward = confirmedCoreBalance;
-    updateCoreBalances(payload.coreBalance);
     if (payload.reward?.type === "core") {
-      animateCurrencyReward(payload.reward.amount);
-      animateCoreBalanceTo(payload.coreBalance, balanceBeforeReward);
-    }
+      applyConfirmedCoreGain(payload.coreBalance, payload.reward.amount);
+    } else updateCoreBalances(payload.coreBalance);
     await refreshCommerceProfile();
     dailyLoginStatus.available = false;
     dailyLoginStatus.streak = payload.day;
@@ -1291,27 +1288,44 @@ function updateCoreBalances(balance) {
   if (ui.missionsCoreBalance) ui.missionsCoreBalance.textContent = visibleBalance.toLocaleString("pt-BR");
 }
 
+function applyConfirmedCoreGain(balance, amount, { previousBalance = confirmedCoreBalance, origin } = {}) {
+  const targetBalance = Math.max(0, Number(balance) || 0);
+  const reward = Math.max(0, Math.round(Number(amount) || 0));
+  const startingBalance = Math.max(0, Number(previousBalance) || 0);
+  updateCoreBalances(targetBalance);
+  if (reward <= 0) return;
+  animateCurrencyReward(reward, origin);
+  animateCoreBalanceTo(targetBalance, startingBalance);
+}
+
 let coreCountAnimationFrame = 0;
 function animateCurrencyReward(amount, { fromX = innerWidth / 2, fromY = innerHeight / 2 } = {}) {
   const reward = Math.max(0, Math.round(Number(amount) || 0));
   const layer = ui.currencyRewardLayer;
   const wallet = ui.mainCoreWallet && !ui.mainCoreWallet.classList.contains("hidden") ? ui.mainCoreWallet : null;
-  if (!layer || !wallet || reward === 0 || settings.reduceMotion) return;
-  const walletRect = wallet.getBoundingClientRect();
+  if (!layer || reward === 0 || settings.reduceMotion) return;
+  // Em modais como Missões e Códigos a carteira fica propositalmente
+  // oculta. O ganho continua visível e converge para o canto onde o saldo
+  // reaparecerá, sem forçar elementos globais por cima do modal.
+  const walletRect = wallet?.getBoundingClientRect();
+  const walletX = walletRect ? walletRect.left + walletRect.width / 2 : innerWidth - 54;
+  const walletY = walletRect ? walletRect.top + walletRect.height / 2 : 42;
   const burst = document.createElement("div");
   burst.className = "currency-reward-burst";
   burst.style.setProperty("--reward-x", `${fromX}px`);
   burst.style.setProperty("--reward-y", `${fromY}px`);
-  burst.style.setProperty("--wallet-x", `${walletRect.left + walletRect.width / 2}px`);
-  burst.style.setProperty("--wallet-y", `${walletRect.top + walletRect.height / 2}px`);
+  burst.style.setProperty("--wallet-x", `${walletX}px`);
+  burst.style.setProperty("--wallet-y", `${walletY}px`);
   burst.innerHTML = `<strong>+${reward} C</strong>${Array.from({ length: 10 }, (_, index) => `<i class="currency-reward-particle" style="--angle:${index * 36}deg;--distance:${52 + index % 3 * 16}px"></i>`).join("")}`;
   layer.appendChild(burst);
-  window.setTimeout(() => wallet.classList.add("is-absorbing"), 1050);
-  window.setTimeout(() => wallet.classList.remove("is-absorbing"), 1500);
+  if (wallet) {
+    window.setTimeout(() => wallet.classList.add("is-absorbing"), 1050);
+    window.setTimeout(() => wallet.classList.remove("is-absorbing"), 1500);
+  }
   window.setTimeout(() => burst.remove(), 1700);
 }
 
-function animateCoreBalanceTo(targetBalance, previousBalance = confirmedCoreBalance) {
+function animateCoreBalanceTo(targetBalance, previousBalance = confirmedCoreBalance, { includePending = true } = {}) {
   const target = Math.max(0, Math.round(Number(targetBalance) || 0));
   const start = Math.max(0, Math.round(Number(previousBalance) || 0));
   cancelAnimationFrame(coreCountAnimationFrame);
@@ -1319,7 +1333,7 @@ function animateCoreBalanceTo(targetBalance, previousBalance = confirmedCoreBala
   const tick = (now) => {
     const progress = Math.min(1, (now - startedAt) / 900);
     const eased = 1 - Math.pow(1 - progress, 3);
-    const value = Math.round(start + (target - start) * eased) + currentPendingCoreTotal();
+    const value = Math.round(start + (target - start) * eased) + (includePending ? currentPendingCoreTotal() : 0);
     for (const element of [ui.mainCoreBalance, ui.storeCoreBalance, ui.missionsCoreBalance]) {
       if (element) element.textContent = value.toLocaleString("pt-BR");
     }
@@ -1591,8 +1605,16 @@ async function commerceMutation(path, options, successMessage, { successSound = 
   commerceState.busy = true;
   setCommerceFeedback("Processando no servidor...");
   try {
+    const balanceBeforeMutation = confirmedCoreBalance;
     const payload = await requestApi(path, { ...options, headers: { ...commerceAuthorization(), ...(options.headers || {}) } });
     await refreshCommerceProfile();
+    const responseBalance = Number(payload?.coreBalance);
+    const creditedAmount = Number.isFinite(responseBalance)
+      ? Math.max(0, Math.round(responseBalance - balanceBeforeMutation))
+      : 0;
+    if (creditedAmount > 0) {
+      applyConfirmedCoreGain(responseBalance, creditedAmount, { previousBalance: balanceBeforeMutation });
+    }
     setCommerceFeedback(successMessage(payload), "success");
     // A confirmação sonora só ocorre depois que o servidor persistiu a
     // transação e o inventário atualizado foi carregado com sucesso.
@@ -6177,6 +6199,10 @@ function queueOptimisticMatchReward() {
   writePendingRewardsQueue(queue);
   game.pendingRewardId = entry.id;
   updateCoreBalances(confirmedCoreBalance);
+  // A recompensa aparece no exato fim da partida. A sincronização em
+  // segundo plano apenas confirma o saldo, evitando repetir a celebração.
+  animateCurrencyReward(entry.reward);
+  animateCoreBalanceTo(confirmedCoreBalance + currentPendingCoreTotal(), confirmedCoreBalance, { includePending: false });
   return entry;
 }
 
@@ -6232,12 +6258,7 @@ function confirmMatchCoreReward(payload) {
     ? `+${reward} C · Core faturado na partida`
     : `+${reward} ${reward === 1 ? "Core obtido" : "Cores obtidos"}`;
   // O valor exibido vem diretamente da transação concluída no servidor.
-  const balanceBeforeReward = confirmedCoreBalance;
-  updateCoreBalances(balance);
-  if (reward > 0) {
-    animateCurrencyReward(reward);
-    animateCoreBalanceTo(balance, balanceBeforeReward);
-  }
+  applyConfirmedCoreGain(balance, reward);
   return true;
 }
 
