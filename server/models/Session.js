@@ -54,10 +54,12 @@ class Session {
               users.id, users.username, users.email, users.auth_provider,
               users.avatar_url, users.data_criacao,
               users.core_balance, users.core_earned_total, users.is_admin,
+              users.is_banned,
               users.onboarding_completed, users.menu_tour_completed
        FROM sessions
        INNER JOIN users ON users.id = sessions.user_id
        WHERE sessions.token_hash = $1
+         AND users.is_banned = FALSE
          AND sessions.data_expiracao > CURRENT_TIMESTAMP`,
       [tokenHash],
     );

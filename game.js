@@ -17388,6 +17388,89 @@ ui.adminRouletteKeep?.addEventListener("click", () => void keepAdminRouletteSkin
 ui.adminRouletteOverlay?.addEventListener("pointerdown", (event) => {
   if (event.target === ui.adminRouletteOverlay) closeAdminSkinRoulette();
 });
+
+// Ponte estreita entre o terminal administrativo e o jogo. Nenhuma referência
+// ao banco ou segredo do servidor é exposta; toda mutação remota ainda passa
+// pela sessão Bearer e pela autorização administrativa do Back-End.
+window.Valorant2DAdminBridge = Object.freeze({
+  isAdmin: () => isAdminProfile(),
+  async api(path, { method = "GET", body } = {}) {
+    if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
+    const headers = commerceAuthorization();
+    return requestApi(path, {
+      method,
+      headers,
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    });
+  },
+  playVfx(effectName) {
+    if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
+    const effect = String(effectName || "").toLowerCase();
+    if (effect === "color_gain") {
+      animateCurrencyReward(250);
+      return "VFX color_gain executado (+250 C apenas visual).";
+    }
+    if (effect === "victory_confetti") {
+      const preview = document.createElement("div");
+      preview.className = "admin-terminal-confetti";
+      preview.replaceChildren(...Array.from({ length: 42 }, (_, index) => {
+        const particle = document.createElement("i");
+        particle.style.setProperty("--terminal-confetti-x", `${(index * 37) % 100}%`);
+        particle.style.setProperty("--terminal-confetti-delay", `${(index % 9) * .05}s`);
+        return particle;
+      }));
+      ui.currencyRewardLayer?.appendChild(preview);
+      window.setTimeout(() => {
+        preview.remove();
+      }, 4200);
+      return "VFX victory_confetti executado.";
+    }
+    if (effect === "hit_flash") {
+      ui.gameRoot?.classList.remove("admin-vfx-hit-flash");
+      requestAnimationFrame(() => ui.gameRoot?.classList.add("admin-vfx-hit-flash"));
+      window.setTimeout(() => ui.gameRoot?.classList.remove("admin-vfx-hit-flash"), 480);
+      return "VFX hit_flash executado.";
+    }
+    throw new Error("Efeito desconhecido. Use color_gain, victory_confetti ou hit_flash.");
+  },
+  async toggleUi(componentName) {
+    if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
+    const component = String(componentName || "").toLowerCase();
+    if (component === "inventory") {
+      if (ui.commerceOverlay?.classList.contains("hidden")) {
+        await openCommerceStore();
+        commerceState.tab = "inventory";
+        renderCommerceTab();
+        return "Inventário aberto.";
+      }
+      closeCommerceStore();
+      return "Inventário fechado.";
+    }
+    if (component === "missions") {
+      if (ui.missionsOverlay?.classList.contains("hidden")) {
+        await openMissionsModal();
+        return "Missões abertas.";
+      }
+      closeMissionsModal();
+      return "Missões fechadas.";
+    }
+    if (component === "ranking") {
+      openGlobalRanking();
+      return "Ranking aberto.";
+    }
+    if (component === "options") {
+      showOptionsMenu();
+      return "Opções abertas.";
+    }
+    if (component === "hud") {
+      const hidden = !ui.topHud?.classList.contains("hidden");
+      ui.topHud?.classList.toggle("hidden", hidden);
+      document.querySelector(".status-card")?.classList.toggle("hidden", hidden);
+      return `HUD ${hidden ? "oculto" : "exibido"}.`;
+    }
+    throw new Error("Componente desconhecido. Use inventory, missions, ranking, options ou hud.");
+  },
+});
 ui.updatesCloseButton?.addEventListener("click", () => void closeUpdateNotes());
 ui.updatesPreviousButton?.addEventListener("click", () => renderUpdateRelease(activeUpdateReleaseIndex - 1));
 ui.updatesNextButton?.addEventListener("click", () => renderUpdateRelease(activeUpdateReleaseIndex + 1));

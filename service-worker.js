@@ -8,6 +8,8 @@ const APP_SHELL = [
   "./version-manager.js?v=0.9.7",
   "./auth-boot-guard.js?v=0.9.7",
   "./game.js?v=0.9.7",
+  "./CommandRegistry.js?v=0.9.7",
+  "./AdminTerminal.js?v=0.9.7",
   "./updates.json?v=0.9.7",
   "./assets/Favicon/android-chrome-192x192.png",
   "./assets/Favicon/android-chrome-512x512.png",

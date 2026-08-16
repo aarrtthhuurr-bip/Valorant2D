@@ -12,6 +12,7 @@ const preferencesRoutes = require('./routes/preferencesRoutes');
 const commerceRoutes = require('./routes/commerceRoutes');
 const onboardingRoutes = require('./routes/onboardingRoutes');
 const profileRoutes = require('./routes/profileRoutes');
+const adminTerminalRoutes = require('./routes/adminTerminalRoutes');
 const {
   globalLimiter,
   requestId,
@@ -72,6 +73,8 @@ if (process.env.NODE_ENV === 'development') {
     ['/', 'index.html'],
     ['/index.html', 'index.html'],
     ['/game.js', 'game.js'],
+    ['/CommandRegistry.js', 'CommandRegistry.js'],
+    ['/AdminTerminal.js', 'AdminTerminal.js'],
     ['/styles.css', 'styles.css'],
     ['/version-manager.js', 'version-manager.js'],
     ['/manifest.webmanifest', 'manifest.webmanifest'],
@@ -103,6 +106,7 @@ app.use('/api/preferences', preferencesRoutes);
 app.use('/api/commerce', commerceRoutes);
 app.use('/api/onboarding', onboardingRoutes);
 app.use('/api/profile', profileRoutes);
+app.use('/api/admin-terminal', adminTerminalRoutes);
 
 app.use((request, response) => {
   response.status(404).json({ erro: 'Rota não encontrada.' });

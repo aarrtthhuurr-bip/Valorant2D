@@ -16,6 +16,7 @@ const MatchSubmission = require('../models/MatchSubmission');
 const Statistic = require('../models/Statistic');
 const Leaderboard = require('../models/Leaderboard');
 const PlayerProfile = require('../models/PlayerProfile');
+const AdminTerminal = require('../models/AdminTerminal');
 const database = require('../config/database');
 
 test('health check aplica headers de segurança e identificador', async () => {
@@ -57,6 +58,33 @@ test('respostas da API não podem ser armazenadas em cache', async () => {
     .expect(401);
   assert.match(response.headers['cache-control'], /no-store/);
   assert.equal(response.headers.pragma, 'no-cache');
+});
+
+test('terminal administrativo rejeita sessões comuns e lista dados somente para admin', async () => {
+  const originalSession = Session.findValid;
+  const originalList = AdminTerminal.listAccounts;
+  try {
+    Session.findValid = async () => ({ id: 7, username: 'jogador', is_admin: false });
+    await request(app)
+      .get('/api/admin-terminal/accounts')
+      .set('Authorization', `Bearer ${'a'.repeat(64)}`)
+      .expect(403);
+
+    Session.findValid = async () => ({ id: 1, username: 'Admin', is_admin: true });
+    AdminTerminal.listAccounts = async () => [{
+      uuid: '0f21a63a-ad84-478b-89ca-fdc834858c4d', username: 'Teste', email: 'teste@example.com',
+      is_admin: false, is_banned: false, core_balance: 100,
+    }];
+    const response = await request(app)
+      .get('/api/admin-terminal/accounts')
+      .set('Authorization', `Bearer ${'b'.repeat(64)}`)
+      .expect(200);
+    assert.equal(response.body.accounts[0].username, 'Teste');
+    assert.equal(response.body.accounts[0].id, undefined);
+  } finally {
+    Session.findValid = originalSession;
+    AdminTerminal.listAccounts = originalList;
+  }
 });
 
 test('corpos acima de 32 KB são recusados', async () => {

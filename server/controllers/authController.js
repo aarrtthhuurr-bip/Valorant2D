@@ -206,7 +206,7 @@ async function login(request, response, next) {
     const locked = user?.bloqueado_ate && new Date(user.bloqueado_ate).getTime() > Date.now();
     const passwordMatches = await verifySecret(password, user?.senha_hash || DUMMY_SECRET_HASH);
 
-    if (!passwordMatches || locked) {
+    if (!passwordMatches || locked || user?.is_banned) {
       if (user && !locked) await User.registerFailedLogin(user.id);
       securityAudit('login', request, { username, success: false });
       // A mensagem única evita revelar quais nomes estão cadastrados.
@@ -298,6 +298,12 @@ async function googleLogin(request, response, next) {
 
     if (!user) {
       response.status(409).json({ error: 'Não foi possível vincular a conta Google.', code: 'GOOGLE_LINK_FAILED' });
+      return;
+    }
+
+    if (user.is_banned) {
+      securityAudit('google_login_banned', request, { userId: user.id, success: false });
+      response.status(403).json({ error: 'Esta conta está suspensa.', code: 'ACCOUNT_BANNED' });
       return;
     }
 
