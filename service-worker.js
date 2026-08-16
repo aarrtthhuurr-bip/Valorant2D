@@ -4,7 +4,7 @@ const APP_SHELL = [
   "./index.html",
   "./manifest.webmanifest?v=0.9.7",
   "./styles.css?v=0.9.7",
-  "./server/thespinner.css?v=0.9.7",
+  "./server/thespinner.css?v=0.9.7-spinner2",
   "./version-manager.js?v=0.9.7",
   "./auth-boot-guard.js?v=0.9.7",
   "./game.js?v=0.9.7",
