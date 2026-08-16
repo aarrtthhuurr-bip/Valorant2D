@@ -6,6 +6,7 @@ const APP_SHELL = [
   "./styles.css?v=0.9.7",
   "./server/thespinner.css?v=0.9.7",
   "./version-manager.js?v=0.9.7",
+  "./auth-boot-guard.js?v=0.9.7",
   "./game.js?v=0.9.7",
   "./updates.json?v=0.9.7",
   "./assets/Favicon/android-chrome-192x192.png",

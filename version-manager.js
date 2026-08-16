@@ -3,8 +3,12 @@
 
   const versionMeta = document.querySelector('meta[name="valorant2d-version"]');
   const currentVersion = versionMeta?.content?.trim() || "0.0.0";
-  const localIntegrated = ["localhost", "127.0.0.1"].includes(location.hostname)
-    && location.port === "3000";
+  // Qualquer servidor local e um ambiente de desenvolvimento. O Live Server
+  // normalmente usa a porta 5500, enquanto o servidor integrado usa a 3000.
+  // Nenhum deles deve ser controlado pelo Service Worker de producao, pois
+  // isso pode manter HTML/JS de commits diferentes no mesmo navegador.
+  const localDevelopment = ["localhost", "127.0.0.1", "::1"].includes(location.hostname);
+  const localCleanupKey = "valorant2d:local-cache-cleanup";
   const reloadKey = "valorant2d:version-reload";
   let reloadScheduled = false;
   let updateTimer = 0;
@@ -84,10 +88,23 @@
   async function initializeVersionManager() {
     if (!("serviceWorker" in navigator)) return;
 
-    if (localIntegrated) {
+    if (localDevelopment) {
       const registrations = await navigator.serviceWorker.getRegistrations();
       await Promise.all(registrations.map((registration) => registration.unregister()));
       await clearValorantCaches();
+
+      // Uma pagina que ja estava sob controle continua usando o worker ate a
+      // proxima navegacao. Faz uma unica recarga limpa para liberar o Live
+      // Server imediatamente, sem criar um ciclo de reload.
+      if (navigator.serviceWorker.controller && !sessionStorage.getItem(localCleanupKey)) {
+        sessionStorage.setItem(localCleanupKey, "1");
+        const target = new URL(location.href);
+        target.searchParams.set("local-cache", Date.now().toString());
+        location.replace(target.toString());
+        return;
+      }
+
+      sessionStorage.removeItem(localCleanupKey);
       return;
     }
 

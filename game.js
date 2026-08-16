@@ -2064,6 +2064,7 @@ function setAuthBootstrapLoading() {
 
 function showAuthBootstrapError(message = "Não foi possível validar sua sessão.") {
   authBootstrapSettled = true;
+  window.V2DAuthBootGuard?.resolve();
   ui.authOverlay?.classList.add("is-resolved");
   ui.authSessionCheck?.classList.remove("hidden");
   ui.authSessionCheck?.classList.add("is-error");
@@ -2078,6 +2079,7 @@ function continueToLoginFromBootstrap(message = "Entre novamente para continuar.
   authBootstrapController?.abort();
   authBootstrapController = null;
   authBootstrapSettled = true;
+  window.V2DAuthBootGuard?.resolve();
   ui.authSessionCheck?.classList.add("hidden");
   ui.authSessionCheck?.classList.remove("is-error");
   ui.authBootstrapActions?.classList.add("hidden");
@@ -2121,6 +2123,7 @@ async function bootstrapAuthentication() {
     if (attempt !== authBootstrapAttempt) return;
     saveSession({ ...storedSession, ...payload });
     authBootstrapSettled = true;
+    window.V2DAuthBootGuard?.resolve();
     enterGameWithProfile({ ...payload.user, isGuest: false, token: storedSession.token });
   } catch (error) {
     if (attempt !== authBootstrapAttempt) return;
@@ -12645,6 +12648,13 @@ function updateUi() {
   const outbreakGadgetReady = Boolean(outbreakGadgetDefinition)
     && (game.outbreakGadget?.charges || 0) > 0
     && outbreakGadgetCooldown <= 0;
+  // Esses estados alimentam tanto o painel opcional quanto os indicadores
+  // circulares permanentes. Mantê-los fora do bloco condicional evita que a
+  // inicialização quebre quando o painel detalhado estiver desativado.
+  const ultimateReady = outbreakGadgetDefinition ? outbreakGadgetReady : game.sandbox || ultReady;
+  const ultimateEmpty = outbreakGadgetDefinition
+    ? (game.outbreakGadget?.charges || 0) <= 0
+    : !game.sandbox && getUltimatePoints(game.player) <= 0;
   setText(ui.ultLabel, outbreakGadgetDefinition ? "GADGET" : "ULT");
   setText(ui.ultPoints, outbreakGadgetDefinition
     ? (outbreakGadgetCooldown > 0
@@ -12661,10 +12671,6 @@ function updateUi() {
     setText(ui.abilityPrimaryState?.querySelector("b"), primaryLabel);
     toggleClass(ui.abilityPrimaryState, "is-ready", primaryReady);
     toggleClass(ui.abilityPrimaryState, "is-cooldown", !primaryReady);
-    const ultimateReady = outbreakGadgetDefinition ? outbreakGadgetReady : game.sandbox || ultReady;
-    const ultimateEmpty = outbreakGadgetDefinition
-      ? (game.outbreakGadget?.charges || 0) <= 0
-      : !game.sandbox && getUltimatePoints(game.player) <= 0;
     setText(ui.abilityUltimateState?.querySelector("b"), ultimateReady
       ? "PRONTA"
       : ultimateEmpty
