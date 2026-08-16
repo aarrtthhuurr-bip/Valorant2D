@@ -546,6 +546,22 @@ input {
   text-transform: uppercase;
 }
 
+.auth-session-check p {
+  max-width: 320px;
+  margin: 0;
+  color: #7f96a3;
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: center;
+}
+.auth-session-check.is-error .v2d-spinner { display: none; }
+.auth-session-check.is-error strong { color: #ff7b86; }
+.auth-bootstrap-actions { display: flex; gap: 9px; margin-top: 5px; }
+.auth-bootstrap-actions.hidden { display: none; }
+.auth-bootstrap-actions button { min-height: 38px; padding: 0 15px; border: 1px solid rgba(255,70,85,.56); background: rgba(255,70,85,.1); color: #eef6f8; font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.auth-bootstrap-actions button:last-child { border-color: rgba(102,205,226,.34); background: rgba(45,137,160,.08); }
+.auth-bootstrap-actions button:hover,.auth-bootstrap-actions button:focus-visible { background: #ff4655; border-color: #ff4655; color: #fff; }
+
 .auth-loader {
   width: 32px;
   height: 32px;

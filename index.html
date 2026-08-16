@@ -577,6 +577,11 @@
         <div class="auth-session-check" id="authSessionCheck" role="status" aria-live="polite">
           <span class="v2d-spinner v2d-spinner--compact" aria-hidden="true"><i></i><i></i><i></i></span>
           <strong>Inicializando conexão segura</strong>
+          <p id="authBootstrapDetail">Validando sua sessão e preparando o acesso.</p>
+          <div class="auth-bootstrap-actions hidden" id="authBootstrapActions">
+            <button type="button" id="authBootstrapRetry">Tentar novamente</button>
+            <button type="button" id="authBootstrapLogin">Ir para login</button>
+          </div>
         </div>
       </section>
 

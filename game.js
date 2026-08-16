@@ -171,6 +171,10 @@ const ui = {
   mobileOrientationHint: document.getElementById("mobileOrientationHint"),
   authOverlay: document.getElementById("authOverlay"),
   authSessionCheck: document.getElementById("authSessionCheck"),
+  authBootstrapDetail: document.getElementById("authBootstrapDetail"),
+  authBootstrapActions: document.getElementById("authBootstrapActions"),
+  authBootstrapRetry: document.getElementById("authBootstrapRetry"),
+  authBootstrapLogin: document.getElementById("authBootstrapLogin"),
   authForm: document.getElementById("authForm"),
   authUsername: document.getElementById("authUsername"),
   authPassword: document.getElementById("authPassword"),
@@ -752,15 +756,23 @@ function clearStoredSession() {
 }
 
 async function requestApi(path, options = {}) {
+  const {
+    timeoutMs = API_REQUEST_TIMEOUT,
+    signal: externalSignal,
+    ...fetchOptions
+  } = options;
   const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT);
+  const abortFromExternalSignal = () => controller.abort(externalSignal?.reason);
+  if (externalSignal?.aborted) abortFromExternalSignal();
+  else externalSignal?.addEventListener("abort", abortFromExternalSignal, { once: true });
+  const timeoutId = window.setTimeout(() => controller.abort(new DOMException("Tempo limite excedido", "TimeoutError")), Math.max(1, timeoutMs));
 
   try {
     const response = await fetch(`${API_BASE_URL}${path}`, {
-      ...options,
+      ...fetchOptions,
       headers: {
         "Content-Type": "application/json",
-        ...(options.headers || {}),
+        ...(fetchOptions.headers || {}),
       },
       signal: controller.signal,
     });
@@ -794,6 +806,7 @@ async function requestApi(path, options = {}) {
     throw error;
   } finally {
     window.clearTimeout(timeoutId);
+    externalSignal?.removeEventListener("abort", abortFromExternalSignal);
   }
 }
 
@@ -2035,37 +2048,91 @@ function cryptoRandomGuestSuffix() {
   return String(1000 + Math.floor(Math.random() * 9000));
 }
 
+const AUTH_BOOTSTRAP_TIMEOUT_MS = 5000;
+let authBootstrapController = null;
+let authBootstrapAttempt = 0;
+let authBootstrapSettled = false;
+
+function setAuthBootstrapLoading() {
+  authBootstrapSettled = false;
+  ui.authSessionCheck?.classList.remove("hidden", "is-error");
+  ui.authBootstrapActions?.classList.add("hidden");
+  const title = ui.authSessionCheck?.querySelector("strong");
+  if (title) title.textContent = "Inicializando conexão segura";
+  if (ui.authBootstrapDetail) ui.authBootstrapDetail.textContent = "Validando sua sessão e preparando o acesso.";
+}
+
+function showAuthBootstrapError(message = "Não foi possível validar sua sessão.") {
+  authBootstrapSettled = true;
+  ui.authOverlay?.classList.add("is-resolved");
+  ui.authSessionCheck?.classList.remove("hidden");
+  ui.authSessionCheck?.classList.add("is-error");
+  ui.authBootstrapActions?.classList.remove("hidden");
+  const title = ui.authSessionCheck?.querySelector("strong");
+  if (title) title.textContent = "Falha ao conectar";
+  if (ui.authBootstrapDetail) ui.authBootstrapDetail.textContent = message;
+}
+
+function continueToLoginFromBootstrap(message = "Entre novamente para continuar.") {
+  authBootstrapAttempt += 1;
+  authBootstrapController?.abort();
+  authBootstrapController = null;
+  authBootstrapSettled = true;
+  ui.authSessionCheck?.classList.add("hidden");
+  ui.authSessionCheck?.classList.remove("is-error");
+  ui.authBootstrapActions?.classList.add("hidden");
+  ui.authOverlay?.classList.add("is-resolved");
+  replaceAuthRoute("login");
+  syncAuthRouteFromLocation();
+  setAuthFeedback(message, "error");
+  ui.authUsername?.focus();
+}
+
+window.addEventListener("unhandledrejection", (event) => {
+  console.error("Promise de autenticação/conexão não tratada:", event.reason);
+  if (!authBootstrapSettled) {
+    event.preventDefault();
+    authBootstrapController?.abort();
+    showAuthBootstrapError("Ocorreu uma falha inesperada durante a inicialização. Você pode tentar novamente ou acessar o login.");
+  }
+});
+
 async function bootstrapAuthentication() {
+  const attempt = ++authBootstrapAttempt;
+  authBootstrapController?.abort();
+  const controller = new AbortController();
+  authBootstrapController = controller;
+  const timeoutId = window.setTimeout(() => controller.abort(), AUTH_BOOTSTRAP_TIMEOUT_MS);
   const storedSession = readStoredSession();
   if (!storedSession) {
-    ui.authSessionCheck?.classList.add("hidden");
-    ui.authOverlay?.classList.add("is-resolved");
-    if (!/\/(?:login|signup)\/?$/i.test(window.location.pathname)) replaceAuthRoute("login");
-    syncAuthRouteFromLocation();
-    ui.authUsername?.focus();
+    window.clearTimeout(timeoutId);
+    continueToLoginFromBootstrap("");
     return;
   }
 
-  ui.authSessionCheck?.classList.remove("hidden");
+  setAuthBootstrapLoading();
   try {
     const payload = await requestApi("/api/verify", {
       method: "POST",
       headers: { Authorization: `Bearer ${storedSession.token}` },
+      signal: controller.signal,
+      timeoutMs: AUTH_BOOTSTRAP_TIMEOUT_MS,
     });
+    if (attempt !== authBootstrapAttempt) return;
     saveSession({ ...storedSession, ...payload });
+    authBootstrapSettled = true;
     enterGameWithProfile({ ...payload.user, isGuest: false, token: storedSession.token });
   } catch (error) {
-    clearStoredSession();
-    ui.authSessionCheck?.classList.add("hidden");
-    ui.authOverlay?.classList.add("is-resolved");
-    replaceAuthRoute("login");
-    setAuthFeedback(
-      error.code === "SERVER_OFFLINE"
-        ? error.message
-        : "Sua sessão expirou. Entre novamente.",
-      "error",
-    );
-    ui.authUsername?.focus();
+    if (attempt !== authBootstrapAttempt) return;
+    if (error.code === "SERVER_OFFLINE" || controller.signal.aborted) {
+      showAuthBootstrapError("O servidor demorou para responder. Tente novamente ou prossiga para o login.");
+    } else {
+      clearStoredSession();
+      continueToLoginFromBootstrap("Sua sessão expirou. Entre novamente.");
+    }
+  } finally {
+    window.clearTimeout(timeoutId);
+    if (attempt === authBootstrapAttempt) authBootstrapController = null;
   }
 }
 
@@ -17017,6 +17084,14 @@ ui.authPassword?.addEventListener("input", () => {
   ui.authPassword.removeAttribute("aria-invalid");
   setAuthFeedback("");
 });
+ui.authBootstrapRetry?.addEventListener("click", () => {
+  setAuthFeedback("");
+  void bootstrapAuthentication().catch((error) => {
+    console.error("Falha ao reiniciar autenticação:", error);
+    showAuthBootstrapError("A nova tentativa falhou. Verifique sua conexão ou prossiga para o login.");
+  });
+});
+ui.authBootstrapLogin?.addEventListener("click", () => continueToLoginFromBootstrap("Você pode entrar novamente ou jogar como convidado."));
 
 window.addEventListener("beforeinstallprompt", (event) => {
   event.preventDefault();
@@ -17035,5 +17110,8 @@ setShopTab(game.shopTab);
 game.menuMapTimer = 0;
 startNewMatch();
 initializeGoogleIdentity();
-bootstrapAuthentication();
+void bootstrapAuthentication().catch((error) => {
+  console.error("Falha fatal ao inicializar autenticação:", error);
+  showAuthBootstrapError("Não foi possível concluir a inicialização. Tente novamente ou acesse o login.");
+});
 requestAnimationFrame(loop);
