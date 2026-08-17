@@ -90,6 +90,15 @@ class AdminTerminal {
     );
   }
 
+  static async setAdminRole(identifier, isAdmin) {
+    return database.get(
+      `UPDATE users SET is_admin = $2
+       WHERE ${TARGET_PREDICATE}
+       RETURNING id, admin_uuid AS uuid, username, email, is_admin`,
+      [String(identifier || '').trim(), Boolean(isAdmin)],
+    );
+  }
+
   static resolveItem(identifier) {
     const value = String(identifier || '').trim();
     const normalized = value.toLowerCase().replace(/[\s_-]+/g, '');

@@ -216,6 +216,19 @@
         return `Conta ${payload.account.username} suspensa.`;
       },
     });
+    for (const action of ['make_admin', 'revoke_admin']) register({
+      name: `account ${action}`,
+      description: action === 'make_admin' ? 'Promove uma conta para Admin.' : 'Revoga privilégios administrativos.',
+      usage: '<target>', minimumArguments: 1,
+      execute: async ([target]) => {
+        const promote = action === 'make_admin';
+        const payload = await bridge.api(`/api/admin-terminal/accounts/${encodeURIComponent(target)}/role`, {
+          method: 'POST', body: { role: promote ? 'admin' : 'player' },
+        });
+        const identity = payload.account.email || payload.account.username;
+        return { html: `<span class="terminal-success">[SUCCESS] User ${escapeHtml(identity)} has been ${promote ? 'promoted to Admin' : 'demoted to Player'}.</span>` };
+      },
+    });
     register({
       name: 'eco give', description: 'Adiciona Core ao saldo de uma conta.', usage: '<target> <amount>', minimumArguments: 2,
       execute: async ([target, rawAmount]) => {

@@ -8,6 +8,7 @@ router.get('/accounts/:uuid', controller.viewAccount);
 router.post('/accounts', authenticatedWriteLimiter, controller.createAccount);
 router.post('/accounts/:uuid/ban', authenticatedWriteLimiter, controller.banAccount);
 router.post('/accounts/:uuid/core', authenticatedWriteLimiter, controller.updateCore);
+router.post('/accounts/:target/role', authenticatedWriteLimiter, controller.updateRole);
 router.post('/accounts/:target/kick', authenticatedWriteLimiter, controller.kickPlayer);
 router.post('/accounts/:target/inventory/:item', authenticatedWriteLimiter, controller.mutateInventory);
 router.delete('/accounts/:target/inventory/:item', authenticatedWriteLimiter, controller.mutateInventory);

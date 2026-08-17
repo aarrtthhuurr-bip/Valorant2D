@@ -6,6 +6,8 @@ const { securityAudit } = require('../utils/securityAudit');
 
 const scryptAsync = promisify(crypto.scrypt);
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const ROOT_ADMIN_EMAIL = String(process.env.ROOT_ADMIN_EMAIL || 'arthurdealmeida124@gmail.com').trim().toLowerCase();
+const ROOT_ADMIN_UUID = String(process.env.ROOT_ADMIN_UUID || '').trim().toLowerCase();
 
 function tokenFrom(request) {
   const value = request.get('authorization') || '';
@@ -112,6 +114,39 @@ async function updateCore(request, response, next) {
   } catch (error) { next(error); }
 }
 
+function isRootAdmin(account) {
+  const email = String(account?.email || '').trim().toLowerCase();
+  const uuid = String(account?.uuid || '').trim().toLowerCase();
+  return Boolean((ROOT_ADMIN_EMAIL && email === ROOT_ADMIN_EMAIL)
+    || (ROOT_ADMIN_UUID && uuid === ROOT_ADMIN_UUID));
+}
+
+async function updateRole(request, response, next) {
+  try {
+    const actor = await requireAdmin(request, response); if (!actor) return;
+    const role = String(request.body?.role || '').trim().toLowerCase();
+    if (!['admin', 'player'].includes(role)) {
+      return response.status(400).json({ error: 'A função deve ser admin ou player.' });
+    }
+    const current = await AdminTerminal.findAccount(request.params.target);
+    if (!current) return response.status(404).json({ error: 'Conta não encontrada.' });
+    if (role === 'player' && isRootAdmin(current)) {
+      securityAudit('admin_role_revoke_denied', request, {
+        userId: actor.id, target: current.uuid, success: false,
+      });
+      return response.status(403).json({
+        error: '[ERROR] Action denied: Root admin permissions cannot be revoked.',
+        code: 'ROOT_ADMIN_PROTECTED',
+      });
+    }
+    const account = await AdminTerminal.setAdminRole(request.params.target, role === 'admin');
+    securityAudit(role === 'admin' ? 'admin_role_grant' : 'admin_role_revoke', request, {
+      userId: actor.id, target: account.uuid, role, success: true,
+    });
+    response.json({ account: publicAccount(account), role });
+  } catch (error) { next(error); }
+}
+
 async function mutateInventory(request, response, next) {
   try {
     const actor = await requireAdmin(request, response); if (!actor) return;
@@ -172,5 +207,5 @@ async function ping(request, response, next) {
 
 module.exports = {
   banAccount, broadcast, createAccount, kickPlayer, listAccounts, mutateInventory,
-  ping, pollEvents, updateCore, viewAccount,
+  ping, pollEvents, updateCore, updateRole, viewAccount,
 };
