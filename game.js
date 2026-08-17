@@ -12860,6 +12860,7 @@ function draw() {
   }
 
   drawBotDebug();
+  drawAdminHitboxes();
   drawDamageIndicator();
   if (!game.tutorial) {
     drawAbilityBar();
@@ -12870,6 +12871,30 @@ function draw() {
   drawShadowBlindness();
   drawAgentScreenEffects();
   drawSyntheticKillcam();
+  ctx.restore();
+}
+
+function drawAdminHitboxes() {
+  if (!game.adminDebugHitboxes || !isAdminProfile()) return;
+  ctx.save();
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 4]);
+  ctx.strokeStyle = "rgba(255, 70, 85, .9)";
+  for (const wall of map.walls || []) ctx.strokeRect(wall.x, wall.y, wall.w, wall.h);
+  ctx.strokeStyle = "rgba(70, 255, 140, .9)";
+  for (const entity of [game.player, ...game.bots, ...game.allies]) {
+    if (!entity || entity.alive === false) continue;
+    ctx.beginPath();
+    ctx.arc(entity.x, entity.y, entity.r || 16, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = "rgba(255, 215, 80, .95)";
+  for (const projectile of [...game.bullets, ...game.rockets, ...game.grenades]) {
+    if (!projectile) continue;
+    ctx.beginPath();
+    ctx.arc(projectile.x, projectile.y, projectile.r || 4, 0, Math.PI * 2);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -14893,7 +14918,8 @@ let preferencesSyncedRevision = 0;
  * o nome visível da conta nunca concede privilégios por conta própria.
  */
 function isAdminProfile() {
-  return Boolean(currentProfile && !currentProfile.isGuest && currentProfile.isAdmin);
+  return Boolean(currentProfile && !currentProfile.isGuest
+    && (currentProfile.role === "admin" || currentProfile.isAdmin));
 }
 
 function availableOptionsTabs() {
@@ -17410,7 +17436,7 @@ window.Valorant2DAdminBridge = Object.freeze({
       animateCurrencyReward(250);
       return "VFX color_gain executado (+250 C apenas visual).";
     }
-    if (effect === "victory_confetti") {
+    if (effect === "level_up") {
       const preview = document.createElement("div");
       preview.className = "admin-terminal-confetti";
       preview.replaceChildren(...Array.from({ length: 42 }, (_, index) => {
@@ -17423,15 +17449,23 @@ window.Valorant2DAdminBridge = Object.freeze({
       window.setTimeout(() => {
         preview.remove();
       }, 4200);
-      return "VFX victory_confetti executado.";
+      return "VFX level_up executado.";
     }
-    if (effect === "hit_flash") {
+    if (effect === "hit_spark") {
       ui.gameRoot?.classList.remove("admin-vfx-hit-flash");
       requestAnimationFrame(() => ui.gameRoot?.classList.add("admin-vfx-hit-flash"));
       window.setTimeout(() => ui.gameRoot?.classList.remove("admin-vfx-hit-flash"), 480);
-      return "VFX hit_flash executado.";
+      if (game.player) spawnAdminParticles(game.player.x, game.player.y, "#ffdc7a", 16);
+      return "VFX hit_spark executado.";
     }
-    throw new Error("Efeito desconhecido. Use color_gain, victory_confetti ou hit_flash.");
+    if (effect === "explosion") {
+      const x = game.player?.x ?? canvas.width / 2;
+      const y = game.player?.y ?? canvas.height / 2;
+      game.explosions.push({ x, y, r: 0, maxR: 110, life: 0.8, maxLife: 0.8, color: "#ff7a32" });
+      spawnAdminParticles(x, y, "#ff4655", 34);
+      return "VFX explosion executado.";
+    }
+    throw new Error("Efeito desconhecido. Use color_gain, hit_spark, explosion ou level_up.");
   },
   async toggleUi(componentName) {
     if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
@@ -17454,13 +17488,14 @@ window.Valorant2DAdminBridge = Object.freeze({
       closeMissionsModal();
       return "Missões fechadas.";
     }
-    if (component === "ranking") {
-      openGlobalRanking();
-      return "Ranking aberto.";
+    if (component === "scoreboard") {
+      game.scoreboardVisible = !game.scoreboardVisible;
+      updateUi();
+      return `Placar ${game.scoreboardVisible ? "aberto" : "fechado"}.`;
     }
-    if (component === "options") {
+    if (component === "settings") {
       showOptionsMenu();
-      return "Opções abertas.";
+      return "Configurações abertas.";
     }
     if (component === "hud") {
       const hidden = !ui.topHud?.classList.contains("hidden");
@@ -17468,9 +17503,117 @@ window.Valorant2DAdminBridge = Object.freeze({
       document.querySelector(".status-card")?.classList.toggle("hidden", hidden);
       return `HUD ${hidden ? "oculto" : "exibido"}.`;
     }
-    throw new Error("Componente desconhecido. Use inventory, missions, ranking, options ou hud.");
+    throw new Error("Componente desconhecido. Use inventory, hud, scoreboard ou settings.");
+  },
+  inventoryItems() {
+    const skinIds = (commerceState.profile?.catalog || []).map((item) => item.id);
+    return [...new Set([...skinIds, ...BLACK_MARKET_GADGETS.map((item) => item.id)])];
+  },
+  toggleDebug(kind) {
+    if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
+    if (kind === "hitboxes") {
+      game.adminDebugHitboxes = !game.adminDebugHitboxes;
+      return `Hitboxes ${game.adminDebugHitboxes ? "ativadas" : "desativadas"}.`;
+    }
+    if (kind === "stats") {
+      game.adminDebugStats = !game.adminDebugStats;
+      toggleAdminStatsOverlay(game.adminDebugStats);
+      return `Debug de desempenho ${game.adminDebugStats ? "ativado" : "desativado"}.`;
+    }
+    throw new Error("Métrica de debug desconhecida.");
+  },
+  pauseMatch() {
+    if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
+    game.paused = !game.paused;
+    return `Partida ${game.paused ? "pausada" : "retomada"}.`;
+  },
+  forceEnd(winner) {
+    if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
+    if (!["attackers", "defenders", "draw"].includes(winner)) throw new Error("Time inválido.");
+    if (winner === "draw") {
+      game.phase = "ended";
+      game.phaseTime = 4;
+      setMessage("Round encerrado em empate pelo terminal.");
+      showRoundBanner("Empate", "Round encerrado administrativamente.", `${game.playerScore} - ${game.enemyScore}`, 2.8);
+    } else endRound(winner, "Round encerrado pelo terminal administrativo.");
+    return `Round encerrado: ${winner}.`;
   },
 });
+
+let adminStatsInterval = 0;
+function spawnAdminParticles(x, y, color, amount) {
+  for (let index = 0; index < amount; index += 1) {
+    const angle = (index / amount) * Math.PI * 2 + Math.random() * 0.24;
+    const speed = 90 + Math.random() * 240;
+    game.particles.push({
+      x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+      life: 0.65, maxLife: 0.65, size: 2 + Math.random() * 4, color,
+    });
+  }
+}
+
+function toggleAdminStatsOverlay(show) {
+  let overlay = document.getElementById("adminDebugStats");
+  if (!overlay) {
+    overlay = document.createElement("aside");
+    overlay.id = "adminDebugStats";
+    overlay.className = "admin-debug-stats hidden";
+    document.body.appendChild(overlay);
+  }
+  overlay.classList.toggle("hidden", !show);
+  window.clearInterval(adminStatsInterval);
+  if (!show) return;
+  const refresh = async () => {
+    const memory = performance.memory ? `${Math.round(performance.memory.usedJSHeapSize / 1048576)} MB` : "n/d";
+    const started = performance.now();
+    let ping = "offline";
+    try {
+      await window.Valorant2DAdminBridge.api("/api/admin-terminal/ping");
+      ping = `${Math.round(performance.now() - started)} ms`;
+    } catch (_error) {}
+    overlay.textContent = `FPS ${game.currentFps || 0}  |  MEM ${memory}  |  SUPABASE ${ping}`;
+  };
+  void refresh();
+  adminStatsInterval = window.setInterval(() => void refresh(), 2000);
+}
+
+let lastAdminEventId = Number(sessionStorage.getItem("valorant2d:admin-event-id") || 0);
+function showAdministrativeBroadcast(message) {
+  let banner = document.getElementById("adminBroadcastBanner");
+  if (!banner) {
+    banner = document.createElement("aside");
+    banner.id = "adminBroadcastBanner";
+    banner.className = "admin-broadcast-banner";
+    document.body.appendChild(banner);
+  }
+  banner.textContent = message;
+  banner.classList.remove("is-visible");
+  requestAnimationFrame(() => banner.classList.add("is-visible"));
+  window.clearTimeout(showAdministrativeBroadcast.timer);
+  showAdministrativeBroadcast.timer = window.setTimeout(() => banner.classList.remove("is-visible"), 6500);
+}
+
+async function pollAdministrativeEvents() {
+  const session = readStoredSession();
+  try {
+    const payload = await requestApi(`/api/admin-terminal/events?after=${lastAdminEventId}`, {
+      headers: session?.token ? { Authorization: `Bearer ${session.token}` } : {}, timeoutMs: 4500,
+    });
+    for (const event of payload.events || []) {
+      lastAdminEventId = Math.max(lastAdminEventId, Number(event.id) || 0);
+      sessionStorage.setItem("valorant2d:admin-event-id", String(lastAdminEventId));
+      if (event.event_type === "broadcast") showAdministrativeBroadcast(event.message);
+      if (event.event_type === "kick") {
+        clearStoredSession();
+        currentProfile = null;
+        showUxToast(`Sessão encerrada: ${event.message}`, { title: "SESSÃO ENCERRADA", tone: "error", duration: 5000 });
+        window.valorant2DAdminTerminal?.toggle(false);
+        window.setTimeout(() => continueToLoginFromBootstrap(`Sessão encerrada: ${event.message}`), 900);
+      }
+    }
+  } catch (_error) {}
+}
+window.setInterval(() => void pollAdministrativeEvents(), 5000);
 ui.updatesCloseButton?.addEventListener("click", () => void closeUpdateNotes());
 ui.updatesPreviousButton?.addEventListener("click", () => renderUpdateRelease(activeUpdateReleaseIndex - 1));
 ui.updatesNextButton?.addEventListener("click", () => renderUpdateRelease(activeUpdateReleaseIndex + 1));

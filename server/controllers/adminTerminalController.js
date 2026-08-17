@@ -112,4 +112,65 @@ async function updateCore(request, response, next) {
   } catch (error) { next(error); }
 }
 
-module.exports = { banAccount, createAccount, listAccounts, updateCore, viewAccount };
+async function mutateInventory(request, response, next) {
+  try {
+    const actor = await requireAdmin(request, response); if (!actor) return;
+    const item = AdminTerminal.resolveItem(request.params.item);
+    if (!item) return response.status(404).json({ error: 'Item desconhecido no catálogo do jogo.' });
+    const grant = request.method === 'POST';
+    const result = await AdminTerminal.mutateInventory(request.params.target, item, grant);
+    if (!result) return response.status(404).json({ error: 'Conta não encontrada.' });
+    securityAudit(grant ? 'admin_inventory_grant' : 'admin_inventory_revoke', request, {
+      userId: actor.id, target: result.account.uuid, item: item.id, success: true,
+    });
+    response.json({ account: publicAccount(result.account), item });
+  } catch (error) { next(error); }
+}
+
+async function kickPlayer(request, response, next) {
+  try {
+    const actor = await requireAdmin(request, response); if (!actor) return;
+    const account = await AdminTerminal.findAccount(request.params.target);
+    if (!account) return response.status(404).json({ error: 'Conta não encontrada.' });
+    if (account.is_admin) return response.status(400).json({ error: 'Uma conta administrativa não pode ser removida.' });
+    const reason = String(request.body?.reason || 'Removido por um administrador.').trim().slice(0, 180);
+    await AdminTerminal.createEvent({ type: 'kick', targetUserId: account.id, message: reason, createdBy: actor.id });
+    // Mantém a sessão por uma janela curta para que o cliente receba o evento
+    // de expulsão; depois disso, a revogação no servidor impede reconexão.
+    setTimeout(() => void AdminTerminal.revokeSessions(account.id).catch(() => {}), 7000).unref?.();
+    securityAudit('admin_player_kick', request, { userId: actor.id, target: account.uuid, success: true });
+    response.json({ account: publicAccount(account), reason });
+  } catch (error) { next(error); }
+}
+
+async function broadcast(request, response, next) {
+  try {
+    const actor = await requireAdmin(request, response); if (!actor) return;
+    const message = String(request.body?.message || '').trim();
+    if (!message || message.length > 180) return response.status(400).json({ error: 'A mensagem deve ter entre 1 e 180 caracteres.' });
+    const event = await AdminTerminal.createEvent({ type: 'broadcast', message, createdBy: actor.id });
+    securityAudit('admin_broadcast', request, { userId: actor.id, success: true });
+    response.status(201).json({ event });
+  } catch (error) { next(error); }
+}
+
+async function pollEvents(request, response, next) {
+  try {
+    const token = tokenFrom(request);
+    const session = token ? await Session.findValid(token) : null;
+    const after = Math.max(0, Number.parseInt(request.query.after, 10) || 0);
+    response.json({ events: await AdminTerminal.eventsFor(session?.id || null, after) });
+  } catch (error) { next(error); }
+}
+
+async function ping(request, response, next) {
+  try {
+    const actor = await requireAdmin(request, response); if (!actor) return;
+    response.json({ ok: true, ...(await AdminTerminal.ping()) });
+  } catch (error) { next(error); }
+}
+
+module.exports = {
+  banAccount, broadcast, createAccount, kickPlayer, listAccounts, mutateInventory,
+  ping, pollEvents, updateCore, viewAccount,
+};

@@ -13,6 +13,7 @@
       this.suggestionIndex = 0;
       this.history = [];
       this.historyIndex = 0;
+      this.activeSuggestions = [];
       this.render();
       this.registerEvents();
     }
@@ -45,12 +46,10 @@
       this.input.addEventListener('input', () => this.updateSuggestions());
       this.input.addEventListener('keydown', (event) => this.handleInputKey(event));
       this.suggestionsBox.addEventListener('pointerdown', (event) => {
-        const option = event.target.closest('[data-command]');
+        const option = event.target.closest('[data-suggestion-index]');
         if (!option) return;
         event.preventDefault();
-        this.input.value = `${option.dataset.command} `;
-        this.input.focus();
-        this.updateSuggestions();
+        this.applySuggestion(Number(option.dataset.suggestionIndex));
       });
     }
 
@@ -72,19 +71,17 @@
     handleInputKey(event) {
       if (event.key === 'Enter') {
         event.preventDefault();
-        void this.submit();
+        if (!this.suggestionsBox.classList.contains('hidden') && this.activeSuggestions.length) {
+          this.applySuggestion(this.suggestionIndex);
+        } else void this.submit();
       } else if (event.key === 'Tab') {
         event.preventDefault();
-        const suggestions = this.registry.suggestions(this.input.value);
-        if (suggestions.length) {
-          this.input.value = `${suggestions[this.suggestionIndex]?.name || suggestions[0].name} `;
-          this.updateSuggestions();
-        }
+        if (this.activeSuggestions.length) this.applySuggestion(this.suggestionIndex);
       } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         if (!this.suggestionsBox.classList.contains('hidden')) {
           event.preventDefault();
           const direction = event.key === 'ArrowDown' ? 1 : -1;
-          const count = this.registry.suggestions(this.input.value).length;
+          const count = this.activeSuggestions.length;
           this.suggestionIndex = (this.suggestionIndex + direction + count) % Math.max(1, count);
           this.updateSuggestions(false);
         } else this.navigateHistory(event.key === 'ArrowUp' ? -1 : 1);
@@ -103,24 +100,34 @@
 
     updateSuggestions(reset = true) {
       const value = this.input.value;
-      const matches = this.registry.suggestions(value).slice(0, 7);
+      const matches = this.registry.suggestions(value, { bridge: this.bridge }).slice(0, 8);
+      this.activeSuggestions = matches;
       if (reset) this.suggestionIndex = 0;
-      if (!value.trim() || !matches.length || this.registry.resolve(value)) {
+      if (!matches.length) {
         this.hideSuggestions();
         return;
       }
       this.suggestionIndex = Math.min(this.suggestionIndex, matches.length - 1);
-      this.suggestionsBox.innerHTML = matches.map((command, index) => `
-        <button type="button" data-command="${escapeHtml(command.name)}" class="${index === this.suggestionIndex ? 'is-active' : ''}">
-          <strong>${escapeHtml(command.name)} <i>${escapeHtml(command.usage || '')}</i></strong>
-          <span>${escapeHtml(command.description)}</span>
+      this.suggestionsBox.innerHTML = matches.map((suggestion, index) => `
+        <button type="button" data-suggestion-index="${index}" class="${index === this.suggestionIndex ? 'is-active' : ''}">
+          <strong>${escapeHtml(suggestion.label)} <i>${escapeHtml(suggestion.usage || '')}</i></strong>
+          <span>${escapeHtml(suggestion.description)}</span>
         </button>`).join('');
       this.suggestionsBox.classList.remove('hidden');
+    }
+
+    applySuggestion(index = 0) {
+      const suggestion = this.activeSuggestions[index] || this.activeSuggestions[0];
+      if (!suggestion) return;
+      this.input.value = suggestion.value;
+      this.input.focus();
+      this.updateSuggestions();
     }
 
     hideSuggestions() {
       this.suggestionsBox.classList.add('hidden');
       this.suggestionsBox.replaceChildren();
+      this.activeSuggestions = [];
     }
 
     async submit() {
@@ -182,16 +189,16 @@
     });
     register({ name: 'clear', description: 'Limpa o log do terminal.', usage: '', execute: (_args, { terminal }) => terminal.clear() });
     register({
-      name: 'account list', description: 'Lista as 20 contas mais recentes.', usage: '',
+      name: 'account list', description: 'Lista as 15 contas mais recentes.', usage: '',
       execute: async () => {
         const payload = await bridge.api('/api/admin-terminal/accounts');
         return payload.accounts.length ? payload.accounts.map(formatAccount).join('\n\n') : 'Nenhuma conta encontrada.';
       },
     });
     register({
-      name: 'account view', description: 'Exibe perfil, estatísticas e inventário.', usage: '<uuid>', minimumArguments: 1,
-      execute: async ([uuid]) => {
-        const payload = await bridge.api(`/api/admin-terminal/accounts/${encodeURIComponent(uuid)}`);
+      name: 'account view', description: 'Exibe perfil, estatísticas e inventário.', usage: '<target>', minimumArguments: 1,
+      execute: async ([target]) => {
+        const payload = await bridge.api(`/api/admin-terminal/accounts/${encodeURIComponent(target)}`);
         return `${formatAccount(payload.account)}\nPartidas: ${payload.account.total_matches} | Kills: ${payload.account.total_kills} | Mortes: ${payload.account.total_deaths}\nSkins: ${payload.inventory.skins.map((item) => item.skin_id).join(', ') || '-'}\nUtilitários: ${payload.inventory.gadgets.map((item) => item.gadget_id).join(', ') || '-'}`;
       },
     });
@@ -203,48 +210,83 @@
       },
     });
     register({
-      name: 'account ban', description: 'Suspende a conta e revoga suas sessões.', usage: '<uuid>', minimumArguments: 1,
-      execute: async ([uuid]) => {
-        const payload = await bridge.api(`/api/admin-terminal/accounts/${encodeURIComponent(uuid)}/ban`, { method: 'POST', body: {} });
+      name: 'account ban', description: 'Suspende a conta e revoga suas sessões.', usage: '<target>', minimumArguments: 1,
+      execute: async ([target]) => {
+        const payload = await bridge.api(`/api/admin-terminal/accounts/${encodeURIComponent(target)}/ban`, { method: 'POST', body: {} });
         return `Conta ${payload.account.username} suspensa.`;
       },
     });
     register({
-      name: 'eco give', description: 'Adiciona Core ao saldo de uma conta.', usage: '<uuid> <amount>', minimumArguments: 2,
-      execute: async ([uuid, rawAmount]) => {
+      name: 'eco give', description: 'Adiciona Core ao saldo de uma conta.', usage: '<target> <amount>', minimumArguments: 2,
+      execute: async ([target, rawAmount]) => {
         const amount = Number(rawAmount);
         if (!Number.isInteger(amount) || amount < 1) throw new Error('A quantidade deve ser um inteiro positivo.');
-        const payload = await bridge.api(`/api/admin-terminal/accounts/${encodeURIComponent(uuid)}/core`, { method: 'POST', body: { amount } });
+        const payload = await bridge.api(`/api/admin-terminal/accounts/${encodeURIComponent(target)}/core`, { method: 'POST', body: { amount } });
         return `${amount.toLocaleString('pt-BR')} C concedidos a ${payload.account.username}. Saldo: ${Number(payload.account.core_balance).toLocaleString('pt-BR')} C.`;
       },
     });
     register({
-      name: 'eco set', description: 'Define o saldo Core exato de uma conta.', usage: '<uuid> <amount>', minimumArguments: 2,
-      execute: async ([uuid, rawAmount]) => {
+      name: 'eco set', description: 'Define o saldo Core exato de uma conta.', usage: '<target> <amount>', minimumArguments: 2,
+      execute: async ([target, rawAmount]) => {
         const amount = Number(rawAmount);
         if (!Number.isInteger(amount) || amount < 0 || amount > 1000000) {
           throw new Error('O saldo deve ser um inteiro entre 0 e 1000000.');
         }
-        const payload = await bridge.api(`/api/admin-terminal/accounts/${encodeURIComponent(uuid)}/core`, {
+        const payload = await bridge.api(`/api/admin-terminal/accounts/${encodeURIComponent(target)}/core`, {
           method: 'POST', body: { amount, set: true },
         });
         return `Saldo de ${payload.account.username} definido como ${Number(payload.account.core_balance).toLocaleString('pt-BR')} C.`;
       },
     });
     register({
-      name: 'eco reset', description: 'Define o saldo Core da conta como zero.', usage: '<uuid>', minimumArguments: 1,
-      execute: async ([uuid]) => {
-        const payload = await bridge.api(`/api/admin-terminal/accounts/${encodeURIComponent(uuid)}/core`, { method: 'POST', body: { reset: true } });
+      name: 'eco reset', description: 'Define o saldo Core da conta como zero.', usage: '<target>', minimumArguments: 1,
+      execute: async ([target]) => {
+        const payload = await bridge.api(`/api/admin-terminal/accounts/${encodeURIComponent(target)}/core`, { method: 'POST', body: { reset: true } });
         return `Saldo de ${payload.account.username} redefinido para 0 C.`;
       },
     });
     register({
-      name: 'vfx play', description: 'Executa um efeito visual isolado.', usage: '<color_gain|victory_confetti|hit_flash>', minimumArguments: 1,
+      name: 'vfx play', description: 'Executa um efeito visual isolado.', usage: '<effect_name>', minimumArguments: 1,
+      staticParams: [['color_gain', 'hit_spark', 'explosion', 'level_up']],
       execute: async ([effect]) => bridge.playVfx(effect),
     });
     register({
-      name: 'ui toggle', description: 'Alterna uma camada da interface.', usage: '<inventory|missions|ranking|options|hud>', minimumArguments: 1,
+      name: 'ui toggle', description: 'Alterna uma camada da interface.', usage: '<component>', minimumArguments: 1,
+      staticParams: [['inventory', 'hud', 'scoreboard', 'settings']],
       execute: async ([component]) => bridge.toggleUi(component),
+    });
+    register({ name: 'debug hitboxes', description: 'Alterna os contornos de colisão.', usage: '', execute: () => bridge.toggleDebug('hitboxes') });
+    register({ name: 'debug stats', description: 'Alterna FPS, memória e latência do banco.', usage: '', execute: () => bridge.toggleDebug('stats') });
+    register({ name: 'match pause', description: 'Pausa ou retoma física e timers.', usage: '', execute: () => bridge.pauseMatch() });
+    register({
+      name: 'match force_end', description: 'Força o encerramento do round.', usage: '<winner_team>', minimumArguments: 1,
+      staticParams: [['attackers', 'defenders', 'draw']], execute: ([winner]) => bridge.forceEnd(winner),
+    });
+    register({
+      name: 'server broadcast', description: 'Exibe uma mensagem global aos jogadores conectados.', usage: '<message>', minimumArguments: 1,
+      execute: async (parts) => {
+        const payload = await bridge.api('/api/admin-terminal/broadcast', { method: 'POST', body: { message: parts.join(' ') } });
+        return `Broadcast #${payload.event.id} publicado.`;
+      },
+    });
+    register({
+      name: 'player kick', description: 'Encerra as sessões do jogador e o remove do jogo.', usage: '<target> <reason>', minimumArguments: 2,
+      execute: async ([target, ...reason]) => {
+        const payload = await bridge.api(`/api/admin-terminal/accounts/${encodeURIComponent(target)}/kick`, { method: 'POST', body: { reason: reason.join(' ') } });
+        return `${payload.account.username} removido: ${payload.reason}`;
+      },
+    });
+    for (const action of ['grant', 'revoke']) register({
+      name: `inv ${action}`,
+      description: action === 'grant' ? 'Libera um item no inventário.' : 'Remove um item do inventário.',
+      usage: '<target> <item>', minimumArguments: 2,
+      staticParams: (index, _args, context) => index === 1 ? context.bridge.inventoryItems() : [],
+      execute: async ([target, item]) => {
+        const payload = await bridge.api(`/api/admin-terminal/accounts/${encodeURIComponent(target)}/inventory/${encodeURIComponent(item)}`, {
+          method: action === 'grant' ? 'POST' : 'DELETE', body: {},
+        });
+        return `${payload.item.name} ${action === 'grant' ? 'liberado para' : 'removido de'} ${payload.account.username}.`;
+      },
     });
   }
 

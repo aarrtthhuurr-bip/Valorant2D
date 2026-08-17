@@ -35,6 +35,7 @@ function publicUser(user) {
     coreBalance: Number(user.core_balance) || 0,
     coreEarnedTotal: Number(user.core_earned_total) || 0,
     isAdmin: Boolean(user.is_admin),
+    role: user.is_admin ? 'admin' : 'player',
     onboardingCompleted: Boolean(user.onboarding_completed),
     menuTourCompleted: Boolean(user.menu_tour_completed),
     createdAt: user.data_criacao,

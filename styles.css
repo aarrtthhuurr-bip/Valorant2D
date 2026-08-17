@@ -192,6 +192,10 @@ input {
 .terminal-help-row b { color:#00ff66; }.terminal-help-row i { color:#b8c9bd; }.terminal-help-row span { color:#fff; }
 .admin-terminal-confetti { position:fixed; z-index:2990; inset:0; overflow:hidden; pointer-events:none; }
 .admin-terminal-confetti i { position:absolute; top:-18px; left:var(--terminal-confetti-x); width:8px; height:16px; background:#ff4655; box-shadow:10px 8px 0 #00e5ff; animation:terminalConfettiFall 2.8s var(--terminal-confetti-delay) cubic-bezier(.2,.7,.25,1) both; }
+.admin-debug-stats { position:fixed; z-index:2995; top:max(10px,env(safe-area-inset-top)); right:max(10px,env(safe-area-inset-right)); padding:8px 11px; border:1px solid rgba(0,255,102,.45); background:rgba(0,0,0,.86); color:#00ff66; font:700 12px/1.2 "Courier New",monospace; pointer-events:none; }
+.admin-debug-stats.hidden { display:none; }
+.admin-broadcast-banner { position:fixed; z-index:2975; top:max(16px,env(safe-area-inset-top)); left:50%; width:min(760px,88vw); padding:14px 20px; border:1px solid rgba(0,240,255,.62); background:rgba(3,14,22,.96); color:#f4fbff; font:800 clamp(12px,1.4vw,16px)/1.35 "Rajdhani",sans-serif; letter-spacing:.08em; text-align:center; pointer-events:none; opacity:0; transform:translate(-50%,-18px); transition:opacity .2s ease,transform .25s ease; }
+.admin-broadcast-banner.is-visible { opacity:1; transform:translate(-50%,0); }
 .admin-vfx-hit-flash::after { content:""; position:fixed; z-index:2980; inset:0; pointer-events:none; background:radial-gradient(circle,rgba(255,70,85,.08),rgba(255,70,85,.55)); animation:adminHitFlash .48s ease-out both; }
 @keyframes adminHitFlash { from { opacity:1; } to { opacity:0; } }
 @keyframes terminalConfettiFall { to { transform:translate3d(30px,105vh,0) rotate(620deg); opacity:.15; } }
