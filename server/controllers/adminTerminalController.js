@@ -97,13 +97,17 @@ async function updateCore(request, response, next) {
   try {
     const actor = await requireAdmin(request, response); if (!actor) return;
     const reset = request.body?.reset === true;
+    const setExact = request.body?.set === true;
     const amount = reset ? 0 : Number(request.body?.amount);
-    if (!reset && (!Number.isInteger(amount) || amount < 1 || amount > 100000)) {
-      return response.status(400).json({ error: 'Informe uma quantidade inteira entre 1 e 100000.' });
+    const minimum = setExact ? 0 : 1;
+    const maximum = setExact ? 1000000 : 100000;
+    if (!reset && (!Number.isInteger(amount) || amount < minimum || amount > maximum)) {
+      return response.status(400).json({ error: `Informe uma quantidade inteira entre ${minimum} e ${maximum}.` });
     }
-    const account = await AdminTerminal.setCore(request.params.uuid, amount, { add: !reset });
+    const account = await AdminTerminal.setCore(request.params.uuid, amount, { add: !reset && !setExact });
     if (!account) return response.status(404).json({ error: 'Conta não encontrada.' });
-    securityAudit(reset ? 'admin_core_reset' : 'admin_core_grant', request, { userId: actor.id, target: account.uuid, amount, success: true });
+    const auditEvent = reset ? 'admin_core_reset' : setExact ? 'admin_core_set' : 'admin_core_grant';
+    securityAudit(auditEvent, request, { userId: actor.id, target: account.uuid, amount, success: true });
     response.json({ account });
   } catch (error) { next(error); }
 }

@@ -219,6 +219,19 @@
       },
     });
     register({
+      name: 'eco set', description: 'Define o saldo Core exato de uma conta.', usage: '<uuid> <amount>', minimumArguments: 2,
+      execute: async ([uuid, rawAmount]) => {
+        const amount = Number(rawAmount);
+        if (!Number.isInteger(amount) || amount < 0 || amount > 1000000) {
+          throw new Error('O saldo deve ser um inteiro entre 0 e 1000000.');
+        }
+        const payload = await bridge.api(`/api/admin-terminal/accounts/${encodeURIComponent(uuid)}/core`, {
+          method: 'POST', body: { amount, set: true },
+        });
+        return `Saldo de ${payload.account.username} definido como ${Number(payload.account.core_balance).toLocaleString('pt-BR')} C.`;
+      },
+    });
+    register({
       name: 'eco reset', description: 'Define o saldo Core da conta como zero.', usage: '<uuid>', minimumArguments: 1,
       execute: async ([uuid]) => {
         const payload = await bridge.api(`/api/admin-terminal/accounts/${encodeURIComponent(uuid)}/core`, { method: 'POST', body: { reset: true } });
