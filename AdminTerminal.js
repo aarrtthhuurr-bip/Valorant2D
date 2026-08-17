@@ -61,6 +61,7 @@
       this.root.setAttribute('aria-hidden', String(!next));
       if (next) {
         if (!this.log.children.length) this.print('Terminal administrativo inicializado. Digite help para ver os comandos.', 'system');
+        void this.bridge.prepareInventoryItems?.().then(() => this.updateSuggestions()).catch(() => {});
         requestAnimationFrame(() => this.input.focus());
       } else {
         this.input.blur();
@@ -181,6 +182,47 @@
     ].join('\n');
   }
 
+  function splitStack(value) {
+    return String(value || '').split(/\s*\/\s*/).map((entry) => entry.trim()).filter(Boolean);
+  }
+
+  function parseTargetStack(args) {
+    const targets = splitStack(args.join(' '));
+    if (!targets.length) throw new Error('Informe ao menos um alvo. Separe vários alvos com /.');
+    return [...new Set(targets)];
+  }
+
+  function parseEconomyBatch(args) {
+    const source = args.join(' ').trim();
+    const match = source.match(/^(.*?)\s+(-?\d+)$/);
+    if (!match) throw new Error('Uso: <target> [/ <target>...] <amount>');
+    return { targets: parseTargetStack([match[1]]), amount: Number(match[2]) };
+  }
+
+  function parseInventoryBatch(args, bridge) {
+    const knownItems = new Set(bridge.inventoryItems().map((item) => item.toLowerCase()));
+    const tokens = args.join(' ').trim().split(/\s+/);
+    const itemStart = tokens.findIndex((token) => splitStack(token)
+      .some((part) => knownItems.has(part.toLowerCase())));
+    if (itemStart < 1) throw new Error('Informe alvo(s) e item(ns) válidos do catálogo. Separe lotes com /.');
+    const targets = splitStack(tokens.slice(0, itemStart).join(' '));
+    const items = splitStack(tokens.slice(itemStart).join(' '));
+    if (!targets.length || !items.length) throw new Error('Informe ao menos um alvo e um item.');
+    return { targets: [...new Set(targets)], items: [...new Set(items)] };
+  }
+
+  async function executeBatch(entries, operation) {
+    const lines = [];
+    for (const entry of entries) {
+      try {
+        lines.push(`<span class="terminal-success">${escapeHtml(await operation(entry))}</span>`);
+      } catch (error) {
+        lines.push(`<span class="terminal-batch-error">[ERROR] ${escapeHtml(entry.label || entry.target || entry)}: ${escapeHtml(error?.message || 'Falha desconhecida.')}</span>`);
+      }
+    }
+    return { html: lines.join('<br>') };
+  }
+
   function registerCommands(registry, bridge) {
     const register = (definition) => registry.register(definition);
     register({
@@ -210,45 +252,49 @@
       },
     });
     register({
-      name: 'account ban', description: 'Suspende a conta e revoga suas sessões.', usage: '<target>', minimumArguments: 1,
-      execute: async ([target]) => {
+      name: 'account ban', description: 'Suspende uma ou mais contas e revoga suas sessões.', usage: '<target> [/ <target>...]', minimumArguments: 1,
+      execute: async (args) => executeBatch(parseTargetStack(args), async (target) => {
         const payload = await bridge.api(`/api/admin-terminal/accounts/${encodeURIComponent(target)}/ban`, { method: 'POST', body: {} });
-        return `Conta ${payload.account.username} suspensa.`;
-      },
+        return `[SUCCESS] Conta ${payload.account.username} suspensa.`;
+      }),
     });
     for (const action of ['make_admin', 'revoke_admin']) register({
       name: `account ${action}`,
       description: action === 'make_admin' ? 'Promove uma conta para Admin.' : 'Revoga privilégios administrativos.',
-      usage: '<target>', minimumArguments: 1,
-      execute: async ([target]) => {
+      usage: '<target> [/ <target>...]', minimumArguments: 1,
+      execute: async (args) => executeBatch(parseTargetStack(args), async (target) => {
         const promote = action === 'make_admin';
         const payload = await bridge.api(`/api/admin-terminal/accounts/${encodeURIComponent(target)}/role`, {
           method: 'POST', body: { role: promote ? 'admin' : 'player' },
         });
         const identity = payload.account.email || payload.account.username;
-        return { html: `<span class="terminal-success">[SUCCESS] User ${escapeHtml(identity)} has been ${promote ? 'promoted to Admin' : 'demoted to Player'}.</span>` };
-      },
+        return `[SUCCESS] User ${identity} has been ${promote ? 'promoted to Admin' : 'demoted to Player'}.`;
+      }),
     });
     register({
-      name: 'eco give', description: 'Adiciona Core ao saldo de uma conta.', usage: '<target> <amount>', minimumArguments: 2,
-      execute: async ([target, rawAmount]) => {
-        const amount = Number(rawAmount);
+      name: 'eco give', description: 'Adiciona Core ao saldo de uma ou mais contas.', usage: '<target> [/ <target>...] <amount>', minimumArguments: 2,
+      execute: async (args) => {
+        const { targets, amount } = parseEconomyBatch(args);
         if (!Number.isInteger(amount) || amount < 1) throw new Error('A quantidade deve ser um inteiro positivo.');
-        const payload = await bridge.api(`/api/admin-terminal/accounts/${encodeURIComponent(target)}/core`, { method: 'POST', body: { amount } });
-        return `${amount.toLocaleString('pt-BR')} C concedidos a ${payload.account.username}. Saldo: ${Number(payload.account.core_balance).toLocaleString('pt-BR')} C.`;
+        return executeBatch(targets, async (target) => {
+          const payload = await bridge.api(`/api/admin-terminal/accounts/${encodeURIComponent(target)}/core`, { method: 'POST', body: { amount } });
+          return `[SUCCESS] ${amount.toLocaleString('pt-BR')} C concedidos a ${payload.account.username}. Saldo: ${Number(payload.account.core_balance).toLocaleString('pt-BR')} C.`;
+        });
       },
     });
     register({
-      name: 'eco set', description: 'Define o saldo Core exato de uma conta.', usage: '<target> <amount>', minimumArguments: 2,
-      execute: async ([target, rawAmount]) => {
-        const amount = Number(rawAmount);
+      name: 'eco set', description: 'Define o saldo Core exato de uma ou mais contas.', usage: '<target> [/ <target>...] <amount>', minimumArguments: 2,
+      execute: async (args) => {
+        const { targets, amount } = parseEconomyBatch(args);
         if (!Number.isInteger(amount) || amount < 0 || amount > 1000000) {
           throw new Error('O saldo deve ser um inteiro entre 0 e 1000000.');
         }
-        const payload = await bridge.api(`/api/admin-terminal/accounts/${encodeURIComponent(target)}/core`, {
-          method: 'POST', body: { amount, set: true },
+        return executeBatch(targets, async (target) => {
+          const payload = await bridge.api(`/api/admin-terminal/accounts/${encodeURIComponent(target)}/core`, {
+            method: 'POST', body: { amount, set: true },
+          });
+          return `[SUCCESS] Saldo de ${payload.account.username} definido como ${Number(payload.account.core_balance).toLocaleString('pt-BR')} C.`;
         });
-        return `Saldo de ${payload.account.username} definido como ${Number(payload.account.core_balance).toLocaleString('pt-BR')} C.`;
       },
     });
     register({
@@ -292,13 +338,19 @@
     for (const action of ['grant', 'revoke']) register({
       name: `inv ${action}`,
       description: action === 'grant' ? 'Libera um item no inventário.' : 'Remove um item do inventário.',
-      usage: '<target> <item>', minimumArguments: 2,
-      staticParams: (index, _args, context) => index === 1 ? context.bridge.inventoryItems() : [],
-      execute: async ([target, item]) => {
-        const payload = await bridge.api(`/api/admin-terminal/accounts/${encodeURIComponent(target)}/inventory/${encodeURIComponent(item)}`, {
-          method: action === 'grant' ? 'POST' : 'DELETE', body: {},
+      usage: '<target> [/ <target>...] <item> [/ <item>...]', minimumArguments: 2,
+      stackedParams: true,
+      staticParams: (index, args, context) => index >= 1 ? context.bridge.inventoryItems() : [],
+      execute: async (args) => {
+        await bridge.prepareInventoryItems?.();
+        const { targets, items } = parseInventoryBatch(args, bridge);
+        const operations = targets.flatMap((target) => items.map((item) => ({ target, item, label: `${target} / ${item}` })));
+        return executeBatch(operations, async ({ target, item }) => {
+          const payload = await bridge.api(`/api/admin-terminal/accounts/${encodeURIComponent(target)}/inventory/${encodeURIComponent(item)}`, {
+            method: action === 'grant' ? 'POST' : 'DELETE', body: {},
+          });
+          return `[SUCCESS] ${payload.item.name} ${action === 'grant' ? 'liberado para' : 'removido de'} ${payload.account.username}.`;
         });
-        return `${payload.item.name} ${action === 'grant' ? 'liberado para' : 'removido de'} ${payload.account.username}.`;
       },
     });
   }

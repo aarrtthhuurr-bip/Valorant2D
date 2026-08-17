@@ -36,18 +36,33 @@
       const provider = resolved.command.staticParams;
       if (!provider || (!trailingSpace && resolved.args.length === 0)) return [];
       const argumentIndex = trailingSpace ? resolved.args.length : Math.max(0, resolved.args.length - 1);
-      const currentValue = trailingSpace ? '' : String(resolved.args[argumentIndex] || '');
+      const rawCurrentValue = trailingSpace ? '' : String(resolved.args[argumentIndex] || '');
+      const inlineStack = resolved.command.stackedParams && rawCurrentValue.includes('/')
+        ? rawCurrentValue.split('/') : null;
+      const currentValue = inlineStack ? inlineStack.pop().trim() : rawCurrentValue;
       const values = typeof provider === 'function'
         ? provider(argumentIndex, resolved.args, context)
         : Array.isArray(provider?.[argumentIndex]) ? provider[argumentIndex] : provider;
       if (!Array.isArray(values)) return [];
       const prefixArgs = resolved.args.slice(0, argumentIndex);
+      if (inlineStack) {
+        for (const value of inlineStack.map((entry) => entry.trim()).filter(Boolean)) {
+          prefixArgs.push(value, '/');
+        }
+      }
+      const previous = String(prefixArgs.at(-1) || '').toLowerCase();
+      const previousIsStaticValue = values.some((entry) => String(typeof entry === 'string' ? entry : entry.value).toLowerCase() === previous);
+      const stackSeparator = resolved.command.stackedParams && trailingSpace && previousIsStaticValue ? ['/'] : [];
       return values
         .map((entry) => typeof entry === 'string' ? { value: entry, description: '' } : entry)
-        .filter((entry) => String(entry.value).toLowerCase().startsWith(currentValue.toLowerCase()))
+        .filter((entry) => {
+          const candidate = String(entry.value).toLowerCase();
+          const fragment = currentValue.toLowerCase();
+          return candidate.startsWith(fragment) || candidate.includes(fragment);
+        })
         .map((entry) => ({
           type: 'parameter',
-          value: `${resolved.command.name} ${[...prefixArgs, entry.value].join(' ')} `,
+          value: `${resolved.command.name} ${[...prefixArgs, ...stackSeparator, entry.value].join(' ')} `,
           label: entry.label || entry.value,
           usage: `parâmetro ${argumentIndex + 1}`,
           description: entry.description || resolved.command.description || '',

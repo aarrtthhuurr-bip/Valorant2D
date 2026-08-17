@@ -179,6 +179,7 @@ input {
 .admin-terminal-line.is-error { color:#ff5b67; }
 .admin-terminal-line.is-system { color:#83e6ff; }
 .terminal-success { color:#00ff66; font-weight:700; }
+.terminal-batch-error { color:#ff5b67; font-weight:700; }
 .admin-terminal-prompt { display:flex; align-items:center; gap:8px; padding:11px 14px; border-top:1px solid rgba(0,255,102,.28); background:#020604; color:#00ff66; }
 .admin-terminal-prompt input { flex:1; min-width:0; border:0; outline:0; background:transparent; color:#fff; caret-color:#00ff66; font:inherit; }
 .admin-terminal.is-busy .admin-terminal-prompt::after { content:""; width:10px; height:10px; border:2px solid #00ff66; border-right-color:transparent; border-radius:50%; animation:spin .65s linear infinite; }

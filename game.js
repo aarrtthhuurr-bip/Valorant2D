@@ -17509,6 +17509,13 @@ window.Valorant2DAdminBridge = Object.freeze({
     const skinIds = (commerceState.profile?.catalog || []).map((item) => item.id);
     return [...new Set([...skinIds, ...BLACK_MARKET_GADGETS.map((item) => item.id)])];
   },
+  async prepareInventoryItems() {
+    if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
+    if (commerceState.profile?.catalog?.length) return commerceState.profile.catalog;
+    const payload = await requestApi("/api/commerce/profile", { headers: commerceAuthorization() });
+    commerceState.profile = payload;
+    return payload.catalog || [];
+  },
   toggleDebug(kind) {
     if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
     if (kind === "hitboxes") {
