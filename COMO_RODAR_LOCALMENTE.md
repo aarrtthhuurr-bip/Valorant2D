@@ -1,8 +1,8 @@
 # Como executar o Valorant2D localmente
 
-Este guia inicia o Front-End pelo Live Server na porta `5500` e o Back-End na
-porta `3000`. Quando o jogo abre por `localhost:5500` ou `127.0.0.1:5500`, ele
-seleciona automaticamente a API local em `http://localhost:3000`.
+Este guia inicia o Front-End pelo Live Server na porta `3000` e o Back-End na
+porta `3001`. Quando o jogo abre por `localhost:3000` ou `127.0.0.1:3000`, ele
+seleciona automaticamente a API local em `http://localhost:3001`.
 
 ## 1. Requisitos
 
@@ -43,7 +43,7 @@ Crie `server/.env` usando `server/.env.example` como referência. O conteúdo
 mínimo para desenvolvimento é:
 
 ```dotenv
-PORT=3000
+PORT=3001
 NODE_ENV=development
 DEVELOPMENT_DATABASE_URL=postgresql://USUARIO:SENHA@HOST:5432/BANCO?sslmode=require
 PG_SSL_REJECT_UNAUTHORIZED=false
@@ -70,7 +70,7 @@ O terminal deve exibir mensagens semelhantes a:
 
 ```text
 [PostgreSQL] Conectado...
-Servidor online na porta 3000.
+Servidor online na porta 3001.
 ```
 
 Mantenha esse terminal aberto. Para encerrar o servidor, pressione `Ctrl+C`.
@@ -80,13 +80,13 @@ Mantenha esse terminal aberto. Para encerrar o servidor, pressione `Ctrl+C`.
 Abra outro terminal e execute:
 
 ```bash
-curl http://localhost:3000/
+curl http://localhost:3001/
 ```
 
 O resultado deve ser um JSON informando que o servidor está online. Também é
-possível abrir `http://localhost:3000/` no navegador.
+possível abrir `http://localhost:3001/` no navegador.
 
-## 4. Iniciar o Front-End na porta 5500
+## 4. Iniciar o Front-End na porta 3000
 
 No Cursor ou VS Code:
 
@@ -96,11 +96,11 @@ No Cursor ou VS Code:
 4. confirme que o endereço aberto é um destes:
 
 ```text
-http://127.0.0.1:5500/index.html
-http://localhost:5500/index.html
+http://127.0.0.1:3000/index.html
+http://localhost:3000/index.html
 ```
 
-O jogo detecta essa porta e utiliza `http://localhost:3000` automaticamente.
+O jogo detecta essa porta e utiliza `http://localhost:3001` automaticamente.
 
 ### Se o Live Server abrir em outra porta
 
@@ -108,7 +108,7 @@ Abra as configurações JSON do editor e adicione:
 
 ```json
 {
-  "liveServer.settings.port": 5500
+  "liveServer.settings.port": 3000
 }
 ```
 
@@ -120,18 +120,18 @@ Com o Back-End ainda aberto no primeiro terminal, abra outro terminal na raiz e
 execute:
 
 ```bash
-python3 -m http.server 5500
+python3 -m http.server 3000
 ```
 
 Depois acesse:
 
 ```text
-http://localhost:5500/
+http://localhost:3000/
 ```
 
 Encerre esse servidor com `Ctrl+C`.
 
-## 6. Alternativa mais simples: tudo na porta 3000
+## 6. Alternativa mais simples: tudo na porta 3001
 
 O Back-End em modo de desenvolvimento também entrega os arquivos públicos do
 jogo. Portanto, você pode executar apenas:
@@ -143,7 +143,7 @@ npm run dev
 e abrir:
 
 ```text
-http://localhost:3000/
+http://localhost:3001/
 ```
 
 Esse modo dispensa o Live Server e costuma ser o mais fácil para testar login,
@@ -159,7 +159,7 @@ nvm use 20
 npm run dev
 ```
 
-Em seguida, abra o `index.html` com o Live Server na porta `5500`.
+Em seguida, abra o `index.html` com o Live Server na porta `3000`.
 
 Não é necessário executar `npm install` toda vez. Repita a instalação somente
 quando `server/package.json` ou `server/package-lock.json` mudar.
@@ -171,9 +171,9 @@ quando `server/package.json` ou `server/package-lock.json` mudar.
 Confirme, nesta ordem:
 
 1. o terminal do Back-End continua aberto;
-2. aparece `Servidor online na porta 3000` no terminal;
-3. `http://localhost:3000/` responde no navegador;
-4. o Front-End está realmente na porta `5500`;
+2. aparece `Servidor online na porta 3001` no terminal;
+3. `http://localhost:3001/` responde no navegador;
+4. o Front-End está realmente na porta `3000`;
 5. `NODE_ENV=development` está definido em `server/.env`;
 6. `DEVELOPMENT_DATABASE_URL` está correta;
 7. a senha da conexão está em URL encoded.
@@ -196,17 +196,17 @@ PG_SSL_REJECT_UNAUTHORIZED=false
 Em um ambiente definitivo, prefira configurar a CA do provedor em
 `PG_SSL_CA_BASE64` e habilitar a validação.
 
-### Porta 3000 já está sendo usada
+### Porta 3001 já está sendo usada pelo Back-End
 
 Descubra o processo:
 
 ```bash
-lsof -i :3000
+lsof -i :3001
 ```
 
 Encerre o servidor antigo com `Ctrl+C` no terminal em que ele está rodando.
 
-### Porta 5500 já está sendo usada
+### Porta 3000 já está sendo usada pelo Live Server
 
 Pare a instância anterior do Live Server ou do `python3 -m http.server` antes de
 abrir outra.
@@ -215,7 +215,7 @@ abrir outra.
 
 1. feche a aba do jogo;
 2. pare e reinicie o Live Server;
-3. abra novamente `http://localhost:5500/`;
+3. abra novamente `http://localhost:3000/`;
 4. no DevTools, use **Application > Service Workers > Unregister** apenas se o
    navegador ainda estiver servindo uma versão antiga do PWA.
 
@@ -237,4 +237,4 @@ nvm use 20
 npm run dev
 ```
 
-Depois abra o `index.html` com Live Server em `http://127.0.0.1:5500/`.
+Depois abra o `index.html` com Live Server em `http://127.0.0.1:3000/`.
