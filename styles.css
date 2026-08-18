@@ -182,8 +182,11 @@ input {
 .terminal-batch-error { color:#ff5b67; font-weight:700; }
 .admin-terminal-prompt { display:flex; align-items:center; gap:8px; padding:11px 14px; border-top:1px solid rgba(0,255,102,.28); background:#020604; color:#00ff66; }
 .admin-terminal-prompt input { flex:1; min-width:0; border:0; outline:0; background:transparent; color:#fff; caret-color:#00ff66; font:inherit; }
+.admin-terminal-submit { min-width:82px; min-height:34px; padding:7px 13px; border:1px solid rgba(0,255,102,.55); background:rgba(0,255,102,.1); color:#00ff66; font:700 11px/1 "Courier New",monospace; letter-spacing:.08em; cursor:pointer; transition:background .15s ease,color .15s ease,border-color .15s ease; }
+.admin-terminal-submit:hover,.admin-terminal-submit:focus-visible { border-color:#00ff66; background:rgba(0,255,102,.22); color:#fff; outline:none; }
+.admin-terminal-submit:disabled { cursor:wait; opacity:.45; }
 .admin-terminal.is-busy .admin-terminal-prompt::after { content:""; width:10px; height:10px; border:2px solid #00ff66; border-right-color:transparent; border-radius:50%; animation:spin .65s linear infinite; }
-.admin-terminal-suggestions { position:absolute; right:12px; bottom:47px; left:12px; max-height:260px; overflow:auto; border:1px solid rgba(0,255,102,.4); background:rgba(0,10,4,.98); box-shadow:0 -12px 34px rgba(0,0,0,.55); }
+.admin-terminal-suggestions { position:absolute; right:12px; bottom:58px; left:12px; max-height:260px; overflow:auto; border:1px solid rgba(0,255,102,.4); background:rgba(0,10,4,.98); box-shadow:0 -12px 34px rgba(0,0,0,.55); }
 .admin-terminal-suggestions.hidden { display:none; }
 .admin-terminal-suggestions button { width:100%; display:grid; gap:2px; padding:9px 12px; border:0; border-bottom:1px solid rgba(0,255,102,.13); background:transparent; color:#d9ffe5; text-align:left; font:inherit; }
 .admin-terminal-suggestions button.is-active,.admin-terminal-suggestions button:hover { background:rgba(0,255,102,.13); }

@@ -27,11 +27,12 @@
         <header><strong>V2D ADMIN TERMINAL</strong><span>F8 / ~ para fechar</span></header>
         <div class="admin-terminal-log" role="log" aria-live="polite"></div>
         <div class="admin-terminal-suggestions hidden" role="listbox"></div>
-        <label class="admin-terminal-prompt"><span>admin@server:~$</span><input type="text" autocomplete="off" spellcheck="false" aria-label="Comando administrativo"></label>`;
+        <div class="admin-terminal-prompt"><span>admin@server:~$</span><input type="text" autocomplete="off" spellcheck="false" aria-label="Comando administrativo"><button type="button" class="admin-terminal-submit" aria-label="Enviar comando">ENVIAR</button></div>`;
       document.body.appendChild(this.root);
       this.log = this.root.querySelector('.admin-terminal-log');
       this.input = this.root.querySelector('input');
       this.suggestionsBox = this.root.querySelector('.admin-terminal-suggestions');
+      this.submitButton = this.root.querySelector('.admin-terminal-submit');
     }
 
     registerEvents() {
@@ -45,6 +46,7 @@
       }, true);
       this.input.addEventListener('input', () => this.updateSuggestions());
       this.input.addEventListener('keydown', (event) => this.handleInputKey(event));
+      this.submitButton.addEventListener('click', () => void this.submit());
       this.suggestionsBox.addEventListener('pointerdown', (event) => {
         const option = event.target.closest('[data-suggestion-index]');
         if (!option) return;
@@ -72,9 +74,7 @@
     handleInputKey(event) {
       if (event.key === 'Enter') {
         event.preventDefault();
-        if (!this.suggestionsBox.classList.contains('hidden') && this.activeSuggestions.length) {
-          this.applySuggestion(this.suggestionIndex);
-        } else void this.submit();
+        void this.submit();
       } else if (event.key === 'Tab') {
         event.preventDefault();
         if (this.activeSuggestions.length) this.applySuggestion(this.suggestionIndex);
@@ -144,6 +144,7 @@
       this.input.value = '';
       this.hideSuggestions();
       this.input.disabled = true;
+      this.submitButton.disabled = true;
       this.root.classList.add('is-busy');
       try {
         const output = await this.registry.execute(source, { terminal: this, bridge: this.bridge });
@@ -152,6 +153,7 @@
         this.print(error?.message || 'Falha desconhecida.', 'error');
       } finally {
         this.input.disabled = false;
+        this.submitButton.disabled = false;
         this.root.classList.remove('is-busy');
         this.input.focus();
       }
