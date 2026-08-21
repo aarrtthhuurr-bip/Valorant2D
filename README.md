@@ -242,11 +242,12 @@ npm run dev
 Abra:
 
 ```text
-http://localhost:3000/
+http://localhost:3001/
 ```
 
-Nesse endereço, o Front-End usa automaticamente a API local. GitHub Pages,
-arquivos abertos por Live Server e outras portas continuam utilizando o Render.
+Nesse endereço, o Express entrega o Front-End e a API local juntos. Pelo Live
+Server oficial do workspace, o Front-End abre na porta `3000` e usa a mesma API
+local em `http://localhost:3001`.
 O Express expõe apenas os arquivos públicos necessários; a pasta `server` e o
 arquivo `.env` não podem ser acessados pelo navegador.
 
@@ -257,10 +258,10 @@ contexto HTTP ou HTTPS.
 Para testar somente a interface contra a API pública, ainda é possível executar:
 
 ```bash
-python3 -m http.server 5500
+python3 -m http.server 3000
 ```
 
-e acessar `http://localhost:5500/`.
+e acessar `http://localhost:3000/`.
 
 ## Central de atualizações
 
@@ -291,8 +292,8 @@ Antes de publicar uma versão:
 
 No Render, `NODE_ENV=production` utiliza exclusivamente `DATABASE_URL`. No
 computador, `NODE_ENV=development` utiliza exclusivamente
-`DEVELOPMENT_DATABASE_URL`. A porta padrão é `3000`, mas o servidor respeita
-`process.env.PORT`.
+`DEVELOPMENT_DATABASE_URL`. Em desenvolvimento, a porta padrão do Back-End é
+`3001`; em produção, o servidor sempre respeita `process.env.PORT`.
 
 ## Variáveis de ambiente
 

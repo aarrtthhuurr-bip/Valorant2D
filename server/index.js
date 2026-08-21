@@ -12,6 +12,7 @@ const preferencesRoutes = require('./routes/preferencesRoutes');
 const commerceRoutes = require('./routes/commerceRoutes');
 const onboardingRoutes = require('./routes/onboardingRoutes');
 const profileRoutes = require('./routes/profileRoutes');
+const adminTerminalRoutes = require('./routes/adminTerminalRoutes');
 const {
   globalLimiter,
   requestId,
@@ -20,7 +21,7 @@ const {
 } = require('./middleware/security');
 
 const app = express();
-const port = Number(process.env.PORT) || 3000;
+const port = Number(process.env.PORT) || (process.env.NODE_ENV === 'development' ? 3001 : 3000);
 const trustProxy = Number(process.env.TRUST_PROXY_HOPS ?? (process.env.NODE_ENV === 'production' ? 1 : 0));
 
 if (Number.isInteger(trustProxy) && trustProxy > 0) app.set('trust proxy', trustProxy);
@@ -30,6 +31,8 @@ const defaultOrigins = [
   'https://aarrtthhuurr-bip.github.io',
   'http://localhost:5500',
   'http://127.0.0.1:5500',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
 ];
 const configuredOrigins = (process.env.CORS_ORIGINS || '')
   .split(',')
@@ -72,6 +75,8 @@ if (process.env.NODE_ENV === 'development') {
     ['/', 'index.html'],
     ['/index.html', 'index.html'],
     ['/game.js', 'game.js'],
+    ['/CommandRegistry.js', 'CommandRegistry.js'],
+    ['/AdminTerminal.js', 'AdminTerminal.js'],
     ['/styles.css', 'styles.css'],
     ['/version-manager.js', 'version-manager.js'],
     ['/manifest.webmanifest', 'manifest.webmanifest'],
@@ -92,7 +97,7 @@ if (process.env.NODE_ENV === 'development') {
       response.sendFile(path.join(projectRoot, fileName));
     });
   }
-  console.log('[Desenvolvimento] Front-end disponível em http://localhost:3000.');
+  console.log(`[Desenvolvimento] Front-end integrado disponível em http://localhost:${port}.`);
 }
 
 app.use('/', healthRoutes);
@@ -103,6 +108,7 @@ app.use('/api/preferences', preferencesRoutes);
 app.use('/api/commerce', commerceRoutes);
 app.use('/api/onboarding', onboardingRoutes);
 app.use('/api/profile', profileRoutes);
+app.use('/api/admin-terminal', adminTerminalRoutes);
 
 app.use((request, response) => {
   response.status(404).json({ erro: 'Rota não encontrada.' });

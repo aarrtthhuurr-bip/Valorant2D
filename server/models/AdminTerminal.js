@@ -1,0 +1,252 @@
+const database = require('../config/database');
+const { SKIN_CATALOG, SKINS_BY_ID } = require('../data/skinCatalog');
+const { BLACK_MARKET_BY_ID } = require('../data/blackMarketCatalog');
+
+const TARGET_PREDICATE = `(admin_uuid::text = $1 OR id::text = $1
+  OR LOWER(COALESCE(email, '')) = LOWER($1)
+  OR LOWER(username) = LOWER($1))`;
+const STARTER_AGENT_IDS = Object.freeze(['sova', 'jett', 'sage', 'viper']);
+const AGENT_IDS = Object.freeze([...STARTER_AGENT_IDS, 'neon', 'omen', 'killjoy', 'raze', 'gekko', 'yoru']);
+
+class AdminTerminal {
+  static async listCodes(limit = 100) {
+    return database.all(
+      `SELECT promo_codes.id, promo_codes.code_display, promo_codes.core_amount,
+              promo_codes.active, promo_codes.created_at, users.username AS created_by
+       FROM promo_codes LEFT JOIN users ON users.id = promo_codes.created_by
+       ORDER BY promo_codes.created_at DESC LIMIT $1`,
+      [Math.min(100, Math.max(1, Number(limit) || 100))],
+    );
+  }
+
+  static async createCode({ codeHash, codeDisplay, coreAmount, createdBy }) {
+    return database.get(
+      `INSERT INTO promo_codes (code_hash, code_display, core_amount, created_by)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, code_display, core_amount, active, created_at`,
+      [codeHash, codeDisplay, coreAmount, createdBy],
+    );
+  }
+
+  static async deleteCode(identifier) {
+    return database.get(
+      `DELETE FROM promo_codes
+       WHERE id::text = $1 OR UPPER(code_display) = UPPER($1)
+       RETURNING id, code_display, core_amount`,
+      [String(identifier || '').trim()],
+    );
+  }
+
+  static async listAccounts(limit = 15) {
+    return database.all(
+      `SELECT admin_uuid AS uuid, username, email, auth_provider,
+              is_admin, is_banned, core_balance, data_criacao
+       FROM users
+       ORDER BY data_criacao DESC
+       LIMIT $1`,
+      [Math.min(15, Math.max(1, Number(limit) || 15))],
+    );
+  }
+
+  static async findAccount(identifier) {
+    return database.get(
+      `SELECT id, admin_uuid AS uuid, username, email, auth_provider,
+              avatar_url, is_admin, is_banned, core_balance,
+              core_earned_total, total_matches, total_kills, total_deaths,
+              wins_default, wins_blackout, highest_wave_outbreak,
+              unlocked_agents,
+              onboarding_completed, menu_tour_completed, data_criacao
+       FROM users
+       WHERE ${TARGET_PREDICATE}`,
+      [String(identifier || '').trim()],
+    );
+  }
+
+  static async inventory(userId) {
+    const [skins, gadgets] = await Promise.all([
+      database.all(
+        `SELECT skin_id, paid_price, acquired_at
+         FROM user_skins WHERE user_id = $1 ORDER BY acquired_at DESC`,
+        [userId],
+      ),
+      database.all(
+        `SELECT gadget_id, paid_price, acquired_at
+         FROM user_gadgets WHERE user_id = $1 ORDER BY acquired_at DESC`,
+        [userId],
+      ),
+    ]);
+    const account = await database.get('SELECT unlocked_agents FROM users WHERE id = $1', [userId]);
+    return { skins, gadgets, agents: Array.isArray(account?.unlocked_agents) ? account.unlocked_agents : STARTER_AGENT_IDS };
+  }
+
+  static async createAccount({ username, email, passwordHash, isAdmin }) {
+    return database.get(
+      `INSERT INTO users
+       (username, email, senha_hash, auth_provider, pergunta_seguranca,
+        resposta_seguranca, is_admin, onboarding_completed, menu_tour_completed)
+       VALUES ($1, $2, $3, 'local', 'Conta administrativa', $3, $4, FALSE, FALSE)
+       RETURNING admin_uuid AS uuid, username, email, is_admin, is_banned, core_balance, data_criacao`,
+      [username, email, passwordHash, Boolean(isAdmin)],
+    );
+  }
+
+  static async usernameExists(username) {
+    return database.get('SELECT 1 FROM users WHERE LOWER(username) = LOWER($1)', [username]);
+  }
+
+  static async emailExists(email) {
+    return database.get('SELECT 1 FROM users WHERE LOWER(email) = LOWER($1)', [email]);
+  }
+
+  static async banAccount(identifier) {
+    return database.get(
+      `UPDATE users SET is_banned = TRUE
+       WHERE ${TARGET_PREDICATE} AND is_admin = FALSE
+       RETURNING id, admin_uuid AS uuid, username, is_banned`,
+      [String(identifier || '').trim()],
+    );
+  }
+
+  static async revokeSessions(userId) {
+    return database.run('DELETE FROM sessions WHERE user_id = $1', [userId]);
+  }
+
+  static async updateCredential(identifier, column, value) {
+    const allowed = new Set(['senha_hash', 'pergunta_seguranca', 'resposta_seguranca']);
+    if (!allowed.has(column)) throw new Error('Campo de credencial inválido.');
+    return database.get(
+      `UPDATE users SET ${column} = $2 WHERE ${TARGET_PREDICATE}
+       RETURNING id, admin_uuid AS uuid, username, email, is_admin`,
+      [String(identifier || '').trim(), value],
+    );
+  }
+
+  static async setCore(identifier, amount, { add = false } = {}) {
+    const operation = add ? 'core_balance + $2' : '$2';
+    const earned = add ? ', core_earned_total = core_earned_total + $2' : '';
+    return database.get(
+      `UPDATE users
+       SET core_balance = ${operation}${earned}
+       WHERE ${TARGET_PREDICATE}
+       RETURNING admin_uuid AS uuid, username, core_balance`,
+      [String(identifier || '').trim(), amount],
+    );
+  }
+
+  static async setAdminRole(identifier, isAdmin) {
+    return database.get(
+      `UPDATE users SET is_admin = $2
+       WHERE ${TARGET_PREDICATE}
+       RETURNING id, admin_uuid AS uuid, username, email, is_admin`,
+      [String(identifier || '').trim(), Boolean(isAdmin)],
+    );
+  }
+
+  static resolveItem(identifier) {
+    const value = String(identifier || '').trim();
+    if (value.toLowerCase() === '-all') return { kind: 'skin-all', id: '-all', name: 'Todas as skins' };
+    const normalized = value.toLowerCase().replace(/[\s_-]+/g, '');
+    const skin = [...SKINS_BY_ID.values()].find((entry) => (
+      entry.id.toLowerCase() === value.toLowerCase()
+      || entry.id.toLowerCase().replace(/[\s_:-]+/g, '') === normalized
+      || `${entry.weaponName}_${entry.name}`.toLowerCase().replace(/[^a-z0-9]+/g, '') === normalized
+    ));
+    if (skin) return { kind: 'skin', id: skin.id, name: `${skin.weaponName} | ${skin.name}` };
+    const gadget = [...BLACK_MARKET_BY_ID.values()].find((entry) => (
+      entry.id.toLowerCase() === value.toLowerCase()
+      || entry.id.toLowerCase().replace(/[\s_-]+/g, '') === normalized
+      || entry.name.toLowerCase().replace(/[^a-z0-9]+/g, '') === normalized
+    ));
+    return gadget ? { kind: 'gadget', id: gadget.id, name: gadget.name } : null;
+  }
+
+  static async mutateInventory(identifier, item, grant) {
+    const account = await this.findAccount(identifier);
+    if (!account) return null;
+    if (item.kind === 'skin-all') {
+      const client = await database.pool.connect();
+      try {
+        await client.query('BEGIN');
+        if (grant) {
+          await client.query(
+            `INSERT INTO user_skins (user_id, skin_id, paid_price)
+             SELECT $1, catalog.skin_id, NULL
+             FROM unnest($2::text[]) AS catalog(skin_id)
+             ON CONFLICT (user_id, skin_id) DO NOTHING`,
+            [account.id, SKIN_CATALOG.map((skin) => skin.id)],
+          );
+        } else {
+          await client.query('DELETE FROM equipped_skins WHERE user_id = $1', [account.id]);
+          await client.query('DELETE FROM user_skins WHERE user_id = $1', [account.id]);
+        }
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally { client.release(); }
+    } else if (item.kind === 'skin') {
+      if (grant) await database.run(
+        `INSERT INTO user_skins (user_id, skin_id, paid_price) VALUES ($1, $2, NULL)
+         ON CONFLICT (user_id, skin_id) DO NOTHING`, [account.id, item.id],
+      );
+      else {
+        await database.run('DELETE FROM equipped_skins WHERE user_id = $1 AND skin_id = $2', [account.id, item.id]);
+        await database.run('DELETE FROM user_skins WHERE user_id = $1 AND skin_id = $2', [account.id, item.id]);
+      }
+    } else {
+      if (grant) await database.run(
+        `INSERT INTO user_gadgets (user_id, gadget_id, paid_price) VALUES ($1, $2, 0)
+         ON CONFLICT (user_id, gadget_id) DO NOTHING`, [account.id, item.id],
+      );
+      else await database.run('DELETE FROM user_gadgets WHERE user_id = $1 AND gadget_id = $2', [account.id, item.id]);
+    }
+    return { account, item };
+  }
+
+  static resolveAgent(identifier) {
+    const value = String(identifier || '').trim().toLowerCase();
+    if (value === '-all') return { id: '-all', name: 'Todos os agentes' };
+    return AGENT_IDS.includes(value) ? { id: value, name: value[0].toUpperCase() + value.slice(1) } : null;
+  }
+
+  static async mutateAgents(identifier, agent, grant) {
+    const account = await this.findAccount(identifier);
+    if (!account) return null;
+    const current = Array.isArray(account.unlocked_agents) ? account.unlocked_agents : STARTER_AGENT_IDS;
+    const unlocked = new Set([...STARTER_AGENT_IDS, ...current]);
+    if (agent.id === '-all') {
+      if (grant) AGENT_IDS.forEach((id) => unlocked.add(id));
+      else {
+        unlocked.clear();
+        STARTER_AGENT_IDS.forEach((id) => unlocked.add(id));
+      }
+    } else if (grant) unlocked.add(agent.id);
+    else if (!STARTER_AGENT_IDS.includes(agent.id)) unlocked.delete(agent.id);
+    await database.run('UPDATE users SET unlocked_agents = $2::jsonb WHERE id = $1', [account.id, JSON.stringify([...unlocked])]);
+    return { account, agent, unlockedAgentIds: [...unlocked] };
+  }
+
+  static async createEvent({ type, targetUserId = null, message, createdBy }) {
+    return database.get(
+      `INSERT INTO admin_events (event_type, target_user_id, message, created_by, expires_at)
+       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP + INTERVAL '10 minutes')
+       RETURNING id, event_type, message, created_at`,
+      [type, targetUserId, message, createdBy],
+    );
+  }
+
+  static async eventsFor(userId, after = 0) {
+    return database.all(
+      `SELECT id, event_type, message, created_at FROM admin_events
+       WHERE id > $1 AND expires_at > CURRENT_TIMESTAMP
+         AND (target_user_id IS NULL OR target_user_id = $2)
+       ORDER BY id ASC LIMIT 20`, [after, userId],
+    );
+  }
+
+  static async ping() {
+    return database.get('SELECT CURRENT_TIMESTAMP AS database_time');
+  }
+}
+
+module.exports = AdminTerminal;

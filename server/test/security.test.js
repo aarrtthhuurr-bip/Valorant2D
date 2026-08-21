@@ -16,6 +16,7 @@ const MatchSubmission = require('../models/MatchSubmission');
 const Statistic = require('../models/Statistic');
 const Leaderboard = require('../models/Leaderboard');
 const PlayerProfile = require('../models/PlayerProfile');
+const AdminTerminal = require('../models/AdminTerminal');
 const database = require('../config/database');
 
 test('health check aplica headers de segurança e identificador', async () => {
@@ -57,6 +58,71 @@ test('respostas da API não podem ser armazenadas em cache', async () => {
     .expect(401);
   assert.match(response.headers['cache-control'], /no-store/);
   assert.equal(response.headers.pragma, 'no-cache');
+});
+
+test('terminal administrativo rejeita sessões comuns e lista dados somente para admin', async () => {
+  const originalSession = Session.findValid;
+  const originalList = AdminTerminal.listAccounts;
+  try {
+    Session.findValid = async () => ({ id: 7, username: 'jogador', is_admin: false });
+    await request(app)
+      .get('/api/admin-terminal/accounts')
+      .set('Authorization', `Bearer ${'a'.repeat(64)}`)
+      .expect(403);
+
+    Session.findValid = async () => ({ id: 1, username: 'Admin', is_admin: true });
+    AdminTerminal.listAccounts = async () => [{
+      uuid: '0f21a63a-ad84-478b-89ca-fdc834858c4d', username: 'Teste', email: 'teste@example.com',
+      is_admin: false, is_banned: false, core_balance: 100,
+    }];
+    const response = await request(app)
+      .get('/api/admin-terminal/accounts')
+      .set('Authorization', `Bearer ${'b'.repeat(64)}`)
+      .expect(200);
+    assert.equal(response.body.accounts[0].username, 'Teste');
+    assert.equal(response.body.accounts[0].id, undefined);
+  } finally {
+    Session.findValid = originalSession;
+    AdminTerminal.listAccounts = originalList;
+  }
+});
+
+test('terminal promove administradores e impede revogação da conta raiz', async () => {
+  const originalSession = Session.findValid;
+  const originalFind = AdminTerminal.findAccount;
+  const originalSetRole = AdminTerminal.setAdminRole;
+  let updates = 0;
+  try {
+    Session.findValid = async () => ({ id: 1, username: 'Admin', is_admin: true });
+    AdminTerminal.findAccount = async (target) => target === 'root'
+      ? { id: 1, uuid: 'root-uuid', username: 'Admin', email: 'arthurdealmeida124@gmail.com', is_admin: true }
+      : { id: 2, uuid: 'player-uuid', username: 'Player', email: 'player@example.com', is_admin: false };
+    AdminTerminal.setAdminRole = async (_target, isAdmin) => {
+      updates += 1;
+      return { id: 2, uuid: 'player-uuid', username: 'Player', email: 'player@example.com', is_admin: isAdmin };
+    };
+
+    const promoted = await request(app)
+      .post('/api/admin-terminal/accounts/player/role')
+      .set('Authorization', `Bearer ${'c'.repeat(64)}`)
+      .send({ role: 'admin' })
+      .expect(200);
+    assert.equal(promoted.body.account.is_admin, true);
+    assert.equal(updates, 1);
+
+    const protectedResponse = await request(app)
+      .post('/api/admin-terminal/accounts/root/role')
+      .set('Authorization', `Bearer ${'d'.repeat(64)}`)
+      .send({ role: 'player' })
+      .expect(403);
+    assert.equal(protectedResponse.body.code, 'ROOT_ADMIN_PROTECTED');
+    assert.match(protectedResponse.body.error, /cannot be revoked/i);
+    assert.equal(updates, 1);
+  } finally {
+    Session.findValid = originalSession;
+    AdminTerminal.findAccount = originalFind;
+    AdminTerminal.setAdminRole = originalSetRole;
+  }
 });
 
 test('corpos acima de 32 KB são recusados', async () => {

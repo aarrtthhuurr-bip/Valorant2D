@@ -25,6 +25,8 @@ const ERRORS = {
   GADGET_ALREADY_OWNED: [409, 'Este utilitário já foi desbloqueado.'],
   GADGET_NOT_OWNED: [403, 'Desbloqueie o utilitário antes de equipá-lo.'],
   DAILY_ALREADY_CLAIMED: [409, 'A recompensa de hoje já foi resgatada.'],
+  AGENT_NOT_FOUND: [404, 'Agente não encontrado.'],
+  AGENT_ALREADY_OWNED: [409, 'Este agente já foi desbloqueado.'],
 };
 
 function sendResult(response, result, successStatus = 200) {
@@ -50,6 +52,16 @@ async function purchaseSkin(request, response, next) {
     const user = await userFromSession(request, response); if (!user) return;
     const result = await Commerce.purchaseSkin(user.id, String(request.params.skinId || ''));
     securityAudit('skin_purchase', request, { userId: user.id, skinId: request.params.skinId, success: !result.error });
+    sendResult(response, result, 201);
+  } catch (error) { next(error); }
+}
+
+async function purchaseAgent(request, response, next) {
+  try {
+    const user = await userFromSession(request, response); if (!user) return;
+    const agentId = String(request.params.agentId || '');
+    const result = await Commerce.purchaseAgent(user.id, agentId);
+    securityAudit('agent_purchase', request, { userId: user.id, agentId, success: !result.error });
     sendResult(response, result, 201);
   } catch (error) { next(error); }
 }
@@ -124,6 +136,7 @@ module.exports = {
   getDailyLogin,
   grantAdminSkin,
   purchaseGadget,
+  purchaseAgent,
   purchaseSkin,
   redeemCode,
 };

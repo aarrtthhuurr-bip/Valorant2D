@@ -7,6 +7,7 @@ router.get('/', controller.getProfile);
 router.get('/daily-login', controller.getDailyLogin);
 router.post('/daily-login/claim', authenticatedWriteLimiter, controller.claimDailyLogin);
 router.post('/skins/:skinId/purchase', authenticatedWriteLimiter, controller.purchaseSkin);
+router.post('/agents/:agentId/purchase', authenticatedWriteLimiter, controller.purchaseAgent);
 router.put('/inventory/:weaponId', authenticatedWriteLimiter, controller.equipSkin);
 router.post('/gadgets/:gadgetId/purchase', authenticatedWriteLimiter, controller.purchaseGadget);
 router.put('/gadgets/:gadgetId/equip', authenticatedWriteLimiter, controller.equipGadget);

@@ -19,6 +19,9 @@ const ui = {
   abilityFeedback: document.getElementById("abilityFeedback"),
   abilityPrimaryState: document.getElementById("abilityPrimaryState"),
   abilityUltimateState: document.getElementById("abilityUltimateState"),
+  dashCooldownWipe: document.getElementById("dashCooldownWipe"),
+  primaryCooldownWipe: document.getElementById("primaryCooldownWipe"),
+  ultimateCooldownWipe: document.getElementById("ultimateCooldownWipe"),
   ultLabel: document.getElementById("ultLabel"),
   ultPoints: document.getElementById("ultPointsText"),
   ammo: document.getElementById("ammoText"),
@@ -168,10 +171,10 @@ const ui = {
   mobileOrientationHint: document.getElementById("mobileOrientationHint"),
   authOverlay: document.getElementById("authOverlay"),
   authSessionCheck: document.getElementById("authSessionCheck"),
-  serverStatus: document.getElementById("serverStatus"),
-  serverStatusTitle: document.getElementById("serverStatusTitle"),
-  serverStatusText: document.getElementById("serverStatusText"),
-  serverRetryButton: document.getElementById("serverRetryButton"),
+  authBootstrapDetail: document.getElementById("authBootstrapDetail"),
+  authBootstrapActions: document.getElementById("authBootstrapActions"),
+  authBootstrapRetry: document.getElementById("authBootstrapRetry"),
+  authBootstrapLogin: document.getElementById("authBootstrapLogin"),
   authForm: document.getElementById("authForm"),
   authUsername: document.getElementById("authUsername"),
   authPassword: document.getElementById("authPassword"),
@@ -185,9 +188,16 @@ const ui = {
   accountType: document.getElementById("accountType"),
   accountUsername: document.getElementById("accountUsername"),
   logoutButton: document.getElementById("logoutButton"),
-  authRegistrationFields: document.getElementById("authRegistrationFields"),
-  authSecurityQuestion: document.getElementById("authSecurityQuestion"),
-  authSecurityAnswer: document.getElementById("authSecurityAnswer"),
+  signupOverlay: document.getElementById("signupOverlay"),
+  signupForm: document.getElementById("signupForm"),
+  signupUsername: document.getElementById("signupUsername"),
+  signupPassword: document.getElementById("signupPassword"),
+  signupSecurityQuestion: document.getElementById("signupSecurityQuestion"),
+  signupSecurityAnswer: document.getElementById("signupSecurityAnswer"),
+  signupFeedback: document.getElementById("signupFeedback"),
+  signupSubmitButton: document.getElementById("signupSubmitButton"),
+  signupBackButton: document.getElementById("signupBackButton"),
+  signupCloseButton: document.getElementById("signupCloseButton"),
   forgotPasswordButton: document.getElementById("forgotPasswordButton"),
   recoveryForm: document.getElementById("recoveryForm"),
   recoveryUsername: document.getElementById("recoveryUsername"),
@@ -212,6 +222,14 @@ const ui = {
   currentPlayerRanking: document.getElementById("currentPlayerRanking"),
   mainCoreWallet: document.getElementById("mainCoreWallet"),
   mainCoreBalance: document.getElementById("mainCoreBalance"),
+  menuFullscreenButton: document.getElementById("menuFullscreenButton"),
+  audioMiniPlayer: document.getElementById("audioMiniPlayer"),
+  audioMiniToggle: document.getElementById("audioMiniToggle"),
+  audioMiniTrack: document.getElementById("audioMiniTrack"),
+  audioMiniPrevious: document.getElementById("audioMiniPrevious"),
+  audioMiniPlay: document.getElementById("audioMiniPlay"),
+  audioMiniNext: document.getElementById("audioMiniNext"),
+  currencyRewardLayer: document.getElementById("currencyRewardLayer"),
   menuUtilityDock: document.getElementById("menuUtilityDock"),
   menuTutorialButton: document.getElementById("menuTutorialButton"),
   menuUpdatesButton: document.getElementById("menuUpdatesButton"),
@@ -331,10 +349,10 @@ const configuredApiUrl = document
 // API local. Qualquer outra origem, incluindo o GitHub Pages, permanece ligada
 // ao Render para não misturar os ambientes de desenvolvimento e produção.
 const isLocalDevelopmentHost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
-const usesLocalApi = isLocalDevelopmentHost && ["3000", "5500"].includes(window.location.port);
+const usesLocalApi = isLocalDevelopmentHost && ["3000", "3001", "5500"].includes(window.location.port);
 const API_BASE_URL = (
   usesLocalApi
-    ? "http://localhost:3000"
+    ? "http://localhost:3001"
     : configuredApiUrl || "https://valorant2d.onrender.com"
 ).replace(/\/$/, "");
 // O Render pode precisar de alguns segundos extras para sair do estado de suspensão.
@@ -360,6 +378,7 @@ let updatesAutoTimer = 0;
 let updatesReleases = [];
 let activeUpdateReleaseIndex = 0;
 const shownContextTips = new Set();
+const V2D_SPINNER_MARKUP = '<span class="v2d-spinner v2d-spinner--compact" aria-hidden="true"><i></i><i></i><i></i></span>';
 
 const LAST_SEEN_VERSION_KEY = "valorant2d:last-seen-version";
 
@@ -391,7 +410,53 @@ const LAB_ACHIEVEMENTS = Object.freeze({
   outbreakTwenty: { title: "ZONA VERMELHA", description: "Alcançou a onda 20 no Outbreak.", reward: 800 },
   veteran: { title: "VETERANO", description: "Concluiu 10 partidas.", reward: 600 },
   winner: { title: "IMPARÁVEL", description: "Venceu 5 partidas.", reward: 700 },
+  kills10: { title: "ESQUADRÃO ABATIDO", description: "Elimine 10 ameaças em uma partida.", reward: 180, test: (s) => s.kills >= 10 },
+  kills25: { title: "ZONA LIMPA", description: "Elimine 25 ameaças em uma partida.", reward: 320, test: (s) => s.kills >= 25 },
+  kills50: { title: "SEM TESTEMUNHAS", description: "Elimine 50 ameaças em uma partida.", reward: 520, test: (s) => s.kills >= 50 },
+  headshot1: { title: "NA CABEÇA", description: "Consiga seu primeiro headshot.", reward: 120, test: (s) => s.headshots >= 1 },
+  headshot10: { title: "PRECISÃO LETAL", description: "Consiga 10 headshots em uma partida.", reward: 360, test: (s) => s.headshots >= 10 },
+  damage1000: { title: "PRESSÃO CONSTANTE", description: "Cause 1.000 de dano em uma partida.", reward: 180, test: (s) => s.damage >= 1000 },
+  damage5000: { title: "FORÇA BRUTA", description: "Cause 5.000 de dano em uma partida.", reward: 580, test: (s) => s.damage >= 5000 },
+  assist1: { title: "FOGO CRUZADO", description: "Consiga uma assistência.", reward: 120, test: (s) => s.assists >= 1 },
+  assist5: { title: "COBERTURA TOTAL", description: "Consiga 5 assistências em uma partida.", reward: 260, test: (s) => s.assists >= 5 },
+  plant1: { title: "CARGA ARMADA", description: "Plante a Spike.", reward: 150, test: (s) => s.plants >= 1 },
+  plant3: { title: "ESPECIALISTA EM PLANT", description: "Plante a Spike 3 vezes.", reward: 300, test: (s) => s.plants >= 3 },
+  defuse1: { title: "DESARME PRECISO", description: "Desarme a Spike.", reward: 180, test: (s) => s.defuses >= 1 },
+  defuse3: { title: "SANGUE FRIO", description: "Desarme a Spike 3 vezes.", reward: 360, test: (s) => s.defuses >= 3 },
+  flawless: { title: "INTOCÁVEL", description: "Conclua uma partida sem morrer.", reward: 450, endOnly: true, test: (s) => s.deaths === 0 && s.kills >= 3 },
+  survivor5: { title: "PRIMEIRO SURTO", description: "Alcance a onda 5 no Outbreak.", reward: 220, test: (_s, g) => g.outbreak && g.outbreakWave >= 5 },
+  survivor15: { title: "CONTENÇÃO ROMPIDA", description: "Alcance a onda 15 no Outbreak.", reward: 650, test: (_s, g) => g.outbreak && g.outbreakWave >= 15 },
+  survivor30: { title: "ALÉM DO LIMITE", description: "Alcance a onda 30 no Outbreak.", reward: 1100, test: (_s, g) => g.outbreak && g.outbreakWave >= 30 },
+  credits5000: { title: "ARSENAL ABASTECIDO", description: "Acumule 5.000 créditos em uma partida.", reward: 300, test: (_s, g) => g.money >= 5000 },
+  credits10000: { title: "ECONOMIA DE GUERRA", description: "Acumule 10.000 créditos em uma partida.", reward: 520, test: (_s, g) => g.money >= 10000 },
+  ultUse: { title: "PODER LIBERADO", description: "Ative uma Ultimate.", reward: 170, test: (_s, g) => g.achievementUltUses >= 1 },
+  ultTriple: { title: "ENERGIA INSTÁVEL", description: "Ative 3 Ultimates em uma partida.", reward: 420, test: (_s, g) => g.achievementUltUses >= 3 },
+  ability10: { title: "KIT COMPLETO", description: "Use habilidades 10 vezes.", reward: 280, test: (_s, g) => g.achievementAbilityUses >= 10 },
+  dash10: { title: "MOVIMENTO TÁTICO", description: "Use o dash 10 vezes.", reward: 240, test: (_s, g) => g.achievementDashUses >= 10 },
+  reload20: { title: "DISCIPLINA DE TIRO", description: "Recarregue 20 vezes.", reward: 240, test: (_s, g) => g.achievementReloads >= 20 },
+  round3: { title: "OPERAÇÃO EM CURSO", description: "Chegue ao round 3.", reward: 140, test: (_s, g) => !g.outbreak && g.roundNumber >= 3 },
+  round7: { title: "LINHA DE FRENTE", description: "Chegue ao round 7.", reward: 360, test: (_s, g) => !g.outbreak && g.roundNumber >= 7 },
+  winNoDeath: { title: "VITÓRIA PERFEITA", description: "Vença sem morrer.", reward: 720, endOnly: true, test: (s, g, won) => won && s.deaths === 0 },
+  comeback: { title: "VIRADA TÁTICA", description: "Vença depois de perder rounds consecutivos.", reward: 420, endOnly: true, test: (_s, g, won) => won && g.lossStreak >= 2 },
+  accuracy: { title: "RAJADA CONTROLADA", description: "Faça 5 headshots com no máximo 20 abates.", reward: 380, test: (s) => s.headshots >= 5 && s.kills <= 20 },
+  collector: { title: "COLETOR DE ENERGIA", description: "Colete 4 orbes em uma partida.", reward: 260, test: (_s, g) => g.achievementOrbs >= 4 },
+  shopper: { title: "PRONTO PARA O COMBATE", description: "Faça 5 compras em uma partida.", reward: 200, test: (_s, g) => g.achievementPurchases >= 5 },
+  medic: { title: "SEGUNDA CHANCE", description: "Recupere 100 pontos de vida.", reward: 220, test: (_s, g) => g.achievementHealing >= 100 },
+  closeCall: { title: "POR UM FIO", description: "Sobreviva com 10 HP ou menos.", reward: 240, test: (_s, g) => g.player?.alive && g.player.hp > 0 && g.player.hp <= 10 },
+  sandboxer: { title: "LABORATÓRIO ABERTO", description: "Entre no modo Sandbox.", reward: 100, test: (_s, g) => g.sandbox },
+  trainee: { title: "AQUECIMENTO", description: "Elimine 10 alvos no Treino.", reward: 180, test: (s, g) => g.training && s.kills >= 10 },
 });
+
+let lastAchievementEvaluationAt = 0;
+function evaluateLabAchievements({ endOnly = false, victory = false, force = false } = {}) {
+  const now = performance.now();
+  if (!force && !endOnly && now - lastAchievementEvaluationAt < 750) return;
+  lastAchievementEvaluationAt = now;
+  for (const [id, achievement] of Object.entries(LAB_ACHIEVEMENTS)) {
+    if (typeof achievement.test !== "function" || Boolean(achievement.endOnly) !== Boolean(endOnly)) continue;
+    if (achievement.test(game.stats || {}, game, victory)) unlockLabAchievement(id);
+  }
+}
 
 function unlockedLabAchievements() {
   try {
@@ -691,15 +756,23 @@ function clearStoredSession() {
 }
 
 async function requestApi(path, options = {}) {
+  const {
+    timeoutMs = API_REQUEST_TIMEOUT,
+    signal: externalSignal,
+    ...fetchOptions
+  } = options;
   const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT);
+  const abortFromExternalSignal = () => controller.abort(externalSignal?.reason);
+  if (externalSignal?.aborted) abortFromExternalSignal();
+  else externalSignal?.addEventListener("abort", abortFromExternalSignal, { once: true });
+  const timeoutId = window.setTimeout(() => controller.abort(new DOMException("Tempo limite excedido", "TimeoutError")), Math.max(1, timeoutMs));
 
   try {
     const response = await fetch(`${API_BASE_URL}${path}`, {
-      ...options,
+      ...fetchOptions,
       headers: {
         "Content-Type": "application/json",
-        ...(options.headers || {}),
+        ...(fetchOptions.headers || {}),
       },
       signal: controller.signal,
     });
@@ -733,6 +806,7 @@ async function requestApi(path, options = {}) {
     throw error;
   } finally {
     window.clearTimeout(timeoutId);
+    externalSignal?.removeEventListener("abort", abortFromExternalSignal);
   }
 }
 
@@ -824,7 +898,7 @@ function closeWelcomeReview() {
   showMainMenu();
 }
 
-const commerceState = { tab: "skins", profile: null, weaponId: "pistol", inventoryFilter: "all", busy: false };
+const commerceState = { tab: "skins", profile: null, weaponId: "pistol", inventoryFilter: "all", busy: false, pendingSkinIds: new Set() };
 
 const INVENTORY_FILTERS = Object.freeze([
   { id: "all", label: "Todas", weaponIds: null },
@@ -887,6 +961,12 @@ function renderDailyLoginModal(status, { forceOpen = false } = {}) {
   const overlay = document.getElementById("dailyLoginOverlay");
   const days = document.getElementById("dailyLoginDays");
   if (!overlay || !days) return;
+  if (!ui.authOverlay?.classList.contains("hidden") || !ui.signupOverlay?.classList.contains("hidden")) {
+    overlay.classList.add("hidden");
+    overlay.setAttribute("aria-hidden", "true");
+    dailyLoginDeferredUntilOnboarding = true;
+    return;
+  }
   dailyLoginStatus = status;
   if (!status.loading) persistDailyLoginCache(status);
   window.clearTimeout(dailyRouletteTimer);
@@ -919,6 +999,12 @@ function renderDailyLoginModal(status, { forceOpen = false } = {}) {
 
 async function checkDailyLogin({ force = false } = {}) {
   if (currentProfile?.isGuest || !readStoredSession()?.token) return;
+  if (!ui.authOverlay?.classList.contains("hidden")
+    || !ui.signupOverlay?.classList.contains("hidden")
+    || /\/(login|signup)\/?$/i.test(window.location.pathname)) {
+    dailyLoginDeferredUntilOnboarding = true;
+    return;
+  }
   if (currentProfile?.onboardingCompleted === false || welcomeFirstAccess) {
     dailyLoginDeferredUntilOnboarding = true;
     return;
@@ -1006,7 +1092,13 @@ function playDailyClaimCelebration(reward, day) {
   const name = document.getElementById("dailyClaimCelebrationName");
   if (!modal || !celebration || !icon || !name) return;
   window.clearTimeout(dailyClaimAnimationTimer);
-  icon.textContent = dailyRewardGlyph(reward);
+  icon.replaceChildren();
+  if (reward?.type === "skin" && reward?.imagePath) {
+    const image = document.createElement("img");
+    image.src = reward.imagePath;
+    image.alt = reward.name || "Skin recebida";
+    icon.appendChild(image);
+  } else icon.textContent = dailyRewardGlyph(reward);
   name.textContent = reward?.name || (reward?.type === "core" ? `${reward.amount} C` : DAILY_LOGIN_REWARDS[day - 1]?.label || "RECOMPENSA");
   celebration.className = `daily-claim-celebration reward-${reward?.type || "core"}`;
   modal.classList.add("is-celebrating");
@@ -1103,7 +1195,9 @@ async function claimDailyLoginReward() {
       playDailySkinRoulette(payload.reward);
     }
     if (feedback) feedback.textContent = payload.reward?.type === "core" ? `+${payload.reward.amount} C recebidos.` : `${payload.reward?.name || "Prêmio"} adicionado ao inventário.`;
-    updateCoreBalances(payload.coreBalance);
+    if (payload.reward?.type === "core") {
+      applyConfirmedCoreGain(payload.coreBalance, payload.reward.amount);
+    } else updateCoreBalances(payload.coreBalance);
     await refreshCommerceProfile();
     dailyLoginStatus.available = false;
     dailyLoginStatus.streak = payload.day;
@@ -1212,6 +1306,60 @@ function updateCoreBalances(balance) {
   if (ui.missionsCoreBalance) ui.missionsCoreBalance.textContent = visibleBalance.toLocaleString("pt-BR");
 }
 
+function applyConfirmedCoreGain(balance, amount, { previousBalance = confirmedCoreBalance, origin } = {}) {
+  const targetBalance = Math.max(0, Number(balance) || 0);
+  const reward = Math.max(0, Math.round(Number(amount) || 0));
+  const startingBalance = Math.max(0, Number(previousBalance) || 0);
+  updateCoreBalances(targetBalance);
+  if (reward <= 0) return;
+  animateCurrencyReward(reward, origin);
+  animateCoreBalanceTo(targetBalance, startingBalance);
+}
+
+let coreCountAnimationFrame = 0;
+function animateCurrencyReward(amount, { fromX = innerWidth / 2, fromY = innerHeight / 2 } = {}) {
+  const reward = Math.max(0, Math.round(Number(amount) || 0));
+  const layer = ui.currencyRewardLayer;
+  const wallet = ui.mainCoreWallet && !ui.mainCoreWallet.classList.contains("hidden") ? ui.mainCoreWallet : null;
+  if (!layer || reward === 0 || settings.reduceMotion) return;
+  // Em modais como Missões e Códigos a carteira fica propositalmente
+  // oculta. O ganho continua visível e converge para o canto onde o saldo
+  // reaparecerá, sem forçar elementos globais por cima do modal.
+  const walletRect = wallet?.getBoundingClientRect();
+  const walletX = walletRect ? walletRect.left + walletRect.width / 2 : innerWidth - 54;
+  const walletY = walletRect ? walletRect.top + walletRect.height / 2 : 42;
+  const burst = document.createElement("div");
+  burst.className = "currency-reward-burst";
+  burst.style.setProperty("--reward-x", `${fromX}px`);
+  burst.style.setProperty("--reward-y", `${fromY}px`);
+  burst.style.setProperty("--wallet-x", `${walletX}px`);
+  burst.style.setProperty("--wallet-y", `${walletY}px`);
+  burst.innerHTML = `<strong>+${reward} C</strong>${Array.from({ length: 10 }, (_, index) => `<i class="currency-reward-particle" style="--angle:${index * 36}deg;--distance:${52 + index % 3 * 16}px"></i>`).join("")}`;
+  layer.appendChild(burst);
+  if (wallet) {
+    window.setTimeout(() => wallet.classList.add("is-absorbing"), 1050);
+    window.setTimeout(() => wallet.classList.remove("is-absorbing"), 1500);
+  }
+  window.setTimeout(() => burst.remove(), 1700);
+}
+
+function animateCoreBalanceTo(targetBalance, previousBalance = confirmedCoreBalance, { includePending = true } = {}) {
+  const target = Math.max(0, Math.round(Number(targetBalance) || 0));
+  const start = Math.max(0, Math.round(Number(previousBalance) || 0));
+  cancelAnimationFrame(coreCountAnimationFrame);
+  const startedAt = performance.now();
+  const tick = (now) => {
+    const progress = Math.min(1, (now - startedAt) / 900);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const value = Math.round(start + (target - start) * eased) + (includePending ? currentPendingCoreTotal() : 0);
+    for (const element of [ui.mainCoreBalance, ui.storeCoreBalance, ui.missionsCoreBalance]) {
+      if (element) element.textContent = value.toLocaleString("pt-BR");
+    }
+    if (progress < 1) coreCountAnimationFrame = requestAnimationFrame(tick);
+  };
+  coreCountAnimationFrame = requestAnimationFrame(tick);
+}
+
 function applyCommerceProfile(profile) {
   commerceState.profile = profile;
   updateCoreBalances(profile?.coreBalance || 0);
@@ -1291,7 +1439,8 @@ function commerceSkinCard(skin, { offer = false, inventory = false } = {}) {
   const owned = commerceState.profile?.ownedSkinIds?.includes(skin.id);
   const equipped = commerceState.profile?.equippedSkins?.[skin.weaponId] === skin.id;
   const card = document.createElement("article");
-  card.className = `skin-card${inventory ? " inventory-skin-card" : ""}${owned ? " is-owned" : ""}${equipped ? " is-equipped" : ""}`;
+  const pending = commerceState.pendingSkinIds.has(skin.id);
+  card.className = `skin-card${inventory ? " inventory-skin-card" : ""}${owned ? " is-owned" : ""}${equipped ? " is-equipped" : ""}${pending ? " is-loading" : ""}`;
   const price = Number(skin.price) || 0;
   card.innerHTML = inventory
     ? `<span class="skin-card-art"><img src="${skin.imagePath}" alt="${skin.name} para ${skin.weaponName}"></span>
@@ -1320,9 +1469,9 @@ function commerceSkinCard(skin, { offer = false, inventory = false } = {}) {
   }
   const action = document.createElement("button");
   action.type = "button";
-  action.textContent = owned ? "ADQUIRIDA" : "COMPRAR";
-  action.disabled = owned || commerceState.busy;
-  action.addEventListener("click", () => purchaseCommerceSkin(skin.id));
+  action.innerHTML = owned ? "ADQUIRIDA" : pending ? `${V2D_SPINNER_MARKUP} SINCRONIZANDO` : "COMPRAR";
+  action.disabled = owned || pending;
+  action.addEventListener("click", () => purchaseCommerceSkin(skin));
   card.appendChild(action);
   attachSkinPreviewMotion(card);
   return card;
@@ -1452,7 +1601,7 @@ async function openMissionsModal() {
   ui.missionsOverlay?.setAttribute("aria-hidden", "false");
   game.menuState = "missions";
   game.paused = true;
-  if (ui.missionsContent) ui.missionsContent.innerHTML = '<div class="commerce-loading"><span>Atualizando missões...</span></div>';
+  if (ui.missionsContent) ui.missionsContent.innerHTML = `<div class="commerce-loading">${V2D_SPINNER_MARKUP}<span>Atualizando missões...</span></div>`;
   if (ui.missionsFeedback) ui.missionsFeedback.textContent = "";
   try {
     const profile = await refreshCommerceProfile();
@@ -1474,8 +1623,16 @@ async function commerceMutation(path, options, successMessage, { successSound = 
   commerceState.busy = true;
   setCommerceFeedback("Processando no servidor...");
   try {
+    const balanceBeforeMutation = confirmedCoreBalance;
     const payload = await requestApi(path, { ...options, headers: { ...commerceAuthorization(), ...(options.headers || {}) } });
     await refreshCommerceProfile();
+    const responseBalance = Number(payload?.coreBalance);
+    const creditedAmount = Number.isFinite(responseBalance)
+      ? Math.max(0, Math.round(responseBalance - balanceBeforeMutation))
+      : 0;
+    if (creditedAmount > 0) {
+      applyConfirmedCoreGain(responseBalance, creditedAmount, { previousBalance: balanceBeforeMutation });
+    }
     setCommerceFeedback(successMessage(payload), "success");
     // A confirmação sonora só ocorre depois que o servidor persistiu a
     // transação e o inventário atualizado foi carregado com sucesso.
@@ -1486,13 +1643,34 @@ async function commerceMutation(path, options, successMessage, { successSound = 
   } finally { commerceState.busy = false; renderCommerceTab(); }
 }
 
-function purchaseCommerceSkin(skinId) {
-  return commerceMutation(
-    `/api/commerce/skins/${encodeURIComponent(skinId)}/purchase`,
-    { method: "POST", body: "{}" },
-    (data) => `${data.skin.name} adicionada ao inventário por ${data.paid} C.`,
-    { successSound: "skin_purchase" },
-  );
+async function purchaseCommerceSkin(skin) {
+  if (!skin || commerceState.pendingSkinIds.has(skin.id) || commerceState.profile?.ownedSkinIds?.includes(skin.id)) return;
+  const previousBalance = Number(commerceState.profile?.coreBalance) || 0;
+  const price = Math.max(0, Number(skin.price) || 0);
+  if (previousBalance < price) {
+    showUxToast("Core insuficiente para esta skin.", { title: "COMPRA NÃO CONCLUÍDA", tone: "warning" });
+    return;
+  }
+  commerceState.pendingSkinIds.add(skin.id);
+  commerceState.profile.ownedSkinIds = [...(commerceState.profile.ownedSkinIds || []), skin.id];
+  commerceState.profile.coreBalance = previousBalance - price;
+  updateCoreBalances(commerceState.profile.coreBalance);
+  renderCommerceSkins();
+  try {
+    const payload = await requestApi(`/api/commerce/skins/${encodeURIComponent(skin.id)}/purchase`, { method: "POST", headers: commerceAuthorization(), body: "{}" });
+    await refreshCommerceProfile();
+    playSound("skin_purchase");
+    setCommerceFeedback(`${payload.skin.name} adicionada ao inventário por ${payload.paid} C.`, "success");
+  } catch (error) {
+    commerceState.profile.ownedSkinIds = (commerceState.profile.ownedSkinIds || []).filter((id) => id !== skin.id);
+    commerceState.profile.coreBalance = previousBalance;
+    updateCoreBalances(previousBalance);
+    showUxToast("A compra foi desfeita; tente novamente.", { title: "FALHA DE SINCRONIZAÇÃO", tone: "warning" });
+    setCommerceFeedback(error.message, "error");
+  } finally {
+    commerceState.pendingSkinIds.delete(skin.id);
+    renderCommerceSkins();
+  }
 }
 async function equipCommerceSkinInstant(skin) {
   if (commerceState.busy || !commerceState.profile?.ownedSkinIds?.includes(skin.id)) return;
@@ -1563,7 +1741,7 @@ async function openCommerceStore() {
   ui.commerceOverlay?.classList.remove("hidden", "is-leaving");
   game.menuState = "commerce";
   game.paused = true;
-  ui.commerceContent.innerHTML = '<div class="commerce-loading"><span>Sincronizando loja e inventário...</span></div>';
+  ui.commerceContent.innerHTML = `<div class="commerce-loading">${V2D_SPINNER_MARKUP}<span>Sincronizando loja e inventário...</span></div>`;
   setCommerceFeedback("");
   try { await refreshCommerceProfile({ render: true }); } catch (error) { setCommerceFeedback(error.message, "error"); renderCommerceTab(); }
 }
@@ -1591,35 +1769,42 @@ function setAuthBusy(isBusy, action = "login") {
     ui.registerButton.textContent = authMode === "register" ? "Voltar para entrar" : "Cadastrar nova conta";
   }
   ui.googleAuthBlock?.classList.toggle("is-busy", isBusy);
+  if (ui.signupSubmitButton) {
+    ui.signupSubmitButton.disabled = isBusy;
+    ui.signupSubmitButton.classList.toggle("is-loading", isBusy && action === "register");
+  }
 }
 
 function validateAuthForm(action) {
-  const username = ui.authUsername?.value.trim() || "";
-  const password = ui.authPassword?.value || "";
+  const registering = action === "register";
+  const usernameInput = registering ? ui.signupUsername : ui.authUsername;
+  const passwordInput = registering ? ui.signupPassword : ui.authPassword;
+  const username = usernameInput?.value.trim() || "";
+  const password = passwordInput?.value || "";
   const usernameIsValid = /^[A-Za-z0-9_]{3,24}$/.test(username);
   const passwordIsValid = password.length >= 8 && password.length <= 72;
 
-  ui.authUsername?.setAttribute("aria-invalid", String(!usernameIsValid));
-  ui.authPassword?.setAttribute("aria-invalid", String(!passwordIsValid));
+  usernameInput?.setAttribute("aria-invalid", String(!usernameIsValid));
+  passwordInput?.setAttribute("aria-invalid", String(!passwordIsValid));
 
   if (!usernameIsValid) {
     setAuthFeedback("Use de 3 a 24 letras, números ou sublinhados no nome de usuário.", "error");
-    ui.authUsername?.focus();
+    usernameInput?.focus();
     return null;
   }
 
   if (!passwordIsValid) {
     setAuthFeedback("A senha deve ter entre 8 e 72 caracteres.", "error");
-    ui.authPassword?.focus();
+    passwordInput?.focus();
     return null;
   }
 
   const credentials = { username, password };
   if (action === "register") {
-    const securityQuestion = ui.authSecurityQuestion?.value || "";
-    const securityAnswer = ui.authSecurityAnswer?.value.trim() || "";
+    const securityQuestion = ui.signupSecurityQuestion?.value || "";
+    const securityAnswer = ui.signupSecurityAnswer?.value.trim() || "";
     if (!securityQuestion || securityAnswer.length < 2) {
-      setAuthFeedback("Selecione uma pergunta e informe sua resposta de segurança.", "error");
+      if (ui.signupFeedback) ui.signupFeedback.textContent = "Selecione uma pergunta e informe sua resposta de segurança.";
       return null;
     }
     credentials.securityQuestion = securityQuestion;
@@ -1659,6 +1844,8 @@ function enterGameWithProfile(profile) {
   }
 
   if (!ui.authOverlay) return;
+  replaceAuthRoute("");
+  closeSignupRoute({ updateHistory: false });
   ui.authOverlay.classList.add("is-leaving");
   window.setTimeout(() => {
     ui.authOverlay.classList.add("hidden");
@@ -1672,7 +1859,8 @@ async function submitAuthentication(action) {
   if (!credentials) return;
 
   setAuthBusy(true, action);
-  setAuthFeedback(action === "register" ? "Criando sua conta segura..." : "Validando credenciais...");
+  if (action === "register" && ui.signupFeedback) ui.signupFeedback.textContent = "Criando sua conta segura...";
+  else setAuthFeedback("Validando credenciais...");
 
   try {
     const payload = await requestApi(`/api/${action}`, {
@@ -1680,14 +1868,16 @@ async function submitAuthentication(action) {
       body: JSON.stringify(credentials),
     });
     saveSession(payload);
-    setAuthFeedback(payload.message || "Acesso autorizado.", "success");
+    if (action === "register" && ui.signupFeedback) ui.signupFeedback.textContent = payload.message || "Conta criada.";
+    else setAuthFeedback(payload.message || "Acesso autorizado.", "success");
     enterGameWithProfile({ ...payload.user, isGuest: false, token: payload.token });
     showUxToast(action === "register" ? "Conta criada e perfil online ativado." : `Bem-vindo de volta, ${payload.user?.username || "agente"}.`, {
       title: action === "register" ? "CONTA CRIADA" : "SESSÃO CONECTADA",
       tone: "success",
     });
   } catch (error) {
-    setAuthFeedback(error.message, "error");
+    if (action === "register" && ui.signupFeedback) ui.signupFeedback.textContent = error.message;
+    else setAuthFeedback(error.message, "error");
     showUxToast(error.message, { title: error.code === "SERVER_OFFLINE" ? "SERVIDOR INDISPONÍVEL" : "ACESSO NÃO CONCLUÍDO", tone: "warning", duration: 3800 });
   } finally {
     setAuthBusy(false);
@@ -1766,12 +1956,48 @@ function initializeGoogleIdentity(attempt = 0) {
   setGoogleAuthStatus("");
 }
 
-function toggleRegistrationMode() {
-  authMode = authMode === "login" ? "register" : "login";
-  ui.authRegistrationFields?.classList.toggle("hidden", authMode !== "register");
-  if (ui.authPassword) ui.authPassword.autocomplete = authMode === "register" ? "new-password" : "current-password";
-  setAuthFeedback("");
-  setAuthBusy(false);
+const APP_ROUTE_BASE = (() => {
+  const path = window.location.pathname;
+  const knownRoute = path.match(/\/(login|signup)\/?$/i);
+  const looksLikeFile = /\/[^/]+\.[a-z0-9]+$/i.test(path);
+  const base = knownRoute
+    ? path.slice(0, knownRoute.index + 1)
+    : path.endsWith("/") ? path : looksLikeFile ? path.replace(/[^/]*$/, "") : `${path}/`;
+  return base || "/";
+})();
+
+function authRouteUrl(route = "") {
+  return `${APP_ROUTE_BASE}${String(route).replace(/^\//, "")}`;
+}
+
+function replaceAuthRoute(route) {
+  window.history.replaceState({ valorant2dRoute: route || "main" }, "", authRouteUrl(route));
+}
+
+function pushAuthRoute(route) {
+  window.history.pushState({ valorant2dRoute: route || "main" }, "", authRouteUrl(route));
+}
+
+function openSignupRoute({ updateHistory = true } = {}) {
+  authMode = "register";
+  if (ui.signupUsername && !ui.signupUsername.value) ui.signupUsername.value = ui.authUsername?.value.trim() || "";
+  ui.signupOverlay?.classList.remove("hidden");
+  ui.signupOverlay?.setAttribute("aria-hidden", "false");
+  if (updateHistory) pushAuthRoute("signup");
+  window.setTimeout(() => ui.signupUsername?.focus(), 30);
+}
+
+function closeSignupRoute({ updateHistory = true } = {}) {
+  authMode = "login";
+  ui.signupOverlay?.classList.add("hidden");
+  ui.signupOverlay?.setAttribute("aria-hidden", "true");
+  if (updateHistory) pushAuthRoute("login");
+  ui.authUsername?.focus();
+}
+
+function syncAuthRouteFromLocation() {
+  if (/\/signup\/?$/i.test(window.location.pathname)) openSignupRoute({ updateHistory: false });
+  else closeSignupRoute({ updateHistory: false });
 }
 
 function setRecoveryFeedback(message = "", type = "") {
@@ -1862,32 +2088,94 @@ function cryptoRandomGuestSuffix() {
   return String(1000 + Math.floor(Math.random() * 9000));
 }
 
+const AUTH_BOOTSTRAP_TIMEOUT_MS = 5000;
+let authBootstrapController = null;
+let authBootstrapAttempt = 0;
+let authBootstrapSettled = false;
+
+function setAuthBootstrapLoading() {
+  authBootstrapSettled = false;
+  ui.authSessionCheck?.classList.remove("hidden", "is-error");
+  ui.authBootstrapActions?.classList.add("hidden");
+  const title = ui.authSessionCheck?.querySelector("strong");
+  if (title) title.textContent = "Inicializando conexão segura";
+  if (ui.authBootstrapDetail) ui.authBootstrapDetail.textContent = "Validando sua sessão e preparando o acesso.";
+}
+
+function showAuthBootstrapError(message = "Não foi possível validar sua sessão.") {
+  authBootstrapSettled = true;
+  window.V2DAuthBootGuard?.resolve();
+  ui.authOverlay?.classList.add("is-resolved");
+  ui.authSessionCheck?.classList.remove("hidden");
+  ui.authSessionCheck?.classList.add("is-error");
+  ui.authBootstrapActions?.classList.remove("hidden");
+  const title = ui.authSessionCheck?.querySelector("strong");
+  if (title) title.textContent = "Falha ao conectar";
+  if (ui.authBootstrapDetail) ui.authBootstrapDetail.textContent = message;
+}
+
+function continueToLoginFromBootstrap(message = "Entre novamente para continuar.") {
+  authBootstrapAttempt += 1;
+  authBootstrapController?.abort();
+  authBootstrapController = null;
+  authBootstrapSettled = true;
+  window.V2DAuthBootGuard?.resolve();
+  ui.authSessionCheck?.classList.add("hidden");
+  ui.authSessionCheck?.classList.remove("is-error");
+  ui.authBootstrapActions?.classList.add("hidden");
+  ui.authOverlay?.classList.add("is-resolved");
+  replaceAuthRoute("login");
+  syncAuthRouteFromLocation();
+  setAuthFeedback(message, "error");
+  ui.authUsername?.focus();
+}
+
+window.addEventListener("unhandledrejection", (event) => {
+  console.error("Promise de autenticação/conexão não tratada:", event.reason);
+  if (!authBootstrapSettled) {
+    event.preventDefault();
+    authBootstrapController?.abort();
+    showAuthBootstrapError("Ocorreu uma falha inesperada durante a inicialização. Você pode tentar novamente ou acessar o login.");
+  }
+});
+
 async function bootstrapAuthentication() {
+  const attempt = ++authBootstrapAttempt;
+  authBootstrapController?.abort();
+  const controller = new AbortController();
+  authBootstrapController = controller;
+  const timeoutId = window.setTimeout(() => controller.abort(), AUTH_BOOTSTRAP_TIMEOUT_MS);
   const storedSession = readStoredSession();
   if (!storedSession) {
-    ui.authSessionCheck?.classList.add("hidden");
-    ui.authUsername?.focus();
+    window.clearTimeout(timeoutId);
+    continueToLoginFromBootstrap("");
     return;
   }
 
-  ui.authSessionCheck?.classList.remove("hidden");
+  setAuthBootstrapLoading();
   try {
     const payload = await requestApi("/api/verify", {
       method: "POST",
       headers: { Authorization: `Bearer ${storedSession.token}` },
+      signal: controller.signal,
+      timeoutMs: AUTH_BOOTSTRAP_TIMEOUT_MS,
     });
+    if (attempt !== authBootstrapAttempt) return;
     saveSession({ ...storedSession, ...payload });
+    authBootstrapSettled = true;
+    window.V2DAuthBootGuard?.resolve();
     enterGameWithProfile({ ...payload.user, isGuest: false, token: storedSession.token });
   } catch (error) {
-    clearStoredSession();
-    ui.authSessionCheck?.classList.add("hidden");
-    setAuthFeedback(
-      error.code === "SERVER_OFFLINE"
-        ? error.message
-        : "Sua sessão expirou. Entre novamente.",
-      "error",
-    );
-    ui.authUsername?.focus();
+    if (attempt !== authBootstrapAttempt) return;
+    if (error.code === "SERVER_OFFLINE" || controller.signal.aborted) {
+      showAuthBootstrapError("O servidor demorou para responder. Tente novamente ou prossiga para o login.");
+    } else {
+      clearStoredSession();
+      continueToLoginFromBootstrap("Sua sessão expirou. Entre novamente.");
+    }
+  } finally {
+    window.clearTimeout(timeoutId);
+    if (attempt === authBootstrapAttempt) authBootstrapController = null;
   }
 }
 
@@ -1915,6 +2203,8 @@ async function logoutCurrentProfile() {
   ui.authPassword.value = "";
   setAuthFeedback("");
   ui.authOverlay?.classList.remove("hidden", "is-leaving");
+  ui.authOverlay?.classList.add("is-resolved");
+  replaceAuthRoute("login");
   ui.authUsername?.focus();
 }
 
@@ -2349,34 +2639,37 @@ window.Valorant2DLab = Object.freeze({
 
 // Custo de orbs por agente para ativar a ultimate
 const ULT_COSTS = {
-  neon:     5,
-  viper:    6,
-  sage:     5,
-  omen:     6,
-  jett:     4,
-  killjoy:  4,
+  neon:     8,
+  viper:    9,
+  sage:     8,
+  omen:     7,
+  jett:     8,
+  killjoy:  9,
   raze:     8,
-  yoru:     5,
+  sova:     8,
+  gekko:    8,
+  yoru:     8,
 };
-const ULT_MAX_POINTS = 8; // máximo de orbs que o jogador pode acumular
+const ULT_MAX_POINTS = 9; // maior custo atual entre os agentes disponíveis
 const MEDKIT_HEAL = 50;
 const ORB_CHANNEL_TIME = 3;
 const VIPER_CAST_RANGE = 330;
 const VIPER_CLOUD_RADIUS = 92;
 const ECONOMY = {
   start: 800,
+  kill: 200,
   botKillMin: 100,
   botKillMax: 300,
-  defuseWin: 3800,
-  eliminationWin: 3300,
-  standardWin: 3000,
-  lossConsolation: 900,
-  spikeDeathCash: 100,
+  roundWin: 3000,
+  lossBase: 1900,
+  lossStep: 500,
+  lossMax: 2900,
   objective: 300,
-  cap: 12000,
+  cap: 9000,
 };
 
 function botEliminationCredits({ headshot = false } = {}) {
+  if (!game.outbreak) return ECONOMY.kill;
   // A potência de 1,45 cria uma queda gradual de probabilidade: recompensas
   // altas são menos comuns, mas a faixa superior ainda aparece regularmente.
   // Headshots continuam premiando diretamente o teto da recompensa.
@@ -2422,6 +2715,21 @@ const MENU_MUSIC_TRACKS = [
 ];
 const menuMusic = { element: null, index: -1, requested: false };
 
+function menuTrackLabel(path = "") {
+  const filename = decodeURIComponent(String(path).split("/").pop() || "Trilha do menu");
+  return filename.replace(/_[A-Za-z0-9]+\.mp3$/i, "").replace(/\.mp3$/i, "").replaceAll("_", " ").trim().toUpperCase();
+}
+
+function syncAudioMiniPlayer() {
+  const element = menuMusic.element;
+  if (ui.audioMiniTrack) ui.audioMiniTrack.textContent = menuTrackLabel(MENU_MUSIC_TRACKS[menuMusic.index]);
+  if (ui.audioMiniPlay) {
+    const paused = !element || element.paused;
+    ui.audioMiniPlay.textContent = paused ? "▶" : "‖";
+    ui.audioMiniPlay.setAttribute("aria-label", paused ? "Reproduzir música" : "Pausar música");
+  }
+}
+
 function randomMenuMusicIndex(previousIndex = menuMusic.index) {
   const trackCount = MENU_MUSIC_TRACKS.length;
   if (trackCount <= 1) return trackCount ? 0 : -1;
@@ -2443,6 +2751,7 @@ function selectRandomMenuMusic({ restart = true } = {}) {
     menuMusic.element.src = MENU_MUSIC_TRACKS[nextIndex];
     if (restart) menuMusic.element.currentTime = 0;
   }
+  syncAudioMiniPlayer();
   return MENU_MUSIC_TRACKS[nextIndex];
 }
 
@@ -2460,6 +2769,7 @@ function ensureMenuMusic() {
   element.loop = false;
   const advanceTrack = () => {
     selectRandomMenuMusic();
+    syncAudioMiniPlayer();
     void element.play().catch(() => {});
   };
   element.addEventListener("ended", advanceTrack);
@@ -2467,6 +2777,10 @@ function ensureMenuMusic() {
   // interromper permanentemente toda a música do menu.
   element.addEventListener("error", advanceTrack);
   menuMusic.element = element;
+  element.addEventListener("play", syncAudioMiniPlayer);
+  element.addEventListener("pause", syncAudioMiniPlayer);
+  element.addEventListener("loadedmetadata", syncAudioMiniPlayer);
+  syncAudioMiniPlayer();
   return element;
 }
 
@@ -2475,10 +2789,30 @@ function syncMenuMusic(shouldPlay = game.menuState !== "none") {
   element.volume = menuMusicVolume();
   if (!shouldPlay || settings?.muted || optionsSettings?.muted || element.volume <= 0) {
     element.pause();
+    syncAudioMiniPlayer();
     return;
   }
   menuMusic.requested = true;
   void element.play().catch(() => {});
+}
+
+function stepMenuMusic(direction = 1) {
+  const element = ensureMenuMusic();
+  const count = MENU_MUSIC_TRACKS.length;
+  if (!count) return;
+  menuMusic.index = (menuMusic.index + direction + count) % count;
+  element.src = MENU_MUSIC_TRACKS[menuMusic.index];
+  element.currentTime = 0;
+  syncAudioMiniPlayer();
+  void element.play().catch(() => {});
+}
+
+function toggleAudioMiniPlayer(forceExpanded) {
+  const expanded = typeof forceExpanded === "boolean"
+    ? forceExpanded
+    : ui.audioMiniPlayer?.classList.contains("is-collapsed");
+  ui.audioMiniPlayer?.classList.toggle("is-collapsed", !expanded);
+  ui.audioMiniToggle?.setAttribute("aria-expanded", String(expanded));
 }
 const AUDIO_MASTER_HEADROOM = 0.75;
 const AUDIO_MIX = {
@@ -2564,7 +2898,7 @@ const agents = [
     name: "Neon",
     role: "Entrada",
     color: "#00d9ff",
-    ultCost: 5,
+    ultCost: 8,
     ability: "Alta Voltagem",
     cooldown: 0,
     use(game) {
@@ -2589,25 +2923,11 @@ const agents = [
     name: "Viper",
     role: "Controle",
     color: "#0f7f3b",
-    ultCost: 6,
+    ultCost: 9,
     ability: "Nuvem de veneno",
     cooldown: 9,
     use(game) {
-      const p = game.player;
-      const castPoint = limitedCastPoint(p, mouse, VIPER_CAST_RANGE);
-      game.smokes.push({
-        ...nearestWalkablePoint(castPoint, p),
-        r: 22,
-        targetR: VIPER_CLOUD_RADIUS + 18,
-        life: 9,
-        maxLife: 9,
-        poison: true,
-        damagePerSecond: 27,
-        ownerTeam: "player",
-        visualPhase: Math.random() * Math.PI * 2,
-      });
-      game.explosions.push({ x: castPoint.x, y: castPoint.y, r: 8, maxR: VIPER_CLOUD_RADIUS + 24, life: .55, maxLife: .55, color: "#52e36f" });
-      spawnParticles(castPoint.x, castPoint.y, "#8dff78", 34, 165);
+      launchViperGrenade(game.player);
       return true;
     },
   },
@@ -2616,11 +2936,32 @@ const agents = [
     name: "Sage",
     role: "Suporte",
     color: "#00cfa6",
-    ultCost: 5,
+    ultCost: 8,
     ability: "Cura",
     cooldown: 9,
     use(game) {
+      const before = game.player.hp;
       game.player.hp = Math.min(game.player.maxHp, game.player.hp + 35);
+      game.achievementHealing = (game.achievementHealing || 0) + Math.max(0, game.player.hp - before);
+      game.ultimateEffects.push({
+        type: "sage-heal",
+        entityId: game.player.id,
+        x: game.player.x,
+        y: game.player.y,
+        color: "#62e6c0",
+        life: 1.15,
+        maxLife: 1.15,
+        radius: 12,
+      });
+      game.screenTint = { color: "rgba(98,230,192,.14)", life: .45, maxLife: .45 };
+      for (let ring = 0; ring < 3; ring++) {
+        window.setTimeout(() => {
+          if (!game.player?.alive) return;
+          spawnParticles(game.player.x, game.player.y, ring % 2 ? "#eafff8" : "#62e6c0", 14, 115 + ring * 22);
+        }, ring * 120);
+      }
+      setMessage(`Sage restaurou ${Math.round(game.player.hp - before)} HP.`);
+      return true;
     },
   },
   {
@@ -2628,7 +2969,7 @@ const agents = [
     name: "Omen",
     role: "Controle",
     color: "#5a2b9e",
-    ultCost: 6,
+    ultCost: 7,
     ability: "Smoke",
     cooldown: 8,
     use(game) {
@@ -2653,19 +2994,11 @@ const agents = [
     name: "Jett",
     role: "Duelista",
     color: "#9fe8ff",
-    ultCost: 4,
+    ultCost: 8,
     ability: "Brisa de Impulso",
     cooldown: 7,
     use(game) {
-      const p = game.player;
-      const length = Math.hypot(p.moveX || 0, p.moveY || 0);
-      const angle = length > 0.1 ? Math.atan2(p.moveY, p.moveX) : p.angle;
-      const fromX = p.x;
-      const fromY = p.y;
-      safeDisplaceEntity(p, Math.cos(angle) * 170, Math.sin(angle) * 170, 12);
-      spawnDashTrail(p, fromX, fromY, p.x, p.y, "#d7f7ff");
-      game.screenTint = { color: "rgba(120, 220, 255, 0.22)", life: 0.22, maxLife: 0.22 };
-      return Math.hypot(p.x - fromX, p.y - fromY) > 8;
+      return startJettDirectionalDash();
     },
   },
   {
@@ -2673,7 +3006,7 @@ const agents = [
     name: "Killjoy",
     role: "Sentinela",
     color: "#f7d84a",
-    ultCost: 4,
+    ultCost: 9,
     ability: "Torreta",
     cooldown: 12,
     use(game) {
@@ -2716,11 +3049,25 @@ const agents = [
     },
   },
   {
+    id: "sova", name: "Sova", role: "Iniciador", color: "#68b5ff", ultCost: 8,
+    ability: "Dardo de Choque", cooldown: 11,
+    use(game) {
+      return equipSovaShockDart();
+    },
+  },
+  {
+    id: "gekko", name: "Gekko", role: "Iniciador", color: "#b7f34a", ultCost: 8,
+    ability: "Mosh Pit", cooldown: 12,
+    use(game) {
+      return equipGekkoMosh();
+    },
+  },
+  {
     id: "yoru",
     name: "Yoru",
     role: "Duelista",
     color: "#3e6bff",
-    ultCost: 5,
+    ultCost: 8,
     ability: "Passagem Dimensional",
     cooldown: 8,
     use(game) {
@@ -2759,6 +3106,15 @@ const agents = [
     },
   },
 ];
+
+const STARTER_AGENT_IDS = Object.freeze(["sova", "jett", "sage", "viper"]);
+const AGENT_UNLOCK_PRICE = 250;
+const starterAgentOrder = new Map(STARTER_AGENT_IDS.map((id, index) => [id, index]));
+agents.sort((left, right) => {
+  const leftOrder = starterAgentOrder.has(left.id) ? starterAgentOrder.get(left.id) : STARTER_AGENT_IDS.length;
+  const rightOrder = starterAgentOrder.has(right.id) ? starterAgentOrder.get(right.id) : STARTER_AGENT_IDS.length;
+  return leftOrder - rightOrder;
+});
 
 const weapons = [
   { id: "pistol", name: "Classic", price: 0, damage: 28, fireRate: 0.34, speed: 980, spread: 0.04, mag: 12, reload: 1.1 },
@@ -2833,6 +3189,12 @@ const weaponSpriteVisuals = {
 };
 
 const weaponSpriteCache = new Map();
+const sovaBowSprite = new Image();
+sovaBowSprite.src = "./assets/images/sova_bow.png";
+const gekkoMoshSprite = new Image();
+gekkoMoshSprite.src = "./assets/images/Mosh_Pit.webp";
+const gekkoThrashSprite = new Image();
+gekkoThrashSprite.src = "./assets/images/Thrash.webp";
 
 function weaponImagePath(weapon) {
   return `./assets/weapon-icon/${weaponImageFiles[weapon.id] || `${weapon.name}_icon.webp`}`;
@@ -4876,6 +5238,8 @@ const game = {
   },
   outbreakUltInventory: { agentId: null, charges: 0 },
   outbreakGadget: { id: "pulseBomb", charges: 2, cooldownRemaining: 0 },
+  globalDashCooldown: 0,
+  agentDash: null,
   airdrops: [],
   airdropVisuals: [],
   outbreakOverdriveTrailTimer: 0,
@@ -4971,6 +5335,11 @@ const game = {
   ultimateEffects: [],
   turrets: [],
   grenades: [],
+  moshZones: [],
+  sovaBeams: [],
+  equippedAbility: null,
+  gekkoThrash: null,
+  mobileAgentFireHeld: false,
   rockets: [],
   paintDecals: [],
   yoruGatecrash: null,
@@ -5154,7 +5523,9 @@ function makeBot(spawn, index) {
     aiState: "hold",
     revealedTimer: 0,
     agentId: agents[index % agents.length].id,
-    ultimatePoints: Math.min(ULT_MAX_POINTS, Math.max(0, game.roundNumber - 1) + (index % 2)),
+    // Cada bot mantém uma carteira individual. Nenhum nasce com Ultimate
+    // pronta por progressão artificial de rodada: os pontos são conquistados.
+    ultimatePoints: 0,
     ultimate: null,
     orbChannel: null,
   };
@@ -5538,6 +5909,11 @@ game.bullets = [];
    game.ultimateEffects = [];
    game.turrets = [];
    game.grenades = [];
+   game.moshZones = [];
+   game.sovaBeams = [];
+   game.equippedAbility = null;
+   game.gekkoThrash = null;
+   game.mobileAgentFireHeld = false;
    game.rockets = [];
    game.paintDecals = [];
    game.yoruGatecrash = null;
@@ -5635,6 +6011,7 @@ function announceShopResult(text, { success = false, title = "ARSENAL", purchase
   setShopFeedback(text, success ? "success" : "warning");
   showUxToast(text, { title, tone: success ? "success" : "warning", duration: success ? 2200 : 3200 });
   if (purchaseSound) playSound("ingame_purchase");
+  if (success && purchaseSound) game.achievementPurchases = (game.achievementPurchases || 0) + 1;
   else if (!success) playSound("denied");
   if (labEnabled("enhancedShopFeedback") && pendingShopFeedbackCard) {
     const stateClass = success ? "purchase-confirmed" : "purchase-denied";
@@ -5767,6 +6144,13 @@ function startNewMatch() {
   game.roundNumber = 1;
   game.statisticsRecorded = false;
   game.achievementMatchRecorded = false;
+  game.achievementUltUses = 0;
+  game.achievementAbilityUses = 0;
+  game.achievementDashUses = 0;
+  game.achievementReloads = 0;
+  game.achievementOrbs = 0;
+  game.achievementPurchases = 0;
+  game.achievementHealing = 0;
   game.pendingRewardId = "";
   game.matchSubmissionToken = "";
   game.matchSubmissionPromise = null;
@@ -5851,6 +6235,10 @@ function queueOptimisticMatchReward() {
   writePendingRewardsQueue(queue);
   game.pendingRewardId = entry.id;
   updateCoreBalances(confirmedCoreBalance);
+  // A recompensa aparece no exato fim da partida. A sincronização em
+  // segundo plano apenas confirma o saldo, evitando repetir a celebração.
+  animateCurrencyReward(entry.reward);
+  animateCoreBalanceTo(confirmedCoreBalance + currentPendingCoreTotal(), confirmedCoreBalance, { includePending: false });
   return entry;
 }
 
@@ -5906,7 +6294,7 @@ function confirmMatchCoreReward(payload) {
     ? `+${reward} C · Core faturado na partida`
     : `+${reward} ${reward === 1 ? "Core obtido" : "Cores obtidos"}`;
   // O valor exibido vem diretamente da transação concluída no servidor.
-  updateCoreBalances(balance);
+  applyConfirmedCoreGain(balance, reward);
   return true;
 }
 
@@ -5958,6 +6346,7 @@ function showMatchResult() {
   if (ui.matchSyncStatus) ui.matchSyncStatus.textContent = currentProfile?.isGuest ? "Partida local: entre com uma conta para salvar o desempenho." : "Sincronizando desempenho...";
   prepareMatchCoreReward();
   updateCareerAchievements(won);
+  evaluateLabAchievements({ endOnly: true, victory: won, force: true });
   renderMatchConfetti(won);
   ui.newGameButton.style.display = "";
   ui.newGameButton.querySelector("span").textContent = "CONTINUAR";
@@ -5996,6 +6385,7 @@ function showOutbreakGameOver(reason = "Sinal vital perdido") {
     : "Sincronizando pontuação global...";
   prepareMatchCoreReward();
   updateCareerAchievements(false);
+  evaluateLabAchievements({ endOnly: true, victory: false, force: true });
   ui.matchConfetti?.replaceChildren();
   if (ui.newGameButton) {
     ui.newGameButton.style.display = "";
@@ -6067,6 +6457,14 @@ function endRound(winner, reason, outcome = "standard") {
   if (game.phase === "ended" || game.phase === "matchOver") return;
   game.phase = "ended";
   game.phaseTime = 4;
+  if (!game.player?.alive && !game.outbreak && !game.sandbox && !game.training) {
+    game.selectedWeapon = weapons[0];
+    game.ownedWeapons = new Set([weapons[0].id]);
+    if (game.player) {
+      game.player.weapon = game.selectedWeapon;
+      game.player.ammo = currentMagSize();
+    }
+  }
   if (winner === "attackers") {
     game.scoreA += 1;
   } else {
@@ -6080,18 +6478,11 @@ function endRound(winner, reason, outcome = "standard") {
     game.enemyScore += 1;
     game.lossStreak += 1;
   }
-  if (outcome === "spike_death") {
-    moneyGained = ECONOMY.spikeDeathCash - game.money;
-    if (!game.sandbox) game.money = ECONOMY.spikeDeathCash;
-  } else if (winner === game.playerSide) {
-    moneyGained = outcome === "defuse"
-      ? ECONOMY.defuseWin
-      : outcome === "elimination"
-        ? ECONOMY.eliminationWin
-        : ECONOMY.standardWin;
+  if (winner === game.playerSide) {
+    moneyGained = ECONOMY.roundWin;
     if (!game.sandbox) game.money += moneyGained;
   } else {
-    moneyGained = ECONOMY.lossConsolation;
+    moneyGained = Math.min(ECONOMY.lossMax, ECONOMY.lossBase + Math.max(0, game.lossStreak - 1) * ECONOMY.lossStep);
     if (!game.sandbox) game.money += moneyGained;
   }
   if (!game.sandbox && !game.training) game.money = Math.min(game.money, ECONOMY.cap);
@@ -6371,6 +6762,195 @@ function spawnDashTrail(entity, fromX, fromY, toX, toY, color) {
   spawnParticles(toX, toY, color, 10, 180);
 }
 
+const GLOBAL_DASH = Object.freeze({ distance: 62, duration: .16, cooldown: 2.1, color: "#67e8f9" });
+
+function movementDirection(entity = game.player) {
+  const moving = Math.hypot(entity?.moveX || 0, entity?.moveY || 0);
+  const angle = moving > 0.08 ? Math.atan2(entity.moveY, entity.moveX) : entity?.angle || 0;
+  return { x: Math.cos(angle), y: Math.sin(angle), angle };
+}
+
+function performGlobalDash() {
+  const player = game.player;
+  if (!player?.alive || game.globalDashCooldown > 0 || game.phase !== "action") return false;
+  const direction = movementDirection(player);
+  game.agentDash = {
+    x: direction.x, y: direction.y, life: GLOBAL_DASH.duration, maxLife: GLOBAL_DASH.duration,
+    speed: GLOBAL_DASH.distance / GLOBAL_DASH.duration, color: GLOBAL_DASH.color,
+    lastX: player.x, lastY: player.y,
+  };
+  game.globalDashCooldown = game.sandbox ? 0 : GLOBAL_DASH.cooldown;
+  game.achievementDashUses = (game.achievementDashUses || 0) + 1;
+  game.screenTint = { color: "rgba(0, 240, 255, 0.12)", life: 0.14, maxLife: 0.14 };
+  playSound("ability");
+  return true;
+}
+
+function startJettDirectionalDash() {
+  const player = game.player;
+  const direction = movementDirection(player);
+  game.agentDash = { x: direction.x, y: direction.y, life: .16, maxLife: .16, speed: 720, color: "#d7f7ff", lastX: player.x, lastY: player.y };
+  game.screenTint = { color: "rgba(120, 220, 255, 0.2)", life: .24, maxLife: .24 };
+  return true;
+}
+
+function updateAgentDash(dt) {
+  const dash = game.agentDash;
+  const player = game.player;
+  if (!dash || !player?.alive) return;
+  const beforeX = player.x;
+  const beforeY = player.y;
+  const moved = moveEntity(player, dash.x * dash.speed * dt, dash.y * dash.speed * dt, map.walls);
+  if (moved > 0.5) spawnDashTrail(player, beforeX, beforeY, player.x, player.y, dash.color);
+  dash.life = Math.max(0, dash.life - dt);
+  if (dash.life === 0 || moved < 0.5) game.agentDash = null;
+}
+
+function launchViperGrenade(owner) {
+  const target = owner.id === "player" ? mouse : {
+    x: owner.x + Math.cos(owner.angle) * VIPER_CAST_RANGE,
+    y: owner.y + Math.sin(owner.angle) * VIPER_CAST_RANGE,
+  };
+  const castPoint = limitedCastPoint(owner, target, VIPER_CAST_RANGE);
+  const dx = castPoint.x - owner.x;
+  const dy = castPoint.y - owner.y;
+  const travelDistance = Math.max(24, Math.hypot(dx, dy));
+  const angle = Math.atan2(dy, dx);
+  const launchSpeed = 470 * GAME_CONFIG.projectiles.utilitySpeedMultiplier;
+  game.grenades.push({
+    kind: "viper",
+    x: owner.x + Math.cos(angle) * (owner.r + 10), y: owner.y + Math.sin(angle) * (owner.r + 10),
+    vx: Math.cos(angle) * 470 * GAME_CONFIG.projectiles.utilitySpeedMultiplier,
+    vy: Math.sin(angle) * 470 * GAME_CONFIG.projectiles.utilitySpeedMultiplier,
+    life: travelDistance / launchSpeed, maxLife: travelDistance / launchSpeed, r: 8, color: "#57ef79",
+  });
+  spawnParticles(owner.x, owner.y, "#8dff78", 12, 100);
+}
+
+function equipSovaShockDart() {
+  if (game.equippedAbility) return false;
+  game.equippedAbility = { type: "sova-shock", charge: 0, charging: false, bounces: 0 };
+  setMessage("Sova: segure o disparo para carregar; clique direito adiciona até 2 ricochetes.");
+  return "noCooldown";
+}
+
+function fireSovaShockDart() {
+  const equipped = game.equippedAbility;
+  const owner = game.player;
+  if (equipped?.type !== "sova-shock" || !owner?.alive) return false;
+  const ratio = clamp01(equipped.charge / 1.35);
+  const speed = (360 + ratio * 520) * GAME_CONFIG.projectiles.utilitySpeedMultiplier;
+  const angle = owner.angle;
+  game.grenades.push({
+    kind: "sova-shock",
+    x: owner.x + Math.cos(angle) * (owner.r + 10),
+    y: owner.y + Math.sin(angle) * (owner.r + 10),
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed,
+    life: 1.15 + ratio * .85,
+    maxLife: 2,
+    r: 6,
+    color: "#68b5ff",
+    bounces: equipped.bounces,
+  });
+  game.equippedAbility = null;
+  game.abilityCooldown = game.sandbox ? 0 : game.selectedAgent.cooldown;
+  playAgentAbilitySound("sova");
+  setMessage(`Dardo de Choque disparado${equipped.bounces ? ` com ${equipped.bounces} ricochete(s)` : ""}.`);
+  return true;
+}
+
+function equipGekkoMosh() {
+  if (game.equippedAbility) return false;
+  game.equippedAbility = { type: "gekko-mosh" };
+  setMessage("Gekko: clique para lançar Mosh; clique direito faz um arremesso curto.");
+  return "noCooldown";
+}
+
+function throwGekkoMosh(alternate = false) {
+  if (game.equippedAbility?.type !== "gekko-mosh" || !game.player?.alive) return false;
+  const owner = game.player;
+  const target = alternate
+    ? { x: owner.x + Math.cos(owner.angle) * 145, y: owner.y + Math.sin(owner.angle) * 145 }
+    : limitedCastPoint(owner, mouse, 520);
+  const angle = Math.atan2(target.y - owner.y, target.x - owner.x);
+  const distance = Math.max(40, Math.hypot(target.x - owner.x, target.y - owner.y));
+  const speed = (alternate ? 330 : 520) * GAME_CONFIG.projectiles.utilitySpeedMultiplier;
+  game.grenades.push({
+    kind: "gekko-mosh",
+    x: owner.x + Math.cos(angle) * (owner.r + 10), y: owner.y + Math.sin(angle) * (owner.r + 10),
+    vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+    life: distance / speed, maxLife: distance / speed, r: 10, color: "#b7f34a",
+  });
+  game.equippedAbility = null;
+  game.abilityCooldown = game.sandbox ? 0 : game.selectedAgent.cooldown;
+  playAgentAbilitySound("gekko");
+  setMessage(alternate ? "Mosh lançado em arco curto." : "Mosh lançado.");
+  return true;
+}
+
+function detonateSovaShock(grenade) {
+  explodeArea(grenade.x, grenade.y, 112, 82, "#68b5ff", {
+    weaponName: "Dardo de Choque", particles: 38, power: 260, shake: .3,
+  });
+  game.ultimateEffects.push({ type: "sova-shock", x: grenade.x, y: grenade.y, color: "#68b5ff", life: .55, maxLife: .55, radius: 18, maxRadius: 118 });
+}
+
+function deployMoshPit(grenade) {
+  const point = nearestWalkablePoint({ x: grenade.x, y: grenade.y }, game.player);
+  game.moshZones.push({ ...point, r: 142, life: 3.15, maxLife: 3.15, tick: 0, exploded: false });
+  spawnParticles(point.x, point.y, "#b7f34a", 34, 190);
+}
+
+function fireSovaHunterFury() {
+  const p = game.player;
+  const ultimate = p?.ultimate;
+  if (ultimate?.type !== "sova" || ultimate.fired || ultimate.fireCooldown > 0) return false;
+  if ((ultimate.charge || 0) < ultimate.chargeTime) {
+    ultimate.charging = true;
+    setMessage("Fúria do Caçador: carregando disparo...");
+    return true;
+  }
+  const length = Math.hypot(map.width, map.height) * 1.5;
+  const x2 = p.x + Math.cos(p.angle) * length;
+  const y2 = p.y + Math.sin(p.angle) * length;
+  for (const bot of game.bots) {
+    if (!bot.alive || !segmentCircleHit(p.x, p.y, x2, y2, bot, 24)) continue;
+    const damage = applyDamage(bot, 180);
+    game.stats.damage += Math.round(damage);
+    spawnDamageNumber(bot, damage, false);
+    if (bot.hp <= 0) eliminateBot(bot, { playerCredit: true, weaponName: "Fúria do Caçador" });
+  }
+  ultimate.fired = true;
+  ultimate.charging = false;
+  ultimate.fireCooldown = 1;
+  game.sovaBeams.push({ x1: p.x, y1: p.y, x2, y2, life: 1.15, maxLife: 1.15 });
+  game.shake = Math.max(game.shake, .48);
+  spawnParticles(p.x, p.y, "#9ad8ff", 34, 260);
+  ultimate.life = Math.min(ultimate.life, 1.2);
+  return true;
+}
+
+function detonateGekkoThrash() {
+  const thrash = game.gekkoThrash;
+  if (!thrash) return false;
+  safeDisplaceEntity(thrash, Math.cos(thrash.angle) * 92, Math.sin(thrash.angle) * 92, 6);
+  for (const bot of game.bots) {
+    if (!bot.alive || Math.hypot(bot.x - thrash.x, bot.y - thrash.y) > 105 + bot.r) continue;
+    const previousHp = bot.hp;
+    bot.hp = Math.max(1, bot.hp * .5);
+    bot.gekkoSlowTimer = Math.max(bot.gekkoSlowTimer || 0, 7);
+    bot.disarmedTimer = Math.max(bot.disarmedTimer || 0, 3.5);
+    spawnDamageNumber(bot, Math.round(previousHp - bot.hp), false);
+    spawnParticles(bot.x, bot.y, "#d9ff69", 26, 170);
+  }
+  game.explosions.push({ x: thrash.x, y: thrash.y, r: 0, maxR: 115, life: .62, maxLife: .62, color: "#b7f34a" });
+  spawnParticles(thrash.x, thrash.y, "#b7f34a", 52, 280);
+  game.gekkoThrash = null;
+  if (game.player?.ultimate?.type === "gekko") game.player.ultimate.life = 0;
+  return true;
+}
+
 function updateNeonStamina(dt) {
   const isNeon = game.selectedAgent?.id === "neon" && game.player?.alive && game.phase === "action";
   if (!isNeon) {
@@ -6619,6 +7199,8 @@ function tutorialAgentDescription(agent) {
     viper: ["Controle de espaço", "Nuvem venenosa e Ultimate química para negar áreas."],
     sage: ["Suporte da equipe", "Cura direta e Ultimate que restaura vida e escudos aliados."],
     omen: ["Controle tático", "Smoke para cortar visão e criar rotas seguras."],
+    sova: ["Reconhecimento tático", "Revela ameaças próximas e facilita a leitura do campo."],
+    gekko: ["Iniciador versátil", "Envia um companheiro para pressionar inimigos e abrir espaço."],
   };
   return descriptions[agent.id] || [agent.role, agent.ability];
 }
@@ -6968,7 +7550,7 @@ function updateTutorial(dt) {
       game.tutorialTimer = 0;
       game.tutorialFreeUlts = 3;
       setUltimatePoints(game.player, ULT_MAX_POINTS);
-      setTutorialPrompt("Fase 6 - Ultimate", "Aperte Q para testar a Ultimate escolhida", "3 ultimates gratis");
+      setTutorialPrompt("Fase 6 - Ultimate", "Aperte V para testar a Ultimate escolhida", "3 ultimates grátis");
       return;
     }
     if (game.tutorialStage === "ult-test" && (game.tutorialFreeUlts <= 0 || game.tutorialTimer > 10)) completeTutorialPhase(6);
@@ -7447,6 +8029,7 @@ function reload() {
   if (game.reloadTimer > 0) return;
   if (game.player.ammo >= currentMagSize()) return;
   game.reloadTimer = currentReloadTime();
+  game.achievementReloads = (game.achievementReloads || 0) + 1;
   playWeaponSound(game.selectedWeapon, "reload", game.player);
 }
 
@@ -7476,7 +8059,8 @@ function getUltimatePoints(entity) {
 }
 
 function setUltimatePoints(entity, value) {
-  const points = Math.max(0, Math.min(ULT_MAX_POINTS, Number(value) || 0));
+  const cap = Math.max(1, Math.min(ULT_MAX_POINTS, getUltCost(entity)));
+  const points = Math.max(0, Math.min(cap, Number(value) || 0));
   if (entity.id === "player") {
     entity.ultPoints = points;
     game.playerUltPoints = points;
@@ -7664,6 +8248,7 @@ function activateUltimate(entity) {
     return false;
   }
   const agent = agentById(purchasedUlt?.agentId || entity.agentId);
+  if (entity.id === "player") game.achievementUltUses = (game.achievementUltUses || 0) + 1;
   const team = entityTeam(entity);
   if (infiniteSandboxUlt) entity.ultimate = null;
   else if (tutorialFreeUlt) {
@@ -7677,7 +8262,7 @@ function activateUltimate(entity) {
     if (purchasedUlt.charges === 0) purchasedUlt.agentId = null;
   } else {
     // Consome exatamente o custo de orbs do agente
-    setUltimatePoints(entity, getUltimatePoints(entity) - cost);
+    setUltimatePoints(entity, entity.id === "player" ? getUltimatePoints(entity) - cost : 0);
   }
 
   if (agent.id === "neon") {
@@ -7769,6 +8354,15 @@ function activateUltimate(entity) {
       game.screenTint = { color: "rgba(0, 207, 166, 0.24)", life: 0.72, maxLife: 0.72 };
     }
     addUltimateEffect("healing-beam", entity, "#62e6a0", 0.9);
+  } else if (agent.id === "sova") {
+    entity.ultimate = { type: "sova", life: 12, maxLife: 12, fired: false, charging: true, charge: 0, chargeTime: 1.15, fireCooldown: 0 };
+    setMessage("Fúria do Caçador: carregue e dispare um raio devastador.");
+    spawnParticles(entity.x, entity.y, "#9ad8ff", 42, 250);
+  } else if (agent.id === "gekko") {
+    entity.ultimate = { type: "gekko", life: 9, maxLife: 9 };
+    game.gekkoThrash = { x: entity.x, y: entity.y, r: 14, speed: 330, angle: entity.angle, life: 11, maxLife: 11 };
+    setMessage("Thrash conectada: guie com WASD e dispare para avançar e deter inimigos.");
+    spawnParticles(entity.x, entity.y, "#b7f34a", 38, 230);
   } else {
     if (agent.id === "omen" && entity.id === "player" && beginOmenUltimate(entity)) {
       playAgentUltimateSound(agent.id);
@@ -7806,6 +8400,7 @@ function nearestPickup(entity, pickups) {
 function completeOrbCollection(entity, orb) {
    setUltimatePoints(entity, getUltimatePoints(entity) + 1);
    if (entity.id === "player") {
+     game.achievementOrbs = (game.achievementOrbs || 0) + 1;
      game.ultFlashTimer = 0.28;
      playSound("pickup");
    }
@@ -7818,8 +8413,18 @@ function completeOrbCollection(entity, orb) {
    spawnParticles(orb.x, orb.y, "#bd67ff", 28, 180);
  }
 
+function awardUltimatePoint(entity, reason = "ação") {
+  if (!entity || game.outbreak) return;
+  const before = getUltimatePoints(entity);
+  setUltimatePoints(entity, before + 1);
+  if (entity.id === "player" && getUltimatePoints(entity) > before) {
+    game.ultFlashTimer = Math.max(game.ultFlashTimer, .24);
+    setMessage(`+1 ponto de Ultimate: ${reason}.`);
+  }
+}
+
 function updateOrbChannel(entity, orb, dt) {
-   if (!orb || getUltimatePoints(entity) >= ULT_MAX_POINTS) {
+   if (!orb || getUltimatePoints(entity) >= getUltCost(entity)) {
      entity.orbChannel = null;
      return;
    }
@@ -7940,7 +8545,7 @@ function plantOrDefuse(dt) {
       if (complete) {
         spawnParticles(game.spike.x, game.spike.y, "#66e48f", 28, 180);
         game.stats.defuses += 1;
-        if (!game.sandbox) game.money += ECONOMY.objective;
+        awardUltimatePoint(p, "Spike desarmada");
         endRound("defenders", "Spike desarmada. Defensores venceram.", "defuse");
       }
     } else if (game.spike.state === "planted") {
@@ -7989,6 +8594,7 @@ function plantOrDefuse(dt) {
     spawnParticles(p.x, p.y, "#ffd166", 22, 160);
     game.shake = 0.18;
     game.stats.plants += 1;
+    awardUltimatePoint(p, "Spike plantada");
     if (!game.sandbox) game.money += ECONOMY.objective;
     playSound("plant");
     setMessage(`Spike plantada no site ${game.spike.site}. Defenda.`);
@@ -8024,7 +8630,7 @@ function updatePlayer(dt) {
    const dx = joystickActive ? touchControls.move.x : keyboardDx;
    const dy = joystickActive ? touchControls.move.y : keyboardDy;
    const len = joystickActive ? 1 : (Math.hypot(dx, dy) || 1);
-   const movementLocked = (p.detainedTimer || 0) > 0;
+   const movementLocked = (p.detainedTimer || 0) > 0 || Boolean(game.gekkoThrash);
    p.moving = !movementLocked && Math.hypot(dx, dy) > 0.08;
   p.moveX = p.moving ? dx / len : 0;
   p.moveY = p.moving ? dy / len : 0;
@@ -8032,7 +8638,8 @@ function updatePlayer(dt) {
   const ultimateSpeed = 1;
   const shadowSlow = shadowSlowMultiplier(p);
   if (!movementLocked) {
-    moveEntity(p, (dx / len) * p.speed * ultimateSpeed * neonSpeed * shadowSlow * dt, (dy / len) * p.speed * ultimateSpeed * neonSpeed * shadowSlow * dt, map.walls);
+    if (game.agentDash) updateAgentDash(dt);
+    else moveEntity(p, (dx / len) * p.speed * ultimateSpeed * neonSpeed * shadowSlow * dt, (dy / len) * p.speed * ultimateSpeed * neonSpeed * shadowSlow * dt, map.walls);
   }
   const aimActive = game.isMobile
     && touchControls.aim.active
@@ -8067,11 +8674,37 @@ function updatePlayer(dt) {
     game.spike.y = p.y;
   }
 
-  if (mouse.down || keyHeld("fire")) shoot(p, mouse.x, mouse.y, game.selectedWeapon, "player");
+  if (game.equippedAbility?.type === "sova-shock" && game.equippedAbility.charging) {
+    game.equippedAbility.charge = Math.min(1.35, game.equippedAbility.charge + dt);
+  }
+  if (game.isMobile && game.equippedAbility?.type === "sova-shock") {
+    const equipped = game.equippedAbility;
+    if (touchControls.firing) equipped.charging = true;
+    if (equipped.touchWasFiring && !touchControls.firing && equipped.charging) {
+      equipped.charging = false;
+      fireSovaShockDart();
+    } else {
+      equipped.touchWasFiring = Boolean(touchControls.firing);
+    }
+  }
+  const mobileAgentFire = Boolean(game.isMobile && touchControls.firing);
+  let mobileAgentActionConsumed = false;
+  if (mobileAgentFire && !game.mobileAgentFireHeld) {
+    if (game.equippedAbility?.type === "gekko-mosh") mobileAgentActionConsumed = throwGekkoMosh(false);
+    else if (p.ultimate?.type === "sova") mobileAgentActionConsumed = fireSovaHunterFury();
+    else if (p.ultimate?.type === "gekko") mobileAgentActionConsumed = detonateGekkoThrash();
+  }
+  game.mobileAgentFireHeld = mobileAgentFire;
+  const agentWeaponActive = Boolean(game.equippedAbility)
+    || p.ultimate?.type === "sova"
+    || p.ultimate?.type === "gekko";
+  if (!agentWeaponActive && !mobileAgentActionConsumed && (mouse.down || keyHeld("fire"))) shoot(p, mouse.x, mouse.y, game.selectedWeapon, "player");
   if (keyHeld("reload")) reload();
+  if (keyPressed("dash")) performGlobalDash();
   if (keyPressed("ability1") && game.abilityCooldown <= 0 && game.phase === "action") {
     const used = game.selectedAgent.use(game);
     if (used !== false) {
+      game.achievementAbilityUses = (game.achievementAbilityUses || 0) + 1;
       if (used !== "noCooldown") game.abilityCooldown = game.sandbox ? 0 : game.tutorial ? 2 : game.selectedAgent.cooldown;
       if (game.tutorial && game.tutorialStep === 4) {
         game.tutorialAbilityUsed = true;
@@ -8428,7 +9061,8 @@ function moveBotToward(bot, target, dt, speedScale = 1) {
   bot.angle = angle;
   const ultimateSpeed = bot.ultimate?.type === "neon" ? 1.22 : 1;
   const shadowSlow = shadowSlowMultiplier(bot);
-  const movedNow = (bot.detainedTimer || 0) > 0 ? 0 : moveEntity(bot, Math.cos(angle) * bot.speed * speedScale * ultimateSpeed * shadowSlow * dt, Math.sin(angle) * bot.speed * speedScale * ultimateSpeed * shadowSlow * dt, map.walls);
+  const gekkoSlow = (bot.gekkoSlowTimer || 0) > 0 ? .5 : 1;
+  const movedNow = (bot.detainedTimer || 0) > 0 ? 0 : moveEntity(bot, Math.cos(angle) * bot.speed * speedScale * ultimateSpeed * shadowSlow * gekkoSlow * dt, Math.sin(angle) * bot.speed * speedScale * ultimateSpeed * shadowSlow * gekkoSlow * dt, map.walls);
   bot.moving = movedNow > 0.5;
   if (movedNow < 0.5) {
     bot.stuck += dt;
@@ -8691,6 +9325,7 @@ function botPlantSpike(bot, dt) {
     game.spike.defuseProgress = 0;
     game.spike.defuseCheckpoint = 0;
     game.spike.defuserId = null;
+    awardUltimatePoint(bot, "Spike plantada");
     spawnParticles(bot.x, bot.y, "#ffd166", 24, 150);
     setMessage(`Bots plantaram no site ${site.id}. Desarme a spike.`);
   } else {
@@ -8725,6 +9360,7 @@ function botDefuseSpike(bot, dt) {
   setMessage("Um bot esta desarmando a spike. Derrube ele.");
   if (complete) {
     spawnParticles(game.spike.x, game.spike.y, "#66e48f", 28, 180);
+    awardUltimatePoint(bot, "Spike desarmada");
     endRound("defenders", "Bot desarmou a spike. Defensores venceram.", "defuse");
   }
   return true;
@@ -8920,7 +9556,7 @@ function seekCriticalMedkit(entity, dt, danger) {
 function seekUltimateOrb(entity, dt) {
    const now = performance.now();
    if ((entity.orbRetryAfter || 0) > now) return false;
-   if (game.spike.state === "planted" || getUltimatePoints(entity) >= ULT_MAX_POINTS || !game.ultOrbs.length) {
+   if (game.spike.state === "planted" || getUltimatePoints(entity) >= getUltCost(entity) || !game.ultOrbs.length) {
      releaseEntityOrbReservation(entity);
      return false;
    }
@@ -9027,6 +9663,7 @@ function updateAllies(dt) {
         if (complete) {
           spawnParticles(game.spike.x, game.spike.y, "#66e48f", 28, 180);
           game.stats.defuses += 1;
+          awardUltimatePoint(ally, "Spike desarmada");
           endRound("defenders", "Aliado desarmou a spike. Defensores venceram.", "defuse");
         }
       }
@@ -9272,6 +9909,7 @@ function eliminateBot(bot, { playerCredit = false, weaponName = "Poison Cloud", 
    if (playerCredit) {
      playSound("bot_kill");
      game.stats.kills += 1;
+     awardUltimatePoint(game.player, "abate");
      if (game.stats.kills === 1) unlockLabAchievement("firstBlood");
      if (game.stats.headshots >= 5) unlockLabAchievement("headHunter");
      if (game.stats.damage >= 2500) unlockLabAchievement("damageDealer");
@@ -9449,6 +10087,7 @@ function updateBullets(dt) {
           }
           if (target.id === "player") {
             game.stats.deaths += 1;
+            awardUltimatePoint(game.player, "morte na rodada");
             addKillFeedEntry(false, "", false);
             if (game.tutorial) {
               game.player.alive = true;
@@ -9515,6 +10154,7 @@ function updateSpike(dt) {
         game.player.hp = 0;
         game.player.alive = false;
         game.stats.deaths += 1;
+        awardUltimatePoint(game.player, "morte na rodada");
       }
       if (game.sandbox) {
         if (playerCaught) respawnSandboxPlayer();
@@ -9612,21 +10252,77 @@ function updateAgentObjects(dt) {
     grenade.y += grenade.vy * dt;
     // Conserva o mesmo arrasto percebido a 60 Hz sem depender da quantidade
     // de frames renderizados pelo dispositivo.
-    const grenadeDrag = Math.pow(0.98, dt * 60);
+    const grenadeDrag = grenade.kind === "sova-shock" ? 1 : Math.pow(0.98, dt * 60);
     grenade.vx *= grenadeDrag;
     grenade.vy *= grenadeDrag;
     grenade.life -= dt;
-    if (lineIntersectsAnyWall(oldX, oldY, grenade.x, grenade.y)) grenade.life = 0;
+    const hitWall = lineIntersectsAnyWall(oldX, oldY, grenade.x, grenade.y);
+    const hitEnemy = grenade.kind === "sova-shock"
+      && game.bots.some((bot) => bot.alive && segmentCircleHit(oldX, oldY, grenade.x, grenade.y, bot, 5));
+    if (hitWall && grenade.kind === "sova-shock" && grenade.bounces > 0) {
+      const blockedX = lineIntersectsAnyWall(oldX, oldY, grenade.x, oldY);
+      const blockedY = lineIntersectsAnyWall(oldX, oldY, oldX, grenade.y);
+      if (blockedX || !blockedY) grenade.vx *= -1;
+      if (blockedY || !blockedX) grenade.vy *= -1;
+      grenade.x = oldX;
+      grenade.y = oldY;
+      grenade.bounces -= 1;
+      spawnParticles(oldX, oldY, "#68b5ff", 10, 100);
+    } else if (hitWall || hitEnemy) grenade.life = 0;
     if (grenade.life <= 0) {
+      if (grenade.kind === "viper") {
+        const point = nearestWalkablePoint({ x: grenade.x, y: grenade.y }, game.player);
+        game.smokes.push({ ...point, r: 16, targetR: VIPER_CLOUD_RADIUS + 18, life: 10, maxLife: 10, poison: true, damagePerSecond: 29, ownerTeam: "player", visualPhase: Math.random() * Math.PI * 2 });
+        game.explosions.push({ x: point.x, y: point.y, r: 8, maxR: VIPER_CLOUD_RADIUS + 24, life: .62, maxLife: .62, color: "#52e36f" });
+        spawnParticles(point.x, point.y, "#8dff78", 42, 190);
+        continue;
+      }
+      if (grenade.kind === "sova-shock") {
+        detonateSovaShock(grenade);
+        continue;
+      }
+      if (grenade.kind === "gekko-mosh") {
+        deployMoshPit(grenade);
+        continue;
+      }
       explodeArea(grenade.x, grenade.y, grenade.mini ? 62 : 104, grenade.mini ? 42 : 78, grenade.mini ? "#ffcf45" : "#ff6b2f", { weaponName: grenade.mini ? "Mini Granada" : "Cartuchos de Tinta", particles: grenade.mini ? 18 : 34, power: grenade.mini ? 170 : 250, shake: grenade.mini ? 0.16 : 0.32 });
       if (!grenade.mini) {
-        for (let i = 0; i < 4; i++) {
-          launchRazeGrenade({ x: grenade.x, y: grenade.y, r: 0 }, i * Math.PI / 2 + Math.PI / 4, true);
+        for (let i = 0; i < 6; i++) {
+          launchRazeGrenade({ x: grenade.x, y: grenade.y, r: 0 }, i * Math.PI / 3 + Math.PI / 6, true);
         }
       }
     }
   }
   game.grenades = game.grenades.filter((grenade) => grenade.life > 0);
+
+  for (const zone of game.moshZones) {
+    zone.life -= dt;
+    if (!zone.exploded && zone.life <= .38) {
+      zone.exploded = true;
+      explodeArea(zone.x, zone.y, zone.r, 125, "#b7f34a", { weaponName: "Mosh Pit", particles: 72, power: 320, shake: .52 });
+    }
+  }
+  game.moshZones = game.moshZones.filter((zone) => zone.life > 0);
+
+  if (game.gekkoThrash) {
+    const thrash = game.gekkoThrash;
+    thrash.life -= dt;
+    const inputX = (keys.has("d") ? 1 : 0) - (keys.has("a") ? 1 : 0);
+    const inputY = (keys.has("s") ? 1 : 0) - (keys.has("w") ? 1 : 0);
+    const length = Math.hypot(inputX, inputY);
+    const direction = length > .05
+      ? { x: inputX / length, y: inputY / length }
+      : (() => {
+          const aimAngle = Math.atan2(mouse.y - thrash.y, mouse.x - thrash.x);
+          return { x: Math.cos(aimAngle), y: Math.sin(aimAngle) };
+        })();
+    moveEntity(thrash, direction.x * thrash.speed * dt, direction.y * thrash.speed * dt, map.walls);
+    thrash.angle = Math.atan2(direction.y, direction.x);
+    if (thrash.life <= 0) detonateGekkoThrash();
+  }
+
+  for (const beam of game.sovaBeams) beam.life -= dt;
+  game.sovaBeams = game.sovaBeams.filter((beam) => beam.life > 0);
 
   for (const rocket of game.rockets) {
     const oldX = rocket.x;
@@ -9679,6 +10375,7 @@ function updateTimers(dt) {
     if (game.roundBannerTimer === 0) ui.roundBanner.classList.add("hidden");
   }
   game.abilityCooldown = game.sandbox ? 0 : Math.max(0, game.abilityCooldown - dt);
+  game.globalDashCooldown = game.sandbox ? 0 : Math.max(0, (game.globalDashCooldown || 0) - dt);
   game.shake = Math.max(0, game.shake - dt);
   game.damageFlash = Math.max(0, game.damageFlash - dt * 1.9);
   const wasReloading = game.reloadTimer > 0;
@@ -9741,6 +10438,7 @@ function updateTimers(dt) {
           target.alive = false;
           if (target.id === "player") {
             game.stats.deaths += 1;
+            awardUltimatePoint(game.player, "morte na rodada");
             if (respawnSandboxPlayer()) continue;
             if (game.outbreak) showOutbreakGameOver("CONTAMINAÇÃO CRÍTICA");
             else endRound(opposingSide(game.playerSide), "A névoa química eliminou você.");
@@ -9757,12 +10455,17 @@ function updateTimers(dt) {
     if (!entity) continue;
     entity.detainedTimer = Math.max(0, (entity.detainedTimer || 0) - dt);
     entity.disarmedTimer = Math.max(0, (entity.disarmedTimer || 0) - dt);
+    entity.gekkoSlowTimer = Math.max(0, (entity.gekkoSlowTimer || 0) - dt);
     if (!entity?.ultimate) continue;
     if (!entity.alive) {
       entity.ultimate = null;
       continue;
     }
     entity.ultimate.life -= dt;
+    if (entity.ultimate.type === "sova") {
+      entity.ultimate.fireCooldown = Math.max(0, (entity.ultimate.fireCooldown || 0) - dt);
+      if (!entity.ultimate.fired) entity.ultimate.charge = Math.min(entity.ultimate.chargeTime, (entity.ultimate.charge || 0) + dt);
+    }
     if (entity.ultimate.life <= 0) entity.ultimate = null;
   }
   for (const effect of game.ultimateEffects) {
@@ -9834,6 +10537,8 @@ function updateTimers(dt) {
     explosion.r = explosion.maxR * progress;
   }
   game.explosions = game.explosions.filter((explosion) => explosion.life > 0);
+
+  evaluateLabAchievements();
 
   if (game.phase === "buy" && game.phaseTime <= 0 && !game.outbreak) startActionRound();
   if (game.phase === "action" && game.phaseTime <= 0 && game.spike.state !== "planted") {
@@ -9989,7 +10694,7 @@ function update(dt) {
 }
 
 function updateReplayRecorder(dt) {
-  if (!labEnabled("syntheticKillcam") || !game.player?.alive || game.phase !== "action") return;
+  if (!settings.killcamEnabled || !game.player?.alive || game.phase !== "action") return;
   game.replaySampleTimer = (game.replaySampleTimer || 0) - dt;
   if (game.replaySampleTimer > 0) return;
   game.replaySampleTimer = 0.08;
@@ -9999,16 +10704,17 @@ function updateReplayRecorder(dt) {
     hostileBullets: game.bullets
       .filter((bullet) => bullet.team === "bot")
       .map((bullet) => ({ x: bullet.x, y: bullet.y, startX: bullet.startX, startY: bullet.startY })),
+    hostiles: game.bots.filter((bot) => bot.alive).map((bot) => ({ x: bot.x, y: bot.y, r: bot.r || 18 })),
   });
   const cutoff = performance.now() - 4200;
   while (game.replayBuffer[0]?.at < cutoff) game.replayBuffer.shift();
 }
 
 function startSyntheticKillcam(bullet, target) {
-  if (!labEnabled("syntheticKillcam") || !bullet || !target) return;
+  if (!settings.killcamEnabled || !bullet || !target) return;
   game.syntheticKillcam = {
-    life: 2.4,
-    maxLife: 2.4,
+    life: 3,
+    maxLife: 3,
     fromX: Number.isFinite(bullet.startX) ? bullet.startX : bullet.x - bullet.vx * 0.25,
     fromY: Number.isFinite(bullet.startY) ? bullet.startY : bullet.y - bullet.vy * 0.25,
     toX: target.x,
@@ -10022,9 +10728,27 @@ function drawSyntheticKillcam() {
   const replay = game.syntheticKillcam;
   if (!replay || replay.life <= 0) return;
   const progress = 1 - replay.life / replay.maxLife;
+  const frameIndex = Math.min(replay.samples.length - 1, Math.max(0, Math.floor(progress * replay.samples.length)));
+  const frame = replay.samples[frameIndex];
   const endX = replay.fromX + (replay.toX - replay.fromX) * Math.min(1, progress * 2.2);
   const endY = replay.fromY + (replay.toY - replay.fromY) * Math.min(1, progress * 2.2);
   ctx.save();
+  ctx.fillStyle = "rgba(2,7,12,.5)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (frame) {
+    ctx.globalAlpha = .52;
+    ctx.fillStyle = "#ff6370";
+    for (const hostile of frame.hostiles || []) {
+      ctx.beginPath(); ctx.arc(hostile.x, hostile.y, hostile.r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = "#f7fbfd";
+    for (const bullet of frame.hostileBullets || []) {
+      ctx.beginPath(); ctx.arc(bullet.x, bullet.y, 3, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.strokeStyle = "#54d6e7";
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(frame.player.x, frame.player.y, 20, 0, Math.PI * 2); ctx.stroke();
+  }
   ctx.globalAlpha = Math.min(1, replay.life * 1.5);
   ctx.strokeStyle = "#ff4655";
   ctx.lineWidth = 3;
@@ -10038,6 +10762,11 @@ function drawSyntheticKillcam() {
   ctx.beginPath();
   ctx.arc(replay.toX, replay.toY, 22 + Math.sin(performance.now() / 90) * 4, 0, Math.PI * 2);
   ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = "#eef7fa";
+  ctx.font = "900 15px Rajdhani, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(`REPLAY // ${Math.max(0, replay.life).toFixed(1)}S`, canvas.width / 2, 36);
   ctx.restore();
 }
 
@@ -10308,6 +11037,42 @@ function drawHeldWeapon(entity, weapon, kind) {
   }
 }
 
+function drawAgentAbilityWeapon(entity, kind) {
+  if (kind !== "player") return false;
+  const sovaActive = game.equippedAbility?.type === "sova-shock" || entity.ultimate?.type === "sova";
+  const gekkoActive = game.equippedAbility?.type === "gekko-mosh" || entity.ultimate?.type === "gekko";
+  if (sovaActive) {
+    if (sovaBowSprite.complete && sovaBowSprite.naturalWidth) {
+      const width = 74;
+      const height = width * (sovaBowSprite.naturalHeight / sovaBowSprite.naturalWidth);
+      // O punho do arco fica alinhado à mão e a flecha segue o eixo frontal
+      // da entidade, que já foi rotacionado para a direção da mira.
+      ctx.drawImage(sovaBowSprite, entity.r - width * .52, -height / 2, width, height);
+    } else {
+      ctx.strokeStyle = "#9ad8ff"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(entity.r + 9, 0, 20, -Math.PI / 2, Math.PI / 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(entity.r + 9, -20); ctx.lineTo(entity.r + 9, 20); ctx.stroke();
+    }
+    return true;
+  }
+  if (gekkoActive) {
+    if (gekkoMoshSprite.complete && gekkoMoshSprite.naturalWidth) {
+      ctx.save();
+      ctx.translate(entity.r + 14, 0);
+      ctx.rotate(Math.sin(performance.now() / 140) * .08);
+      ctx.shadowColor = "#b7f34a";
+      ctx.shadowBlur = 12;
+      ctx.drawImage(gekkoMoshSprite, -19, -19, 38, 38);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = "#b7f34a"; ctx.strokeStyle = "#efffb8"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(entity.r + 12, 0, 16, 11, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+    return true;
+  }
+  return false;
+}
+
 function drawEntity(entity, color, label, kind = "bot") {
   if (!entity.alive) return;
   const rendered = interpolatedPosition(entity);
@@ -10355,7 +11120,7 @@ function drawEntity(entity, color, label, kind = "bot") {
     ctx.arc(0, 0, entity.r + 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * armorRatio);
     ctx.stroke();
   }
-  drawHeldWeapon(entity, weapon, kind);
+  if (!drawAgentAbilityWeapon(entity, kind)) drawHeldWeapon(entity, weapon, kind);
   ctx.fillStyle = "#0b1115";
   ctx.fillRect(-8, -entity.r - 2, 16, 5);
   ctx.fillStyle = "rgba(255,255,255,0.28)";
@@ -10410,6 +11175,22 @@ function drawEntity(entity, color, label, kind = "bot") {
     ctx.fillRect(entity.x - 24, barY, Math.max(0, Math.min(1, reloadRatio)) * 48, 6);
     ctx.strokeStyle = "rgba(255,255,255,0.45)";
     ctx.strokeRect(entity.x - 24, barY, 48, 6);
+  }
+
+  if (kind === "player" && entity.ultimate?.type === "sova" && !entity.ultimate.fired) {
+    const chargeRatio = clamp01((entity.ultimate.charge || 0) / Math.max(.01, entity.ultimate.chargeTime || 1));
+    const barY = entity.y + entity.r + (game.outbreak ? 40 : 15);
+    ctx.fillStyle = "rgba(0, 8, 16, .82)"; ctx.fillRect(entity.x - 34, barY, 68, 7);
+    ctx.fillStyle = chargeRatio >= 1 ? "#dff6ff" : "#68b5ff"; ctx.fillRect(entity.x - 32, barY + 2, 64 * chargeRatio, 3);
+  }
+  if (kind === "player" && game.equippedAbility?.type === "sova-shock") {
+    const ratio = clamp01((game.equippedAbility.charge || 0) / 1.35);
+    const distance = Math.round(360 + ratio * 520);
+    const barY = entity.y + entity.r + (game.outbreak ? 40 : 15);
+    ctx.fillStyle = "rgba(0, 8, 16, .86)"; ctx.fillRect(entity.x - 38, barY, 76, 12);
+    ctx.fillStyle = "#68b5ff"; ctx.fillRect(entity.x - 36, barY + 2, 72 * ratio, 4);
+    ctx.fillStyle = "#dff6ff"; ctx.font = "8px monospace"; ctx.textAlign = "center";
+    ctx.fillText(`${distance}px`, entity.x, barY + 11); ctx.textAlign = "left";
   }
 
   if (label) {
@@ -10958,26 +11739,26 @@ function drawMedkitsAndOrbs() {
     ctx.restore();
   }
   for (const orb of game.ultOrbs) {
-    if (!estaNoCampoDeVisao(orb, 32)) continue;
-    const pulse = 1 + Math.sin(now * 1.5 + orb.phase) * 0.12;
+    if (!estaNoCampoDeVisao(orb, 25)) continue;
+    const pulse = 1 + Math.sin(now * 3.1 + orb.phase) * 0.1;
+    const bounce = Math.sin(now * 2.2 + orb.phase) * 5;
     ctx.save();
-    ctx.translate(orb.x, orb.y);
-    ctx.strokeStyle = "rgba(189,103,255,0.5)";
-    ctx.lineWidth = 3;
-    for (let i = 0; i < 3; i++) {
+    ctx.translate(orb.x, orb.y + bounce);
+    ctx.strokeStyle = "rgba(189,103,255,0.52)";
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 2; i++) {
       ctx.beginPath();
-      ctx.arc(0, 0, 22 + i * 8 + Math.sin(now + i) * 3, 0, Math.PI * 2);
+      ctx.arc(0, 0, 16 + i * 7 + Math.sin(now * 2 + i) * 2, 0, Math.PI * 2);
       ctx.stroke();
     }
-    ctx.fillStyle = "#000";
+    ctx.rotate(Math.PI / 4 + now * .35);
+    ctx.fillStyle = "#090311";
     ctx.shadowColor = "#bd67ff";
-    ctx.shadowBlur = 28;
-    ctx.beginPath();
-    ctx.arc(0, 0, 15 * pulse, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.shadowBlur = 18 + pulse * 6;
+    ctx.fillRect(-9 * pulse, -9 * pulse, 18 * pulse, 18 * pulse);
     ctx.strokeStyle = "#d7a0ff";
-    ctx.lineWidth = 4;
-    ctx.stroke();
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(-9 * pulse, -9 * pulse, 18 * pulse, 18 * pulse);
     ctx.restore();
   }
 }
@@ -11207,6 +11988,26 @@ function drawUltimateEffects() {
       ctx.textAlign = "center";
       ctx.fillText(effect.detonated ? "LOCK" : `${Math.ceil(effect.countdown || 0)}`, effect.x, effect.y + 7);
       ctx.textAlign = "left";
+    } else if (effect.type === "sage-heal") {
+      const pulse = 1 + Math.sin(performance.now() / 80) * .08;
+      ctx.strokeStyle = "#b9fff0";
+      ctx.fillStyle = `rgba(98,230,192,${alpha * .12})`;
+      for (let ring = 0; ring < 3; ring++) {
+        ctx.lineWidth = 2 + ring;
+        ctx.beginPath();
+        ctx.ellipse(effect.x, effect.y - ring * 8, (24 + ring * 13) * pulse, (10 + ring * 4) * pulse, 0, 0, Math.PI * 2);
+        ctx.fill(); ctx.stroke();
+      }
+      for (let rune = 0; rune < 6; rune++) {
+        const angle = performance.now() / 420 + rune * Math.PI / 3;
+        const radius = 34 + Math.sin(performance.now() / 130 + rune) * 8;
+        ctx.fillStyle = rune % 2 ? "#eafff8" : "#62e6c0";
+        ctx.save();
+        ctx.translate(effect.x + Math.cos(angle) * radius, effect.y + Math.sin(angle) * radius - 12);
+        ctx.rotate(angle + Math.PI / 4);
+        ctx.fillRect(-4, -4, 8, 8);
+        ctx.restore();
+      }
     } else if (effect.type === "healing-beam" || effect.type === "orb-beam") {
       ctx.fillStyle = effect.color;
       const width = effect.type === "healing-beam" ? 34 : 12;
@@ -11342,6 +12143,63 @@ function drawAgentObjects() {
     ctx.beginPath();
     ctx.arc(grenade.x, grenade.y, grenade.r, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
+  }
+
+  for (const zone of game.moshZones) {
+    if (!estaNoCampoDeVisao(zone, zone.r)) continue;
+    const ratio = Math.max(0, zone.life / zone.maxLife);
+    ctx.save();
+    ctx.globalAlpha = .28 + (1 - ratio) * .28;
+    ctx.fillStyle = "#93d62f";
+    ctx.strokeStyle = "#d9ff69";
+    ctx.shadowColor = "#b7f34a";
+    ctx.shadowBlur = 22;
+    ctx.lineWidth = 3;
+    for (let cell = 0; cell < 13; cell++) {
+      const angle = cell * 2.399 + zone.x;
+      const distance = zone.r * Math.sqrt(cell / 13) * .78;
+      const radius = 28 + (cell % 3) * 9 + Math.sin(performance.now() / 120 + cell) * 3;
+      ctx.beginPath();
+      ctx.arc(zone.x + Math.cos(angle) * distance, zone.y + Math.sin(angle) * distance, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  for (const beam of game.sovaBeams) {
+    const alpha = Math.max(0, beam.life / beam.maxLife);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = "#bfe8ff";
+    ctx.shadowColor = "#4eb8ff";
+    ctx.shadowBlur = 34;
+    ctx.lineWidth = 18 * alpha + 5;
+    ctx.beginPath();
+    ctx.moveTo(beam.x1, beam.y1);
+    ctx.lineTo(beam.x2, beam.y2);
+    ctx.stroke();
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  if (game.gekkoThrash && estaNoCampoDeVisao(game.gekkoThrash, 28)) {
+    const thrash = game.gekkoThrash;
+    ctx.save();
+    ctx.translate(thrash.x, thrash.y);
+    ctx.rotate(thrash.angle);
+    ctx.shadowColor = "#b7f34a";
+    ctx.shadowBlur = 20;
+    if (gekkoThrashSprite.complete && gekkoThrashSprite.naturalWidth) {
+      const pulse = 46 + Math.sin(performance.now() / 105) * 3;
+      ctx.drawImage(gekkoThrashSprite, -pulse / 2, -pulse / 2, pulse, pulse);
+    } else {
+      ctx.fillStyle = "#b7f34a"; ctx.strokeStyle = "#efffb8"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(22, 0); ctx.lineTo(-10, -13); ctx.lineTo(-4, 0); ctx.lineTo(-10, 13); ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -12086,6 +12944,7 @@ function draw() {
   }
 
   drawBotDebug();
+  drawAdminHitboxes();
   drawDamageIndicator();
   if (!game.tutorial) {
     drawAbilityBar();
@@ -12096,6 +12955,30 @@ function draw() {
   drawShadowBlindness();
   drawAgentScreenEffects();
   drawSyntheticKillcam();
+  ctx.restore();
+}
+
+function drawAdminHitboxes() {
+  if (!game.adminDebugHitboxes || !isAdminProfile()) return;
+  ctx.save();
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 4]);
+  ctx.strokeStyle = "rgba(255, 70, 85, .9)";
+  for (const wall of map.walls || []) ctx.strokeRect(wall.x, wall.y, wall.w, wall.h);
+  ctx.strokeStyle = "rgba(70, 255, 140, .9)";
+  for (const entity of [game.player, ...game.bots, ...game.allies]) {
+    if (!entity || entity.alive === false) continue;
+    ctx.beginPath();
+    ctx.arc(entity.x, entity.y, entity.r || 16, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = "rgba(255, 215, 80, .95)";
+  for (const projectile of [...game.bullets, ...game.rockets, ...game.grenades]) {
+    if (!projectile) continue;
+    ctx.beginPath();
+    ctx.arc(projectile.x, projectile.y, projectile.r || 4, 0, Math.PI * 2);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -12189,6 +13072,13 @@ function updateUi() {
   const outbreakGadgetReady = Boolean(outbreakGadgetDefinition)
     && (game.outbreakGadget?.charges || 0) > 0
     && outbreakGadgetCooldown <= 0;
+  // Esses estados alimentam tanto o painel opcional quanto os indicadores
+  // circulares permanentes. Mantê-los fora do bloco condicional evita que a
+  // inicialização quebre quando o painel detalhado estiver desativado.
+  const ultimateReady = outbreakGadgetDefinition ? outbreakGadgetReady : game.sandbox || ultReady;
+  const ultimateEmpty = outbreakGadgetDefinition
+    ? (game.outbreakGadget?.charges || 0) <= 0
+    : !game.sandbox && getUltimatePoints(game.player) <= 0;
   setText(ui.ultLabel, outbreakGadgetDefinition ? "GADGET" : "ULT");
   setText(ui.ultPoints, outbreakGadgetDefinition
     ? (outbreakGadgetCooldown > 0
@@ -12205,10 +13095,6 @@ function updateUi() {
     setText(ui.abilityPrimaryState?.querySelector("b"), primaryLabel);
     toggleClass(ui.abilityPrimaryState, "is-ready", primaryReady);
     toggleClass(ui.abilityPrimaryState, "is-cooldown", !primaryReady);
-    const ultimateReady = outbreakGadgetDefinition ? outbreakGadgetReady : game.sandbox || ultReady;
-    const ultimateEmpty = outbreakGadgetDefinition
-      ? (game.outbreakGadget?.charges || 0) <= 0
-      : !game.sandbox && getUltimatePoints(game.player) <= 0;
     setText(ui.abilityUltimateState?.querySelector("b"), ultimateReady
       ? "PRONTA"
       : ultimateEmpty
@@ -12221,8 +13107,33 @@ function updateUi() {
   } else {
     toggleClass(ui.abilityFeedback, "hidden", true);
   }
+  const updateCooldownWipe = (element, remaining, total, label, { ready = remaining <= 0, empty = false, visible = remaining > 0 } = {}) => {
+    if (!element) return;
+    const duration = Math.max(.001, Number(total) || 1);
+    const progress = ready ? 1 : Math.max(0, Math.min(1, 1 - Math.max(0, remaining) / duration));
+    element.style.setProperty("--cooldown-progress", `${progress * 360}deg`);
+    element.style.setProperty("--ready", String(progress));
+    element.classList.toggle("is-ready", Boolean(ready));
+    element.classList.toggle("is-empty", Boolean(empty));
+    element.classList.toggle("is-visible", Boolean(visible));
+    const status = element.querySelector("small");
+    if (status) status.textContent = label;
+  };
+  const activeAgentPresentation = agentPresentation(game.selectedAgent);
+  if (ui.primaryCooldownWipe) ui.primaryCooldownWipe.style.setProperty("--ability-icon", `url("${activeAgentPresentation.abilityIcon || activeAgentPresentation.icon}")`);
+  if (ui.ultimateCooldownWipe && !outbreakGadgetDefinition) ui.ultimateCooldownWipe.style.setProperty("--ability-icon", `url("${activeAgentPresentation.ultimateIcon || activeAgentPresentation.icon}")`);
+  updateCooldownWipe(ui.dashCooldownWipe, game.globalDashCooldown || 0, GLOBAL_DASH.cooldown,
+    game.globalDashCooldown > 0 ? `${Math.ceil(game.globalDashCooldown)}S` : "PRONTO",
+    { visible: game.globalDashCooldown > 0 });
+  updateCooldownWipe(ui.primaryCooldownWipe, game.abilityCooldown || 0, game.selectedAgent.cooldown || 1,
+    game.abilityCooldown > 0 ? `${Math.ceil(game.abilityCooldown)}S` : "PRONTO",
+    { visible: game.abilityCooldown > 0 || Boolean(game.equippedAbility) });
+  const ultimateRemaining = outbreakGadgetDefinition ? outbreakGadgetCooldown : ultimateReady ? 0 : 1;
+  updateCooldownWipe(ui.ultimateCooldownWipe, ultimateRemaining, outbreakGadgetDefinition ? outbreakGadgetDefinition.cooldown : 1,
+    ultimateReady ? "PRONTO" : ultimateEmpty ? "SEM CARGA" : outbreakGadgetCooldown > 0 ? `${Math.ceil(outbreakGadgetCooldown)}S` : `${getUltimatePoints(game.player)}/${ultCost}`,
+    { ready: ultimateReady, empty: ultimateEmpty, visible: outbreakGadgetCooldown > 0 || Boolean(game.player?.ultimate) });
   if (!outbreakGadgetDefinition && ultReady && !game.tutorial && !game.sandbox) {
-    showContextTipOnce("ultimate-ready", `Ultimate de ${game.selectedAgent?.name || "agente"} pronta. Pressione ${settings.keys?.ability2 || "Q"} para usar.`);
+    showContextTipOnce("ultimate-ready", `Ultimate de ${game.selectedAgent?.name || "agente"} pronta. Pressione V para usar.`);
   }
   const ultimateAmmo = game.player.ultimate?.type === "jett"
     ? `${game.player.ultimate.knives || 0}/${game.player.ultimate.maxKnives || 6} dardos`
@@ -12300,10 +13211,10 @@ function updateUi() {
     : game.isMobile
       ? "Use os controles touch para mover, mirar, atirar e interagir."
     : game.playerSide === "attackers"
-      ? "WASD move, E habilidade, Q Ultimate, F planta, B loja, Esc pause."
-      : "WASD move, E habilidade, Q Ultimate, F desarma, B loja, Esc pause.");
+      ? "WASD move, E habilidade, Q dash, V Ultimate, F planta, B loja, Esc pause."
+      : "WASD move, E habilidade, Q dash, V Ultimate, F desarma, B loja, Esc pause.");
   toggleClass(ui.sandboxTools, "hidden", !game.sandbox || game.menuState !== "none");
-  toggleClass(ui.sandboxPanel, "hidden", !game.sandbox || !game.sandboxPanelOpen);
+  toggleClass(ui.sandboxPanel, "hidden", !(game.sandbox || game.adminCheatsOpen) || !game.sandboxPanelOpen);
   toggleClass(ui.pauseSandboxButton, "hidden", !game.sandbox);
   setText(ui.godModeButton, `God: ${game.godMode ? "ON" : "OFF"}`);
   setSwitch(ui.sandboxGodToggle, game.godMode);
@@ -12483,7 +13394,7 @@ function renderSandboxBotList() {
 
 function renderSandboxPanel() {
   populateSandboxSelectors();
-  ui.sandboxPanel?.classList.toggle("hidden", !game.sandbox || !game.sandboxPanelOpen);
+  ui.sandboxPanel?.classList.toggle("hidden", !(game.sandbox || game.adminCheatsOpen) || !game.sandboxPanelOpen);
   setSandboxTab(game.sandboxTab);
   setSwitch(ui.sandboxPierceWallsToggle, game.sandboxBulletsPierceWalls);
   setSwitch(ui.sandboxGodToggle, game.godMode);
@@ -12502,6 +13413,7 @@ function openSandboxPanel() {
 function closeSandboxPanel() {
   const resumeSandbox = game.sandbox && game.paused && game.menuState === "none";
   game.sandboxPanelOpen = false;
+  game.adminCheatsOpen = false;
   cancelSandboxPlacement();
   if (resumeSandbox) game.paused = false;
   renderSandboxPanel();
@@ -12710,6 +13622,28 @@ function syncMainMenuUtilities() {
   document.body?.classList.toggle("menu-utilities-suppressed", !shouldShow);
   ui.menuUtilityDock?.classList.toggle("hidden", !shouldShow);
   ui.mainCoreWallet?.classList.toggle("hidden", !shouldShow || Boolean(currentProfile?.isGuest));
+  ui.menuFullscreenButton?.classList.toggle("hidden", !shouldShow);
+  ui.audioMiniPlayer?.classList.toggle("hidden", !shouldShow);
+}
+
+async function toggleGameFullscreen() {
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await document.documentElement.requestFullscreen();
+  } catch {
+    showUxToast("O navegador bloqueou a alteração de tela.", { title: "TELA CHEIA", tone: "warning" });
+  }
+}
+
+function syncFullscreenState() {
+  const active = Boolean(document.fullscreenElement);
+  if (ui.menuFullscreenButton) {
+    ui.menuFullscreenButton.classList.toggle("is-active", active);
+    ui.menuFullscreenButton.querySelector("span").textContent = active ? "🗗" : "⛶";
+    ui.menuFullscreenButton.setAttribute("aria-label", active ? "Sair da tela cheia" : "Entrar em tela cheia");
+  }
+  if (settings) settings.displayMode = active ? "fullscreen" : "window";
+  if (optionsSettings) optionsSettings.displayMode = active ? "fullscreen" : "window";
 }
 
 function setMenu(title, text, buttons, kicker = "Valorant2D", state = "menu") {
@@ -12958,6 +13892,7 @@ function agentPresentation(agent) {
       ultimate: "Sobrecarga Cinética",
       icon: "./assets/images/Neon_icon.webp",
       artwork: "./assets/images/Neon_Artwork_Full.webp",
+      ultimateIcon: "./assets/images/Overdrive.webp",
     },
     viper: {
       className: "Controladora",
@@ -12965,6 +13900,10 @@ function agentPresentation(agent) {
       ultimate: "Poço Químico",
       icon: "./assets/images/Viper_icon.webp",
       artwork: "./assets/images/Viper_Artwork_Full.webp",
+      abilityIcon: "./assets/images/Poison_Cloud.webp",
+      // O nome físico do arquivo contém os caracteres "%27". O sinal de
+      // porcentagem precisa ser escapado na URL para não virar um apóstrofo.
+      ultimateIcon: "./assets/images/Viper%2527s_Pit.webp",
     },
     sage: {
       className: "Sentinela",
@@ -12972,6 +13911,8 @@ function agentPresentation(agent) {
       ultimate: "Restauração Total",
       icon: "./assets/images/Sage_icon.webp",
       artwork: "./assets/images/Sage_Artwork_Full.webp",
+      abilityIcon: "./assets/images/Healing_Orb.webp",
+      ultimateIcon: "./assets/images/Resurrection.webp",
     },
     omen: {
       className: "Controlador",
@@ -12979,6 +13920,8 @@ function agentPresentation(agent) {
       ultimate: "Domínio das Sombras",
       icon: "./assets/images/Omen_icon.webp",
       artwork: "./assets/images/Omen_Artwork_Full.webp",
+      abilityIcon: "./assets/images/Dark_Cover.webp",
+      ultimateIcon: "./assets/images/From_the_Shadows.webp",
     },
     jett: {
       className: "Duelista",
@@ -12986,6 +13929,8 @@ function agentPresentation(agent) {
       ultimate: "Tormenta de Aço",
       icon: "./assets/images/Jett_icon.webp",
       artwork: "./assets/images/Jett_Artwork_Full.webp",
+      abilityIcon: "./assets/images/Tailwind.webp",
+      ultimateIcon: "./assets/images/Blade_Storm.webp",
     },
     killjoy: {
       className: "Sentinela",
@@ -12993,6 +13938,8 @@ function agentPresentation(agent) {
       ultimate: "Confinamento",
       icon: "./assets/images/Killjoy_icon.webp",
       artwork: "./assets/images/Killjoy_Artwork_Full.webp",
+      abilityIcon: "./assets/images/Turret.webp",
+      ultimateIcon: "./assets/images/Lockdown.webp",
     },
     raze: {
       className: "Duelista",
@@ -13000,6 +13947,26 @@ function agentPresentation(agent) {
       ultimate: "Estraga-prazeres",
       icon: "./assets/images/Raze_icon.webp",
       artwork: "./assets/images/Raze_Artwork_Full.webp",
+      abilityIcon: "./assets/images/Paint_Shells.webp",
+      ultimateIcon: "./assets/images/Showstopper.webp",
+    },
+    sova: {
+      className: "Iniciador",
+      tagline: "Reconhecimento, leitura de terreno e precisão a distância",
+      ultimate: "Fúria do Caçador",
+      icon: "./assets/images/Sova_icon.webp",
+      artwork: "./assets/images/Sova_Artwork_Full.webp",
+      abilityIcon: "./assets/images/Shock_Bolt.webp",
+      ultimateIcon: "./assets/images/Hunter%2527s_Fury.webp",
+    },
+    gekko: {
+      className: "Iniciador",
+      tagline: "Companheiros táticos e controle criativo do combate",
+      ultimate: "Thrash",
+      icon: "./assets/images/Gekko_icon.webp",
+      artwork: "./assets/images/Gekko_Artwork_Full.webp",
+      abilityIcon: "./assets/images/Mosh_Pit.webp",
+      ultimateIcon: "./assets/images/Thrash.webp",
     },
     yoru: {
       className: "Duelista",
@@ -13007,6 +13974,8 @@ function agentPresentation(agent) {
       ultimate: "Espionagem Dimensional",
       icon: "./assets/images/Yoru_icon.webp",
       artwork: "./assets/images/Yoru_Artwork_Full.webp",
+      abilityIcon: "./assets/images/Gatecrash.webp",
+      ultimateIcon: "./assets/images/Dimensional_Drift.webp",
     },
   };
   return details[agent.id] || {
@@ -13087,10 +14056,10 @@ function showAgentSelect(onPick, returnState = "main") {
        <p></p>
        <div class="agent-abilities">
          <div class="ability-chip ability-chip-basic agent-preview-ability">
-           <i>E</i><span><small>Habilidade</small><b></b><span class="agent-ability-cooldown"></span></span>
+           <i><img alt=""><em>E</em></i><span><small>Habilidade</small><b></b><span class="agent-ability-cooldown"></span></span>
          </div>
          <div class="ability-chip ability-chip-ultimate agent-preview-ability">
-           <i>Q</i><span><small>Ultimate</small><b></b></span>
+           <i><img alt=""><em>V</em></i><span><small>Ultimate</small><b></b></span>
          </div>
        </div>
        <button type="button" class="agent-confirm" disabled>Confirmar agente</button>
@@ -13101,6 +14070,19 @@ function showAgentSelect(onPick, returnState = "main") {
   let selectedAgent = null;
   let agenteTravado = false;
   let previewRenderId = 0;
+
+  const orderedAgentsForSelection = () => {
+    const unlocked = commerceState.profile?.unlockedAgentIds || STARTER_AGENT_IDS;
+    const unlockedSet = new Set(unlocked);
+    const starters = STARTER_AGENT_IDS.map((id) => agents.find((agent) => agent.id === id)).filter(Boolean);
+    const acquired = [...unlocked]
+      .reverse()
+      .filter((id) => !STARTER_AGENT_IDS.includes(id))
+      .map((id) => agents.find((agent) => agent.id === id))
+      .filter(Boolean);
+    const locked = agents.filter((agent) => !unlockedSet.has(agent.id) && !STARTER_AGENT_IDS.includes(agent.id));
+    return [...starters, ...acquired, ...locked];
+  };
 
   const renderPreview = (agent) => {
      const renderId = ++previewRenderId;
@@ -13118,6 +14100,10 @@ function showAgentSelect(onPick, returnState = "main") {
      const cooldownEl = preview.querySelector(".agent-ability-cooldown");
      if (cooldownEl) cooldownEl.textContent = `(${agent.cooldown}s recarga)`;
      preview.querySelector(".ability-chip-ultimate b").textContent = presentation.ultimate;
+     const abilityIcon = preview.querySelector(".ability-chip-basic img");
+     const ultimateIcon = preview.querySelector(".ability-chip-ultimate img");
+     if (abilityIcon) { abilityIcon.src = presentation.abilityIcon || presentation.icon; abilityIcon.alt = `Ícone de ${agent.ability}`; }
+     if (ultimateIcon) { ultimateIcon.src = presentation.ultimateIcon || presentation.icon; ultimateIcon.alt = `Ícone de ${presentation.ultimate}`; }
      preloadAgentAsset(presentation.artwork).then((src) => {
        if (renderId !== previewRenderId) return;
        previewImage.src = src;
@@ -13125,8 +14111,65 @@ function showAgentSelect(onPick, returnState = "main") {
      });
   };
 
-  const confirmSelection = () => {
+  const isAgentUnlocked = (agent) => STARTER_AGENT_IDS.includes(agent.id)
+    || commerceState.profile?.unlockedAgentIds?.includes(agent.id);
+
+  const renderAgentCardsState = () => {
+    for (const card of ui.agentSelectGrid.querySelectorAll(".agent-card")) {
+      const agent = agents.find((entry) => entry.id === card.dataset.agentId);
+      const unlocked = agent && isAgentUnlocked(agent);
+      card.classList.toggle("is-locked", !unlocked);
+      card.querySelector(".agent-lock-tag")?.remove();
+      if (!unlocked) card.insertAdjacentHTML("beforeend", `<span class="agent-lock-tag">${Number(commerceState.profile?.agentUnlockPrice) || AGENT_UNLOCK_PRICE} C</span>`);
+    }
+    // Reanexa os mesmos elementos na ordem visual correta sem recriar listeners:
+    // iniciais, compras recentes e, por fim, agentes ainda bloqueados.
+    for (const agent of orderedAgentsForSelection()) {
+      const card = ui.agentSelectGrid.querySelector(`[data-agent-id="${agent.id}"]`);
+      if (card) ui.agentSelectGrid.appendChild(card);
+    }
+    if (selectedAgent) {
+      confirmButton.textContent = isAgentUnlocked(selectedAgent)
+        ? `Confirmar ${selectedAgent.name}`
+        : `Desbloquear ${selectedAgent.name} · ${Number(commerceState.profile?.agentUnlockPrice) || AGENT_UNLOCK_PRICE} C`;
+    }
+  };
+
+  const confirmSelection = async () => {
     if (!selectedAgent) return;
+    if (!isAgentUnlocked(selectedAgent)) {
+      if (!commerceAuthorization()) {
+        showUxToast("Entre em uma conta para desbloquear agentes.", { title: "AGENTE BLOQUEADO", tone: "warning" });
+        return;
+      }
+      const balance = Number(commerceState.profile?.coreBalance) || 0;
+      const price = Number(commerceState.profile?.agentUnlockPrice) || AGENT_UNLOCK_PRICE;
+      if (balance < price) {
+        showUxToast(`Você precisa de ${price} C para desbloquear ${selectedAgent.name}.`, { title: "CORE INSUFICIENTE", tone: "warning" });
+        return;
+      }
+      const previousUnlocked = [...(commerceState.profile.unlockedAgentIds || STARTER_AGENT_IDS)];
+      commerceState.profile.unlockedAgentIds = [...new Set([...previousUnlocked, selectedAgent.id])];
+      commerceState.profile.coreBalance = balance - price;
+      updateCoreBalances(commerceState.profile.coreBalance);
+      renderAgentCardsState();
+      try {
+        const payload = await requestApi(`/api/commerce/agents/${encodeURIComponent(selectedAgent.id)}/purchase`, {
+          method: "POST", headers: commerceAuthorization(), body: "{}",
+        });
+        commerceState.profile.coreBalance = payload.coreBalance;
+        updateCoreBalances(payload.coreBalance);
+        playSound("skin_purchase");
+        showUxToast(`${selectedAgent.name} agora faz parte do seu protocolo.`, { title: "AGENTE DESBLOQUEADO", tone: "success" });
+      } catch (error) {
+        commerceState.profile.unlockedAgentIds = previousUnlocked;
+        commerceState.profile.coreBalance = balance;
+        updateCoreBalances(balance);
+        renderAgentCardsState();
+        showUxToast(error.message, { title: "DESBLOQUEIO DESFEITO", tone: "warning" });
+        return;
+      }
+    }
     game.selectedAgent = selectedAgent;
     game.agentLocked = true;
     hideAgentSelect();
@@ -13138,11 +14181,12 @@ function showAgentSelect(onPick, returnState = "main") {
   attachButtonFeedback(confirmButton);
   confirmButton.addEventListener("click", confirmSelection);
 
-  for (const agent of agents) {
+  for (const agent of orderedAgentsForSelection()) {
     const presentation = agentPresentation(agent);
     const button = document.createElement("button");
     button.type = "button";
     button.className = "agent-card";
+    button.dataset.agentId = agent.id;
     button.style.setProperty("--agent-color", agent.color);
     button.innerHTML = `
       <span class="agent-card-portrait"><img src="${presentation.icon}" alt="Retrato de ${agent.name}"></span>
@@ -13163,11 +14207,12 @@ function showAgentSelect(onPick, returnState = "main") {
         card.classList.toggle("selected", card === button);
       }
       confirmButton.disabled = false;
-      confirmButton.textContent = `Confirmar ${agent.name}`;
+      renderAgentCardsState();
     });
     button.addEventListener("dblclick", confirmSelection);
     ui.agentSelectGrid.appendChild(button);
   }
+  renderAgentCardsState();
   renderPreview(game.selectedAgent || agents[0]);
   ui.agentOverlay.classList.remove("hidden");
   game.paused = true;
@@ -13584,7 +14629,7 @@ async function openPlayerProfile() {
   if (currentProfile?.isGuest) {
     renderGuestProfile();
   } else {
-    ui.playerProfileContent.innerHTML = '<div class="player-modal-loading"><span class="auth-loader"></span><strong>Sincronizando perfil</strong></div>';
+    ui.playerProfileContent.innerHTML = `<div class="player-modal-loading">${V2D_SPINNER_MARKUP}<strong>Sincronizando perfil</strong></div>`;
     try {
       const session = readStoredSession();
       const payload = await requestApi("/api/profile", {
@@ -13672,7 +14717,7 @@ function renderGlobalRanking(payload = {}) {
 async function loadGlobalRanking(mode) {
   if (!LEADERBOARD_MODES.some((item) => item.id === mode) || !ui.globalRankingRows) return;
   activeLeaderboardMode = mode;
-  ui.globalRankingRows.innerHTML = '<div class="player-modal-loading"><span class="auth-loader"></span><strong>Atualizando classificação</strong></div>';
+  ui.globalRankingRows.innerHTML = `<div class="player-modal-loading">${V2D_SPINNER_MARKUP}<strong>Atualizando classificação</strong></div>`;
   try {
     const session = readStoredSession();
     const headers = session?.token && !currentProfile?.isGuest
@@ -13796,7 +14841,7 @@ async function loadLeaderboardMode(mode) {
   if (!LEADERBOARD_MODES.some((item) => item.id === mode)) return;
   activeLeaderboardMode = mode;
   ui.menuButtons.className = "leaderboard-shell";
-  ui.menuButtons.innerHTML = '<div class="statistics-loading"><span class="auth-loader"></span><strong>Atualizando ranking global</strong></div>';
+  ui.menuButtons.innerHTML = `<div class="statistics-loading">${V2D_SPINNER_MARKUP}<strong>Atualizando ranking global</strong></div>`;
   try {
     const session = readStoredSession();
     const headers = session?.token && !currentProfile?.isGuest
@@ -13956,7 +15001,6 @@ const OPTIONS_TABS = [
   { id: "audio", label: "ÁUDIO", icon: "volume-2", description: "Mixagem e efeitos" },
   { id: "video", label: "VÍDEO", icon: "monitor", description: "Imagem e desempenho" },
   { id: "accessibility", label: "ACESSIBILIDADE", icon: "accessibility", description: "Leitura e assistência" },
-  { id: "developer", label: "DESENVOLVEDOR", icon: "terminal", description: "Ferramentas de teste", adminOnly: true },
 ];
 
 const OPTIONS_STORAGE_KEY = "valorant2d-options";
@@ -13983,7 +15027,7 @@ const OPTIONS_DEFAULTS = {
   mobileHudScale: 100,
   mobileHudOpacity: 82,
   mobileLeftHanded: false,
-  keys: { fire: "Mouse1", reload: "R", ability1: "E", ability2: "Q", interact: "F", neonRun: "Shift" },
+  keys: { fire: "Mouse1", reload: "R", ability1: "E", dash: "Q", ability2: "V", interact: "F", neonRun: "Shift" },
   crosshairType: "default",
   crosshairColor: "#ffffff",
   crosshairCustomColor: "#ffffff",
@@ -14007,6 +15051,7 @@ const OPTIONS_DEFAULTS = {
   particles: true,
   bloodEffects: true,
   shadows: true,
+  killcamEnabled: true,
 };
 
 function loadOptionsSettings() {
@@ -14017,7 +15062,12 @@ function loadOptionsSettings() {
     // preservando o valor escolhido pelo jogador como volume dos disparos.
     if (saved.gunshotVolume == null && saved.voiceVolume != null) saved.gunshotVolume = saved.voiceVolume;
     delete saved.voiceVolume;
-    return { ...cloneOptions(OPTIONS_DEFAULTS), ...saved, keys: { ...OPTIONS_DEFAULTS.keys, ...(saved.keys || {}) } };
+    const merged = { ...cloneOptions(OPTIONS_DEFAULTS), ...saved, keys: { ...OPTIONS_DEFAULTS.keys, ...(saved.keys || {}) } };
+    // Q e V são contratos de gameplay: Q nunca aciona Ultimate e V nunca
+    // aciona dash, inclusive para perfis que carregam atalhos antigos.
+    merged.keys.dash = "Q";
+    merged.keys.ability2 = "V";
+    return merged;
   } catch {
     return cloneOptions(OPTIONS_DEFAULTS);
   }
@@ -14052,7 +15102,8 @@ let preferencesSyncedRevision = 0;
  * o nome visível da conta nunca concede privilégios por conta própria.
  */
 function isAdminProfile() {
-  return Boolean(currentProfile && !currentProfile.isGuest && currentProfile.isAdmin);
+  return Boolean(currentProfile && !currentProfile.isGuest
+    && (currentProfile.role === "admin" || currentProfile.isAdmin));
 }
 
 function availableOptionsTabs() {
@@ -14294,10 +15345,14 @@ function SettingDropdown(label, key, options) {
 }
 
 function KeyBind(label, key) {
+  const fixedGameplayKey = key === "dash" || key === "ability2";
   const button = createOptionElement("button", `option-keybind ${pendingKeyBind === key ? "is-listening" : ""}`);
   button.type = "button";
+  button.disabled = fixedGameplayKey;
+  if (fixedGameplayKey) button.title = key === "dash" ? "Q é reservado ao dash global" : "V é reservado à Ultimate";
   button.textContent = pendingKeyBind === key ? "PRESSIONE UMA TECLA..." : optionsSettings.keys[key];
   button.addEventListener("click", () => {
+    if (fixedGameplayKey) return;
     pendingKeyBind = key;
     renderOptionsMenu();
   });
@@ -14409,6 +15464,13 @@ function renderGeneralOptions() {
       })()),
       ToggleSwitch("Mostrar FPS", "showFps"),
       ToggleSwitch("Mostrar Ping", "showPing"),
+      (() => {
+        const button = createOptionElement("button", "option-keybind restore-defaults-button", "RESTAURAR PADRÕES");
+        button.type = "button";
+        button.addEventListener("click", resetAllOptionsSettings);
+        attachButtonFeedback(button);
+        return optionRow("Configuração original", button, "Restaura e aplica todas as categorias imediatamente.");
+      })(),
     ]),
     optionSection("INTERFACE", [
       ToggleSwitch("Mostrar Kill Feed", "showKillFeed"),
@@ -14435,6 +15497,7 @@ function renderAccessibilityOptions() {
       ToggleSwitch("Reduzir animações", "reduceMotion"),
       ToggleSwitch("Alto contraste", "highContrast"),
       ToggleSwitch("Texto ampliado", "largeText"),
+      ToggleSwitch("Killcam de 3 segundos", "killcamEnabled"),
     ]),
     optionSection("ASSISTÊNCIA", [
       ToggleSwitch("Mostrar dicas", "showTips"),
@@ -14488,7 +15551,8 @@ function renderControlOptions() {
       KeyBind("Atirar", "fire"),
       KeyBind("Recarregar", "reload"),
       KeyBind("Habilidade 1", "ability1"),
-      KeyBind("Habilidade 2", "ability2"),
+      KeyBind("Dash global", "dash"),
+      KeyBind("Ultimate", "ability2"),
       KeyBind("Usar/Interagir", "interact"),
     ]),
   );
@@ -14818,7 +15882,6 @@ function renderOptionsContent() {
   if (activeOptionsTab === "audio") return renderAudioOptions();
   if (activeOptionsTab === "video") return renderVideoOptions();
   if (activeOptionsTab === "accessibility") return renderAccessibilityOptions();
-  if (activeOptionsTab === "developer") return renderDeveloperOptions();
   return renderGeneralOptions();
 }
 
@@ -14883,6 +15946,14 @@ function resetOptionsSettings() {
   showOptionsFeedback("Padrões restaurados!");
 }
 
+function resetAllOptionsSettings() {
+  optionsSettings = cloneOptions(OPTIONS_DEFAULTS);
+  pendingKeyBind = null;
+  applyOptionsSettings();
+  renderOptionsMenu(true);
+  showOptionsFeedback("Todos os padrões foram restaurados e aplicados.");
+}
+
 function renderOptionsMenu(skipFade = false) {
   if (!ui.menuButtons) return;
   const visibleTabs = availableOptionsTabs();
@@ -14926,10 +15997,7 @@ function renderOptionsMenu(skipFade = false) {
   renderOptionsContent().forEach((section) => content.appendChild(section));
   workspace.append(tabs, content);
   const footer = createOptionElement("footer", "options-footer");
-  const footerItems = activeOptionsTab === "developer" ? [
-    { label: "VOLTAR", action: backFromOptions },
-  ] : [
-    { label: "REPOR PADRÕES", action: resetOptionsSettings },
+  const footerItems = [
     { label: "APLICAR", action: applyOptionsSettings, primary: true },
     { label: "VOLTAR", action: backFromOptions },
   ];
@@ -16197,7 +17265,10 @@ if (window) window.addEventListener("resize", () => {
 if (window) window.addEventListener("orientationchange", escalarViewportAposOrientacao);
 if (window.visualViewport) window.visualViewport.addEventListener("resize", escalarViewport);
 if (window.visualViewport) window.visualViewport.addEventListener("scroll", escalarViewport, { passive: true });
-if (document) document.addEventListener("fullscreenchange", escalarViewport);
+if (document) document.addEventListener("fullscreenchange", () => {
+  escalarViewport();
+  syncFullscreenState();
+});
 coarsePointerQuery?.addEventListener?.("change", () => applyDeviceMode());
 standaloneDisplayQuery?.addEventListener?.("change", () => applyDeviceMode());
 if (document) document.addEventListener("visibilitychange", () => {
@@ -16252,6 +17323,32 @@ if (canvas) canvas.addEventListener("mousedown", (event) => {
     }
     return;
   }
+  if (game.player?.ultimate?.type === "sova" && event.button === 0) {
+    event.preventDefault();
+    fireSovaHunterFury();
+    return;
+  }
+  if (game.player?.ultimate?.type === "gekko" && event.button === 0) {
+    event.preventDefault();
+    detonateGekkoThrash();
+    return;
+  }
+  if (game.equippedAbility?.type === "sova-shock") {
+    event.preventDefault();
+    if (event.button === 2) {
+      game.equippedAbility.bounces = Math.min(2, game.equippedAbility.bounces + 1);
+      setMessage(`Sova: ${game.equippedAbility.bounces} ricochete(s) configurado(s).`);
+    } else if (event.button === 0) {
+      game.equippedAbility.charging = true;
+      mouse.down = false;
+    }
+    return;
+  }
+  if (game.equippedAbility?.type === "gekko-mosh" && (event.button === 0 || event.button === 2)) {
+    event.preventDefault();
+    throwGekkoMosh(event.button === 2);
+    return;
+  }
   if (game.sandbox && game.phase === "action" && game.sandboxPlacement && event.button === 0) {
     event.preventDefault();
     const point = { x: mouse.x, y: mouse.y };
@@ -16285,6 +17382,10 @@ if (canvas) canvas.addEventListener("mousedown", (event) => {
 });
 
 if (window) window.addEventListener("mouseup", (event) => {
+  if ((!event || event.button === 0) && game.equippedAbility?.type === "sova-shock" && game.equippedAbility.charging) {
+    game.equippedAbility.charging = false;
+    fireSovaShockDart();
+  }
   if (!event || event.button === 0) mouse.down = false;
   if (!event || event.button === 2) mouse.rightDown = false;
 });
@@ -16440,9 +17541,15 @@ if (ui.pauseQuitButton) ui.pauseQuitButton.addEventListener("click", quitToMainM
 
 ui.authForm?.addEventListener("submit", (event) => {
   event.preventDefault();
-  submitAuthentication(authMode);
+  submitAuthentication("login");
 });
-ui.registerButton?.addEventListener("click", toggleRegistrationMode);
+ui.registerButton?.addEventListener("click", () => openSignupRoute());
+ui.signupForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  void submitAuthentication("register");
+});
+ui.signupBackButton?.addEventListener("click", () => closeSignupRoute());
+ui.signupCloseButton?.addEventListener("click", () => closeSignupRoute());
 ui.forgotPasswordButton?.addEventListener("click", () => showPasswordRecovery(true));
 ui.recoveryBackButton?.addEventListener("click", () => showPasswordRecovery(false));
 ui.recoveryForm?.addEventListener("submit", (event) => {
@@ -16460,7 +17567,16 @@ document.querySelectorAll("[data-password-toggle]").forEach((button) => {
   });
 });
 ui.guestButton?.addEventListener("click", enterAsGuest);
-ui.serverRetryButton?.addEventListener("click", () => void wakeRenderServer({ force: true }));
+window.addEventListener("popstate", syncAuthRouteFromLocation);
+ui.menuFullscreenButton?.addEventListener("click", () => void toggleGameFullscreen());
+ui.audioMiniToggle?.addEventListener("click", () => toggleAudioMiniPlayer());
+ui.audioMiniPrevious?.addEventListener("click", () => stepMenuMusic(-1));
+ui.audioMiniNext?.addEventListener("click", () => stepMenuMusic(1));
+ui.audioMiniPlay?.addEventListener("click", () => {
+  const element = ensureMenuMusic();
+  if (element.paused) void element.play().catch(() => {});
+  else element.pause();
+});
 ui.logoutButton?.addEventListener("click", logoutCurrentProfile);
 ui.profileButton?.addEventListener("click", openPlayerProfile);
 ui.playerProfileClose?.addEventListener("click", closePlayerProfile);
@@ -16479,6 +17595,318 @@ ui.adminRouletteKeep?.addEventListener("click", () => void keepAdminRouletteSkin
 ui.adminRouletteOverlay?.addEventListener("pointerdown", (event) => {
   if (event.target === ui.adminRouletteOverlay) closeAdminSkinRoulette();
 });
+
+// Ponte estreita entre o terminal administrativo e o jogo. Nenhuma referência
+// ao banco ou segredo do servidor é exposta; toda mutação remota ainda passa
+// pela sessão Bearer e pela autorização administrativa do Back-End.
+window.Valorant2DAdminBridge = Object.freeze({
+  isAdmin: () => isAdminProfile(),
+  async api(path, { method = "GET", body } = {}) {
+    if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
+    const headers = commerceAuthorization();
+    return requestApi(path, {
+      method,
+      headers,
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    });
+  },
+  async loginAs(target) {
+    const payload = await this.api(`/api/admin-terminal/accounts/${encodeURIComponent(target)}/login-as`, { method: "POST", body: {} });
+    saveSession(payload);
+    window.valorant2DAdminTerminal?.toggle(false);
+    enterGameWithProfile({ ...payload.user, isGuest: false, token: payload.token });
+    return `[SUCCESS] Sessão iniciada como ${payload.user.username}.`;
+  },
+  setWave(rawWave) {
+    if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
+    const wave = Number.parseInt(rawWave, 10);
+    if (!game.outbreak || !game.player?.alive) throw new Error("Inicie uma partida Outbreak antes de selecionar a wave.");
+    if (!Number.isInteger(wave) || wave < 1 || wave > 999) throw new Error("Informe uma wave entre 1 e 999.");
+    closeShop({ force: true });
+    game.outbreakShopPending = false;
+    game.outbreakAdminShopResume = false;
+    game.bots = [];
+    game.bullets = [];
+    game.phase = "action";
+    game.phaseTime = 9999;
+    game.clockActive = true;
+    deployOutbreakWave(wave);
+    updateUi();
+    return `Wave ${wave} iniciada.`;
+  },
+  openShop(mode) {
+    if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
+    if (!game.player?.alive || game.menuState !== "none") throw new Error("Inicie uma partida antes de abrir a loja.");
+    const normalized = String(mode || "").toLowerCase();
+    if (!["default", "blackout", "outbreak"].includes(normalized)) throw new Error("Use default, blackout ou outbreak.");
+    if (normalized === "outbreak") {
+      if (!game.outbreak) throw new Error("A loja Outbreak exige uma partida Outbreak ativa.");
+      openOutbreakShopBreak({ resumeCurrentWave: true });
+    } else {
+      if (game.outbreak) throw new Error("Use a loja do modo correspondente à partida ativa.");
+      game.phase = "buy";
+      game.phaseTime = Number.POSITIVE_INFINITY;
+      game.clockActive = false;
+      openShop();
+    }
+    return `Loja ${normalized} aberta.`;
+  },
+  async openRoulette() {
+    if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
+    window.valorant2DAdminTerminal?.toggle(false);
+    await openAdminSkinRoulette();
+    return "Roleta administrativa aberta.";
+  },
+  matchWeapons: () => weapons.map((weapon) => weapon.id),
+  give(kind, rawValue) {
+    if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
+    if (!game.player?.alive) throw new Error("Nenhum jogador ativo na partida.");
+    const type = String(kind || "").toLowerCase();
+    const value = String(rawValue || "").trim();
+    if (type === "credits") {
+      const amount = Number.parseInt(value, 10);
+      if (!Number.isInteger(amount) || amount < 1 || amount > 999999) throw new Error("Créditos devem estar entre 1 e 999999.");
+      game.money = Math.min(999999, game.money + amount);
+      updateShopState(); updateUi();
+      return `${amount} créditos adicionados à partida.`;
+    }
+    if (type === "weapon") {
+      const weapon = weapons.find((entry) => entry.id === value || entry.name.toLowerCase() === value.toLowerCase());
+      if (!weapon) throw new Error("Arma desconhecida.");
+      game.ownedWeapons.add(weapon.id);
+      game.selectedWeapon = weapon;
+      game.player.weapon = weapon;
+      game.player.ammo = currentMagSize();
+      updateUi();
+      return `${weapon.name} equipada.`;
+    }
+    if (type !== "item") throw new Error("Use credits, weapon ou item.");
+    if (value === "armor") { game.player.maxArmor = Math.max(100, game.player.maxArmor || 0); game.player.armor = game.player.maxArmor; game.armor = game.player.armor; }
+    else if (value === "ammo") game.player.ammo = currentMagSize();
+    else if (value === "health") game.player.hp = game.player.maxHp;
+    else if (value === "ultimate") setUltimatePoints(game.player, getUltCost(game.player));
+    else if (value === "spike") { game.spike.state = "carried"; game.spike.owner = "player"; }
+    else throw new Error("Item desconhecido. Use armor, ammo, health, ultimate ou spike.");
+    updateUi();
+    return `Item ${value} concedido.`;
+  },
+  swapTeam() {
+    if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
+    if (!game.player) throw new Error("Nenhuma partida ativa.");
+    game.playerSide = opposingSide(game.playerSide);
+    const spawn = game.playerSide === "attackers" ? map.attackersSpawn : (map.playerDefenderSpawn || map.defendersSpawn?.[0]);
+    if (spawn) { game.player.x = spawn.x; game.player.y = spawn.y; sanitizeEntityPosition(game.player); }
+    updateUi();
+    return `Jogador movido para ${game.playerSide}.`;
+  },
+  openCheats() {
+    if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
+    if (!game.player) throw new Error("Nenhuma partida ativa.");
+    game.adminCheatsOpen = true;
+    game.sandboxPanelOpen = true;
+    renderSandboxPanel();
+    ui.sandboxPanel?.classList.remove("hidden");
+    return "Painel de cheats aberto.";
+  },
+  setTimeScale(scale) {
+    if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
+    if (!Number.isFinite(scale) || scale < 0.1 || scale > 4) throw new Error("A escala deve estar entre 0.1 e 4.");
+    game.timeScale = scale;
+    return `Timescale definido como ${scale}x.`;
+  },
+  playVfx(effectName) {
+    if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
+    const effect = String(effectName || "").toLowerCase();
+    if (effect === "color_gain") {
+      animateCurrencyReward(250);
+      return "VFX color_gain executado (+250 C apenas visual).";
+    }
+    if (effect === "level_up") {
+      const preview = document.createElement("div");
+      preview.className = "admin-terminal-confetti";
+      preview.replaceChildren(...Array.from({ length: 42 }, (_, index) => {
+        const particle = document.createElement("i");
+        particle.style.setProperty("--terminal-confetti-x", `${(index * 37) % 100}%`);
+        particle.style.setProperty("--terminal-confetti-delay", `${(index % 9) * .05}s`);
+        return particle;
+      }));
+      ui.currencyRewardLayer?.appendChild(preview);
+      window.setTimeout(() => {
+        preview.remove();
+      }, 4200);
+      return "VFX level_up executado.";
+    }
+    if (effect === "hit_spark") {
+      ui.gameRoot?.classList.remove("admin-vfx-hit-flash");
+      requestAnimationFrame(() => ui.gameRoot?.classList.add("admin-vfx-hit-flash"));
+      window.setTimeout(() => ui.gameRoot?.classList.remove("admin-vfx-hit-flash"), 480);
+      if (game.player) spawnAdminParticles(game.player.x, game.player.y, "#ffdc7a", 16);
+      return "VFX hit_spark executado.";
+    }
+    if (effect === "explosion") {
+      const x = game.player?.x ?? canvas.width / 2;
+      const y = game.player?.y ?? canvas.height / 2;
+      game.explosions.push({ x, y, r: 0, maxR: 110, life: 0.8, maxLife: 0.8, color: "#ff7a32" });
+      spawnAdminParticles(x, y, "#ff4655", 34);
+      return "VFX explosion executado.";
+    }
+    throw new Error("Efeito desconhecido. Use color_gain, hit_spark, explosion ou level_up.");
+  },
+  async toggleUi(componentName) {
+    if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
+    const component = String(componentName || "").toLowerCase();
+    if (component === "inventory") {
+      if (ui.commerceOverlay?.classList.contains("hidden")) {
+        await openCommerceStore();
+        commerceState.tab = "inventory";
+        renderCommerceTab();
+        return "Inventário aberto.";
+      }
+      closeCommerceStore();
+      return "Inventário fechado.";
+    }
+    if (component === "missions") {
+      if (ui.missionsOverlay?.classList.contains("hidden")) {
+        await openMissionsModal();
+        return "Missões abertas.";
+      }
+      closeMissionsModal();
+      return "Missões fechadas.";
+    }
+    if (component === "scoreboard") {
+      game.scoreboardVisible = !game.scoreboardVisible;
+      updateUi();
+      return `Placar ${game.scoreboardVisible ? "aberto" : "fechado"}.`;
+    }
+    if (component === "settings") {
+      showOptionsMenu();
+      return "Configurações abertas.";
+    }
+    if (component === "hud") {
+      const hidden = !ui.topHud?.classList.contains("hidden");
+      ui.topHud?.classList.toggle("hidden", hidden);
+      document.querySelector(".status-card")?.classList.toggle("hidden", hidden);
+      return `HUD ${hidden ? "oculto" : "exibido"}.`;
+    }
+    throw new Error("Componente desconhecido. Use inventory, hud, scoreboard ou settings.");
+  },
+  inventoryItems() {
+    const skinIds = (commerceState.profile?.catalog || []).map((item) => item.id);
+    return [...new Set([...skinIds, ...BLACK_MARKET_GADGETS.map((item) => item.id)])];
+  },
+  agentItems: () => agents.map((agent) => agent.id),
+  async prepareInventoryItems() {
+    if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
+    if (commerceState.profile?.catalog?.length) return commerceState.profile.catalog;
+    const payload = await requestApi("/api/commerce", { headers: commerceAuthorization() });
+    commerceState.profile = payload;
+    return payload.catalog || [];
+  },
+  toggleDebug(kind) {
+    if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
+    if (kind === "hitboxes") {
+      game.adminDebugHitboxes = !game.adminDebugHitboxes;
+      return `Hitboxes ${game.adminDebugHitboxes ? "ativadas" : "desativadas"}.`;
+    }
+    if (kind === "stats") {
+      game.adminDebugStats = !game.adminDebugStats;
+      toggleAdminStatsOverlay(game.adminDebugStats);
+      return `Debug de desempenho ${game.adminDebugStats ? "ativado" : "desativado"}.`;
+    }
+    throw new Error("Métrica de debug desconhecida.");
+  },
+  pauseMatch() {
+    if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
+    game.paused = !game.paused;
+    return `Partida ${game.paused ? "pausada" : "retomada"}.`;
+  },
+  forceEnd(winner) {
+    if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
+    if (!["attackers", "defenders", "draw"].includes(winner)) throw new Error("Time inválido.");
+    if (winner === "draw") {
+      game.phase = "ended";
+      game.phaseTime = 4;
+      setMessage("Round encerrado em empate pelo terminal.");
+      showRoundBanner("Empate", "Round encerrado administrativamente.", `${game.playerScore} - ${game.enemyScore}`, 2.8);
+    } else endRound(winner, "Round encerrado pelo terminal administrativo.");
+    return `Round encerrado: ${winner}.`;
+  },
+});
+
+let adminStatsInterval = 0;
+function spawnAdminParticles(x, y, color, amount) {
+  for (let index = 0; index < amount; index += 1) {
+    const angle = (index / amount) * Math.PI * 2 + Math.random() * 0.24;
+    const speed = 90 + Math.random() * 240;
+    game.particles.push({
+      x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+      life: 0.65, maxLife: 0.65, size: 2 + Math.random() * 4, color,
+    });
+  }
+}
+
+function toggleAdminStatsOverlay(show) {
+  let overlay = document.getElementById("adminDebugStats");
+  if (!overlay) {
+    overlay = document.createElement("aside");
+    overlay.id = "adminDebugStats";
+    overlay.className = "admin-debug-stats hidden";
+    document.body.appendChild(overlay);
+  }
+  overlay.classList.toggle("hidden", !show);
+  window.clearInterval(adminStatsInterval);
+  if (!show) return;
+  const refresh = async () => {
+    const memory = performance.memory ? `${Math.round(performance.memory.usedJSHeapSize / 1048576)} MB` : "n/d";
+    const started = performance.now();
+    let ping = "offline";
+    try {
+      await window.Valorant2DAdminBridge.api("/api/admin-terminal/ping");
+      ping = `${Math.round(performance.now() - started)} ms`;
+    } catch (_error) {}
+    overlay.textContent = `FPS ${game.currentFps || 0}  |  MEM ${memory}  |  SUPABASE ${ping}`;
+  };
+  void refresh();
+  adminStatsInterval = window.setInterval(() => void refresh(), 2000);
+}
+
+let lastAdminEventId = Number(sessionStorage.getItem("valorant2d:admin-event-id") || 0);
+function showAdministrativeBroadcast(message) {
+  let banner = document.getElementById("adminBroadcastBanner");
+  if (!banner) {
+    banner = document.createElement("aside");
+    banner.id = "adminBroadcastBanner";
+    banner.className = "admin-broadcast-banner";
+    document.body.appendChild(banner);
+  }
+  banner.textContent = message;
+  banner.classList.remove("is-visible");
+  requestAnimationFrame(() => banner.classList.add("is-visible"));
+  window.clearTimeout(showAdministrativeBroadcast.timer);
+  showAdministrativeBroadcast.timer = window.setTimeout(() => banner.classList.remove("is-visible"), 6500);
+}
+
+async function pollAdministrativeEvents() {
+  const session = readStoredSession();
+  try {
+    const payload = await requestApi(`/api/admin-terminal/events?after=${lastAdminEventId}`, {
+      headers: session?.token ? { Authorization: `Bearer ${session.token}` } : {}, timeoutMs: 4500,
+    });
+    for (const event of payload.events || []) {
+      lastAdminEventId = Math.max(lastAdminEventId, Number(event.id) || 0);
+      sessionStorage.setItem("valorant2d:admin-event-id", String(lastAdminEventId));
+      if (event.event_type === "broadcast") showAdministrativeBroadcast(event.message);
+      if (event.event_type === "kick") {
+        clearStoredSession();
+        currentProfile = null;
+        showUxToast(`Sessão encerrada: ${event.message}`, { title: "SESSÃO ENCERRADA", tone: "error", duration: 5000 });
+        window.valorant2DAdminTerminal?.toggle(false);
+        window.setTimeout(() => continueToLoginFromBootstrap(`Sessão encerrada: ${event.message}`), 900);
+      }
+    }
+  } catch (_error) {}
+}
+window.setInterval(() => void pollAdministrativeEvents(), 5000);
 ui.updatesCloseButton?.addEventListener("click", () => void closeUpdateNotes());
 ui.updatesPreviousButton?.addEventListener("click", () => renderUpdateRelease(activeUpdateReleaseIndex - 1));
 ui.updatesNextButton?.addEventListener("click", () => renderUpdateRelease(activeUpdateReleaseIndex + 1));
@@ -16530,10 +17958,22 @@ ui.authUsername?.addEventListener("input", () => {
   ui.authUsername.removeAttribute("aria-invalid");
   setAuthFeedback("");
 });
+[ui.signupUsername, ui.signupPassword, ui.signupSecurityQuestion, ui.signupSecurityAnswer].forEach((input) => input?.addEventListener("input", () => {
+  input.removeAttribute("aria-invalid");
+  if (ui.signupFeedback) ui.signupFeedback.textContent = "";
+}));
 ui.authPassword?.addEventListener("input", () => {
   ui.authPassword.removeAttribute("aria-invalid");
   setAuthFeedback("");
 });
+ui.authBootstrapRetry?.addEventListener("click", () => {
+  setAuthFeedback("");
+  void bootstrapAuthentication().catch((error) => {
+    console.error("Falha ao reiniciar autenticação:", error);
+    showAuthBootstrapError("A nova tentativa falhou. Verifique sua conexão ou prossiga para o login.");
+  });
+});
+ui.authBootstrapLogin?.addEventListener("click", () => continueToLoginFromBootstrap("Você pode entrar novamente ou jogar como convidado."));
 
 window.addEventListener("beforeinstallprompt", (event) => {
   event.preventDefault();
@@ -16552,5 +17992,8 @@ setShopTab(game.shopTab);
 game.menuMapTimer = 0;
 startNewMatch();
 initializeGoogleIdentity();
-bootstrapAuthentication();
+void bootstrapAuthentication().catch((error) => {
+  console.error("Falha fatal ao inicializar autenticação:", error);
+  showAuthBootstrapError("Não foi possível concluir a inicialização. Tente novamente ou acesse o login.");
+});
 requestAnimationFrame(loop);

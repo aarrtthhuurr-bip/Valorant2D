@@ -174,7 +174,10 @@ async function initializeDatabase() {
         preferencias_json JSONB NOT NULL DEFAULT '{}'::jsonb,
         core_balance INTEGER NOT NULL DEFAULT 300 CHECK (core_balance >= 0),
         core_earned_total INTEGER NOT NULL DEFAULT 0 CHECK (core_earned_total >= 0),
+        unlocked_agents JSONB NOT NULL DEFAULT '["sova","jett","sage","viper"]'::jsonb,
         is_admin BOOLEAN NOT NULL DEFAULT FALSE,
+        admin_uuid UUID NOT NULL DEFAULT gen_random_uuid(),
+        is_banned BOOLEAN NOT NULL DEFAULT FALSE,
         onboarding_completed BOOLEAN NOT NULL DEFAULT TRUE,
         menu_tour_completed BOOLEAN NOT NULL DEFAULT TRUE,
         data_criacao TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -212,7 +215,10 @@ async function initializeDatabase() {
       'ADD COLUMN IF NOT EXISTS ultimo_login TIMESTAMPTZ',
       'ADD COLUMN IF NOT EXISTS core_balance INTEGER NOT NULL DEFAULT 300',
       'ADD COLUMN IF NOT EXISTS core_earned_total INTEGER NOT NULL DEFAULT 0',
+      `ADD COLUMN IF NOT EXISTS unlocked_agents JSONB NOT NULL DEFAULT '["sova","jett","sage","viper"]'::jsonb`,
       'ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE',
+      'ADD COLUMN IF NOT EXISTS admin_uuid UUID DEFAULT gen_random_uuid()',
+      'ADD COLUMN IF NOT EXISTS is_banned BOOLEAN NOT NULL DEFAULT FALSE',
       // TRUE preserva o fluxo das contas anteriores a esta funcionalidade.
       'ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN NOT NULL DEFAULT TRUE',
       'ADD COLUMN IF NOT EXISTS menu_tour_completed BOOLEAN NOT NULL DEFAULT TRUE',
@@ -220,6 +226,9 @@ async function initializeDatabase() {
     for (const migration of userMigrations) {
       await client.query(`ALTER TABLE users ${migration}`);
     }
+    await client.query('UPDATE users SET admin_uuid = gen_random_uuid() WHERE admin_uuid IS NULL');
+    await client.query('ALTER TABLE users ALTER COLUMN admin_uuid SET NOT NULL');
+    await client.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_admin_uuid ON users(admin_uuid)');
     // Preserva os acumuladores anteriores na primeira execução da migração.
     await client.query(`
       UPDATE users
@@ -405,6 +414,18 @@ async function initializeDatabase() {
         PRIMARY KEY (user_id, gadget_id)
       )
     `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS admin_events (
+        id BIGSERIAL PRIMARY KEY,
+        event_type VARCHAR(24) NOT NULL CHECK (event_type IN ('broadcast', 'kick')),
+        target_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        message VARCHAR(240) NOT NULL,
+        created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMPTZ NOT NULL
+      )
+    `);
+    await client.query('CREATE INDEX IF NOT EXISTS idx_admin_events_delivery ON admin_events (target_user_id, id)');
     await client.query(`
       CREATE TABLE IF NOT EXISTS equipped_gadgets (
         user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,

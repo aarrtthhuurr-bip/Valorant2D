@@ -1,0 +1,97 @@
+/*
+ * Spinner oficial e unico do Valorant2D.
+ *
+ * Todos os carregamentos reutilizam esta classe. O desenho e formado por
+ * tres segmentos triangulares contínuos; os elementos <i> antigos ficam
+ * ocultos apenas para manter compatibilidade com o HTML ja existente.
+ */
+.v2d-spinner {
+  --spinner-size: 50px;
+  --spinner-color: #ff4655;
+  position: relative;
+  display: inline-block;
+  width: var(--spinner-size);
+  aspect-ratio: 1.154;
+  flex: 0 0 auto;
+  vertical-align: middle;
+  background: conic-gradient(
+    from 120deg at 50% 64%,
+    transparent 0deg,
+    transparent 1deg,
+    var(--spinner-color) 1deg,
+    var(--spinner-color) 120deg,
+    transparent 121deg
+  );
+  filter: drop-shadow(0 0 5px rgba(255, 70, 85, .28));
+  animation: v2d-spinner-rotate 1.5s infinite cubic-bezier(.3, 1, 0, 1);
+}
+
+.v2d-spinner::before,
+.v2d-spinner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: inherit;
+  transform-origin: 50% 66%;
+  animation: v2d-spinner-expand 1.5s infinite;
+}
+
+.v2d-spinner::after {
+  --spinner-direction: -1;
+}
+
+/* O desenho anterior usava tres quadrados reais dentro do container. */
+.v2d-spinner > i {
+  display: none;
+}
+
+.v2d-spinner--compact {
+  --spinner-size: 36px;
+}
+
+.v2d-spinner--inline {
+  --spinner-size: 18px;
+  display: none;
+  margin-left: 9px;
+}
+
+.is-loading .v2d-spinner--inline {
+  display: inline-block;
+}
+
+@keyframes v2d-spinner-rotate {
+  0%, 30% {
+    transform: rotate(0deg);
+  }
+
+  70% {
+    transform: rotate(120deg);
+  }
+
+  70.01%, 100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes v2d-spinner-expand {
+  0% {
+    transform: rotate(calc(var(--spinner-direction, 1) * 120deg)) translate(0, 0);
+  }
+
+  30%, 70% {
+    transform: rotate(calc(var(--spinner-direction, 1) * 120deg))
+      translate(calc(var(--spinner-direction, 1) * -10%), 20%);
+  }
+
+  100% {
+    transform: rotate(calc(var(--spinner-direction, 1) * 120deg)) translate(0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v2d-spinner,
+  .v2d-spinner::before,
+  .v2d-spinner::after {
+    animation-duration: 3s;
+  }
+}
