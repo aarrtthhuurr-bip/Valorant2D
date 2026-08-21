@@ -8,6 +8,10 @@ const {
   STARTER_GADGET_ID,
 } = require('../data/blackMarketCatalog');
 
+const STARTER_AGENT_IDS = Object.freeze(['sova', 'jett', 'sage', 'viper']);
+const UNLOCKABLE_AGENT_IDS = new Set(['neon', 'omen', 'killjoy', 'raze', 'gekko', 'yoru']);
+const AGENT_UNLOCK_PRICE = 250;
+
 function todayUtc() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -133,7 +137,7 @@ class Commerce {
         [userId, STARTER_GADGET_ID],
       );
       const [userResult, ownedResult, equippedResult, missionResult, easterEggResult, gadgetResult, equippedGadgetResult] = await Promise.all([
-        client.query('SELECT core_balance, is_admin FROM users WHERE id = $1', [userId]),
+        client.query('SELECT core_balance, is_admin, unlocked_agents FROM users WHERE id = $1', [userId]),
         client.query('SELECT skin_id, acquired_at FROM user_skins WHERE user_id = $1 ORDER BY acquired_at DESC', [userId]),
         client.query('SELECT weapon_id, skin_id FROM equipped_skins WHERE user_id = $1', [userId]),
         client.query(
@@ -159,6 +163,10 @@ class Commerce {
       return {
         coreBalance: Number(user?.core_balance) || 0,
         isAdmin: Boolean(user?.is_admin),
+        unlockedAgentIds: user?.is_admin
+          ? [...STARTER_AGENT_IDS, ...UNLOCKABLE_AGENT_IDS]
+          : [...new Set([...STARTER_AGENT_IDS, ...(Array.isArray(user?.unlocked_agents) ? user.unlocked_agents : [])])],
+        agentUnlockPrice: AGENT_UNLOCK_PRICE,
         catalog: SKIN_CATALOG,
         dailyOffers: dailyOffers(),
         ownedSkinIds: ownedResult.rows.map((row) => row.skin_id),
@@ -169,6 +177,48 @@ class Commerce {
         ownedGadgetIds: gadgetResult.rows.map((row) => row.gadget_id),
         equippedGadgetId: equippedGadgetResult.rows[0]?.gadget_id || STARTER_GADGET_ID,
         nextRotationAt: `${new Date(Date.now() + 86400000).toISOString().slice(0, 10)}T00:00:00.000Z`,
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  static async purchaseAgent(userId, agentId) {
+    const normalizedAgentId = String(agentId || '').trim().toLowerCase();
+    if (!UNLOCKABLE_AGENT_IDS.has(normalizedAgentId)) return { error: 'AGENT_NOT_FOUND' };
+    const client = await database.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await client.query(
+        'SELECT core_balance, is_admin, unlocked_agents FROM users WHERE id = $1 FOR UPDATE',
+        [userId],
+      );
+      const user = result.rows[0];
+      const unlocked = new Set(Array.isArray(user?.unlocked_agents) ? user.unlocked_agents : STARTER_AGENT_IDS);
+      if (user?.is_admin || unlocked.has(normalizedAgentId)) {
+        await client.query('ROLLBACK');
+        return { error: 'AGENT_ALREADY_OWNED', coreBalance: Number(user?.core_balance) || 0 };
+      }
+      const balance = Number(user?.core_balance) || 0;
+      if (balance < AGENT_UNLOCK_PRICE) {
+        await client.query('ROLLBACK');
+        return { error: 'INSUFFICIENT_CORE', coreBalance: balance };
+      }
+      unlocked.add(normalizedAgentId);
+      const updated = await client.query(
+        `UPDATE users
+         SET core_balance = core_balance - $1, unlocked_agents = $2::jsonb
+         WHERE id = $3 RETURNING core_balance`,
+        [AGENT_UNLOCK_PRICE, JSON.stringify([...unlocked]), userId],
+      );
+      await client.query('COMMIT');
+      return {
+        agentId: normalizedAgentId,
+        paid: AGENT_UNLOCK_PRICE,
+        coreBalance: Number(updated.rows[0].core_balance),
       };
     } catch (error) {
       await client.query('ROLLBACK');

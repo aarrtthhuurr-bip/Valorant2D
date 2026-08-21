@@ -7,6 +7,34 @@ const TARGET_PREDICATE = `(admin_uuid::text = $1 OR id::text = $1
   OR LOWER(username) = LOWER($1))`;
 
 class AdminTerminal {
+  static async listCodes(limit = 100) {
+    return database.all(
+      `SELECT promo_codes.id, promo_codes.code_display, promo_codes.core_amount,
+              promo_codes.active, promo_codes.created_at, users.username AS created_by
+       FROM promo_codes LEFT JOIN users ON users.id = promo_codes.created_by
+       ORDER BY promo_codes.created_at DESC LIMIT $1`,
+      [Math.min(100, Math.max(1, Number(limit) || 100))],
+    );
+  }
+
+  static async createCode({ codeHash, codeDisplay, coreAmount, createdBy }) {
+    return database.get(
+      `INSERT INTO promo_codes (code_hash, code_display, core_amount, created_by)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, code_display, core_amount, active, created_at`,
+      [codeHash, codeDisplay, coreAmount, createdBy],
+    );
+  }
+
+  static async deleteCode(identifier) {
+    return database.get(
+      `DELETE FROM promo_codes
+       WHERE id::text = $1 OR UPPER(code_display) = UPPER($1)
+       RETURNING id, code_display, core_amount`,
+      [String(identifier || '').trim()],
+    );
+  }
+
   static async listAccounts(limit = 15) {
     return database.all(
       `SELECT admin_uuid AS uuid, username, email, auth_provider,
@@ -23,7 +51,8 @@ class AdminTerminal {
       `SELECT id, admin_uuid AS uuid, username, email, auth_provider,
               avatar_url, is_admin, is_banned, core_balance,
               core_earned_total, total_matches, total_kills, total_deaths,
-              wins_default, wins_blackout, highest_wave_outbreak, data_criacao
+              wins_default, wins_blackout, highest_wave_outbreak,
+              onboarding_completed, menu_tour_completed, data_criacao
        FROM users
        WHERE ${TARGET_PREDICATE}`,
       [String(identifier || '').trim()],
@@ -76,6 +105,16 @@ class AdminTerminal {
 
   static async revokeSessions(userId) {
     return database.run('DELETE FROM sessions WHERE user_id = $1', [userId]);
+  }
+
+  static async updateCredential(identifier, column, value) {
+    const allowed = new Set(['senha_hash', 'pergunta_seguranca', 'resposta_seguranca']);
+    if (!allowed.has(column)) throw new Error('Campo de credencial inválido.');
+    return database.get(
+      `UPDATE users SET ${column} = $2 WHERE ${TARGET_PREDICATE}
+       RETURNING id, admin_uuid AS uuid, username, email, is_admin`,
+      [String(identifier || '').trim(), value],
+    );
   }
 
   static async setCore(identifier, amount, { add = false } = {}) {

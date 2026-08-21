@@ -961,6 +961,12 @@ function renderDailyLoginModal(status, { forceOpen = false } = {}) {
   const overlay = document.getElementById("dailyLoginOverlay");
   const days = document.getElementById("dailyLoginDays");
   if (!overlay || !days) return;
+  if (!ui.authOverlay?.classList.contains("hidden") || !ui.signupOverlay?.classList.contains("hidden")) {
+    overlay.classList.add("hidden");
+    overlay.setAttribute("aria-hidden", "true");
+    dailyLoginDeferredUntilOnboarding = true;
+    return;
+  }
   dailyLoginStatus = status;
   if (!status.loading) persistDailyLoginCache(status);
   window.clearTimeout(dailyRouletteTimer);
@@ -993,6 +999,12 @@ function renderDailyLoginModal(status, { forceOpen = false } = {}) {
 
 async function checkDailyLogin({ force = false } = {}) {
   if (currentProfile?.isGuest || !readStoredSession()?.token) return;
+  if (!ui.authOverlay?.classList.contains("hidden")
+    || !ui.signupOverlay?.classList.contains("hidden")
+    || /\/(login|signup)\/?$/i.test(window.location.pathname)) {
+    dailyLoginDeferredUntilOnboarding = true;
+    return;
+  }
   if (currentProfile?.onboardingCompleted === false || welcomeFirstAccess) {
     dailyLoginDeferredUntilOnboarding = true;
     return;
@@ -1080,7 +1092,13 @@ function playDailyClaimCelebration(reward, day) {
   const name = document.getElementById("dailyClaimCelebrationName");
   if (!modal || !celebration || !icon || !name) return;
   window.clearTimeout(dailyClaimAnimationTimer);
-  icon.textContent = dailyRewardGlyph(reward);
+  icon.replaceChildren();
+  if (reward?.type === "skin" && reward?.imagePath) {
+    const image = document.createElement("img");
+    image.src = reward.imagePath;
+    image.alt = reward.name || "Skin recebida";
+    icon.appendChild(image);
+  } else icon.textContent = dailyRewardGlyph(reward);
   name.textContent = reward?.name || (reward?.type === "core" ? `${reward.amount} C` : DAILY_LOGIN_REWARDS[day - 1]?.label || "RECOMPENSA");
   celebration.className = `daily-claim-celebration reward-${reward?.type || "core"}`;
   modal.classList.add("is-celebrating");
@@ -2639,18 +2657,19 @@ const VIPER_CAST_RANGE = 330;
 const VIPER_CLOUD_RADIUS = 92;
 const ECONOMY = {
   start: 800,
+  kill: 200,
   botKillMin: 100,
   botKillMax: 300,
-  defuseWin: 3800,
-  eliminationWin: 3300,
-  standardWin: 3000,
-  lossConsolation: 900,
-  spikeDeathCash: 100,
+  roundWin: 3000,
+  lossBase: 1900,
+  lossStep: 500,
+  lossMax: 2900,
   objective: 300,
-  cap: 12000,
+  cap: 9000,
 };
 
 function botEliminationCredits({ headshot = false } = {}) {
+  if (!game.outbreak) return ECONOMY.kill;
   // A potência de 1,45 cria uma queda gradual de probabilidade: recompensas
   // altas são menos comuns, mas a faixa superior ainda aparece regularmente.
   // Headshots continuam premiando diretamente o teto da recompensa.
@@ -3088,6 +3107,15 @@ const agents = [
   },
 ];
 
+const STARTER_AGENT_IDS = Object.freeze(["sova", "jett", "sage", "viper"]);
+const AGENT_UNLOCK_PRICE = 250;
+const starterAgentOrder = new Map(STARTER_AGENT_IDS.map((id, index) => [id, index]));
+agents.sort((left, right) => {
+  const leftOrder = starterAgentOrder.has(left.id) ? starterAgentOrder.get(left.id) : STARTER_AGENT_IDS.length;
+  const rightOrder = starterAgentOrder.has(right.id) ? starterAgentOrder.get(right.id) : STARTER_AGENT_IDS.length;
+  return leftOrder - rightOrder;
+});
+
 const weapons = [
   { id: "pistol", name: "Classic", price: 0, damage: 28, fireRate: 0.34, speed: 980, spread: 0.04, mag: 12, reload: 1.1 },
   { id: "light-pistol", name: "Shorty", price: 650, damage: 20, fireRate: 0.18, speed: 930, spread: 0.075, mag: 15, reload: 1.2 },
@@ -3161,6 +3189,12 @@ const weaponSpriteVisuals = {
 };
 
 const weaponSpriteCache = new Map();
+const sovaBowSprite = new Image();
+sovaBowSprite.src = "./assets/images/sova_bow.png";
+const gekkoMoshSprite = new Image();
+gekkoMoshSprite.src = "./assets/images/Mosh_Pit.webp";
+const gekkoThrashSprite = new Image();
+gekkoThrashSprite.src = "./assets/images/Thrash.webp";
 
 function weaponImagePath(weapon) {
   return `./assets/weapon-icon/${weaponImageFiles[weapon.id] || `${weapon.name}_icon.webp`}`;
@@ -5489,7 +5523,9 @@ function makeBot(spawn, index) {
     aiState: "hold",
     revealedTimer: 0,
     agentId: agents[index % agents.length].id,
-    ultimatePoints: Math.min(ULT_MAX_POINTS, Math.max(0, game.roundNumber - 1) + (index % 2)),
+    // Cada bot mantém uma carteira individual. Nenhum nasce com Ultimate
+    // pronta por progressão artificial de rodada: os pontos são conquistados.
+    ultimatePoints: 0,
     ultimate: null,
     orbChannel: null,
   };
@@ -6421,6 +6457,14 @@ function endRound(winner, reason, outcome = "standard") {
   if (game.phase === "ended" || game.phase === "matchOver") return;
   game.phase = "ended";
   game.phaseTime = 4;
+  if (!game.player?.alive && !game.outbreak && !game.sandbox && !game.training) {
+    game.selectedWeapon = weapons[0];
+    game.ownedWeapons = new Set([weapons[0].id]);
+    if (game.player) {
+      game.player.weapon = game.selectedWeapon;
+      game.player.ammo = currentMagSize();
+    }
+  }
   if (winner === "attackers") {
     game.scoreA += 1;
   } else {
@@ -6434,18 +6478,11 @@ function endRound(winner, reason, outcome = "standard") {
     game.enemyScore += 1;
     game.lossStreak += 1;
   }
-  if (outcome === "spike_death") {
-    moneyGained = ECONOMY.spikeDeathCash - game.money;
-    if (!game.sandbox) game.money = ECONOMY.spikeDeathCash;
-  } else if (winner === game.playerSide) {
-    moneyGained = outcome === "defuse"
-      ? ECONOMY.defuseWin
-      : outcome === "elimination"
-        ? ECONOMY.eliminationWin
-        : ECONOMY.standardWin;
+  if (winner === game.playerSide) {
+    moneyGained = ECONOMY.roundWin;
     if (!game.sandbox) game.money += moneyGained;
   } else {
-    moneyGained = ECONOMY.lossConsolation;
+    moneyGained = Math.min(ECONOMY.lossMax, ECONOMY.lossBase + Math.max(0, game.lossStreak - 1) * ECONOMY.lossStep);
     if (!game.sandbox) game.money += moneyGained;
   }
   if (!game.sandbox && !game.training) game.money = Math.min(game.money, ECONOMY.cap);
@@ -6725,7 +6762,7 @@ function spawnDashTrail(entity, fromX, fromY, toX, toY, color) {
   spawnParticles(toX, toY, color, 10, 180);
 }
 
-const GLOBAL_DASH = Object.freeze({ distance: 82, cooldown: 2.1, color: "#67e8f9" });
+const GLOBAL_DASH = Object.freeze({ distance: 62, duration: .16, cooldown: 2.1, color: "#67e8f9" });
 
 function movementDirection(entity = game.player) {
   const moving = Math.hypot(entity?.moveX || 0, entity?.moveY || 0);
@@ -6737,17 +6774,13 @@ function performGlobalDash() {
   const player = game.player;
   if (!player?.alive || game.globalDashCooldown > 0 || game.phase !== "action") return false;
   const direction = movementDirection(player);
-  const fromX = player.x;
-  const fromY = player.y;
-  safeDisplaceEntity(player, direction.x * GLOBAL_DASH.distance, direction.y * GLOBAL_DASH.distance, 8);
-  const distance = Math.hypot(player.x - fromX, player.y - fromY);
-  if (distance < 5) {
-    setMessage("Dash bloqueado.");
-    return false;
-  }
+  game.agentDash = {
+    x: direction.x, y: direction.y, life: GLOBAL_DASH.duration, maxLife: GLOBAL_DASH.duration,
+    speed: GLOBAL_DASH.distance / GLOBAL_DASH.duration, color: GLOBAL_DASH.color,
+    lastX: player.x, lastY: player.y,
+  };
   game.globalDashCooldown = game.sandbox ? 0 : GLOBAL_DASH.cooldown;
   game.achievementDashUses = (game.achievementDashUses || 0) + 1;
-  spawnDashTrail(player, fromX, fromY, player.x, player.y, GLOBAL_DASH.color);
   game.screenTint = { color: "rgba(0, 240, 255, 0.12)", life: 0.14, maxLife: 0.14 };
   playSound("ability");
   return true;
@@ -6756,7 +6789,7 @@ function performGlobalDash() {
 function startJettDirectionalDash() {
   const player = game.player;
   const direction = movementDirection(player);
-  game.agentDash = { x: direction.x, y: direction.y, life: .18, maxLife: .18, speed: 920, color: "#d7f7ff", lastX: player.x, lastY: player.y };
+  game.agentDash = { x: direction.x, y: direction.y, life: .16, maxLife: .16, speed: 720, color: "#d7f7ff", lastX: player.x, lastY: player.y };
   game.screenTint = { color: "rgba(120, 220, 255, 0.2)", life: .24, maxLife: .24 };
   return true;
 }
@@ -6872,7 +6905,12 @@ function deployMoshPit(grenade) {
 function fireSovaHunterFury() {
   const p = game.player;
   const ultimate = p?.ultimate;
-  if (ultimate?.type !== "sova" || ultimate.shots <= 0 || ultimate.fireCooldown > 0) return false;
+  if (ultimate?.type !== "sova" || ultimate.fired || ultimate.fireCooldown > 0) return false;
+  if ((ultimate.charge || 0) < ultimate.chargeTime) {
+    ultimate.charging = true;
+    setMessage("Fúria do Caçador: carregando disparo...");
+    return true;
+  }
   const length = Math.hypot(map.width, map.height) * 1.5;
   const x2 = p.x + Math.cos(p.angle) * length;
   const y2 = p.y + Math.sin(p.angle) * length;
@@ -6883,12 +6921,13 @@ function fireSovaHunterFury() {
     spawnDamageNumber(bot, damage, false);
     if (bot.hp <= 0) eliminateBot(bot, { playerCredit: true, weaponName: "Fúria do Caçador" });
   }
-  ultimate.shots -= 1;
-  ultimate.fireCooldown = .72;
-  game.sovaBeams.push({ x1: p.x, y1: p.y, x2, y2, life: .42, maxLife: .42 });
+  ultimate.fired = true;
+  ultimate.charging = false;
+  ultimate.fireCooldown = 1;
+  game.sovaBeams.push({ x1: p.x, y1: p.y, x2, y2, life: 1.15, maxLife: 1.15 });
   game.shake = Math.max(game.shake, .48);
   spawnParticles(p.x, p.y, "#9ad8ff", 34, 260);
-  if (ultimate.shots <= 0) ultimate.life = Math.min(ultimate.life, .5);
+  ultimate.life = Math.min(ultimate.life, 1.2);
   return true;
 }
 
@@ -6898,8 +6937,11 @@ function detonateGekkoThrash() {
   safeDisplaceEntity(thrash, Math.cos(thrash.angle) * 92, Math.sin(thrash.angle) * 92, 6);
   for (const bot of game.bots) {
     if (!bot.alive || Math.hypot(bot.x - thrash.x, bot.y - thrash.y) > 105 + bot.r) continue;
-    bot.detainedTimer = Math.max(bot.detainedTimer || 0, 6);
-    bot.disarmedTimer = Math.max(bot.disarmedTimer || 0, 6);
+    const previousHp = bot.hp;
+    bot.hp = Math.max(1, bot.hp * .5);
+    bot.gekkoSlowTimer = Math.max(bot.gekkoSlowTimer || 0, 7);
+    bot.disarmedTimer = Math.max(bot.disarmedTimer || 0, 3.5);
+    spawnDamageNumber(bot, Math.round(previousHp - bot.hp), false);
     spawnParticles(bot.x, bot.y, "#d9ff69", 26, 170);
   }
   game.explosions.push({ x: thrash.x, y: thrash.y, r: 0, maxR: 115, life: .62, maxLife: .62, color: "#b7f34a" });
@@ -8220,7 +8262,7 @@ function activateUltimate(entity) {
     if (purchasedUlt.charges === 0) purchasedUlt.agentId = null;
   } else {
     // Consome exatamente o custo de orbs do agente
-    setUltimatePoints(entity, getUltimatePoints(entity) - cost);
+    setUltimatePoints(entity, entity.id === "player" ? getUltimatePoints(entity) - cost : 0);
   }
 
   if (agent.id === "neon") {
@@ -8313,12 +8355,12 @@ function activateUltimate(entity) {
     }
     addUltimateEffect("healing-beam", entity, "#62e6a0", 0.9);
   } else if (agent.id === "sova") {
-    entity.ultimate = { type: "sova", life: 10, maxLife: 10, shots: 3, fireCooldown: 0 };
-    setMessage("Fúria do Caçador: dispare até 3 raios que atravessam paredes.");
+    entity.ultimate = { type: "sova", life: 12, maxLife: 12, fired: false, charging: true, charge: 0, chargeTime: 1.15, fireCooldown: 0 };
+    setMessage("Fúria do Caçador: carregue e dispare um raio devastador.");
     spawnParticles(entity.x, entity.y, "#9ad8ff", 42, 250);
   } else if (agent.id === "gekko") {
     entity.ultimate = { type: "gekko", life: 9, maxLife: 9 };
-    game.gekkoThrash = { x: entity.x, y: entity.y, r: 14, speed: 285, angle: entity.angle, life: 9, maxLife: 9 };
+    game.gekkoThrash = { x: entity.x, y: entity.y, r: 14, speed: 330, angle: entity.angle, life: 11, maxLife: 11 };
     setMessage("Thrash conectada: guie com WASD e dispare para avançar e deter inimigos.");
     spawnParticles(entity.x, entity.y, "#b7f34a", 38, 230);
   } else {
@@ -8504,7 +8546,6 @@ function plantOrDefuse(dt) {
         spawnParticles(game.spike.x, game.spike.y, "#66e48f", 28, 180);
         game.stats.defuses += 1;
         awardUltimatePoint(p, "Spike desarmada");
-        if (!game.sandbox) game.money += ECONOMY.objective;
         endRound("defenders", "Spike desarmada. Defensores venceram.", "defuse");
       }
     } else if (game.spike.state === "planted") {
@@ -9020,7 +9061,8 @@ function moveBotToward(bot, target, dt, speedScale = 1) {
   bot.angle = angle;
   const ultimateSpeed = bot.ultimate?.type === "neon" ? 1.22 : 1;
   const shadowSlow = shadowSlowMultiplier(bot);
-  const movedNow = (bot.detainedTimer || 0) > 0 ? 0 : moveEntity(bot, Math.cos(angle) * bot.speed * speedScale * ultimateSpeed * shadowSlow * dt, Math.sin(angle) * bot.speed * speedScale * ultimateSpeed * shadowSlow * dt, map.walls);
+  const gekkoSlow = (bot.gekkoSlowTimer || 0) > 0 ? .5 : 1;
+  const movedNow = (bot.detainedTimer || 0) > 0 ? 0 : moveEntity(bot, Math.cos(angle) * bot.speed * speedScale * ultimateSpeed * shadowSlow * gekkoSlow * dt, Math.sin(angle) * bot.speed * speedScale * ultimateSpeed * shadowSlow * gekkoSlow * dt, map.walls);
   bot.moving = movedNow > 0.5;
   if (movedNow < 0.5) {
     bot.stuck += dt;
@@ -10210,7 +10252,7 @@ function updateAgentObjects(dt) {
     grenade.y += grenade.vy * dt;
     // Conserva o mesmo arrasto percebido a 60 Hz sem depender da quantidade
     // de frames renderizados pelo dispositivo.
-    const grenadeDrag = Math.pow(0.98, dt * 60);
+    const grenadeDrag = grenade.kind === "sova-shock" ? 1 : Math.pow(0.98, dt * 60);
     grenade.vx *= grenadeDrag;
     grenade.vy *= grenadeDrag;
     grenade.life -= dt;
@@ -10255,20 +10297,9 @@ function updateAgentObjects(dt) {
 
   for (const zone of game.moshZones) {
     zone.life -= dt;
-    zone.tick -= dt;
-    if (zone.life > .38 && zone.tick <= 0) {
-      zone.tick = .22;
-      for (const bot of game.bots) {
-        if (!bot.alive || Math.hypot(bot.x - zone.x, bot.y - zone.y) > zone.r + bot.r) continue;
-        const damage = applyDamage(bot, 7);
-        game.stats.damage += Math.round(damage);
-        spawnDamageNumber(bot, damage, false);
-        if (bot.hp <= 0) eliminateBot(bot, { playerCredit: true, weaponName: "Mosh Pit" });
-      }
-    }
     if (!zone.exploded && zone.life <= .38) {
       zone.exploded = true;
-      explodeArea(zone.x, zone.y, zone.r, 145, "#b7f34a", { weaponName: "Mosh Pit", particles: 58, power: 290, shake: .46 });
+      explodeArea(zone.x, zone.y, zone.r, 125, "#b7f34a", { weaponName: "Mosh Pit", particles: 72, power: 320, shake: .52 });
     }
   }
   game.moshZones = game.moshZones.filter((zone) => zone.life > 0);
@@ -10281,7 +10312,10 @@ function updateAgentObjects(dt) {
     const length = Math.hypot(inputX, inputY);
     const direction = length > .05
       ? { x: inputX / length, y: inputY / length }
-      : { x: Math.cos(game.player.angle), y: Math.sin(game.player.angle) };
+      : (() => {
+          const aimAngle = Math.atan2(mouse.y - thrash.y, mouse.x - thrash.x);
+          return { x: Math.cos(aimAngle), y: Math.sin(aimAngle) };
+        })();
     moveEntity(thrash, direction.x * thrash.speed * dt, direction.y * thrash.speed * dt, map.walls);
     thrash.angle = Math.atan2(direction.y, direction.x);
     if (thrash.life <= 0) detonateGekkoThrash();
@@ -10421,6 +10455,7 @@ function updateTimers(dt) {
     if (!entity) continue;
     entity.detainedTimer = Math.max(0, (entity.detainedTimer || 0) - dt);
     entity.disarmedTimer = Math.max(0, (entity.disarmedTimer || 0) - dt);
+    entity.gekkoSlowTimer = Math.max(0, (entity.gekkoSlowTimer || 0) - dt);
     if (!entity?.ultimate) continue;
     if (!entity.alive) {
       entity.ultimate = null;
@@ -10429,6 +10464,7 @@ function updateTimers(dt) {
     entity.ultimate.life -= dt;
     if (entity.ultimate.type === "sova") {
       entity.ultimate.fireCooldown = Math.max(0, (entity.ultimate.fireCooldown || 0) - dt);
+      if (!entity.ultimate.fired) entity.ultimate.charge = Math.min(entity.ultimate.chargeTime, (entity.ultimate.charge || 0) + dt);
     }
     if (entity.ultimate.life <= 0) entity.ultimate = null;
   }
@@ -11001,6 +11037,42 @@ function drawHeldWeapon(entity, weapon, kind) {
   }
 }
 
+function drawAgentAbilityWeapon(entity, kind) {
+  if (kind !== "player") return false;
+  const sovaActive = game.equippedAbility?.type === "sova-shock" || entity.ultimate?.type === "sova";
+  const gekkoActive = game.equippedAbility?.type === "gekko-mosh" || entity.ultimate?.type === "gekko";
+  if (sovaActive) {
+    if (sovaBowSprite.complete && sovaBowSprite.naturalWidth) {
+      const width = 74;
+      const height = width * (sovaBowSprite.naturalHeight / sovaBowSprite.naturalWidth);
+      // O punho do arco fica alinhado à mão e a flecha segue o eixo frontal
+      // da entidade, que já foi rotacionado para a direção da mira.
+      ctx.drawImage(sovaBowSprite, entity.r - width * .52, -height / 2, width, height);
+    } else {
+      ctx.strokeStyle = "#9ad8ff"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(entity.r + 9, 0, 20, -Math.PI / 2, Math.PI / 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(entity.r + 9, -20); ctx.lineTo(entity.r + 9, 20); ctx.stroke();
+    }
+    return true;
+  }
+  if (gekkoActive) {
+    if (gekkoMoshSprite.complete && gekkoMoshSprite.naturalWidth) {
+      ctx.save();
+      ctx.translate(entity.r + 14, 0);
+      ctx.rotate(Math.sin(performance.now() / 140) * .08);
+      ctx.shadowColor = "#b7f34a";
+      ctx.shadowBlur = 12;
+      ctx.drawImage(gekkoMoshSprite, -19, -19, 38, 38);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = "#b7f34a"; ctx.strokeStyle = "#efffb8"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(entity.r + 12, 0, 16, 11, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+    return true;
+  }
+  return false;
+}
+
 function drawEntity(entity, color, label, kind = "bot") {
   if (!entity.alive) return;
   const rendered = interpolatedPosition(entity);
@@ -11048,7 +11120,7 @@ function drawEntity(entity, color, label, kind = "bot") {
     ctx.arc(0, 0, entity.r + 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * armorRatio);
     ctx.stroke();
   }
-  drawHeldWeapon(entity, weapon, kind);
+  if (!drawAgentAbilityWeapon(entity, kind)) drawHeldWeapon(entity, weapon, kind);
   ctx.fillStyle = "#0b1115";
   ctx.fillRect(-8, -entity.r - 2, 16, 5);
   ctx.fillStyle = "rgba(255,255,255,0.28)";
@@ -11103,6 +11175,22 @@ function drawEntity(entity, color, label, kind = "bot") {
     ctx.fillRect(entity.x - 24, barY, Math.max(0, Math.min(1, reloadRatio)) * 48, 6);
     ctx.strokeStyle = "rgba(255,255,255,0.45)";
     ctx.strokeRect(entity.x - 24, barY, 48, 6);
+  }
+
+  if (kind === "player" && entity.ultimate?.type === "sova" && !entity.ultimate.fired) {
+    const chargeRatio = clamp01((entity.ultimate.charge || 0) / Math.max(.01, entity.ultimate.chargeTime || 1));
+    const barY = entity.y + entity.r + (game.outbreak ? 40 : 15);
+    ctx.fillStyle = "rgba(0, 8, 16, .82)"; ctx.fillRect(entity.x - 34, barY, 68, 7);
+    ctx.fillStyle = chargeRatio >= 1 ? "#dff6ff" : "#68b5ff"; ctx.fillRect(entity.x - 32, barY + 2, 64 * chargeRatio, 3);
+  }
+  if (kind === "player" && game.equippedAbility?.type === "sova-shock") {
+    const ratio = clamp01((game.equippedAbility.charge || 0) / 1.35);
+    const distance = Math.round(360 + ratio * 520);
+    const barY = entity.y + entity.r + (game.outbreak ? 40 : 15);
+    ctx.fillStyle = "rgba(0, 8, 16, .86)"; ctx.fillRect(entity.x - 38, barY, 76, 12);
+    ctx.fillStyle = "#68b5ff"; ctx.fillRect(entity.x - 36, barY + 2, 72 * ratio, 4);
+    ctx.fillStyle = "#dff6ff"; ctx.font = "8px monospace"; ctx.textAlign = "center";
+    ctx.fillText(`${distance}px`, entity.x, barY + 11); ctx.textAlign = "left";
   }
 
   if (label) {
@@ -12103,19 +12191,15 @@ function drawAgentObjects() {
     ctx.save();
     ctx.translate(thrash.x, thrash.y);
     ctx.rotate(thrash.angle);
-    ctx.fillStyle = "#b7f34a";
-    ctx.strokeStyle = "#efffb8";
     ctx.shadowColor = "#b7f34a";
     ctx.shadowBlur = 20;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(22, 0);
-    ctx.lineTo(-10, -13);
-    ctx.lineTo(-4, 0);
-    ctx.lineTo(-10, 13);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
+    if (gekkoThrashSprite.complete && gekkoThrashSprite.naturalWidth) {
+      const pulse = 46 + Math.sin(performance.now() / 105) * 3;
+      ctx.drawImage(gekkoThrashSprite, -pulse / 2, -pulse / 2, pulse, pulse);
+    } else {
+      ctx.fillStyle = "#b7f34a"; ctx.strokeStyle = "#efffb8"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(22, 0); ctx.lineTo(-10, -13); ctx.lineTo(-4, 0); ctx.lineTo(-10, 13); ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -13035,6 +13119,9 @@ function updateUi() {
     const status = element.querySelector("small");
     if (status) status.textContent = label;
   };
+  const activeAgentPresentation = agentPresentation(game.selectedAgent);
+  if (ui.primaryCooldownWipe) ui.primaryCooldownWipe.style.setProperty("--ability-icon", `url("${activeAgentPresentation.abilityIcon || activeAgentPresentation.icon}")`);
+  if (ui.ultimateCooldownWipe && !outbreakGadgetDefinition) ui.ultimateCooldownWipe.style.setProperty("--ability-icon", `url("${activeAgentPresentation.ultimateIcon || activeAgentPresentation.icon}")`);
   updateCooldownWipe(ui.dashCooldownWipe, game.globalDashCooldown || 0, GLOBAL_DASH.cooldown,
     game.globalDashCooldown > 0 ? `${Math.ceil(game.globalDashCooldown)}S` : "PRONTO",
     { visible: game.globalDashCooldown > 0 });
@@ -13127,7 +13214,7 @@ function updateUi() {
       ? "WASD move, E habilidade, Q dash, V Ultimate, F planta, B loja, Esc pause."
       : "WASD move, E habilidade, Q dash, V Ultimate, F desarma, B loja, Esc pause.");
   toggleClass(ui.sandboxTools, "hidden", !game.sandbox || game.menuState !== "none");
-  toggleClass(ui.sandboxPanel, "hidden", !game.sandbox || !game.sandboxPanelOpen);
+  toggleClass(ui.sandboxPanel, "hidden", !(game.sandbox || game.adminCheatsOpen) || !game.sandboxPanelOpen);
   toggleClass(ui.pauseSandboxButton, "hidden", !game.sandbox);
   setText(ui.godModeButton, `God: ${game.godMode ? "ON" : "OFF"}`);
   setSwitch(ui.sandboxGodToggle, game.godMode);
@@ -13307,7 +13394,7 @@ function renderSandboxBotList() {
 
 function renderSandboxPanel() {
   populateSandboxSelectors();
-  ui.sandboxPanel?.classList.toggle("hidden", !game.sandbox || !game.sandboxPanelOpen);
+  ui.sandboxPanel?.classList.toggle("hidden", !(game.sandbox || game.adminCheatsOpen) || !game.sandboxPanelOpen);
   setSandboxTab(game.sandboxTab);
   setSwitch(ui.sandboxPierceWallsToggle, game.sandboxBulletsPierceWalls);
   setSwitch(ui.sandboxGodToggle, game.godMode);
@@ -13326,6 +13413,7 @@ function openSandboxPanel() {
 function closeSandboxPanel() {
   const resumeSandbox = game.sandbox && game.paused && game.menuState === "none";
   game.sandboxPanelOpen = false;
+  game.adminCheatsOpen = false;
   cancelSandboxPlacement();
   if (resumeSandbox) game.paused = false;
   renderSandboxPanel();
@@ -13804,6 +13892,7 @@ function agentPresentation(agent) {
       ultimate: "Sobrecarga Cinética",
       icon: "./assets/images/Neon_icon.webp",
       artwork: "./assets/images/Neon_Artwork_Full.webp",
+      ultimateIcon: "./assets/images/Overdrive.webp",
     },
     viper: {
       className: "Controladora",
@@ -13811,6 +13900,8 @@ function agentPresentation(agent) {
       ultimate: "Poço Químico",
       icon: "./assets/images/Viper_icon.webp",
       artwork: "./assets/images/Viper_Artwork_Full.webp",
+      abilityIcon: "./assets/images/Poison_Cloud.webp",
+      ultimateIcon: "./assets/images/Viper%27s_Pit.webp",
     },
     sage: {
       className: "Sentinela",
@@ -13818,6 +13909,8 @@ function agentPresentation(agent) {
       ultimate: "Restauração Total",
       icon: "./assets/images/Sage_icon.webp",
       artwork: "./assets/images/Sage_Artwork_Full.webp",
+      abilityIcon: "./assets/images/Healing_Orb.webp",
+      ultimateIcon: "./assets/images/Resurrection.webp",
     },
     omen: {
       className: "Controlador",
@@ -13825,6 +13918,8 @@ function agentPresentation(agent) {
       ultimate: "Domínio das Sombras",
       icon: "./assets/images/Omen_icon.webp",
       artwork: "./assets/images/Omen_Artwork_Full.webp",
+      abilityIcon: "./assets/images/Dark_Cover.webp",
+      ultimateIcon: "./assets/images/From_the_Shadows.webp",
     },
     jett: {
       className: "Duelista",
@@ -13832,6 +13927,8 @@ function agentPresentation(agent) {
       ultimate: "Tormenta de Aço",
       icon: "./assets/images/Jett_icon.webp",
       artwork: "./assets/images/Jett_Artwork_Full.webp",
+      abilityIcon: "./assets/images/Tailwind.webp",
+      ultimateIcon: "./assets/images/Blade_Storm.webp",
     },
     killjoy: {
       className: "Sentinela",
@@ -13839,6 +13936,8 @@ function agentPresentation(agent) {
       ultimate: "Confinamento",
       icon: "./assets/images/Killjoy_icon.webp",
       artwork: "./assets/images/Killjoy_Artwork_Full.webp",
+      abilityIcon: "./assets/images/Turret.webp",
+      ultimateIcon: "./assets/images/Lockdown.webp",
     },
     raze: {
       className: "Duelista",
@@ -13846,6 +13945,8 @@ function agentPresentation(agent) {
       ultimate: "Estraga-prazeres",
       icon: "./assets/images/Raze_icon.webp",
       artwork: "./assets/images/Raze_Artwork_Full.webp",
+      abilityIcon: "./assets/images/Paint_Shells.webp",
+      ultimateIcon: "./assets/images/Showstopper.webp",
     },
     sova: {
       className: "Iniciador",
@@ -13853,6 +13954,8 @@ function agentPresentation(agent) {
       ultimate: "Fúria do Caçador",
       icon: "./assets/images/Sova_icon.webp",
       artwork: "./assets/images/Sova_Artwork_Full.webp",
+      abilityIcon: "./assets/images/Shock_Bolt.webp",
+      ultimateIcon: "./assets/images/Hunter%27s_Fury.webp",
     },
     gekko: {
       className: "Iniciador",
@@ -13860,6 +13963,8 @@ function agentPresentation(agent) {
       ultimate: "Thrash",
       icon: "./assets/images/Gekko_icon.webp",
       artwork: "./assets/images/Gekko_Artwork_Full.webp",
+      abilityIcon: "./assets/images/Mosh_Pit.webp",
+      ultimateIcon: "./assets/images/Thrash.webp",
     },
     yoru: {
       className: "Duelista",
@@ -13867,6 +13972,8 @@ function agentPresentation(agent) {
       ultimate: "Espionagem Dimensional",
       icon: "./assets/images/Yoru_icon.webp",
       artwork: "./assets/images/Yoru_Artwork_Full.webp",
+      abilityIcon: "./assets/images/Gatecrash.webp",
+      ultimateIcon: "./assets/images/Dimensional_Drift.webp",
     },
   };
   return details[agent.id] || {
@@ -13947,10 +14054,10 @@ function showAgentSelect(onPick, returnState = "main") {
        <p></p>
        <div class="agent-abilities">
          <div class="ability-chip ability-chip-basic agent-preview-ability">
-           <i>E</i><span><small>Habilidade</small><b></b><span class="agent-ability-cooldown"></span></span>
+           <i><img alt=""><em>E</em></i><span><small>Habilidade</small><b></b><span class="agent-ability-cooldown"></span></span>
          </div>
          <div class="ability-chip ability-chip-ultimate agent-preview-ability">
-           <i>V</i><span><small>Ultimate</small><b></b></span>
+           <i><img alt=""><em>V</em></i><span><small>Ultimate</small><b></b></span>
          </div>
        </div>
        <button type="button" class="agent-confirm" disabled>Confirmar agente</button>
@@ -13978,6 +14085,10 @@ function showAgentSelect(onPick, returnState = "main") {
      const cooldownEl = preview.querySelector(".agent-ability-cooldown");
      if (cooldownEl) cooldownEl.textContent = `(${agent.cooldown}s recarga)`;
      preview.querySelector(".ability-chip-ultimate b").textContent = presentation.ultimate;
+     const abilityIcon = preview.querySelector(".ability-chip-basic img");
+     const ultimateIcon = preview.querySelector(".ability-chip-ultimate img");
+     if (abilityIcon) { abilityIcon.src = presentation.abilityIcon || presentation.icon; abilityIcon.alt = `Ícone de ${agent.ability}`; }
+     if (ultimateIcon) { ultimateIcon.src = presentation.ultimateIcon || presentation.icon; ultimateIcon.alt = `Ícone de ${presentation.ultimate}`; }
      preloadAgentAsset(presentation.artwork).then((src) => {
        if (renderId !== previewRenderId) return;
        previewImage.src = src;
@@ -13985,8 +14096,60 @@ function showAgentSelect(onPick, returnState = "main") {
      });
   };
 
-  const confirmSelection = () => {
+  const isAgentUnlocked = (agent) => STARTER_AGENT_IDS.includes(agent.id)
+    || Boolean(commerceState.profile?.isAdmin || currentProfile?.isAdmin)
+    || commerceState.profile?.unlockedAgentIds?.includes(agent.id);
+
+  const renderAgentCardsState = () => {
+    for (const card of ui.agentSelectGrid.querySelectorAll(".agent-card")) {
+      const agent = agents.find((entry) => entry.id === card.dataset.agentId);
+      const unlocked = agent && isAgentUnlocked(agent);
+      card.classList.toggle("is-locked", !unlocked);
+      card.querySelector(".agent-lock-tag")?.remove();
+      if (!unlocked) card.insertAdjacentHTML("beforeend", `<span class="agent-lock-tag">${Number(commerceState.profile?.agentUnlockPrice) || AGENT_UNLOCK_PRICE} C</span>`);
+    }
+    if (selectedAgent) {
+      confirmButton.textContent = isAgentUnlocked(selectedAgent)
+        ? `Confirmar ${selectedAgent.name}`
+        : `Desbloquear ${selectedAgent.name} · ${Number(commerceState.profile?.agentUnlockPrice) || AGENT_UNLOCK_PRICE} C`;
+    }
+  };
+
+  const confirmSelection = async () => {
     if (!selectedAgent) return;
+    if (!isAgentUnlocked(selectedAgent)) {
+      if (!commerceAuthorization()) {
+        showUxToast("Entre em uma conta para desbloquear agentes.", { title: "AGENTE BLOQUEADO", tone: "warning" });
+        return;
+      }
+      const balance = Number(commerceState.profile?.coreBalance) || 0;
+      const price = Number(commerceState.profile?.agentUnlockPrice) || AGENT_UNLOCK_PRICE;
+      if (balance < price) {
+        showUxToast(`Você precisa de ${price} C para desbloquear ${selectedAgent.name}.`, { title: "CORE INSUFICIENTE", tone: "warning" });
+        return;
+      }
+      const previousUnlocked = [...(commerceState.profile.unlockedAgentIds || STARTER_AGENT_IDS)];
+      commerceState.profile.unlockedAgentIds = [...new Set([...previousUnlocked, selectedAgent.id])];
+      commerceState.profile.coreBalance = balance - price;
+      updateCoreBalances(commerceState.profile.coreBalance);
+      renderAgentCardsState();
+      try {
+        const payload = await requestApi(`/api/commerce/agents/${encodeURIComponent(selectedAgent.id)}/purchase`, {
+          method: "POST", headers: commerceAuthorization(), body: "{}",
+        });
+        commerceState.profile.coreBalance = payload.coreBalance;
+        updateCoreBalances(payload.coreBalance);
+        playSound("skin_purchase");
+        showUxToast(`${selectedAgent.name} agora faz parte do seu protocolo.`, { title: "AGENTE DESBLOQUEADO", tone: "success" });
+      } catch (error) {
+        commerceState.profile.unlockedAgentIds = previousUnlocked;
+        commerceState.profile.coreBalance = balance;
+        updateCoreBalances(balance);
+        renderAgentCardsState();
+        showUxToast(error.message, { title: "DESBLOQUEIO DESFEITO", tone: "warning" });
+        return;
+      }
+    }
     game.selectedAgent = selectedAgent;
     game.agentLocked = true;
     hideAgentSelect();
@@ -14003,6 +14166,7 @@ function showAgentSelect(onPick, returnState = "main") {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "agent-card";
+    button.dataset.agentId = agent.id;
     button.style.setProperty("--agent-color", agent.color);
     button.innerHTML = `
       <span class="agent-card-portrait"><img src="${presentation.icon}" alt="Retrato de ${agent.name}"></span>
@@ -14023,11 +14187,12 @@ function showAgentSelect(onPick, returnState = "main") {
         card.classList.toggle("selected", card === button);
       }
       confirmButton.disabled = false;
-      confirmButton.textContent = `Confirmar ${agent.name}`;
+      renderAgentCardsState();
     });
     button.addEventListener("dblclick", confirmSelection);
     ui.agentSelectGrid.appendChild(button);
   }
+  renderAgentCardsState();
   renderPreview(game.selectedAgent || agents[0]);
   ui.agentOverlay.classList.remove("hidden");
   game.paused = true;
@@ -14816,7 +14981,6 @@ const OPTIONS_TABS = [
   { id: "audio", label: "ÁUDIO", icon: "volume-2", description: "Mixagem e efeitos" },
   { id: "video", label: "VÍDEO", icon: "monitor", description: "Imagem e desempenho" },
   { id: "accessibility", label: "ACESSIBILIDADE", icon: "accessibility", description: "Leitura e assistência" },
-  { id: "developer", label: "DESENVOLVEDOR", icon: "terminal", description: "Ferramentas de teste", adminOnly: true },
 ];
 
 const OPTIONS_STORAGE_KEY = "valorant2d-options";
@@ -15698,7 +15862,6 @@ function renderOptionsContent() {
   if (activeOptionsTab === "audio") return renderAudioOptions();
   if (activeOptionsTab === "video") return renderVideoOptions();
   if (activeOptionsTab === "accessibility") return renderAccessibilityOptions();
-  if (activeOptionsTab === "developer") return renderDeveloperOptions();
   return renderGeneralOptions();
 }
 
@@ -15814,9 +15977,7 @@ function renderOptionsMenu(skipFade = false) {
   renderOptionsContent().forEach((section) => content.appendChild(section));
   workspace.append(tabs, content);
   const footer = createOptionElement("footer", "options-footer");
-  const footerItems = activeOptionsTab === "developer" ? [
-    { label: "VOLTAR", action: backFromOptions },
-  ] : [
+  const footerItems = [
     { label: "APLICAR", action: applyOptionsSettings, primary: true },
     { label: "VOLTAR", action: backFromOptions },
   ];
@@ -17428,6 +17589,110 @@ window.Valorant2DAdminBridge = Object.freeze({
       headers,
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
+  },
+  async loginAs(target) {
+    const payload = await this.api(`/api/admin-terminal/accounts/${encodeURIComponent(target)}/login-as`, { method: "POST", body: {} });
+    saveSession(payload);
+    window.valorant2DAdminTerminal?.toggle(false);
+    enterGameWithProfile({ ...payload.user, isGuest: false, token: payload.token });
+    return `[SUCCESS] Sessão iniciada como ${payload.user.username}.`;
+  },
+  setWave(rawWave) {
+    if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
+    const wave = Number.parseInt(rawWave, 10);
+    if (!game.outbreak || !game.player?.alive) throw new Error("Inicie uma partida Outbreak antes de selecionar a wave.");
+    if (!Number.isInteger(wave) || wave < 1 || wave > 999) throw new Error("Informe uma wave entre 1 e 999.");
+    closeShop({ force: true });
+    game.outbreakShopPending = false;
+    game.outbreakAdminShopResume = false;
+    game.bots = [];
+    game.bullets = [];
+    game.phase = "action";
+    game.phaseTime = 9999;
+    game.clockActive = true;
+    deployOutbreakWave(wave);
+    updateUi();
+    return `Wave ${wave} iniciada.`;
+  },
+  openShop(mode) {
+    if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
+    if (!game.player?.alive || game.menuState !== "none") throw new Error("Inicie uma partida antes de abrir a loja.");
+    const normalized = String(mode || "").toLowerCase();
+    if (!["default", "blackout", "outbreak"].includes(normalized)) throw new Error("Use default, blackout ou outbreak.");
+    if (normalized === "outbreak") {
+      if (!game.outbreak) throw new Error("A loja Outbreak exige uma partida Outbreak ativa.");
+      openOutbreakShopBreak({ resumeCurrentWave: true });
+    } else {
+      if (game.outbreak) throw new Error("Use a loja do modo correspondente à partida ativa.");
+      game.phase = "buy";
+      game.phaseTime = Number.POSITIVE_INFINITY;
+      game.clockActive = false;
+      openShop();
+    }
+    return `Loja ${normalized} aberta.`;
+  },
+  async openRoulette() {
+    if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
+    window.valorant2DAdminTerminal?.toggle(false);
+    await openAdminSkinRoulette();
+    return "Roleta administrativa aberta.";
+  },
+  matchWeapons: () => weapons.map((weapon) => weapon.id),
+  give(kind, rawValue) {
+    if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
+    if (!game.player?.alive) throw new Error("Nenhum jogador ativo na partida.");
+    const type = String(kind || "").toLowerCase();
+    const value = String(rawValue || "").trim();
+    if (type === "credits") {
+      const amount = Number.parseInt(value, 10);
+      if (!Number.isInteger(amount) || amount < 1 || amount > 999999) throw new Error("Créditos devem estar entre 1 e 999999.");
+      game.money = Math.min(999999, game.money + amount);
+      updateShopState(); updateUi();
+      return `${amount} créditos adicionados à partida.`;
+    }
+    if (type === "weapon") {
+      const weapon = weapons.find((entry) => entry.id === value || entry.name.toLowerCase() === value.toLowerCase());
+      if (!weapon) throw new Error("Arma desconhecida.");
+      game.ownedWeapons.add(weapon.id);
+      game.selectedWeapon = weapon;
+      game.player.weapon = weapon;
+      game.player.ammo = currentMagSize();
+      updateUi();
+      return `${weapon.name} equipada.`;
+    }
+    if (type !== "item") throw new Error("Use credits, weapon ou item.");
+    if (value === "armor") { game.player.maxArmor = Math.max(100, game.player.maxArmor || 0); game.player.armor = game.player.maxArmor; game.armor = game.player.armor; }
+    else if (value === "ammo") game.player.ammo = currentMagSize();
+    else if (value === "health") game.player.hp = game.player.maxHp;
+    else if (value === "ultimate") setUltimatePoints(game.player, getUltCost(game.player));
+    else if (value === "spike") { game.spike.state = "carried"; game.spike.owner = "player"; }
+    else throw new Error("Item desconhecido. Use armor, ammo, health, ultimate ou spike.");
+    updateUi();
+    return `Item ${value} concedido.`;
+  },
+  swapTeam() {
+    if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
+    if (!game.player) throw new Error("Nenhuma partida ativa.");
+    game.playerSide = opposingSide(game.playerSide);
+    const spawn = game.playerSide === "attackers" ? map.attackersSpawn : (map.playerDefenderSpawn || map.defendersSpawn?.[0]);
+    if (spawn) { game.player.x = spawn.x; game.player.y = spawn.y; sanitizeEntityPosition(game.player); }
+    updateUi();
+    return `Jogador movido para ${game.playerSide}.`;
+  },
+  openCheats() {
+    if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
+    if (!game.player) throw new Error("Nenhuma partida ativa.");
+    game.adminCheatsOpen = true;
+    game.sandboxPanelOpen = true;
+    renderSandboxPanel();
+    ui.sandboxPanel?.classList.remove("hidden");
+    return "Painel de cheats aberto.";
+  },
+  setTimeScale(scale) {
+    if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
+    if (!Number.isFinite(scale) || scale < 0.1 || scale > 4) throw new Error("A escala deve estar entre 0.1 e 4.");
+    game.timeScale = scale;
+    return `Timescale definido como ${scale}x.`;
   },
   playVfx(effectName) {
     if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");

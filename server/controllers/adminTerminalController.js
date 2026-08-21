@@ -35,6 +35,26 @@ function publicAccount(row) {
   return safe;
 }
 
+function sessionUser(row) {
+  return {
+    id: row.id, username: row.username, email: row.email || null,
+    accountProvider: row.auth_provider || 'local', avatarUrl: row.avatar_url || null,
+    coreBalance: Number(row.core_balance) || 0,
+    coreEarnedTotal: Number(row.core_earned_total) || 0,
+    isAdmin: Boolean(row.is_admin), role: row.is_admin ? 'admin' : 'player',
+    onboardingCompleted: Boolean(row.onboarding_completed),
+    menuTourCompleted: Boolean(row.menu_tour_completed), createdAt: row.data_criacao,
+  };
+}
+
+function normalizeCode(value) {
+  return String(value || '').trim().toUpperCase();
+}
+
+function codeHash(value) {
+  return crypto.createHash('sha256').update(normalizeCode(value), 'utf8').digest('hex');
+}
+
 async function uniqueUsername(email) {
   const base = email.split('@')[0]
     .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
@@ -147,6 +167,78 @@ async function updateRole(request, response, next) {
   } catch (error) { next(error); }
 }
 
+async function loginAsAccount(request, response, next) {
+  try {
+    const actor = await requireAdmin(request, response); if (!actor) return;
+    const account = await AdminTerminal.findAccount(request.params.target);
+    if (!account || account.is_banned) return response.status(404).json({ error: 'Conta ativa não encontrada.' });
+    const session = await Session.create(account.id);
+    securityAudit('admin_account_impersonate', request, { userId: actor.id, target: account.uuid, success: true });
+    response.json({ token: session.token, expiresAt: session.expirationDate, user: sessionUser(account) });
+  } catch (error) { next(error); }
+}
+
+async function updateCredential(request, response, next) {
+  try {
+    const actor = await requireAdmin(request, response); if (!actor) return;
+    const field = String(request.body?.field || '').trim();
+    const value = String(request.body?.value || '');
+    const columns = { password: 'senha_hash', question: 'pergunta_seguranca', answer: 'resposta_seguranca' };
+    if (!columns[field]) return response.status(400).json({ error: 'Campo de credencial inválido.' });
+    let storedValue = value.trim();
+    if (field === 'password') {
+      if (value.length < 8 || value.length > 72) return response.status(400).json({ error: 'A senha deve ter entre 8 e 72 caracteres.' });
+      storedValue = await hashPassword(value);
+    } else if (field === 'answer') {
+      if (storedValue.length < 2 || storedValue.length > 100) return response.status(400).json({ error: 'Resposta de segurança inválida.' });
+      storedValue = await hashPassword(storedValue.normalize('NFKC').toLocaleLowerCase('pt-BR'));
+    } else if (storedValue.length < 4 || storedValue.length > 160) {
+      return response.status(400).json({ error: 'Pergunta de segurança inválida.' });
+    }
+    const account = await AdminTerminal.updateCredential(request.params.target, columns[field], storedValue);
+    if (!account) return response.status(404).json({ error: 'Conta não encontrada.' });
+    if (field === 'password') await AdminTerminal.revokeSessions(account.id);
+    securityAudit(`admin_account_${field}_update`, request, { userId: actor.id, target: account.uuid, success: true });
+    response.json({ account: publicAccount(account), field });
+  } catch (error) { next(error); }
+}
+
+async function listCodes(request, response, next) {
+  try {
+    const actor = await requireAdmin(request, response); if (!actor) return;
+    response.json({ codes: await AdminTerminal.listCodes() });
+  } catch (error) { next(error); }
+}
+
+async function createCode(request, response, next) {
+  try {
+    const actor = await requireAdmin(request, response); if (!actor) return;
+    const code = normalizeCode(request.body?.code);
+    const amount = Number(request.body?.amount);
+    if (!/^[A-Z0-9_-]{4,32}$/.test(code) || !Number.isInteger(amount) || amount < 1 || amount > 10000) {
+      return response.status(400).json({ error: 'Use um código de 4 a 32 caracteres e recompensa entre 1 e 10.000 C.' });
+    }
+    try {
+      const created = await AdminTerminal.createCode({ codeHash: codeHash(code), codeDisplay: code, coreAmount: amount, createdBy: actor.id });
+      securityAudit('admin_code_create', request, { userId: actor.id, target: code, amount, success: true });
+      response.status(201).json({ code: created });
+    } catch (error) {
+      if (error.code === '23505') return response.status(409).json({ error: 'Este código já existe.' });
+      throw error;
+    }
+  } catch (error) { next(error); }
+}
+
+async function deleteCode(request, response, next) {
+  try {
+    const actor = await requireAdmin(request, response); if (!actor) return;
+    const removed = await AdminTerminal.deleteCode(request.params.code);
+    if (!removed) return response.status(404).json({ error: 'Código não encontrado.' });
+    securityAudit('admin_code_delete', request, { userId: actor.id, target: removed.code_display, success: true });
+    response.json({ code: removed });
+  } catch (error) { next(error); }
+}
+
 async function mutateInventory(request, response, next) {
   try {
     const actor = await requireAdmin(request, response); if (!actor) return;
@@ -207,5 +299,6 @@ async function ping(request, response, next) {
 
 module.exports = {
   banAccount, broadcast, createAccount, kickPlayer, listAccounts, mutateInventory,
-  ping, pollEvents, updateCore, updateRole, viewAccount,
+  ping, pollEvents, updateCore, updateRole, viewAccount, loginAsAccount,
+  updateCredential, listCodes, createCode, deleteCode,
 };

@@ -24,7 +24,7 @@
       this.root.className = 'admin-terminal hidden';
       this.root.setAttribute('aria-hidden', 'true');
       this.root.innerHTML = `
-        <header><strong>V2D ADMIN TERMINAL</strong><span>F8 / ~ para fechar</span></header>
+        <header><strong>V2D ADMIN TERMINAL</strong><div><span>F8 / Shift+T</span><button type="button" class="admin-terminal-compact" aria-label="Recolher terminal" title="Recolher terminal">⌃</button><button type="button" class="admin-terminal-close" aria-label="Fechar terminal" title="Fechar terminal">×</button></div></header>
         <div class="admin-terminal-log" role="log" aria-live="polite"></div>
         <div class="admin-terminal-suggestions hidden" role="listbox"></div>
         <div class="admin-terminal-prompt"><span>admin@server:~$</span><input type="text" autocomplete="off" spellcheck="false" aria-label="Comando administrativo"><button type="button" class="admin-terminal-submit" aria-label="Enviar comando">ENVIAR</button></div>`;
@@ -33,11 +33,15 @@
       this.input = this.root.querySelector('input');
       this.suggestionsBox = this.root.querySelector('.admin-terminal-suggestions');
       this.submitButton = this.root.querySelector('.admin-terminal-submit');
+      this.compactButton = this.root.querySelector('.admin-terminal-compact');
+      this.closeButton = this.root.querySelector('.admin-terminal-close');
     }
 
     registerEvents() {
       document.addEventListener('keydown', (event) => {
-        if ((event.key === 'F8' || event.key === '~' || event.code === 'Backquote') && !event.ctrlKey && !event.metaKey) {
+        const targetIsInput = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target?.isContentEditable;
+        const shiftT = event.shiftKey && event.key.toLowerCase() === 't' && !targetIsInput;
+        if ((event.key === 'F8' || shiftT) && !event.ctrlKey && !event.metaKey) {
           if (!this.bridge.isAdmin()) return;
           event.preventDefault();
           event.stopPropagation();
@@ -47,12 +51,26 @@
       this.input.addEventListener('input', () => this.updateSuggestions());
       this.input.addEventListener('keydown', (event) => this.handleInputKey(event));
       this.submitButton.addEventListener('click', () => void this.submit());
+      this.compactButton.addEventListener('click', () => this.toggleCompact());
+      this.closeButton.addEventListener('click', () => this.toggle(false));
+      document.addEventListener('pointerdown', (event) => {
+        if (this.visible && !this.root.contains(event.target)) this.toggle(false);
+      });
       this.suggestionsBox.addEventListener('pointerdown', (event) => {
         const option = event.target.closest('[data-suggestion-index]');
         if (!option) return;
         event.preventDefault();
         this.applySuggestion(Number(option.dataset.suggestionIndex));
       });
+    }
+
+    toggleCompact(force) {
+      const compact = typeof force === 'boolean' ? force : !this.root.classList.contains('is-compact');
+      this.root.classList.toggle('is-compact', compact);
+      this.compactButton.textContent = compact ? '⌄' : '⌃';
+      this.compactButton.title = compact ? 'Expandir terminal' : 'Recolher terminal';
+      this.compactButton.setAttribute('aria-label', this.compactButton.title);
+      if (!compact) requestAnimationFrame(() => this.input.focus());
     }
 
     toggle(force) {
@@ -135,10 +153,11 @@
       const source = this.input.value.trim();
       if (!source) return;
       const resolved = this.registry.resolve(source);
-      const printableSource = resolved?.command?.name === 'account create'
-        ? `account create ${resolved.args[0] || ''} ******** ${resolved.args[2] || 'player'}`
+      const sensitive = new Set(['account create', 'account set_password', 'account set_answer']);
+      const printableSource = sensitive.has(resolved?.command?.name)
+        ? `${resolved.command.name} ${resolved.args[0] || ''} ********`
         : source;
-      if (resolved?.command?.name !== 'account create') this.history.push(source);
+      if (!sensitive.has(resolved?.command?.name)) this.history.push(source);
       this.historyIndex = this.history.length;
       this.print(`admin@server:~$ ${printableSource}`, 'command');
       this.input.value = '';
@@ -232,6 +251,7 @@
       execute: () => ({ html: registry.list().map((command) => `<div class="terminal-help-row"><b>${escapeHtml(command.name)}</b> <i>${escapeHtml(command.usage || '')}</i><span>${escapeHtml(command.description)}</span></div>`).join('') }),
     });
     register({ name: 'clear', description: 'Limpa o log do terminal.', usage: '', execute: (_args, { terminal }) => terminal.clear() });
+    register({ name: 'terminal compact', description: 'Alterna o terminal entre os modos completo e compacto.', usage: '', execute: (_args, { terminal }) => { terminal.toggleCompact(); return 'Modo do terminal alterado.'; } });
     register({
       name: 'account list', description: 'Lista as 15 contas mais recentes.', usage: '',
       execute: async () => {
@@ -251,6 +271,21 @@
       execute: async ([email, password, role = 'player']) => {
         const payload = await bridge.api('/api/admin-terminal/accounts', { method: 'POST', body: { email, password, role } });
         return `Conta criada.\n${formatAccount(payload.account)}`;
+      },
+    });
+    register({
+      name: 'account login_as', description: 'Entra em uma conta sem solicitar a senha.', usage: '<target>', minimumArguments: 1,
+      execute: async ([target]) => bridge.loginAs(target),
+    });
+    for (const field of ['password', 'question', 'answer']) register({
+      name: `account set_${field}`,
+      description: `Altera ${field === 'password' ? 'a senha' : field === 'question' ? 'a pergunta de segurança' : 'a resposta de segurança'} da conta.`,
+      usage: `<target> <${field === 'password' ? 'nova_senha' : 'texto'}>`, minimumArguments: 2,
+      execute: async ([target, ...value]) => {
+        const payload = await bridge.api(`/api/admin-terminal/accounts/${encodeURIComponent(target)}/credential`, {
+          method: 'POST', body: { field, value: value.join(' ') },
+        });
+        return `[SUCCESS] ${field} atualizado para ${payload.account.username}.`;
       },
     });
     register({
@@ -329,6 +364,47 @@
         const payload = await bridge.api('/api/admin-terminal/broadcast', { method: 'POST', body: { message: parts.join(' ') } });
         return `Broadcast #${payload.event.id} publicado.`;
       },
+    });
+    register({
+      name: 'code list', description: 'Lista todos os códigos promocionais.', usage: '',
+      execute: async () => {
+        const payload = await bridge.api('/api/admin-terminal/codes');
+        return payload.codes.length ? payload.codes.map((code) => `#${code.id} ${code.code_display} | ${code.core_amount} C | ${code.active ? 'ATIVO' : 'INATIVO'}`).join('\n') : 'Nenhum código cadastrado.';
+      },
+    });
+    register({
+      name: 'code create', description: 'Cria um código promocional de Core.', usage: '<codigo> <amount>', minimumArguments: 2,
+      execute: async ([code, amount]) => {
+        const payload = await bridge.api('/api/admin-terminal/codes', { method: 'POST', body: { code, amount: Number(amount) } });
+        return `[SUCCESS] Código ${payload.code.code_display} criado com ${payload.code.core_amount} C.`;
+      },
+    });
+    register({
+      name: 'code delete', description: 'Exclui um código pelo texto ou ID.', usage: '<codigo|id>', minimumArguments: 1,
+      execute: async ([code]) => {
+        const payload = await bridge.api(`/api/admin-terminal/codes/${encodeURIComponent(code)}`, { method: 'DELETE' });
+        return `[SUCCESS] Código ${payload.code.code_display} excluído.`;
+      },
+    });
+    register({
+      name: 'wave set', description: 'Limpa as ameaças e inicia a wave indicada.', usage: '<numero>', minimumArguments: 1,
+      execute: ([wave]) => bridge.setWave(Number(wave)),
+    });
+    register({
+      name: 'shop open', description: 'Abre a loja de um modo para testes.', usage: '<default|blackout|outbreak>', minimumArguments: 1,
+      staticParams: [['default', 'blackout', 'outbreak']], execute: ([mode]) => bridge.openShop(mode),
+    });
+    register({ name: 'roulette test', description: 'Abre a versão administrativa da roleta de skins.', usage: '', execute: () => bridge.openRoulette() });
+    register({
+      name: 'give', description: 'Entrega créditos, arma ou item ao jogador durante a partida.', usage: '<credits|weapon|item> <valor>', minimumArguments: 2,
+      staticParams: (index, args, context) => index === 0 ? ['credits', 'weapon', 'item'] : args[0] === 'weapon' ? context.bridge.matchWeapons() : args[0] === 'item' ? ['armor', 'ammo', 'health', 'ultimate', 'spike'] : [],
+      execute: ([kind, ...value]) => bridge.give(kind, value.join(' ')),
+    });
+    register({ name: 'swapteam', description: 'Troca o jogador de equipe durante a partida.', usage: '', execute: () => bridge.swapTeam() });
+    register({ name: 'cheats', description: 'Abre o painel de cheats durante a partida.', usage: '', execute: () => bridge.openCheats() });
+    register({
+      name: 'timescale', description: 'Altera a velocidade da simulação.', usage: '<escala>', minimumArguments: 1,
+      staticParams: [['0.25', '0.5', '1', '1.5', '2']], execute: ([scale]) => bridge.setTimeScale(Number(scale)),
     });
     register({
       name: 'player kick', description: 'Encerra as sessões do jogador e o remove do jogo.', usage: '<target> <reason>', minimumArguments: 2,
