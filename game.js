@@ -14071,6 +14071,19 @@ function showAgentSelect(onPick, returnState = "main") {
   let agenteTravado = false;
   let previewRenderId = 0;
 
+  const orderedAgentsForSelection = () => {
+    const unlocked = commerceState.profile?.unlockedAgentIds || STARTER_AGENT_IDS;
+    const unlockedSet = new Set(unlocked);
+    const starters = STARTER_AGENT_IDS.map((id) => agents.find((agent) => agent.id === id)).filter(Boolean);
+    const acquired = [...unlocked]
+      .reverse()
+      .filter((id) => !STARTER_AGENT_IDS.includes(id))
+      .map((id) => agents.find((agent) => agent.id === id))
+      .filter(Boolean);
+    const locked = agents.filter((agent) => !unlockedSet.has(agent.id) && !STARTER_AGENT_IDS.includes(agent.id));
+    return [...starters, ...acquired, ...locked];
+  };
+
   const renderPreview = (agent) => {
      const renderId = ++previewRenderId;
      const presentation = agentPresentation(agent);
@@ -14108,6 +14121,12 @@ function showAgentSelect(onPick, returnState = "main") {
       card.classList.toggle("is-locked", !unlocked);
       card.querySelector(".agent-lock-tag")?.remove();
       if (!unlocked) card.insertAdjacentHTML("beforeend", `<span class="agent-lock-tag">${Number(commerceState.profile?.agentUnlockPrice) || AGENT_UNLOCK_PRICE} C</span>`);
+    }
+    // Reanexa os mesmos elementos na ordem visual correta sem recriar listeners:
+    // iniciais, compras recentes e, por fim, agentes ainda bloqueados.
+    for (const agent of orderedAgentsForSelection()) {
+      const card = ui.agentSelectGrid.querySelector(`[data-agent-id="${agent.id}"]`);
+      if (card) ui.agentSelectGrid.appendChild(card);
     }
     if (selectedAgent) {
       confirmButton.textContent = isAgentUnlocked(selectedAgent)
@@ -14162,7 +14181,7 @@ function showAgentSelect(onPick, returnState = "main") {
   attachButtonFeedback(confirmButton);
   confirmButton.addEventListener("click", confirmSelection);
 
-  for (const agent of agents) {
+  for (const agent of orderedAgentsForSelection()) {
     const presentation = agentPresentation(agent);
     const button = document.createElement("button");
     button.type = "button";
@@ -17775,10 +17794,11 @@ window.Valorant2DAdminBridge = Object.freeze({
     const skinIds = (commerceState.profile?.catalog || []).map((item) => item.id);
     return [...new Set([...skinIds, ...BLACK_MARKET_GADGETS.map((item) => item.id)])];
   },
+  agentItems: () => agents.map((agent) => agent.id),
   async prepareInventoryItems() {
     if (!isAdminProfile()) throw new Error("Acesso administrativo necessário.");
     if (commerceState.profile?.catalog?.length) return commerceState.profile.catalog;
-    const payload = await requestApi("/api/commerce/profile", { headers: commerceAuthorization() });
+    const payload = await requestApi("/api/commerce", { headers: commerceAuthorization() });
     commerceState.profile = payload;
     return payload.catalog || [];
   },

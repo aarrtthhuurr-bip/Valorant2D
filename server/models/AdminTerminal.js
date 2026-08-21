@@ -1,10 +1,12 @@
 const database = require('../config/database');
-const { SKINS_BY_ID } = require('../data/skinCatalog');
+const { SKIN_CATALOG, SKINS_BY_ID } = require('../data/skinCatalog');
 const { BLACK_MARKET_BY_ID } = require('../data/blackMarketCatalog');
 
 const TARGET_PREDICATE = `(admin_uuid::text = $1 OR id::text = $1
   OR LOWER(COALESCE(email, '')) = LOWER($1)
   OR LOWER(username) = LOWER($1))`;
+const STARTER_AGENT_IDS = Object.freeze(['sova', 'jett', 'sage', 'viper']);
+const AGENT_IDS = Object.freeze([...STARTER_AGENT_IDS, 'neon', 'omen', 'killjoy', 'raze', 'gekko', 'yoru']);
 
 class AdminTerminal {
   static async listCodes(limit = 100) {
@@ -52,6 +54,7 @@ class AdminTerminal {
               avatar_url, is_admin, is_banned, core_balance,
               core_earned_total, total_matches, total_kills, total_deaths,
               wins_default, wins_blackout, highest_wave_outbreak,
+              unlocked_agents,
               onboarding_completed, menu_tour_completed, data_criacao
        FROM users
        WHERE ${TARGET_PREDICATE}`,
@@ -72,7 +75,8 @@ class AdminTerminal {
         [userId],
       ),
     ]);
-    return { skins, gadgets };
+    const account = await database.get('SELECT unlocked_agents FROM users WHERE id = $1', [userId]);
+    return { skins, gadgets, agents: Array.isArray(account?.unlocked_agents) ? account.unlocked_agents : STARTER_AGENT_IDS };
   }
 
   static async createAccount({ username, email, passwordHash, isAdmin }) {
@@ -140,6 +144,7 @@ class AdminTerminal {
 
   static resolveItem(identifier) {
     const value = String(identifier || '').trim();
+    if (value.toLowerCase() === '-all') return { kind: 'skin-all', id: '-all', name: 'Todas as skins' };
     const normalized = value.toLowerCase().replace(/[\s_-]+/g, '');
     const skin = [...SKINS_BY_ID.values()].find((entry) => (
       entry.id.toLowerCase() === value.toLowerCase()
@@ -158,12 +163,36 @@ class AdminTerminal {
   static async mutateInventory(identifier, item, grant) {
     const account = await this.findAccount(identifier);
     if (!account) return null;
-    if (item.kind === 'skin') {
+    if (item.kind === 'skin-all') {
+      const client = await database.pool.connect();
+      try {
+        await client.query('BEGIN');
+        if (grant) {
+          await client.query(
+            `INSERT INTO user_skins (user_id, skin_id, paid_price)
+             SELECT $1, catalog.skin_id, NULL
+             FROM unnest($2::text[]) AS catalog(skin_id)
+             ON CONFLICT (user_id, skin_id) DO NOTHING`,
+            [account.id, SKIN_CATALOG.map((skin) => skin.id)],
+          );
+        } else {
+          await client.query('DELETE FROM equipped_skins WHERE user_id = $1', [account.id]);
+          await client.query('DELETE FROM user_skins WHERE user_id = $1', [account.id]);
+        }
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally { client.release(); }
+    } else if (item.kind === 'skin') {
       if (grant) await database.run(
         `INSERT INTO user_skins (user_id, skin_id, paid_price) VALUES ($1, $2, NULL)
          ON CONFLICT (user_id, skin_id) DO NOTHING`, [account.id, item.id],
       );
-      else await database.run('DELETE FROM user_skins WHERE user_id = $1 AND skin_id = $2', [account.id, item.id]);
+      else {
+        await database.run('DELETE FROM equipped_skins WHERE user_id = $1 AND skin_id = $2', [account.id, item.id]);
+        await database.run('DELETE FROM user_skins WHERE user_id = $1 AND skin_id = $2', [account.id, item.id]);
+      }
     } else {
       if (grant) await database.run(
         `INSERT INTO user_gadgets (user_id, gadget_id, paid_price) VALUES ($1, $2, 0)
@@ -172,6 +201,29 @@ class AdminTerminal {
       else await database.run('DELETE FROM user_gadgets WHERE user_id = $1 AND gadget_id = $2', [account.id, item.id]);
     }
     return { account, item };
+  }
+
+  static resolveAgent(identifier) {
+    const value = String(identifier || '').trim().toLowerCase();
+    if (value === '-all') return { id: '-all', name: 'Todos os agentes' };
+    return AGENT_IDS.includes(value) ? { id: value, name: value[0].toUpperCase() + value.slice(1) } : null;
+  }
+
+  static async mutateAgents(identifier, agent, grant) {
+    const account = await this.findAccount(identifier);
+    if (!account) return null;
+    const current = Array.isArray(account.unlocked_agents) ? account.unlocked_agents : STARTER_AGENT_IDS;
+    const unlocked = new Set([...STARTER_AGENT_IDS, ...current]);
+    if (agent.id === '-all') {
+      if (grant) AGENT_IDS.forEach((id) => unlocked.add(id));
+      else {
+        unlocked.clear();
+        STARTER_AGENT_IDS.forEach((id) => unlocked.add(id));
+      }
+    } else if (grant) unlocked.add(agent.id);
+    else if (!STARTER_AGENT_IDS.includes(agent.id)) unlocked.delete(agent.id);
+    await database.run('UPDATE users SET unlocked_agents = $2::jsonb WHERE id = $1', [account.id, JSON.stringify([...unlocked])]);
+    return { account, agent, unlockedAgentIds: [...unlocked] };
   }
 
   static async createEvent({ type, targetUserId = null, message, createdBy }) {

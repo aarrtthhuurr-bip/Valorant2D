@@ -14,6 +14,8 @@ router.post('/accounts/:target/credential', authenticatedWriteLimiter, controlle
 router.post('/accounts/:target/kick', authenticatedWriteLimiter, controller.kickPlayer);
 router.post('/accounts/:target/inventory/:item', authenticatedWriteLimiter, controller.mutateInventory);
 router.delete('/accounts/:target/inventory/:item', authenticatedWriteLimiter, controller.mutateInventory);
+router.post('/accounts/:target/agents/:agent', authenticatedWriteLimiter, controller.mutateAgents);
+router.delete('/accounts/:target/agents/:agent', authenticatedWriteLimiter, controller.mutateAgents);
 router.post('/broadcast', authenticatedWriteLimiter, controller.broadcast);
 router.get('/codes', controller.listCodes);
 router.post('/codes', authenticatedWriteLimiter, controller.createCode);

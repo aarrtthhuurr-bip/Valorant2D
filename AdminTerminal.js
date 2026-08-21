@@ -232,7 +232,7 @@
   }
 
   function parseInventoryBatch(args, bridge) {
-    const knownItems = new Set(bridge.inventoryItems().map((item) => item.toLowerCase()));
+    const knownItems = new Set([...bridge.inventoryItems(), '-all'].map((item) => item.toLowerCase()));
     const tokens = args.join(' ').trim().split(/\s+/);
     const itemStart = tokens.findIndex((token) => splitStack(token)
       .some((part) => knownItems.has(part.toLowerCase())));
@@ -241,6 +241,18 @@
     const items = splitStack(tokens.slice(itemStart).join(' '));
     if (!targets.length || !items.length) throw new Error('Informe ao menos um alvo e um item.');
     return { targets: [...new Set(targets)], items: [...new Set(items)] };
+  }
+
+  function parseAgentBatch(args, bridge) {
+    const knownAgents = new Set([...bridge.agentItems(), '-all'].map((agent) => agent.toLowerCase()));
+    const tokens = args.join(' ').trim().split(/\s+/);
+    const agentStart = tokens.findIndex((token) => splitStack(token)
+      .some((part) => knownAgents.has(part.toLowerCase())));
+    if (agentStart < 1) throw new Error('Informe alvo(s) e agente(s) válidos. Use -all para todos.');
+    const targets = splitStack(tokens.slice(0, agentStart).join(' '));
+    const agents = splitStack(tokens.slice(agentStart).join(' '));
+    if (!targets.length || !agents.length) throw new Error('Informe ao menos um alvo e um agente.');
+    return { targets: [...new Set(targets)], agents: [...new Set(agents)] };
   }
 
   async function executeBatch(entries, operation) {
@@ -274,7 +286,7 @@
       name: 'account view', description: 'Exibe perfil, estatísticas e inventário.', usage: '<target>', minimumArguments: 1,
       execute: async ([target]) => {
         const payload = await bridge.api(`/api/admin-terminal/accounts/${encodeURIComponent(target)}`);
-        return `${formatAccount(payload.account)}\nPartidas: ${payload.account.total_matches} | Kills: ${payload.account.total_kills} | Mortes: ${payload.account.total_deaths}\nSkins: ${payload.inventory.skins.map((item) => item.skin_id).join(', ') || '-'}\nUtilitários: ${payload.inventory.gadgets.map((item) => item.gadget_id).join(', ') || '-'}`;
+        return `${formatAccount(payload.account)}\nPartidas: ${payload.account.total_matches} | Kills: ${payload.account.total_kills} | Mortes: ${payload.account.total_deaths}\nAgentes: ${(payload.inventory.agents || []).join(', ') || '-'}\nSkins: ${payload.inventory.skins.map((item) => item.skin_id).join(', ') || '-'}\nUtilitários: ${payload.inventory.gadgets.map((item) => item.gadget_id).join(', ') || '-'}`;
       },
     });
     register({
@@ -427,9 +439,9 @@
     for (const action of ['grant', 'revoke']) register({
       name: `inv ${action}`,
       description: action === 'grant' ? 'Libera um item no inventário.' : 'Remove um item do inventário.',
-      usage: '<target> [/ <target>...] <item> [/ <item>...]', minimumArguments: 2,
+      usage: '<target> [/ <target>...] <skin|item|-all> [/ <item>...]', minimumArguments: 2,
       stackedParams: true,
-      staticParams: (index, args, context) => index >= 1 ? context.bridge.inventoryItems() : [],
+      staticParams: (index, args, context) => index >= 1 ? ['-all', ...context.bridge.inventoryItems()] : [],
       execute: async (args) => {
         await bridge.prepareInventoryItems?.();
         const { targets, items } = parseInventoryBatch(args, bridge);
@@ -439,6 +451,23 @@
             method: action === 'grant' ? 'POST' : 'DELETE', body: {},
           });
           return `[SUCCESS] ${payload.item.name} ${action === 'grant' ? 'liberado para' : 'removido de'} ${payload.account.username}.`;
+        });
+      },
+    });
+    for (const action of ['grant', 'revoke']) register({
+      name: `agent ${action}`,
+      description: action === 'grant' ? 'Desbloqueia agentes para uma conta.' : 'Remove agentes desbloqueáveis de uma conta.',
+      usage: '<target> [/ <target>...] <agent|-all> [/ <agent>...]', minimumArguments: 2,
+      stackedParams: true,
+      staticParams: (index, args, context) => index >= 1 ? ['-all', ...context.bridge.agentItems()] : [],
+      execute: async (args) => {
+        const { targets, agents } = parseAgentBatch(args, bridge);
+        const operations = targets.flatMap((target) => agents.map((agent) => ({ target, agent, label: `${target} / ${agent}` })));
+        return executeBatch(operations, async ({ target, agent }) => {
+          const payload = await bridge.api(`/api/admin-terminal/accounts/${encodeURIComponent(target)}/agents/${encodeURIComponent(agent)}`, {
+            method: action === 'grant' ? 'POST' : 'DELETE', body: {},
+          });
+          return `[SUCCESS] ${payload.agent.name} ${action === 'grant' ? 'desbloqueado para' : 'removido de'} ${payload.account.username}.`;
         });
       },
     });

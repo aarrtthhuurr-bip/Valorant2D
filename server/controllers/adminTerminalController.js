@@ -254,6 +254,24 @@ async function mutateInventory(request, response, next) {
   } catch (error) { next(error); }
 }
 
+async function mutateAgents(request, response, next) {
+  try {
+    const actor = await requireAdmin(request, response); if (!actor) return;
+    const agent = AdminTerminal.resolveAgent(request.params.agent);
+    if (!agent) return response.status(404).json({ error: 'Agente desconhecido.' });
+    const grant = request.method === 'POST';
+    const result = await AdminTerminal.mutateAgents(request.params.target, agent, grant);
+    if (!result) return response.status(404).json({ error: 'Conta não encontrada.' });
+    securityAudit(grant ? 'admin_agent_grant' : 'admin_agent_revoke', request, {
+      userId: actor.id, target: result.account.uuid, agent: agent.id, success: true,
+    });
+    response.json({
+      account: publicAccount(result.account), agent,
+      unlockedAgentIds: result.unlockedAgentIds,
+    });
+  } catch (error) { next(error); }
+}
+
 async function kickPlayer(request, response, next) {
   try {
     const actor = await requireAdmin(request, response); if (!actor) return;
@@ -298,7 +316,7 @@ async function ping(request, response, next) {
 }
 
 module.exports = {
-  banAccount, broadcast, createAccount, kickPlayer, listAccounts, mutateInventory,
+  banAccount, broadcast, createAccount, kickPlayer, listAccounts, mutateInventory, mutateAgents,
   ping, pollEvents, updateCore, updateRole, viewAccount, loginAsAccount,
   updateCredential, listCodes, createCode, deleteCode,
 };
