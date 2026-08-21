@@ -53,14 +53,28 @@
       this.submitButton.addEventListener('click', () => void this.submit());
       this.compactButton.addEventListener('click', () => this.toggleCompact());
       this.closeButton.addEventListener('click', () => this.toggle(false));
+      this.root.addEventListener('pointerdown', (event) => {
+        // Sugestões e controles interativos nunca devem acionar o recolhimento.
+        // O fundo, o cabeçalho textual e o log funcionam como uma área rápida
+        // para minimizar o terminal sem fechá-lo por completo.
+        if (event.target.closest('.admin-terminal-suggestions, .admin-terminal-prompt, button')) return;
+        this.toggleCompact(true);
+      });
       document.addEventListener('pointerdown', (event) => {
-        if (this.visible && !this.root.contains(event.target)) this.toggle(false);
+        if (this.visible && !event.composedPath().includes(this.root)) this.toggle(false);
       });
       this.suggestionsBox.addEventListener('pointerdown', (event) => {
         const option = event.target.closest('[data-suggestion-index]');
         if (!option) return;
         event.preventDefault();
+        event.stopPropagation();
         this.applySuggestion(Number(option.dataset.suggestionIndex));
+      });
+      this.suggestionsBox.addEventListener('click', (event) => {
+        // O botão é substituído quando a sugestão é aplicada; impedir o
+        // clique residual evita que ele alcance qualquer handler global do jogo.
+        event.preventDefault();
+        event.stopPropagation();
       });
     }
 
@@ -97,13 +111,10 @@
         event.preventDefault();
         if (this.activeSuggestions.length) this.applySuggestion(this.suggestionIndex);
       } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        if (!this.suggestionsBox.classList.contains('hidden')) {
-          event.preventDefault();
-          const direction = event.key === 'ArrowDown' ? 1 : -1;
-          const count = this.activeSuggestions.length;
-          this.suggestionIndex = (this.suggestionIndex + direction + count) % Math.max(1, count);
-          this.updateSuggestions(false);
-        } else this.navigateHistory(event.key === 'ArrowUp' ? -1 : 1);
+        // As setas ficam reservadas ao histórico quando não há sugestões.
+        // A lista de autocomplete é operada somente por Tab ou clique/toque.
+        if (!this.suggestionsBox.classList.contains('hidden')) event.stopPropagation();
+        else this.navigateHistory(event.key === 'ArrowUp' ? -1 : 1);
       } else if (event.key === 'Escape') {
         event.preventDefault();
         this.toggle(false);
