@@ -163,9 +163,10 @@ class Commerce {
       return {
         coreBalance: Number(user?.core_balance) || 0,
         isAdmin: Boolean(user?.is_admin),
-        unlockedAgentIds: user?.is_admin
-          ? [...STARTER_AGENT_IDS, ...UNLOCKABLE_AGENT_IDS]
-          : [...new Set([...STARTER_AGENT_IDS, ...(Array.isArray(user?.unlocked_agents) ? user.unlocked_agents : [])])],
+        unlockedAgentIds: [...new Set([
+          ...STARTER_AGENT_IDS,
+          ...(Array.isArray(user?.unlocked_agents) ? user.unlocked_agents : []),
+        ])],
         agentUnlockPrice: AGENT_UNLOCK_PRICE,
         catalog: SKIN_CATALOG,
         dailyOffers: dailyOffers(),
@@ -198,7 +199,7 @@ class Commerce {
       );
       const user = result.rows[0];
       const unlocked = new Set(Array.isArray(user?.unlocked_agents) ? user.unlocked_agents : STARTER_AGENT_IDS);
-      if (user?.is_admin || unlocked.has(normalizedAgentId)) {
+      if (unlocked.has(normalizedAgentId)) {
         await client.query('ROLLBACK');
         return { error: 'AGENT_ALREADY_OWNED', coreBalance: Number(user?.core_balance) || 0 };
       }

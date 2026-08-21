@@ -13901,7 +13901,9 @@ function agentPresentation(agent) {
       icon: "./assets/images/Viper_icon.webp",
       artwork: "./assets/images/Viper_Artwork_Full.webp",
       abilityIcon: "./assets/images/Poison_Cloud.webp",
-      ultimateIcon: "./assets/images/Viper%27s_Pit.webp",
+      // O nome físico do arquivo contém os caracteres "%27". O sinal de
+      // porcentagem precisa ser escapado na URL para não virar um apóstrofo.
+      ultimateIcon: "./assets/images/Viper%2527s_Pit.webp",
     },
     sage: {
       className: "Sentinela",
@@ -13955,7 +13957,7 @@ function agentPresentation(agent) {
       icon: "./assets/images/Sova_icon.webp",
       artwork: "./assets/images/Sova_Artwork_Full.webp",
       abilityIcon: "./assets/images/Shock_Bolt.webp",
-      ultimateIcon: "./assets/images/Hunter%27s_Fury.webp",
+      ultimateIcon: "./assets/images/Hunter%2527s_Fury.webp",
     },
     gekko: {
       className: "Iniciador",
@@ -14097,7 +14099,6 @@ function showAgentSelect(onPick, returnState = "main") {
   };
 
   const isAgentUnlocked = (agent) => STARTER_AGENT_IDS.includes(agent.id)
-    || Boolean(commerceState.profile?.isAdmin || currentProfile?.isAdmin)
     || commerceState.profile?.unlockedAgentIds?.includes(agent.id);
 
   const renderAgentCardsState = () => {
